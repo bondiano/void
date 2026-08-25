@@ -1,0 +1,16 @@
+# jpm / janet build artifacts
+build/
+jpm_tree/
+*.so
+*.dylib
+*.o
+*.a
+*.jimage
+
+# OMC session state
+.omc/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
