@@ -5,7 +5,9 @@
 ### deps) and swap real components for stubs by re-registering the
 ### same :key (:components override). Factories come straight from the
 ### schema layer through the :generator projection — one declaration
-### feeds validation, docs and test data alike (ADR-0008).
+### feeds validation, docs and test data alike (ADR-0008). `snapshot`
+### stores golden renderings under test/snapshots (hiccup views,
+### ROADMAP 1.2).
 
 (import void/core/system :as system)
 (import void/core/plugin :as plugin)
@@ -94,6 +96,40 @@
   "Generate a sample value for a schema — see void/dev/generate."
   [sch &opt opts]
   (gen/generate sch opts))
+
+(defn snapshot
+  ``Compare the string rendering of `actual` against the stored
+  snapshot `dir`/`name`.snap (dir defaults to "test/snapshots",
+  relative to the package root jpm test runs from — hiccup snapshot
+  testing, ROADMAP 1.2, but any stringable value works).
+
+  A missing snapshot is created and the call succeeds — review and
+  commit it. On a mismatch the call throws with both versions; run
+  with VOID_SNAPSHOT_UPDATE=1 to rewrite the stored snapshots
+  instead. Returns :created, :updated or :matched.``
+  [name actual &opt dir]
+  (default dir "test/snapshots")
+  (def path (string dir "/" name ".snap"))
+  (def s (string actual))
+  (defn write! []
+    (var acc "")
+    (each part (string/split "/" dir)
+      (set acc (if (empty? acc) part (string acc "/" part)))
+      (unless (or (empty? acc) (= "." acc))
+        (os/mkdir acc)))
+    (spit path s))
+  (cond
+    (nil? (os/stat path))
+    (do (write!) :created)
+
+    (= (string (slurp path)) s)
+    :matched
+
+    (os/getenv "VOID_SNAPSHOT_UPDATE")
+    (do (write!) :updated)
+
+    (errorf "snapshot %q differs from %s:\n--- stored ---\n%s\n--- actual ---\n%s\n(run with VOID_SNAPSHOT_UPDATE=1 to update)"
+            name path (slurp path) s)))
 
 (defn factory
   ``A sample value for a map schema with explicit overrides on top:

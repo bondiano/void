@@ -98,4 +98,29 @@
 (assert (schema/valid? :test/User (test/generate :test/User))
         "generate is re-exported")
 
+# -- snapshots -----------------------------------------------------------
+
+(def snap-dir "test/tmp-snapshots")
+(defn- rm-rf [dir]
+  (when (os/stat dir)
+    (each f (os/dir dir) (os/rm (string dir "/" f)))
+    (os/rmdir dir)))
+(rm-rf snap-dir)
+
+(assert (= :created (test/snapshot "greeting" "<h1>hi</h1>" snap-dir))
+        "a missing snapshot is created")
+(assert (= "<h1>hi</h1>" (string (slurp (string snap-dir "/greeting.snap")))))
+(assert (= :matched (test/snapshot "greeting" "<h1>hi</h1>" snap-dir)))
+(assert (= :matched (test/snapshot "greeting" @"<h1>hi</h1>" snap-dir))
+        "buffers compare by content")
+(expect-error "snapshot mismatch" "differs"
+  |(test/snapshot "greeting" "<h1>bye</h1>" snap-dir))
+(assert (= :updated (do (os/setenv "VOID_SNAPSHOT_UPDATE" "1")
+                        (defer (os/setenv "VOID_SNAPSHOT_UPDATE" nil)
+                          (test/snapshot "greeting" "<h1>bye</h1>" snap-dir))))
+        "VOID_SNAPSHOT_UPDATE rewrites")
+(assert (= :matched (test/snapshot "greeting" "<h1>bye</h1>" snap-dir)))
+
+(rm-rf snap-dir)
+
 (print "test-test: all assertions passed")

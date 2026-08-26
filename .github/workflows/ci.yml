@@ -34,5 +34,11 @@ jobs:
       - name: Test void/http
         run: cd http && jpm test
 
+      - name: Test void/html
+        run: cd html && jpm test
+
+      - name: Test void/htmx
+        run: cd htmx && jpm test
+
       - name: Dry-run the full plugin composition
         run: janet scripts/dry-run.janet
