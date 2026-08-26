@@ -8,7 +8,7 @@
 
 ---
 
-## Текущее состояние (2026-08-25)
+## Текущее состояние (2026-08-26)
 
 | Что | Статус |
 |---|---|
@@ -16,7 +16,8 @@
 | ADR 0001–0014 | ✅ accepted |
 | ADR 0015 (свой HTTP-сервер, spork как референс) | ⏳ proposed — принять до старта волны 1 |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, скелет `void/core` | ✅ каркас: `system/config/schema/plugin/hooks` — заглушки |
+| Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина) и `void/run!` реализованы |
+| `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart, fixtures/factories (`:generator`-проекция) |
 | Всё остальное | не начато |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрывается принятием ADR-0015; (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -50,52 +51,52 @@
 
 ### 0.1 `void/core/system` — component system *(ADR-0001)*
 
-- [ ] `defcomponent`: `:deps`, `:config` (schema куска), `:start/:stop/:health`, опц. `:suspend/:resume`
-- [ ] Registry → topological sort → старт по зависимостям, стоп в обратном порядке
-- [ ] Валидация графа: cycles, missing deps, дубли ключей — с указанием конфликтующих plugins
-- [ ] `system/start`, `system/stop`, `system/restart :key` (рестарт транзитивных зависимых — reloaded workflow)
-- [ ] `:provides`-интерфейсы; >1 активной реализации без выбора в конфиге → ошибка старта
-- [ ] Scopes `:singleton`/`:factory`
+- [x] `defcomponent`: `:deps`, `:config` (schema куска), `:start/:stop/:health`, опц. `:suspend/:resume`
+- [x] Registry → topological sort → старт по зависимостям, стоп в обратном порядке
+- [x] Валидация графа: cycles, missing deps, дубли ключей — с указанием конфликтующих plugins
+- [x] `system/start`, `system/stop`, `system/restart :key` (рестарт транзитивных зависимых — reloaded workflow)
+- [x] `:provides`-интерфейсы; >1 активной реализации без выбора в конфиге → ошибка старта
+- [x] Scopes `:singleton`/`:factory`
 
 ### 0.2 `void/core/config` *(ADR-0007)*
 
-- [ ] Слои: plugin defaults ← `config/*.janet|jdn` ← env (`VOID_DB__HOST`) ← CLI overrides
-- [ ] Provenance каждого значения: `(config/explain :database :host)`
-- [ ] Профили `:dev/:test/:prod` + произвольные
-- [ ] Валидация всех `:config-key` по схемам **пачкой** до старта (не first-fail)
-- [ ] Secrets: `{:secret "DB_PASSWORD"}` — резолв из env/file, custom print (не утекают в логи/REPL)
+- [x] Слои: plugin defaults ← `config/*.janet|jdn` ← env (`VOID_DB__HOST`) ← CLI overrides
+- [x] Provenance каждого значения: `(config/explain :database :host)`
+- [x] Профили `:dev/:test/:prod` + произвольные
+- [x] Валидация всех `:config-key` по схемам **пачкой** до старта (не first-fail)
+- [x] Secrets: `{:secret "DB_PASSWORD"}` — резолв из env/file, custom print (не утекают в логи/REPL)
 
 ### 0.3 `void/core/schema` *(ADR-0008)*
 
-- [ ] Базовые типы + композиция: `merge`, `select`, `optional`, `union`, рекурсивные схемы
-- [ ] Refinements предикатами, PEG-паттерны для строк
-- [ ] Coercion-режим (string→int для query/forms)
-- [ ] Ошибки с path (`[:tags 3]`), локализуемые
-- [ ] Механизм проекций (extension point `:void.core/schema-projection`); первая проекция — validator
-- [ ] Registry схем по имени
-- [ ] Опциональные `:db/*`-аннотации — парсятся и хранятся (потребители — волна 2+)
+- [x] Базовые типы + композиция: `merge`, `select`, `optional`, `union`, рекурсивные схемы
+- [x] Refinements предикатами, PEG-паттерны для строк
+- [x] Coercion-режим (string→int для query/forms)
+- [x] Ошибки с path (`[:tags 3]`), локализуемые
+- [x] Механизм проекций (extension point `:void.core/schema-projection`); первая проекция — validator
+- [x] Registry схем по имени
+- [x] Опциональные `:db/*`-аннотации — парсятся и хранятся (потребители — волна 2+)
 
 ### 0.4 `void/core/plugin` — Plugin API *(ADR-0003)*
 
-- [ ] `defplugin` → manifest-struct: `:void-api`, `:version`, `:requires` (semver), `:config-key/-schema`, `:when`, `:components`, `:contributes`, `:extension-points`, `:on-load`
-- [ ] `defextension-point`: `:schema`, `:cardinality` (`:many/:single/:single-required`), `:reduce`, `:validate`
-- [ ] `defcontribution` + resolution: валидация по schema точки, ошибки с plugin-источником, did-you-mean для опечаток, «повисшие» вклады → ошибка
-- [ ] Bootstrap-фазы: load → config → conditional → extension resolution → graph → start → ready; shutdown с таймаутом
-- [ ] Базовые точки ядра: `:void.core/cli`, `/health`, `/config-source`, `/schema-type`, `/schema-projection`, `/interface`, `/hooks`
-- [ ] REPL-инструменты: `(plugin/inspect)`, `(plugin/why :key)`, **`(plugin/dry-run ...)`** — фазы 1–5 без старта
-- [ ] `void/core/meta` — merge-семантика metadata (`:replace/:concat/:deep-merge/:restrict`) живёт в core (ADR-0005: контракт не HTTP-специфичен)
+- [x] `defplugin` → manifest-struct: `:void-api`, `:version`, `:requires` (semver), `:config-key/-schema`, `:when`, `:components`, `:contributes`, `:extension-points`, `:on-load`
+- [x] `defextension-point`: `:schema`, `:cardinality` (`:many/:single/:single-required`), `:reduce`, `:validate`
+- [x] `defcontribution` + resolution: валидация по schema точки, ошибки с plugin-источником, did-you-mean для опечаток, «повисшие» вклады → ошибка
+- [x] Bootstrap-фазы: load → config → conditional → extension resolution → graph → start → ready; shutdown с таймаутом
+- [x] Базовые точки ядра: `:void.core/cli`, `/health`, `/config-source`, `/schema-type`, `/schema-projection`, `/interface`, `/hooks`
+- [x] REPL-инструменты: `(plugin/inspect)`, `(plugin/why :key)`, **`(plugin/dry-run ...)`** — фазы 1–5 без старта
+- [x] `void/core/meta` — merge-семантика metadata (`:replace/:concat/:deep-merge/:restrict`) живёт в core (ADR-0005: контракт не HTTP-специфичен)
 
 ### 0.5 `void/core/hooks` + lifecycle
 
-- [ ] Синхронные упорядоченные хуки (`:config-loaded`, `:before-start`, `:after-start`, …)
-- [ ] In-process pub/sub шина на `ev` для application events
-- [ ] `(void/run! {:plugins [...] :profile ...})` + сигналы (SIGTERM → graceful stop с таймаутом)
+- [x] Синхронные упорядоченные хуки (`:config-loaded`, `:before-start`, `:after-start`, `:before-stop`, `:after-stop` + произвольные; `:phase`-порядок, REPL-friendly `add!`/`remove!`)
+- [x] In-process pub/sub шина на `ev` для application events (буферизованный канал + fiber на подписчика, `:*`-wildcard, backpressure, ошибки хендлера не убивают подписку)
+- [x] `(void/run! {:plugins [...] :profile ...})` + сигналы (SIGTERM/SIGINT → graceful stop с таймаутом; `(void/stop! boot)` из REPL/хуков; обработчики ставятся до старта)
 
 ### 0.6 `void/dev` — канонический plugin
 
-- [ ] netrepl (spork) внутри процесса, unix socket в dev по умолчанию; repl into system environment
-- [ ] File watcher → reload затронутых env tables; карта file→component из manifests → авто `system/restart` stateful
-- [ ] `void/test`: fixtures как компоненты (подъём подмножества системы), factories из schema-generator
+- [x] netrepl (spork) внутри процесса, unix socket в dev по умолчанию; repl into system environment (`system/`, `config/`, `plugin/`, `schema/`, `hooks/`, `(boot)`, `(sys)`; общий env между сессиями)
+- [x] File watcher → reload затронутых env tables (`dofile :env` в тот же table — late binding сохраняется); карта file→component из manifest `:source` (пишется `defplugin`) → авто `system/restart` stateful
+- [x] `void/test`: fixtures как компоненты (`:only` — подъём подмножества системы, `:components` — стабы поверх реальных), factories из schema-generator (`:generator`-проекция, seed/max-depth)
 
 ### Exit-критерии волны 0
 

@@ -1,0 +1,4 @@
+{:database {:host "localhost"
+            :port 5432
+            :password {:secret "TEST_DB_PASSWORD"}}
+ :app {:name "demo"}}
