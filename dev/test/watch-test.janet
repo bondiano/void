@@ -1,6 +1,7 @@
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
+(import void/core/hooks :as hooks)
 (import void/dev/watch :as watch)
 
 # -- workspace -----------------------------------------------------------
@@ -93,6 +94,29 @@
 
 (assert (= {:disabled true} (watch/start {:watch {:enabled false}}))
         "disabled watcher starts nothing")
+
+# -- the :void.dev/reloaded hook -----------------------------------------
+
+(def fired @[])
+(def hreg (hooks/registry))
+(hooks/add! hreg :void.dev/reloaded
+            (fn [b report] (array/push fired (freeze (report :reloaded))))
+            :name :test/spy)
+(hooks/add! hreg :void.dev/reloaded
+            (fn [b report] (error "rebuild blew up"))
+            :name :test/boom :phase 2000)
+(def hook-boot @{:hooks hreg})
+
+(def ok-report @{:reloaded @["a.janet"] :errors @[]})
+(watch/notify-reloaded! hook-boot ok-report)
+(assert (= [["a.janet"]] (freeze fired)) "handlers see the reloaded files")
+(assert (= 1 (length (ok-report :errors)))
+        "a failing handler lands in the report, the watcher survives")
+
+(def quiet-report @{:reloaded @[] :errors @[]})
+(watch/notify-reloaded! hook-boot quiet-report)
+(assert (= 1 (length fired)) "no reloaded files -> the hook does not fire")
+(watch/notify-reloaded! nil ok-report)
 
 (system/stop (boot :system))
 (os/execute @("rm" "-rf" dir) :p)

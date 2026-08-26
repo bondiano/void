@@ -403,13 +403,59 @@
          (print-routes (routes-table)
                        {:keys (truthy? (index-of "--keys" args))}))})
 
+(defn- live-sources
+  ``Route sources re-read from the live manifest registry: a dofile
+  reload of an app module re-runs its `defplugin`, which re-registers
+  the manifest — so the registry holds the *current* :void.http/route-source
+  contributions while the boot value holds the boot-time snapshot.
+  Boot-time source order is preserved (route precedence must not change
+  under a rebuild); sources contributed after boot append at the end.``
+  [boot fallback]
+  (def live @[])
+  (each pname (boot :active)
+    (def m (or (get plugin/manifest-registry pname)
+               (get-in boot [:manifests pname])))
+    (each c (get-in m [:contributes :void.http/route-source] [])
+      (array/push live {:name (get c :name pname)
+                        :routes (c :routes)
+                        :env (c :env)})))
+  (def by-name (tabseq [s :in live] (s :name) s))
+  (def out @[])
+  (each s fallback
+    (when-let [l (get by-name (s :name))]
+      (put by-name (s :name) nil)
+      (array/push out l)))
+  (each s live
+    (when (get by-name (s :name))
+      (put by-name (s :name) nil)
+      (array/push out s)))
+  out)
+
 (defn rebuild!
-  "Rebuild the route table from the booted sources and swap it
-  atomically — after REPL work that changes patterns or metadata
-  (handler redefinitions are live without this, ADR-0002)."
+  "Rebuild the route table and swap it atomically — after code changes
+  that add routes or edit patterns/metadata (handler redefinitions are
+  live without this, ADR-0002). Route sources are re-read from the
+  live manifest registry, so a watcher/dofile reload of an app module
+  is enough; the :void.dev/reloaded hook below calls this for you."
   []
   (def ctx (context))
-  (router/swap! (ctx :cell) (router/build-table (ctx :build-args))))
+  (def args (ctx :build-args))
+  (def sources
+    (if-let [boot plugin/current-boot]
+      (live-sources boot (args :sources))
+      (args :sources)))
+  (router/swap! (ctx :cell)
+                (router/build-table (merge args {:sources sources}))))
+
+(plugin/defcontribution :void.core/hooks
+  {:hook :void.dev/reloaded
+   :phase 500
+   :name :http/rebuild-table
+   :doc "Rebuild + atomically swap the route table after the dev watcher reloads modules (new routes, pattern and metadata edits go live)"
+   :fn (fn on-reloaded [boot report]
+         (when (and current-context (not (empty? (get report :reloaded []))))
+           (rebuild!)
+           (eprint "void/http route table rebuilt")))})
 
 # -- manifest ------------------------------------------------------------
 

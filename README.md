@@ -29,6 +29,8 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `htmx/` | `void/htmx` — htmx integration: hx-attribute builders, HX-\* request predicates and response headers, OOB swaps, fragment-without-layout answers on routes marked `:void.htmx/partial` | 1 |
 | `rest/` | `void/rest` — REST/JSON sugar over void/http: `:void.schema/*` route metadata drives request coercion+validation and response serialization, RFC 7807 problem+json, `defresource` CRUD groups, pagination/sorting/filtering conventions | 1 |
 | `openapi/` | `void/openapi` — OpenAPI 3.1 as a pure projection of the route table + schema registry, `/openapi.json` + Swagger UI in dev, export for CI | 1 |
+| `cli/` | `void/cli` — the `void` binary: commands as the `:void.core/cli` extension point, subset bootstrap via `:needs`, `void new` / `void routes` / `void repl` | 1 |
+| `bench/` | `void/bench` — bench-suite (ADR-0014): B\* mini-apps, wrk/wrk2 методика, Go/FastAPI calibration baselines, 5% regression thresholds in CI | 1 |
 
 Upcoming waves (see SPEC.md §6): `void/cli`, then data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 

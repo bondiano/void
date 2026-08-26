@@ -431,4 +431,59 @@
 (assert (= [:test/dp] (dp-report :active))
         "keyword :plugins entries resolve through the registry")
 
+# -- deprecation aliases (SPEC part II §1.5) -----------------------------
+
+(expect-error "self-alias" "alias itself"
+  |(plugin/extension-point :x/p :aliases [:x/p]))
+(expect-error "non-keyword alias" ":aliases"
+  |(plugin/extension-point :x/p :aliases ["old"]))
+
+(def aliased-owner
+  (plugin/manifest 'test/aliased-owner
+    :version "1.0.0"
+    :extension-points
+    {:test/commands2 {:doc "renamed test commands"
+                      :schema {:name :keyword :fn :function}
+                      :aliases [:test/commands-old]}}))
+
+(def legacy-contributor
+  (plugin/manifest 'test/legacy
+    :version "1.0.0"
+    :requires {:test/aliased-owner ">=1.0"}
+    # still addressing the pre-rename point name
+    :contributes {:test/commands-old [{:name :old-cmd :fn (fn [] :old)}]}))
+
+(def alias-boot
+  (plugin/bootstrap {:plugins [aliased-owner legacy-contributor]}))
+(assert (= 1 (length (get-in alias-boot
+                             [:extensions :test/commands2 :contributions])))
+        "a contribution to the deprecated alias folds into the new point")
+(assert (= :test/legacy
+           (get-in alias-boot
+                   [:extensions :test/commands2 :contributions 0 :plugin]))
+        "the folded contribution keeps its source plugin")
+(assert (nil? (get-in alias-boot [:extensions :test/commands-old]))
+        "the alias is not a point of its own")
+(assert (deep= [:test/commands-old]
+               (freeze (get (plugin/inspect alias-boot :test/commands2) :aliases)))
+        "inspect shows the deprecated aliases")
+
+# an alias validates against the new point's schema like any contribution
+(def bad-legacy
+  (plugin/manifest 'test/legacy-bad
+    :version "1.0.0"
+    :requires {:test/aliased-owner ">=1.0"}
+    :contributes {:test/commands-old [{:name "not-a-keyword" :fn (fn [] nil)}]}))
+(expect-error "aliased contribution is schema-checked" ":test/commands2"
+  |(plugin/bootstrap {:plugins [aliased-owner bad-legacy]}))
+
+# an alias colliding with a declared point is a bootstrap error
+(def colliding-owner
+  (plugin/manifest 'test/colliding
+    :version "1.0.0"
+    :extension-points
+    {:test/other {:doc "other" :aliases [:test/commands2]}}))
+(expect-error "alias vs declared point" "itself a declared point"
+  |(plugin/bootstrap {:plugins [aliased-owner colliding-owner]}))
+
 (print "plugin-test: all assertions passed")

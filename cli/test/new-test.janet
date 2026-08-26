@@ -46,19 +46,44 @@
   (os/cd "sample")
   (cli/add-project-paths! (os/cwd))
   (def app (cli/load-app))
-  (assert (deep= (app :plugins) [:void/http :void/dev :sample/app])
-          "main.janet declares the plugin list")
+  (assert (deep= (app :plugins)
+                 [:void/http :void/html :void/htmx :void/dev :sample/app])
+          "main.janet declares the full wave-1 plugin list")
 
   (def boot (cli/bootstrap-app app :dev))
   (assert (= :validated (boot :phase)) "bootstrap passes, nothing started")
   (def table (http/routes-table))
   (assert (get-in table [:by-name :home]) "the / route lands in the table")
+  (assert (get-in table [:by-name :entries/create])
+          "the POST /entries route lands in the table")
   (assert (empty? (filter |(= :running $) (values (get-in boot [:system :states]))))
           "bootstrap-app starts no components")
 
   # the config file layer is picked up (config/dev.janet sets the port)
   (assert (= 8080 (get-in boot [:config :values :http :port]))
           "config/dev.janet is loaded")
+
+  # -- the generated app serves the guestbook loop without a socket ------
+  (def page (http/with-request {:uri "/"}))
+  (assert (= 200 (page :status)) "GET / renders")
+  (assert (string/find "<form" (string (page :body))) "the schema form renders")
+  (assert (string/find "htmx.org" (string (page :body))) "htmx is on the page")
+
+  (def bad (http/with-request
+             {:method :post :uri "/entries"
+              :headers {"content-type" "application/x-www-form-urlencoded"}
+              :body "name=&message="}))
+  (assert (string/find "field-errors" (string (bad :body)))
+          "an invalid submission re-renders with schema errors")
+
+  (def good (http/with-request
+              {:method :post :uri "/entries"
+               :headers {"content-type" "application/x-www-form-urlencoded"
+                         "hx-request" "true"}
+               :body "name=ada&message=hello"}))
+  (assert (string/find "ada" (string (good :body))) "a valid entry is listed")
+  (assert (not (string/find "<html" (string (good :body))))
+          ":void.htmx/partial strips the layout for the htmx POST")
 
   # -- void routes works against the generated app -----------------------
   (def out @"")

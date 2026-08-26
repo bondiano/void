@@ -26,7 +26,7 @@ Janet без JIT — деградация производительности �
 Вариант 1.
 
 - **Бенчмарки B0–B4** — мини-приложения в `bench/apps/` (plaintext, JSON echo, PG query, PG+SSR, WS broadcast); каждое поднимается одной командой, генератор нагрузки в контейнере рядом.
-- **Бюджеты** (таблица §8.2) — стартовые гипотезы; после первого прогона фиксируются как regression-пороги, допустимая деградация между коммитами — 5%. Не-latency бюджеты: startup < 150 ms, RSS (hello < 30 MB, полный фарш < 80 MB), GC max pause < 10 ms и < 2% времени, ev loop lag p99 < 1 ms, overhead void/obs ≤ 7%.
+- **Бюджеты** (таблица §8.2) — стартовые гипотезы; после первого прогона фиксируются как regression-пороги, допустимая деградация между коммитами — 5%. *(v0.1: B0/B1 промерены, корректировки и причины — [BENCH-v0.1.md](../BENCH-v0.1.md); абсолютный gate — `void bench budgets` на референс-окружении.)* Не-latency бюджеты: startup < 150 ms, RSS (hello < 30 MB, полный фарш < 80 MB), GC max pause < 10 ms и < 2% времени, ev loop lag p99 < 1 ms, overhead void/obs ≤ 7%.
 - **Методика**: `wrk2` для latency под фиксированным RPS (обязательно wrk2 — wrk страдает coordinated omission), `wrk` для max throughput, `k6` для сценарных, свой janet-клиент для WS. Warmup 30s → 3×60s → медиана; фиксировать версию janet, CPU, governor; в CI — dedicated runner или относительные пороги против baseline-коммита.
 - **Контекстные baselines** в том же суите: FastAPI+uvicorn, Go net/http, Joy — для калибровки класса, не для маркетинга.
 - **Профилирование двухэтажное**: C-этаж — `perf record`; janet-этаж — sampling-профайлер void/dev на `debug/stack` по таймеру + `(bench/trace-request ...)` — микротайминги по фазам middleware.

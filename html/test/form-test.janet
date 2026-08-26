@@ -7,7 +7,9 @@
 (schema/defschema SignUp
   {:email [:string {:format :email}]
    :age [:int {:min 18 :max 130}]
-   :bio [:optional [:string {:max-length 200}]]
+   # string length bounds are :min/:max (void/core/schema), the same
+   # props the validator enforces — they project to minlength/maxlength
+   :bio [:optional [:string {:max 200}]]
    :role [:enum :admin :user]
    :subscribed [:optional :boolean]})
 

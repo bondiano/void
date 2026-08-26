@@ -69,10 +69,11 @@
           :attrs {:min (props :min) :max (props :max)}}
     :number {:control :input :type "number"
              :attrs {:min (props :min) :max (props :max) :step "any"}}
+    # string length lives in :min/:max props (void/core/schema bounds)
     :string {:control :input
              :type (get format-input-types (props :format) "text")
-             :attrs {:minlength (props :min-length)
-                     :maxlength (props :max-length)}}
+             :attrs {:minlength (props :min)
+                     :maxlength (props :max)}}
     {:control :input :type "text"}))
 
 (defn field-specs
