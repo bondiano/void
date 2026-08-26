@@ -15,25 +15,30 @@
   :description "A void application."
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
-# void-core / void-http / void-dev must be on the module path as well —
-# until the packages are published, jpm install them from a void
-# checkout (core/, http/, dev/).
+# void-core / void-http / void-html / void-htmx / void-dev must be on
+# the module path as well — until the packages are published, jpm
+# install them from a void checkout (core/, http/, html/, htmx/, dev/).
 `))
 
 (defn- render-main [name]
   (string
     `### ` name ` — entrypoint. Run the app with `
+    "`void dev`"
+    ` (or
+### `
     "`janet main.janet`"
-    `; the
-### void CLI (void routes, void repl, ...) reads the app binding below.
+    `); the void CLI (void routes, void repl, ...)
+### reads the app binding below.
 (import void)
 (import void/http)
+(import void/html)
+(import void/htmx)
 (import void/dev)
 (import ./app)
 
 (def app
   "Boot options — what (void/run! ...) starts and the void CLI reads."
-  {:plugins [:void/http :void/dev :` name `/app]
+  {:plugins [:void/http :void/html :void/htmx :void/dev :` name `/app]
    :profile (keyword (or (os/getenv "VOID_PROFILE") "dev"))})
 
 (defn main [& args]
@@ -42,29 +47,94 @@
 
 (defn- render-app [name]
   (string
-    `### ` name `/app — the application plugin: routes and handlers.
+    `### ` name `/app — the application plugin: schema, views, routes.
 ### Handlers are registered as symbols (late binding): redefine one in
-### the repl and the running route table picks it up immediately.
+### the repl — or save this file with the watcher running — and the
+### running app picks it up; route and metadata edits rebuild the
+### table on the fly.
 (import void/core/plugin :as plugin)
 (import void/http/router :as router)
-(import void/http/ring :as ring)
+(import void/html :as html)
+(import void/html/form :as form)
+(import void/htmx/hx :as hx)
+
+# -- schema: one source of truth for validation and form markup ----------
+
+(def Entry
+  "A guestbook entry — drives both form/check and form/form."
+  {:name [:string {:min 1 :max 40}]
+   :message [:string {:min 1 :max 400}]})
+
+# -- state (in-memory until void/db lands in your :plugins) --------------
+
+(def entries @[])
+
+# -- views (plain functions returning hiccup) ----------------------------
+
+(defn layout [content context]
+  (html/html5
+    [:head
+     [:meta {:charset "utf-8"}]
+     [:title "` name `"]
+     [:script {:src "https://unpkg.com/htmx.org@2.0.7"}]]
+    [:body [:main content]]))
+
+(defn guestbook-view
+  "The #guestbook fragment: schema-driven form plus the entries list.
+  On an invalid submission the caller passes the raw values and the
+  schema errors back in and the same markup re-renders annotated."
+  [&opt values errors]
+  [:div {:id "guestbook"}
+   [:h1 "` name ` guestbook"]
+   (form/form Entry
+     {:action "/entries"
+      :values values
+      :errors errors
+      :fields {:message {:control :textarea}}
+      :submit "Sign"
+      :attrs (hx/post "/entries" :target "#guestbook" :swap :outer-html)})
+   [:ul {:class "entries"}
+    (if (empty? entries)
+      [:li {:class "empty"} "No entries yet — sign the book."]
+      (seq [e :in (reverse entries)]
+        [:li [:strong (e :name)] ": " (e :message)]))]])
+
+# -- handlers ------------------------------------------------------------
 
 (defn home
-  "GET / — replace me."
+  "GET / — the full page."
   [req]
-  (ring/response 200 "hello from ` name `\n"
-                 @{"content-type" "text/plain; charset=utf-8"}))
+  (html/page (guestbook-view) {:layout layout}))
+
+(defn create-entry
+  "POST /entries — form/check validates and coerces against Entry;
+  invalid input re-renders the fragment with per-field errors."
+  [req]
+  (def result (form/check Entry (req :form)))
+  (if (empty? (result :errors))
+    (do
+      (array/push entries (result :value))
+      (html/page (guestbook-view) {:layout layout}))
+    (html/page (guestbook-view (req :form) (result :errors))
+               {:layout layout})))
+
+# -- routes --------------------------------------------------------------
 
 (plugin/defcontribution :void.http/route-source
   {:name :` name `/routes
    :routes (router/routes {}
-             (router/GET "/" 'home {:name :home}))
+             (router/GET "/" 'home {:name :home})
+             # :void.htmx/partial — an HX-Request gets the bare
+             # fragment; a plain form POST still gets the full page
+             (router/POST "/entries" 'create-entry
+                          {:name :entries/create
+                           :void.htmx/partial true}))
    :env (router/env-ref (curenv))})
 
 (plugin/defplugin ` name `/app
   :doc "` name ` application plugin."
   :version "0.1.0"
-  :requires {:void/http ">=0.0.1"})
+  :requires {:void/http ">=0.0.1" :void/html ">=0.0.1" :void/htmx ">=0.0.1"})
 `))
 
 (defn- render-config [name]
@@ -81,11 +151,18 @@
   (string
     "# " name `
 
-A [void](https://github.com/bondiano/void) application.
+A [void](https://github.com/bondiano/void) application — a
+server-rendered HTMX guestbook with schema-validated forms.
 
-    janet main.janet    # run the app (dev profile: netrepl + watcher)
+    void dev            # run the app (dev profile: watcher + netrepl)
     void routes         # print the route table
     void repl           # repl into the running process
+
+Edit app.janet while `
+    "`void dev`"
+    ` runs: handler changes are live
+(late binding), new routes and metadata edits rebuild the route
+table automatically.
 `))
 
 (def template
@@ -129,5 +206,5 @@ A [void](https://github.com/bondiano/void) application.
       (spit full (render name))
       full))
   (each f written (print "  created " f))
-  (printf "\n  cd %s && janet main.janet" name)
+  (printf "\n  cd %s && void dev" name)
   (tuple ;written))
