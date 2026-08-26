@@ -50,12 +50,12 @@
 
 ### 0.1 `void/core/system` — component system *(ADR-0001)*
 
-- [ ] `defcomponent`: `:deps`, `:config` (schema куска), `:start/:stop/:health`, опц. `:suspend/:resume`
-- [ ] Registry → topological sort → старт по зависимостям, стоп в обратном порядке
-- [ ] Валидация графа: cycles, missing deps, дубли ключей — с указанием конфликтующих plugins
-- [ ] `system/start`, `system/stop`, `system/restart :key` (рестарт транзитивных зависимых — reloaded workflow)
-- [ ] `:provides`-интерфейсы; >1 активной реализации без выбора в конфиге → ошибка старта
-- [ ] Scopes `:singleton`/`:factory`
+- [x] `defcomponent`: `:deps`, `:config` (schema куска), `:start/:stop/:health`, опц. `:suspend/:resume`
+- [x] Registry → topological sort → старт по зависимостям, стоп в обратном порядке
+- [x] Валидация графа: cycles, missing deps, дубли ключей — с указанием конфликтующих plugins
+- [x] `system/start`, `system/stop`, `system/restart :key` (рестарт транзитивных зависимых — reloaded workflow)
+- [x] `:provides`-интерфейсы; >1 активной реализации без выбора в конфиге → ошибка старта
+- [x] Scopes `:singleton`/`:factory`
 
 ### 0.2 `void/core/config` *(ADR-0007)*
 
