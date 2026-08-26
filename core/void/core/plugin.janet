@@ -17,6 +17,7 @@
 (import ./system :as system)
 (import ./config :as config)
 (import ./schema :as schema)
+(import ./hooks :as hooks)
 
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
@@ -236,7 +237,7 @@
   {:name true :doc true :void-api true :version true :requires true
    :config-key true :config-schema true :config-defaults true
    :when true :components true :contributes true :extension-points true
-   :on-load true})
+   :on-load true :source true})
 
 (defn- plugin-name [name]
   (cond
@@ -343,6 +344,9 @@
     :extension-points {name point} — this plugin's own points
     :on-load          (fn [ctx]) load-time hook (codegen etc.); ctx is
                       {:name :manifest :plugins :profile}
+    :source           path of the defining file — `defplugin` fills it
+                      from (dyn :current-file); void/dev uses it to map
+                      changed files to components for auto-restart
     :doc              docstring``
   [name & kvs]
   (def pname (plugin-name name))
@@ -379,6 +383,9 @@
       (def [ok e] (protect (schema/normalize cs)))
       (unless ok
         (errorf "plugin %q: invalid :config-schema: %s" pname (err-str e)))))
+  (when-let [src (get opts :source)]
+    (unless (string? src)
+      (errorf "plugin %q: :source must be a string, got %q" pname src)))
   (freeze
     {:name pname
      :doc (get opts :doc)
@@ -392,7 +399,8 @@
      :components (normalize-components pname (get opts :components []))
      :contributes (normalize-contributes pname (get opts :contributes {}))
      :extension-points (normalize-points pname (get opts :extension-points {}))
-     :on-load (get opts :on-load)}))
+     :on-load (get opts :on-load)
+     :source (get opts :source)}))
 
 (def manifest-registry
   "Manifests registered by `defplugin`, keyed by plugin name; bootstrap
@@ -442,10 +450,12 @@
   Contributions and extension points declared earlier in the module via
   `defcontribution` / `defextension-point` are folded in. The manifest
   is also registered in `manifest-registry`, so the project can list
-  the plugin by keyword after requiring the module.``
+  the plugin by keyword after requiring the module. The defining file
+  is recorded as :source (overridable by passing :source explicitly).``
   [name & kvs]
   ~(def manifest
-     (,register-manifest! (,merge-collected (,manifest ',name ,;kvs)))))
+     (,register-manifest!
+       (,merge-collected (,manifest ',name :source (,dyn :current-file) ,;kvs)))))
 
 # -- core extension points -----------------------------------------------
 
@@ -517,8 +527,12 @@
 
      :void.core/hooks
      (extension-point :void.core/hooks
-       :doc "Lifecycle hooks: {:hook :before-start :fn (fn [boot]) :phase <int, default 1000>}"
-       :schema {:hook :keyword :fn :function :phase [:optional :int]}
+       :doc "Lifecycle hooks: {:hook :before-start :fn (fn [boot]) :phase <int, default 1000> :name <keyword>}"
+       :schema {:hook :keyword
+                :fn :function
+                :phase [:optional :int]
+                :name [:optional :keyword]
+                :doc [:optional :string]}
        :reduce |(sorted-by (fn [h] [(get h :phase 1000) (h :hook)]) $))}))
 
 # -- bootstrap phases ----------------------------------------------------
@@ -770,6 +784,20 @@
   extension)."
   nil)
 
+(defn- build-hooks
+  "Fold the :void.core/hooks contributions into a hooks/registry, each
+  handler attributed to its source plugin."
+  [extensions]
+  (def reg (hooks/registry))
+  (each c (get-in extensions [:void.core/hooks :contributions] [])
+    (def v (c :value))
+    (hooks/add! reg (v :hook) (v :fn)
+                :phase (get v :phase 1000)
+                :name (get v :name)
+                :doc (get v :doc)
+                :plugin (c :plugin)))
+  reg)
+
 (defn- bootstrap* [opts track?]
   (unless (dictionary? opts)
     (errorf "bootstrap expects an options dictionary, got %q" opts))
@@ -807,6 +835,7 @@
       :inactive (tuple ;(map |($ :name) inactive))
       :config cfg
       :extensions extensions
+      :hooks (build-hooks extensions)
       :system sys})
   (when track?
     (set current-boot boot))
@@ -826,41 +855,46 @@
               :config-defaults
 
   The boot value is plain data: :phase :profile :plugins :manifests
-  :active :inactive :config :extensions :system.``
-  [opts]
-  (bootstrap* opts true))
+  :active :inactive :config :extensions :hooks :system. With a truthy
+  `untracked` the boot is not recorded as the REPL tools' default
+  subject (test bootstraps).``
+  [opts &opt untracked]
+  (bootstrap* opts (not untracked)))
 
 # -- lifecycle -----------------------------------------------------------
 
-(defn- run-hooks [boot hook]
-  (each h (or (get-in boot [:extensions :void.core/hooks :resolved]) [])
-    (when (= hook (h :hook))
-      ((h :fn) boot))))
-
 (defn start!
-  "Phases 6-7: :before-start hooks, start the component graph in
-  dependency order, mark the boot :ready, run :after-start hooks.
-  Accepts a boot value from `bootstrap` or bootstrap options. Returns
-  the boot value."
+  "Phases 6-7: run the :config-loaded and :before-start hooks, start
+  the component graph in dependency order, mark the boot :ready, run
+  the :after-start hooks (see hooks/lifecycle-hooks; every handler
+  receives the boot value). Accepts a boot value from `bootstrap` or
+  bootstrap options. Returns the boot value."
   [boot-or-opts]
   (def boot (if (get boot-or-opts :system)
               boot-or-opts
               (bootstrap* boot-or-opts true)))
-  (run-hooks boot :before-start)
+  (hooks/run! (boot :hooks) :config-loaded boot)
+  (hooks/run! (boot :hooks) :before-start boot)
   (system/start (boot :system))
   (put boot :phase :ready)
-  (run-hooks boot :after-start)
+  (hooks/run! (boot :hooks) :after-start boot)
   boot)
 
 (defn shutdown!
-  "Stop the system in reverse dependency order, each component's :stop
-  under a deadline of `timeout` seconds (default 5) — a hung stop is
-  cancelled and reported instead of blocking shutdown. Returns the
-  boot value."
+  "Run the :before-stop hooks, stop the system in reverse dependency
+  order — each component's :stop under a deadline of `timeout` seconds
+  (default 5); a hung stop is cancelled and reported instead of
+  blocking shutdown — then run the :after-stop hooks. Stop hooks are
+  protected: a failing handler is reported on stderr but never blocks
+  the shutdown. Returns the boot value."
   [boot &opt timeout]
   (default timeout 5)
+  (each e (hooks/run-protected! (boot :hooks) :before-stop boot)
+    (eprint e))
   (system/stop (boot :system) timeout)
   (put boot :phase :stopped)
+  (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
+    (eprint e))
   boot)
 
 (defn dry-run

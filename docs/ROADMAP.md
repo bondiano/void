@@ -16,7 +16,8 @@
 | ADR 0001–0014 | ✅ accepted |
 | ADR 0015 (свой HTTP-сервер, spork как референс) | ⏳ proposed — принять до старта волны 1 |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, скелет `void/core` | ✅ `system`, `config`, `schema`, `plugin` и `meta` реализованы; `hooks` — заглушка |
+| Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина) и `void/run!` реализованы |
+| `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart, fixtures/factories (`:generator`-проекция) |
 | Всё остальное | не начато |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрывается принятием ADR-0015; (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -87,15 +88,15 @@
 
 ### 0.5 `void/core/hooks` + lifecycle
 
-- [ ] Синхронные упорядоченные хуки (`:config-loaded`, `:before-start`, `:after-start`, …)
-- [ ] In-process pub/sub шина на `ev` для application events
-- [ ] `(void/run! {:plugins [...] :profile ...})` + сигналы (SIGTERM → graceful stop с таймаутом)
+- [x] Синхронные упорядоченные хуки (`:config-loaded`, `:before-start`, `:after-start`, `:before-stop`, `:after-stop` + произвольные; `:phase`-порядок, REPL-friendly `add!`/`remove!`)
+- [x] In-process pub/sub шина на `ev` для application events (буферизованный канал + fiber на подписчика, `:*`-wildcard, backpressure, ошибки хендлера не убивают подписку)
+- [x] `(void/run! {:plugins [...] :profile ...})` + сигналы (SIGTERM/SIGINT → graceful stop с таймаутом; `(void/stop! boot)` из REPL/хуков; обработчики ставятся до старта)
 
 ### 0.6 `void/dev` — канонический plugin
 
-- [ ] netrepl (spork) внутри процесса, unix socket в dev по умолчанию; repl into system environment
-- [ ] File watcher → reload затронутых env tables; карта file→component из manifests → авто `system/restart` stateful
-- [ ] `void/test`: fixtures как компоненты (подъём подмножества системы), factories из schema-generator
+- [x] netrepl (spork) внутри процесса, unix socket в dev по умолчанию; repl into system environment (`system/`, `config/`, `plugin/`, `schema/`, `hooks/`, `(boot)`, `(sys)`; общий env между сессиями)
+- [x] File watcher → reload затронутых env tables (`dofile :env` в тот же table — late binding сохраняется); карта file→component из manifest `:source` (пишется `defplugin`) → авто `system/restart` stateful
+- [x] `void/test`: fixtures как компоненты (`:only` — подъём подмножества системы, `:components` — стабы поверх реальных), factories из schema-generator (`:generator`-проекция, seed/max-depth)
 
 ### Exit-критерии волны 0
 

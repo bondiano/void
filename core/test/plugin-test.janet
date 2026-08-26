@@ -1,6 +1,7 @@
 (import ../void/core/plugin :as plugin)
 (import ../void/core/system :as system)
 (import ../void/core/schema :as schema)
+(import ../void/core/hooks :as hooks)
 
 (defn expect-error [name pat thunk]
   (def [ok err] (protect (thunk)))
@@ -350,12 +351,19 @@
                    :stop (fn [i] (array/push hook-log :stop)))]
     :contributes {:void.core/hooks
                   [{:hook :after-start :fn (fn [b] (array/push hook-log :after)) :phase 2000}
+                   {:hook :config-loaded :fn (fn [b] (array/push hook-log :cfg)) :name :cfg-hook}
                    {:hook :before-start :fn (fn [b] (array/push hook-log :before))}]}))
 (def hboot (plugin/start! {:plugins [hooky]}))
-(assert (= (freeze hook-log) [:before :start :after])
-        "hooks fire around system start")
+(assert (= (freeze hook-log) [:cfg :before :start :after])
+        "hooks fire in lifecycle order around system start")
+(def cfg-entry (first (hooks/handlers (hboot :hooks) :config-loaded)))
+(assert (= :test/hooky (cfg-entry :plugin))
+        "boot :hooks registry attributes handlers to their plugin")
+(hooks/add! (hboot :hooks) :before-stop
+            (fn [b] (array/push hook-log :pre-stop)) :name :late)
 (plugin/shutdown! hboot)
-(assert (= :stop (last hook-log)))
+(assert (= (freeze (slice hook-log 4)) [:pre-stop :stop])
+        "ad-hoc :before-stop handler runs before component stops")
 
 # -- shutdown with timeout -----------------------------------------------
 
@@ -392,6 +400,8 @@
         "defextension-point lands in the manifest")
 (assert (= manifest (get plugin/manifest-registry :test/dp))
         "defplugin registers the manifest")
+(assert (= (dyn :current-file) (manifest :source))
+        "defplugin records the defining file as :source")
 
 (def dp-report (plugin/dry-run {:plugins [:test/dp]}))
 (assert (= [:test/dp] (dp-report :active))
