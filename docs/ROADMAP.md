@@ -130,10 +130,10 @@
 
 ### 1.2 `void/html` *(M)* → 1.3 `void/htmx` *(S)*
 
-- [ ] hiccup-pipeline (htmlgen): layouts, partials, компоненты-функции; snapshot testing
-- [ ] Form helpers из schema (поля, ошибки, значения, CSRF-слот)
-- [ ] Asset pipeline: fingerprinting+manifest, dev-passthrough; temple как альтернативный движок (point `:void.html/engine`)
-- [ ] htmx: hx-хелперы, `HX-Request` → фрагмент без layout (`:void.htmx/partial`), OOB swaps, `HX-Trigger`
+- [x] hiccup-pipeline (htmlgen): компоненты-функции (tuple с функцией в голове), layouts/partials — обычные функции; lazy view responses (`html/page`/`html/fragment`) рендерятся middleware на выходе — `html/void/html/hiccup.janet`, `init.janet`; snapshot testing — `test/snapshot` в `void/test` (dev)
+- [x] Form helpers из schema: `form/field-specs` (проекция map-схемы в контролы), `form/fields`/`form/form` (значения, ошибки schema/check, CSRF-слот через `(dyn :void.html/csrf)`), `form/check` (string-ключи формы → keyword + coerce) — `html/void/html/form.janet`
+- [x] Asset pipeline: `assets/build!` (crc32-fingerprint + manifest.jdn), href через manifest в prod / passthrough в dev; temple как альтернативный движок за point `:void.html/engine` (выбор в `[:html :engine]`, override на response) — `assets.janet`, `temple.janet`
+- [x] htmx: hx-хелперы (`hx/attrs`, verb-сахар, JSON для hx-vals), `HX-Request` → фрагмент без layout на маршрутах с `:void.htmx/partial` (middleware фазы 9500 снимает layout до рендера; history-restore сохраняет), `hx/oob`, `HX-Trigger`/`HX-Redirect`/`HX-Location`/`HX-Reswap` и остальные response-хелперы — `htmx/void/htmx/`
 
 ### 1.4 `void/rest` *(S)* → 1.5 `void/openapi` *(S)*
 

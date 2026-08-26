@@ -1,5 +1,6 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
-### void/dev + the demo plugin on top of the core extension points.
+### void/html + void/htmx + void/dev + the demo plugin on top of the
+### core extension points.
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
 ### non-zero with the batched error list. Run from the repository root:
@@ -14,14 +15,18 @@
 (add-tree (string (os/cwd) "/core"))
 (add-tree (string (os/cwd) "/dev"))
 (add-tree (string (os/cwd) "/http"))
+(add-tree (string (os/cwd) "/html"))
+(add-tree (string (os/cwd) "/htmx"))
 
 (import void/core/plugin :as plugin)
 (require "void/http/init")
+(require "void/html/init")
+(require "void/htmx/init")
 (require "void/dev/init")
 (require "examples/demo/plugin")
 
 (def report
-  (plugin/dry-run {:plugins [:void/http :void/dev :demo/greeter]
+  (plugin/dry-run {:plugins [:void/http :void/html :void/htmx :void/dev :demo/greeter]
                    :profile :dev}))
 
 (printf "dry-run ok (profile %q)" (report :profile))
