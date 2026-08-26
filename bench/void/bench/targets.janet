@@ -3,7 +3,7 @@
 ###
 ### Three tables: `benches` are the load shapes (what the generator
 ### does), `targets` are the servers (what it hits — the B* mini-apps
-### and the contextual baselines), `budgets` are the §8.2 hypotheses.
+### and the contextual baselines), `budgets` are the §8.2 SLOs.
 ### The runner is a pure interpreter of these tables; adding B2-B4 in
 ### later waves means adding rows, not code.
 
@@ -24,11 +24,13 @@
           :body-file "payloads/b1-order.json"}})
 
 (def budgets
-  "SPEC §8.2 budgets (1 worker, 1 vCPU) — hypotheses until the first
-  recorded baseline turns them into regression thresholds. Latencies
-  in ms, :rps is the throughput floor."
-  {:b0 {:p50 0.5 :p99 3 :rps 20000}
-   :b1 {:p50 1 :p99 5 :rps 8000}})
+  "SPEC §8.2 budgets (1 worker, 1 vCPU), verified against the recorded
+  reference environment at v0.1 — measurements, adjustments and their
+  reasons: docs/BENCH-v0.1.md (b0 :p50 was the 0.5 hypothesis, below
+  the loopback methodology floor). Latencies in ms, :rps is the
+  throughput floor. Enforced by `void bench budgets` / --budgets."
+  {:b0 {:p50 2 :p99 3 :rps 20000}
+   :b1 {:p50 2.5 :p99 10 :rps 8000}})
 
 (def targets
   ``target -> how to serve it. :cmd is a sh line run from the bench

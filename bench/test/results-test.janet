@@ -83,7 +83,7 @@
 (def missed
   (results/budget-notes
     {:throughput {:rps 15000}
-     :latency {:rate 16000 :p50 0.7 :p99 2.0}}
+     :latency {:rate 16000 :p50 2.7 :p99 2.0}}
     (targets/budgets :b0)))
 (assert (= :miss (first (missed 0))) "throughput floor missed")
 (assert (= :miss (first (missed 1))) "p50 budget missed")

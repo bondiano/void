@@ -175,7 +175,7 @@
   (print)
   (each tname (filter |(get-in res [:rows $]) targets/order)
     (when-let [bkey (get-in targets/targets [tname :budget])]
-      (printf "budget %s (§8.2, hypotheses):" tname)
+      (printf "budget %s (§8.2, docs/BENCH-v0.1.md):" tname)
       (each [status text] (results/budget-notes (get-in res [:rows tname])
                                                 (targets/budgets bkey))
         (printf "  %s %s"
@@ -186,6 +186,8 @@
 (def- usage
   ``usage: void bench [TARGETS|all|baselines] [flags]
        void bench compare BASE.jdn CURRENT.jdn [--threshold PCT]
+       void bench budgets [FILE]   # §8.2 check of a saved result set
+                                   # (default results/baseline.jdn)
        void bench list
 
 flags:
@@ -199,6 +201,10 @@ flags:
                    any >5% regression
   --against FILE   baseline file for --check
   --threshold PCT  allowed degradation percent (default 5)
+  --budgets        also enforce the absolute §8.2 budgets on this run,
+                   exit 1 on any MISS or unmeasured budget
+                   (docs/BENCH-v0.1.md: reference-environment check,
+                   not for shared CI runners)
 
 tools: wrk (max throughput) and wrk2 (latency under fixed rate) on
 PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
@@ -208,7 +214,8 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
    "--out" :out "--against" :against "--threshold" :threshold})
 
 (def- bool-flags
-  {"--quick" :quick "--record" :record "--check" :check "--help" :help})
+  {"--quick" :quick "--record" :record "--check" :check "--help" :help
+   "--budgets" :budgets})
 
 (defn- parse-args [args]
   (def flags @{})
@@ -270,6 +277,27 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
 (defn- threshold [flags]
   (/ (num-flag flags :threshold (* 100 results/default-threshold)) 100))
 
+(defn enforce-budgets
+  ``The absolute §8.2 gate: every budgeted target present in `res`
+  must measure and meet its budget — a MISS or an unmeasured budget
+  (no wrk2, target not run) throws. Meant for the reference
+  environment (docs/BENCH-v0.1.md), not for shared CI runners.``
+  [res]
+  (def failures @[])
+  (each tname (filter |(get-in targets/targets [$ :budget]) targets/order)
+    (def row (get-in res [:rows tname]))
+    (if (nil? row)
+      (array/push failures (string/format "%s: not in this result set" tname))
+      (each [status text] (results/budget-notes
+                            row
+                            (targets/budgets (get-in targets/targets [tname :budget])))
+        (unless (= :ok status)
+          (array/push failures (string/format "%s: %s" tname text))))))
+  (if (empty? failures)
+    (print "budgets §8.2: all met")
+    (errorf "§8.2 budget check failed:\n  - %s"
+            (string/join failures "\n  - "))))
+
 (defn- check-against [basefile current thr]
   (printf "check against %s (threshold %.0f%%):" basefile (* 100 thr))
   (def cmp (results/print-comparison
@@ -303,6 +331,14 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
                      (results/read-file (in words 2))
                      (threshold flags)))
 
+    (= (first words) "budgets")
+    (do
+      (unless (<= (length words) 2)
+        (errorf "usage: void bench budgets [FILE]"))
+      (def file (get words 1 (string root "/results/baseline.jdn")))
+      (printf "budgets §8.2 check of %s:" file)
+      (enforce-budgets (results/read-file file)))
+
     (do
       (def tnames (resolve-targets words))
       (def settings
@@ -328,4 +364,6 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
       (when (flags :check)
         (check-against (or (flags :against)
                            (string root "/results/baseline.jdn"))
-                       res (threshold flags))))))
+                       res (threshold flags)))
+      (when (flags :budgets)
+        (enforce-budgets res)))))

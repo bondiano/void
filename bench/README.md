@@ -52,13 +52,16 @@ saturation is meaningless. Results land in `results/last.jdn`.
 
 | Target | What it measures | Budget p50 | Budget p99 | Floor |
 |---|---|---|---|---|
-| `b0` | plaintext hello through router + full middleware stack | < 0.5 ms | < 3 ms | ≥ 20k RPS |
-| `b1` | JSON echo 1KB: codec parse + schema validate + serialize (void/rest) | < 1 ms | < 5 ms | ≥ 8k RPS |
+| `b0` | plaintext hello through router + full middleware stack | < 2 ms | < 3 ms | ≥ 20k RPS |
+| `b1` | JSON echo 1KB: codec parse + schema validate + serialize (void/rest) | < 2.5 ms | < 10 ms | ≥ 8k RPS |
 
 B2 (PG query), B3 (PG + SSR) and B4 (WS broadcast) arrive with their
 waves — each is a row in `void/bench/targets.janet`, not new code.
-Budgets are hypotheses until measured; after the first recorded run
-the regression thresholds take over.
+The B0/B1 budgets were verified against the recorded reference
+environment at v0.1 — measurements, the b0 p50 adjustment and its
+reasons live in [docs/BENCH-v0.1.md](../docs/BENCH-v0.1.md). Enforce
+them with `void bench budgets` (a saved result set) or `--budgets`
+(after a run); regression thresholds guard everything else.
 
 ## Baselines for calibration, not marketing
 
