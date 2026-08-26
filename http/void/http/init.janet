@@ -367,6 +367,42 @@
   [name &opt params query]
   (router/url-for (routes-table) name params query))
 
+(defn print-routes
+  ``Print the route table (the `void routes` CLI command). With :keys
+  each route also lists its merged metadata, one key per line — :name
+  aside, since it is already a column.``
+  [table &opt opts]
+  (def entries
+    (sorted-by |[($ :pattern) (string ($ :method))] (table :routes)))
+  (def rows
+    (seq [e :in entries]
+      [(string/ascii-upper (string (e :method)))
+       (e :pattern)
+       (string/format "%q" (e :name))
+       (if (symbol? (e :handler)) (string (e :handler)) "<fn>")
+       (string/format "%q" (e :source))]))
+  (def widths
+    (seq [i :range [0 4]]
+      (max 1 ;(map |(length ($ i)) rows))))
+  (each [row e] (map tuple rows entries)
+    (printf "%s  %s  %s  %s  %s"
+            ;(seq [i :range [0 4]]
+               (string/format (string "%-" (widths i) "s") (row i)))
+            (row 4))
+    (when (get opts :keys)
+      (each k (sorted (filter |(not= :name $) (keys (e :meta))))
+        (printf "  %q %q" k (get-in e [:meta k]))))))
+
+(plugin/defcontribution :void.core/cli
+  {:name :routes
+   :doc "Print the route table: void routes [--keys]"
+   :fn (fn cli-routes [& args]
+         (each a args
+           (unless (= a "--keys")
+             (errorf "void routes: unknown flag %q (only --keys)" a)))
+         (print-routes (routes-table)
+                       {:keys (truthy? (index-of "--keys" args))}))})
+
 (defn rebuild!
   "Rebuild the route table from the booted sources and swap it
   atomically — after REPL work that changes patterns or metadata

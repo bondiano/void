@@ -306,14 +306,38 @@
   (put (sys :instances) k nil)
   (put (sys :states) k :stopped))
 
+(defn needed-keys
+  "Expand a set of component keys to their transitive dependency
+  closure — the minimal subset that can start on its own (the CLI
+  bootstraps command :needs through this). Unknown keys are an error."
+  [sys ks]
+  (def wanted @{})
+  (defn visit [k]
+    (unless (get-in sys [:components k])
+      (errorf "unknown component %q (known: %s)"
+              k (string/join (map |(string/format "%q" $)
+                                  (sorted (keys (sys :components))))
+                             " ")))
+    (unless (in wanted k)
+      (put wanted k true)
+      (each rk (sorted (values (get-in sys [:resolution k] {})))
+        (visit rk))))
+  (each k ks (visit k))
+  wanted)
+
 (defn start
-  "Start all singleton components in dependency order. If a component
-  fails to start, the ones already started are stopped in reverse order
-  (best effort) and the error is rethrown. Returns the system."
-  [sys]
+  "Start singleton components in dependency order — all of them, or,
+  with `subset` (component keys), only those plus their transitive
+  dependencies (partial bootstrap for CLI commands and fixtures). If a
+  component fails to start, the ones already started are stopped in
+  reverse order (best effort) and the error is rethrown. Returns the
+  system."
+  [sys &opt subset]
+  (def wanted (when subset (needed-keys sys subset)))
   (each k (sys :order)
     (def comp (get-in sys [:components k]))
-    (when (and (= :singleton (get comp :scope))
+    (when (and (or (nil? wanted) (in wanted k))
+               (= :singleton (get comp :scope))
                (not= :running (get-in sys [:states k])))
       (try
         (do

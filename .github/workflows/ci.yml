@@ -31,6 +31,9 @@ jobs:
       - name: Test void/dev
         run: cd dev && jpm test
 
+      - name: Test void/cli
+        run: cd cli && jpm test
+
       - name: Test void/http
         run: cd http && jpm test
 

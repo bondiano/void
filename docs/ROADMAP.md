@@ -143,8 +143,8 @@
 
 ### 1.6 `void/cli` — минимум *(M→S в этой волне)*
 
-- [ ] Бинарь `void`; команды — extension point; bootstrap подмножества системы (`:needs [...]`)
-- [ ] `void new` (шаблон проекта), `void routes` (+`--keys`), `void repl` (netrepl-клиент)
+- [x] Бинарь `void`; команды — extension point; bootstrap подмножества системы (`:needs [...]`)
+- [x] `void new` (шаблон проекта), `void routes` (+`--keys`), `void repl` (netrepl-клиент)
 
 ### 1.7 Bench-suite: старт *(ADR-0014)*
 
