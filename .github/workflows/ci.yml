@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Janet
+        run: |
+          git clone --depth 1 --branch v1.41.2 https://github.com/janet-lang/janet /tmp/janet
+          make -C /tmp/janet -j"$(nproc)"
+          sudo make -C /tmp/janet install
+
+      - name: Install jpm
+        run: |
+          git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm
+          cd /tmp/jpm && sudo janet bootstrap.janet
+
+      - name: Install dependencies
+        run: cd dev && sudo jpm deps
+
+      - name: Test void/core
+        run: cd core && jpm test
+
+      - name: Test void/dev
+        run: cd dev && jpm test
+
+      - name: Dry-run the full plugin composition
+        run: janet scripts/dry-run.janet

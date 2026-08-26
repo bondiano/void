@@ -130,6 +130,18 @@
                  (system/component :user :deps [:void/cache] :start (fn [d c] nil))]
                 {:void/cache {:impl :missing}}))
 
+(expect-error "conflict without a dependent" "provided by multiple"
+  |(system/init [(cache-comp :memory-cache :void/memory)
+                 (cache-comp :redis-cache :void/redis)]))
+
+(def sys3b
+  (system/init [(cache-comp :memory-cache :void/memory)
+                (cache-comp :redis-cache :void/redis)]
+               {:void/cache {:impl :memory-cache}}))
+(system/start sys3b)
+(assert (= (system/instance sys3b :void/cache) :memory-cache)
+        "config choice resolves the conflict even with no dependent")
+
 # -- restart: transitive dependents only --------------------------------
 
 (def rlog @[])

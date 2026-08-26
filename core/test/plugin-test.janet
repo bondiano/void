@@ -324,6 +324,30 @@
 (assert (and (string/find "test/dup-a" dup-err) (string/find "test/dup-b" dup-err))
         "duplicate component error names both plugins")
 
+# -- :provides conflict caught by dry-run --------------------------------
+
+(defn store-comp [key]
+  (system/component key :provides [:test/store] :start (fn [d c] key)))
+
+(def multi-store
+  (plugin/manifest 'test/multi-store
+    :source "examples/fake/multi.janet"
+    :components [(store-comp :store/a) (store-comp :store/b)]
+    :contributes {:void.core/interface [{:name :test/store}]}))
+
+(def multi-err
+  (expect-error "provides conflict, no consumer" "provided by multiple"
+    |(plugin/dry-run {:plugins [multi-store]})))
+(assert (string/find "plugin files:" multi-err)
+        "phase error carries a plugin-files footer")
+(assert (string/find "examples/fake/multi.janet" multi-err)
+        "the footer points at the offending plugin's :source")
+
+(def picked (plugin/dry-run {:plugins [multi-store]
+                             :config {:cli {:test/store {:impl :store/a}}}}))
+(assert (= [:store/a :store/b] (freeze (sorted (picked :components))))
+        "a config {:impl ...} choice resolves the conflict in dry-run")
+
 # -- core points: schema-type and schema-projection get registered -------
 
 (def typer

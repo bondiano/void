@@ -238,6 +238,12 @@
   (default config {})
   (def comps (collect-components components))
   (def providers (interface-providers comps))
+  # >1 implementation demands an explicit config {:impl ...} choice even
+  # when nothing depends on the interface yet — instance lookup by
+  # interface must never be ambiguous (ROADMAP 0.1).
+  (each iface (sorted (keys providers))
+    (when (> (length (providers iface)) 1)
+      (resolve-ref comps providers config "interface" iface)))
   (def resolution @{})
   (each k (sorted (keys comps))
     (def comp (comps k))

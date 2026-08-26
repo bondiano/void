@@ -539,10 +539,21 @@
 
 (def- allowed-boot-opts {:plugins true :profile true :config true})
 
-(defn- checked [phase errors]
+(defn- checked
+  "Throw the batched phase errors, if any. `sources` (plugin name ->
+  :source file) adds a `plugin files:` footer for the plugins the
+  errors mention, pointing at the defining files."
+  [phase errors &opt sources]
   (unless (empty? errors)
-    (errorf "plugin bootstrap failed at phase %q:\n  - %s"
-            phase (string/join errors "\n  - "))))
+    (def files
+      (seq [name :in (sorted (keys (or sources {})))
+            :when (some |(string/find (string/format "%q" name) $) errors)]
+        (string/format "%q -> %s" name (in sources name))))
+    (errorf "plugin bootstrap failed at phase %q:\n  - %s%s"
+            phase (string/join errors "\n  - ")
+            (if (empty? files)
+              ""
+              (string "\n  plugin files:\n    " (string/join files "\n    "))))))
 
 (defn- load-manifests
   "Phase 1 (load): resolve :plugins entries — manifest values, keywords
@@ -809,22 +820,23 @@
   (def errors @[])
 
   (def ms (load-manifests (get opts :plugins []) errors))
+  (def sources (tabseq [m :in ms :when (m :source)] (m :name) (m :source)))
   (check-compat ms errors)
   (when (empty? errors)
     (run-on-load ms profile errors))
-  (checked :load errors)
+  (checked :load errors sources)
 
   (def cfg (load-boot-config ms opts errors))
-  (checked :config errors)
+  (checked :config errors sources)
 
   (def [active inactive] (split-active ms cfg errors))
-  (checked :conditional errors)
+  (checked :conditional errors sources)
 
   (def extensions (resolve-extensions active ms errors))
-  (checked :extension-resolution errors)
+  (checked :extension-resolution errors sources)
 
   (def sys (build-system active extensions cfg errors))
-  (checked :graph errors)
+  (checked :graph errors sources)
 
   (def boot
     @{:phase :validated
