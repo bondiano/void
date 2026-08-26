@@ -8,7 +8,7 @@
 
 ---
 
-## Текущее состояние (2026-08-25)
+## Текущее состояние (2026-08-26)
 
 | Что | Статус |
 |---|---|
@@ -16,7 +16,7 @@
 | ADR 0001–0014 | ✅ accepted |
 | ADR 0015 (свой HTTP-сервер, spork как референс) | ⏳ proposed — принять до старта волны 1 |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, скелет `void/core` | ✅ `system`, `config` и `schema` реализованы; `plugin/hooks` — заглушки |
+| Монорепо, скелет `void/core` | ✅ `system`, `config`, `schema`, `plugin` и `meta` реализованы; `hooks` — заглушка |
 | Всё остальное | не начато |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрывается принятием ADR-0015; (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -77,13 +77,13 @@
 
 ### 0.4 `void/core/plugin` — Plugin API *(ADR-0003)*
 
-- [ ] `defplugin` → manifest-struct: `:void-api`, `:version`, `:requires` (semver), `:config-key/-schema`, `:when`, `:components`, `:contributes`, `:extension-points`, `:on-load`
-- [ ] `defextension-point`: `:schema`, `:cardinality` (`:many/:single/:single-required`), `:reduce`, `:validate`
-- [ ] `defcontribution` + resolution: валидация по schema точки, ошибки с plugin-источником, did-you-mean для опечаток, «повисшие» вклады → ошибка
-- [ ] Bootstrap-фазы: load → config → conditional → extension resolution → graph → start → ready; shutdown с таймаутом
-- [ ] Базовые точки ядра: `:void.core/cli`, `/health`, `/config-source`, `/schema-type`, `/schema-projection`, `/interface`, `/hooks`
-- [ ] REPL-инструменты: `(plugin/inspect)`, `(plugin/why :key)`, **`(plugin/dry-run ...)`** — фазы 1–5 без старта
-- [ ] `void/core/meta` — merge-семантика metadata (`:replace/:concat/:deep-merge/:restrict`) живёт в core (ADR-0005: контракт не HTTP-специфичен)
+- [x] `defplugin` → manifest-struct: `:void-api`, `:version`, `:requires` (semver), `:config-key/-schema`, `:when`, `:components`, `:contributes`, `:extension-points`, `:on-load`
+- [x] `defextension-point`: `:schema`, `:cardinality` (`:many/:single/:single-required`), `:reduce`, `:validate`
+- [x] `defcontribution` + resolution: валидация по schema точки, ошибки с plugin-источником, did-you-mean для опечаток, «повисшие» вклады → ошибка
+- [x] Bootstrap-фазы: load → config → conditional → extension resolution → graph → start → ready; shutdown с таймаутом
+- [x] Базовые точки ядра: `:void.core/cli`, `/health`, `/config-source`, `/schema-type`, `/schema-projection`, `/interface`, `/hooks`
+- [x] REPL-инструменты: `(plugin/inspect)`, `(plugin/why :key)`, **`(plugin/dry-run ...)`** — фазы 1–5 без старта
+- [x] `void/core/meta` — merge-семантика metadata (`:replace/:concat/:deep-merge/:restrict`) живёт в core (ADR-0005: контракт не HTTP-специфичен)
 
 ### 0.5 `void/core/hooks` + lifecycle
 

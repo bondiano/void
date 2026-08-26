@@ -324,14 +324,19 @@
   sys)
 
 (defn stop
-  "Stop running components in reverse dependency order. A stop error
-  does not prevent the remaining components from stopping; failures are
-  collected and rethrown as one error at the end. Returns the system."
-  [sys]
+  "Stop running components in reverse dependency order. With `timeout`
+  (seconds) each component's :stop runs under ev/with-deadline — a hung
+  stop is cancelled and reported instead of blocking shutdown. A stop
+  error does not prevent the remaining components from stopping;
+  failures are collected and rethrown as one error at the end. Returns
+  the system."
+  [sys &opt timeout]
   (def failures @[])
   (each k (reverse (sys :order))
     (when (= :running (get-in sys [:states k]))
-      (try (stop-instance sys k)
+      (try (if timeout
+             (ev/with-deadline timeout (stop-instance sys k))
+             (stop-instance sys k))
         ([e]
           (put (sys :instances) k nil)
           (put (sys :states) k :stopped)
