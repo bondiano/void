@@ -148,9 +148,9 @@
 
 ### 1.7 Bench-suite: старт *(ADR-0014)*
 
-- [ ] Каркас `void bench` + `bench/apps/`: B0 plaintext, B1 JSON echo; wrk2/wrk, методика из SPEC §8.3
-- [ ] Первый прогон фиксирует baseline → пороги регрессии 5% в CI
-- [ ] Baselines для калибровки: Go net/http, FastAPI
+- [x] Каркас `void bench` + `bench/apps/`: B0 plaintext, B1 JSON echo; wrk2/wrk (loadgen-контейнер рядом), методика из SPEC §8.3 — таргеты/бюджеты как данные (`bench/void/bench/targets.janet`), команда `bench` — обычный `:void.core/cli` contribution
+- [x] Первый прогон фиксирует baseline (`bench/results/baseline.jdn`) → пороги регрессии 5%; в CI (`bench.yml`) — относительное сравнение merge-base vs head на одном раннере (shared runners не доверяем абсолютным числам, ADR-0014)
+- [x] Baselines для калибровки: Go net/http, FastAPI — `bench/baselines/`, таргеты `go-*`/`fastapi-*` в том же суите
 
 ### Exit-критерии волны 1
 

@@ -1,0 +1,84 @@
+# Bench regression gate (SPEC §8, ADR-0014). Shared runners cannot be
+# trusted with absolute numbers, so the 5% thresholds are RELATIVE:
+# the PR head and its merge-base are measured on the same runner in
+# the same job and compared. A dedicated runner can later switch this
+# to the committed bench/results/baseline.jdn.
+name: Bench
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "core/**"
+      - "http/**"
+      - "rest/**"
+      - "bench/**"
+      - ".github/workflows/bench.yml"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Janet
+        run: |
+          git clone --depth 1 --branch v1.41.2 https://github.com/janet-lang/janet /tmp/janet
+          make -C /tmp/janet -j"$(nproc)"
+          sudo make -C /tmp/janet install
+
+      - name: Install jpm and dependencies
+        run: |
+          git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm
+          cd /tmp/jpm && sudo janet bootstrap.janet
+          cd "$GITHUB_WORKSPACE/dev" && sudo jpm deps
+
+      - name: Install wrk, build wrk2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wrk libssl-dev
+          git clone --depth 1 https://github.com/giltene/wrk2 /tmp/wrk2
+          make -C /tmp/wrk2 -j"$(nproc)"
+          sudo cp /tmp/wrk2/wrk /usr/local/bin/wrk2
+
+      # Shorter than the local методика (2×30s vs 3×60s) — the verdict
+      # is relative, both sides run under the same settings.
+      - name: Bench head
+        run: |
+          cd bench
+          janet main.janet b0 b1 --runs 2 --duration 30 --warmup 10 \
+            --out /tmp/bench-head.jdn
+
+      - name: Bench merge-base
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE_SHA="$(git merge-base HEAD "origin/${{ github.base_ref }}")"
+          echo "merge-base: $BASE_SHA"
+          if git cat-file -e "$BASE_SHA:bench/main.janet" 2>/dev/null; then
+            git worktree add /tmp/base "$BASE_SHA"
+            cd /tmp/base/bench
+            janet main.janet b0 b1 --runs 2 --duration 30 --warmup 10 \
+              --out /tmp/bench-base.jdn
+          else
+            echo "bench suite absent at merge-base — nothing to compare against"
+          fi
+
+      - name: Check the 5% thresholds
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f /tmp/bench-base.jdn ]; then
+            cd bench
+            janet main.janet compare /tmp/bench-base.jdn /tmp/bench-head.jdn
+          else
+            echo "no merge-base results — skipped"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: /tmp/bench-*.jdn
+          if-no-files-found: ignore
