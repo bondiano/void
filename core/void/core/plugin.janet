@@ -125,7 +125,7 @@
 
 (def- allowed-point-keys
   {:name true :doc true :schema true :cardinality true
-   :reduce true :validate true})
+   :reduce true :validate true :aliases true})
 
 (def- cardinalities {:many true :single true :single-required true})
 
@@ -148,6 +148,10 @@
                   contribution (:single, :single-required)
     :validate     (fn [contributions]) — optional cross-checks (name
                   conflicts etc.), failure = throw
+    :aliases      deprecated former names of this point (SPEC part II
+                  §1.5): contributions addressed to an alias fold into
+                  this point with a deprecation warning — renaming a
+                  point is new-point + alias, never mutation
     :doc          docstring``
   [name & kvs]
   (unless (keyword? name)
@@ -170,13 +174,24 @@
   (when-let [d (get opts :doc)]
     (unless (string? d)
       (errorf "extension point %q: :doc must be a string, got %q" name d)))
+  (def aliases (get opts :aliases []))
+  (unless (and (indexed? aliases) (all keyword? aliases))
+    (errorf "extension point %q: :aliases must be a tuple of keywords, got %q"
+            name aliases))
+  (when (index-of name aliases)
+    (errorf "extension point %q: cannot alias itself" name))
   (def sch
     (when-let [s (get opts :schema)]
       (def [ok n] (protect (schema/normalize s)))
       (unless ok
         (errorf "extension point %q: invalid :schema: %s" name (err-str n)))
       n))
-  (freeze (merge-into @{} opts {:name name :cardinality card :schema sch})))
+  # :schema-source keeps the author's shorthand — the contract docs
+  # (scripts/gen-contracts.janet) render it, :schema is the normalized
+  # validator input
+  (freeze (merge-into @{} opts {:name name :cardinality card :schema sch
+                                :aliases (tuple ;aliases)
+                                :schema-source (get opts :schema)})))
 
 (defn- point? [x]
   (and (dictionary? x)
@@ -696,14 +711,38 @@
       (unless (in points name)
         (put inactive-owners name (m :name)))))
 
+  # deprecation aliases (SPEC part II §1.5): a renamed point keeps its
+  # old name as an :aliases entry; contributions addressed to the old
+  # name fold into the new point with a warning
+  (def aliases @{})
+  (each pname (sorted (keys points))
+    (each a (get-in points [pname :point :aliases] [])
+      (cond
+        (in points a)
+        (array/push errors
+                    (string/format "extension point %q declares alias %q, which is itself a declared point"
+                                   pname a))
+        (in aliases a)
+        (array/push errors
+                    (string/format "alias %q is claimed by both %q and %q"
+                                   a (aliases a) pname))
+        (put aliases a pname))))
+
   (def contribs @{})
   (each m active-sorted
     (each pname (sorted (keys (m :contributes)))
+      (def canonical
+        (cond
+          (in points pname) pname
+          (when-let [c (get aliases pname)]
+            (eprintf "warning: plugin %q contributes to deprecated extension point %q — folded into %q"
+                     (m :name) pname c)
+            c)))
       (cond
-        (in points pname)
+        canonical
         (each v (get-in m [:contributes pname])
-          (def arr (or (get contribs pname)
-                       (let [a @[]] (put contribs pname a) a)))
+          (def arr (or (get contribs canonical)
+                       (let [a @[]] (put contribs canonical a) a)))
           (array/push arr {:plugin (m :name) :value v}))
 
         (in inactive-owners pname)
@@ -713,7 +752,9 @@
 
         (array/push errors
                     (string/format "plugin %q contributes to unknown extension point %q%s"
-                                   (m :name) pname (suggest pname (keys points)))))))
+                                   (m :name) pname
+                                   (suggest pname (array/concat (array ;(keys points))
+                                                                ;(keys aliases))))))))
 
   (def out @{})
   (each name (sorted (keys points))
@@ -975,6 +1016,8 @@
        :owner (e :owner)
        :doc (get-in e [:point :doc])
        :cardinality (get-in e [:point :cardinality])
+       :schema (get-in e [:point :schema-source])
+       :aliases (get-in e [:point :aliases])
        :contributions (e :contributions)
        :resolved (e :resolved)})
     (seq [name :in (sorted (keys (bt :manifests)))]
