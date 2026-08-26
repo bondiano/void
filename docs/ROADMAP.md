@@ -16,7 +16,7 @@
 | ADR 0001–0014 | ✅ accepted |
 | ADR 0015 (свой HTTP-сервер, spork как референс) | ⏳ proposed — принять до старта волны 1 |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, скелет `void/core` | ✅ каркас: `system/config/schema/plugin/hooks` — заглушки |
+| Монорепо, скелет `void/core` | ✅ `system` и `config` реализованы; `schema/plugin/hooks` — заглушки |
 | Всё остальное | не начато |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрывается принятием ADR-0015; (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -59,11 +59,11 @@
 
 ### 0.2 `void/core/config` *(ADR-0007)*
 
-- [ ] Слои: plugin defaults ← `config/*.janet|jdn` ← env (`VOID_DB__HOST`) ← CLI overrides
-- [ ] Provenance каждого значения: `(config/explain :database :host)`
-- [ ] Профили `:dev/:test/:prod` + произвольные
-- [ ] Валидация всех `:config-key` по схемам **пачкой** до старта (не first-fail)
-- [ ] Secrets: `{:secret "DB_PASSWORD"}` — резолв из env/file, custom print (не утекают в логи/REPL)
+- [x] Слои: plugin defaults ← `config/*.janet|jdn` ← env (`VOID_DB__HOST`) ← CLI overrides
+- [x] Provenance каждого значения: `(config/explain :database :host)`
+- [x] Профили `:dev/:test/:prod` + произвольные
+- [x] Валидация всех `:config-key` по схемам **пачкой** до старта (не first-fail)
+- [x] Secrets: `{:secret "DB_PASSWORD"}` — резолв из env/file, custom print (не утекают в логи/REPL)
 
 ### 0.3 `void/core/schema` *(ADR-0008)*
 
