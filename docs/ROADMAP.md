@@ -16,7 +16,7 @@
 | ADR 0001–0014 | ✅ accepted |
 | ADR 0015 (свой HTTP-сервер, spork как референс) | ⏳ proposed — принять до старта волны 1 |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, скелет `void/core` | ✅ `system` и `config` реализованы; `schema/plugin/hooks` — заглушки |
+| Монорепо, скелет `void/core` | ✅ `system`, `config` и `schema` реализованы; `plugin/hooks` — заглушки |
 | Всё остальное | не начато |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрывается принятием ADR-0015; (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -67,13 +67,13 @@
 
 ### 0.3 `void/core/schema` *(ADR-0008)*
 
-- [ ] Базовые типы + композиция: `merge`, `select`, `optional`, `union`, рекурсивные схемы
-- [ ] Refinements предикатами, PEG-паттерны для строк
-- [ ] Coercion-режим (string→int для query/forms)
-- [ ] Ошибки с path (`[:tags 3]`), локализуемые
-- [ ] Механизм проекций (extension point `:void.core/schema-projection`); первая проекция — validator
-- [ ] Registry схем по имени
-- [ ] Опциональные `:db/*`-аннотации — парсятся и хранятся (потребители — волна 2+)
+- [x] Базовые типы + композиция: `merge`, `select`, `optional`, `union`, рекурсивные схемы
+- [x] Refinements предикатами, PEG-паттерны для строк
+- [x] Coercion-режим (string→int для query/forms)
+- [x] Ошибки с path (`[:tags 3]`), локализуемые
+- [x] Механизм проекций (extension point `:void.core/schema-projection`); первая проекция — validator
+- [x] Registry схем по имени
+- [x] Опциональные `:db/*`-аннотации — парсятся и хранятся (потребители — волна 2+)
 
 ### 0.4 `void/core/plugin` — Plugin API *(ADR-0003)*
 
