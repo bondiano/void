@@ -1,7 +1,7 @@
 # ADR-0015: Свой HTTP-сервер; spork/http — референс и донор парсеров
 
-- Статус: proposed
-- Дата: 2026-08-25
+- Статус: accepted
+- Дата: 2026-08-25 (принят 2026-08-26)
 - Связанные разделы SPEC: §5.1, §7 п.1, §8.2 (бюджеты B0–B1)
 - Закрывает открытый вопрос №1 SPEC
 
@@ -43,6 +43,17 @@
 - Клиентская часть spork/http (`http/request`) может использоваться как есть до появления собственного клиента.
 
 Валидация решения — бенчмарками B0/B1 (ADR-0014): свой сервер обязан пройти бюджеты, ради которых его пишем.
+
+Спайк выполнен (roadmap 1.0): наследуемые примитивы вынесены в `http/void/http/wire.janet` (пакет `void-http`) — грамматики request/response/query/cookie, status-messages, `write-head`/`write-body` с авто-chunked; первое расхождение с spork — захват минорной HTTP-версии в head-парсерах (нужен для keep-alive решения). Парсинг — чистые функции над буферами, весь I/O останется в цикле соединения сервера (1.1).
+
+Сервер реализован (roadmap 1.1, `http/void/http/server.janet`): цикл соединения по этому ADR — keep-alive + pipelining с leftover-буфером, лимиты и таймауты первым классом (max-header/max-body, read/idle), chunked в обе стороны (с trailers), SSE как chunk-на-событие, graceful drain (idle рвутся сразу, in-flight дорабатывают под deadline, ответы при drain несут `connection: close`). Smuggling-векторы из «минусов» закрыты целевыми тестами: TE+CL, дубли TE, конфликтующие content-length → 400.
+
+Платформенные грабли janet 1.41.2, найденные при реализации (задокументированы в коде сервера):
+
+1. **`net/accept` на закрывающемся листенере сначала возвращает nil-«соединение»**, и только следующий `accept` падает с «stream is closed» — при том что docstring обещает stream. Accept-цикл, передающий результат хендлеру как есть, умирает позже с «bad slot #0, expected core/stream, got nil». Обход: accept-цикл пропускает nil. Минимальный репро: `scripts/janet-repro/accept-spurious-nil.janet` (воспроизводится стабильно).
+2. **`ev/with-deadline` отменяет *root task*** — для цикла соединения это значит, что таймаут хендлера отменил бы сам fiber соединения. Это документированное поведение, а не баг, но для долгоживущего loop-fiber'а отмена посреди ev-операции — ровно тот класс, где апстрим исторически ловил баги «отменённый fiber потом спонтанно резюмится». Поэтому хендлер с `:void.http/timeout` исполняется в отдельной task: `ev/go` + supervisor-канал + `(ev/deadline timeout task task)` — дедлайн отменяет хендлер, а не соединение.
+
+Апстрим-статус (проверено 2026-08-26). Для п. 1 отдельного issue нет; соседи: [#1523](https://github.com/janet-lang/janet/issues/1523) (закрыт правкой доков — той же семьи «что net/* возвращает vs бросает на краевых условиях») и открытый [#1755](https://github.com/janet-lang/janet/issues/1755) (double free в обработке overlapping streams, тот же `ev.c` 1.41.2). Класс из п. 2 хорошо известен: [#1337](https://github.com/janet-lang/janet/issues/1337) «fiber is resumed after it's cancelled» (закрыт частично — починены пути `os/shell`/`os/spawn`; в комментариях подтверждено, что планировщик допускает протухшие wakeup'ы и защищает только мёртвые fibers), [#1707](https://github.com/janet-lang/janet/issues/1707) (`ev/sleep` не отменяется `ev/cancel`; фикс — 1.41.1), [#1405](https://github.com/janet-lang/janet/issues/1405)/[#1409](https://github.com/janet-lang/janet/issues/1409) (то же для `ev/select`; 1409 закрыли только в 01.2026 — класс чинят по одному call-site'у). В CHANGELOG master (будущий 1.42) фикса accept-nil нет — обход в сервере остаётся нужным и после апгрейда janet; п. 1 стоит зарепортить апстрим с нашим репро и ссылкой на #1523 как prior art.
 
 ## Последствия
 

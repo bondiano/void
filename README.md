@@ -23,8 +23,10 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | Directory | Package | Wave |
 |---|---|---|
 | `core/` | `void/core` — component system, config, schema, plugin API, hooks | 0 |
+| `dev/` | `void/dev` — netrepl, file watcher, `void/test` fixtures and factories | 0 |
+| `http/` | `void/http` — HTTP kernel: net/ev server (keep-alive, limits, chunked, SSE, graceful drain), PEG router with symbol handlers and metadata merge, phased middleware, sessions/static/multipart, prefork workers (ADR-0015, 0010) | 1 |
 
-Upcoming waves (see SPEC.md §6): `void/dev`, `void/http`, `void/html`, `void/rest`, `void/openapi`, `void/cli`, then data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+Upcoming waves (see SPEC.md §6): `void/html`, `void/rest`, `void/openapi`, `void/cli`, then data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 

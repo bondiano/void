@@ -22,4 +22,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0012](0012-jobs-i-bus-razdelnye-plaginy-outbox.md) | jobs и bus — раздельные plugins; transactional outbox | accepted |
 | [0013](0013-grpc-cherez-connect-protocol.md) | gRPC через Connect protocol на HTTP/1.1; protobuf — pure-Janet | accepted |
 | [0014](0014-performance-byudzhety-kak-ci-kontrakt.md) | Performance-бюджеты как CI-контракт; bench-suite в репозитории | accepted |
-| [0015](0015-svoj-http-server-spork-kak-referens.md) | Свой HTTP-сервер; spork/http — референс и донор парсеров | proposed |
+| [0015](0015-svoj-http-server-spork-kak-referens.md) | Свой HTTP-сервер; spork/http — референс и донор парсеров | accepted |
