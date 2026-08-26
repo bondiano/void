@@ -13,14 +13,14 @@
 | Что | Статус |
 |---|---|
 | SPEC (обзор + контракты Plugin API / Route Metadata) | ✅ написан |
-| ADR 0001–0014 | ✅ accepted |
-| ADR 0015 (свой HTTP-сервер, spork как референс) | ⏳ proposed — принять до старта волны 1 |
+| ADR 0001–0015 | ✅ accepted |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
 | Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина) и `void/run!` реализованы |
 | `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart, fixtures/factories (`:generator`-проекция) |
+| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware, sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto` |
 | Всё остальное | не начато |
 
-Открытые вопросы SPEC §7: (1) spork/http — закрывается принятием ADR-0015; (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
+Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
 
 ---
 
@@ -113,20 +113,20 @@
 
 ### 1.0 Преддверие: принять ADR-0015
 
-- [ ] Spike: прочитать spork/http, забрать парсеры/примитивы, зафиксировать решение accepted
+- [x] Spike: прочитать spork/http, забрать парсеры/примитивы, зафиксировать решение accepted — примитивы в `http/void/http/wire.janet`
 
 ### 1.1 `void/http` — HTTP kernel *(L; ADR-0006, 0015, 0010)*
 
-- [ ] Сервер на net/ev: keep-alive, лимиты (headers/body/timeout), chunked, SSE, graceful drain
-- [ ] Ring-модель: request/response — plain tables; middleware — обёртки
-- [ ] Router: PEG-компиляция, route table — immutable значение, атомарный swap; handlers — символы (ADR-0002)
-- [ ] Route metadata: namespaced-ключи, декларация через `:void.http/route-meta-key`, merge route←group←global, `:restrict` для security-ключей, прекомпиляция цепочки на билде таблицы (ничего на hot path)
-- [ ] Фазовые константы middleware (0–9000), тай-брейк по имени plugin
-- [ ] Content negotiation, static (etag/range), cookies, multipart, session (point `:void.http/session-store`, memory тут)
-- [ ] Error handling: exception→response, point `:void.http/error-renderer`
-- [ ] `(explain-route "/x")` — итог и происхождение каждого meta-значения по слоям
-- [ ] `(with-request {...} ...)` — прогон через полный стек без сети; dev error page
-- [ ] Prefork `:workers :auto` (SO_REUSEPORT) — можно минимально, добить в волне 2
+- [x] Сервер на net/ev: keep-alive + pipelining, лимиты (max-header/max-body/read/idle timeouts, smuggling-проверки TE/CL), chunked (запрос и ответ), SSE (chunk на событие), graceful drain (idle рвутся сразу, in-flight дорабатывают под deadline) — `http/void/http/server.janet`
+- [x] Ring-модель: request/response — plain tables; middleware — обёртки — `ring.janet`
+- [x] Router: PEG-компиляция, route table — immutable значение, атомарный swap (`router/cell` + `swap!`); handlers — символы с live-резолвом через env таблицы модулей (ADR-0002; `router/env-ref` для env в замороженных manifests) — `router.janet`
+- [x] Route metadata: namespaced-ключи, декларация через `:void.http/route-meta-key`, merge route←group←global на `void/core/meta`, `:restrict` для `:void.http/timeout`/`max-body`, прекомпиляция цепочки на билде таблицы (`:when`-middleware вне цепочки, если предикат false)
+- [x] Фазовые константы middleware (0–9000), тай-брейк по имени plugin — `middleware.janet`
+- [x] Content negotiation (`negotiate.janet`), static etag/range (`static.janet`), cookies (`ring.janet`), multipart (`multipart.janet`), session — point `:void.http/session-store`, memory store тут (`session.janet`; с `:workers > 1` memory-store — ошибка старта, ADR-0010)
+- [x] Error handling: exception→response (`errors/abort` со статусом), point `:void.http/error-renderer` — `errors.janet`
+- [x] `(http/explain-route "/x")` — итог и происхождение каждого meta-значения по слоям
+- [x] `(http/with-request {...})` — прогон через полный стек без сети; dev error page со стектрейсом
+- [x] Prefork `:workers :auto` (SO_REUSEPORT — janet ставит его в `net/listen` сам) — полностью: master re-exec'ает свой же процесс, супервизия с respawn+backoff, SIGTERM→drain каскадом; e2e-тест master+2 воркера — `prefork.janet`
 
 ### 1.2 `void/html` *(M)* → 1.3 `void/htmx` *(S)*
 
