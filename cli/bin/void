@@ -1,0 +1,6 @@
+#!/usr/bin/env janet
+### The void binary — see void/cli (SPEC.md §5.17, ROADMAP 1.6).
+(import void/cli :as cli)
+
+(defn main [& args]
+  (cli/main ;args))

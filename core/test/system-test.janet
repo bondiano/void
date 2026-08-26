@@ -275,6 +275,37 @@
 (system/start sys9b)
 (assert (= (get (system/instance sys9b :db) :host) "h") "valid config passes the schema")
 
+# -- subset start (:needs bootstrap for CLI commands) --------------------
+
+(def subset-log @[])
+(defn- track [k]
+  (system/component k
+    :deps (case k :b [:a] :c [:b] [])
+    :start (fn [d c] (array/push subset-log [:start k]) k)
+    :stop (fn [i] (array/push subset-log [:stop k]))))
+
+(def sys11 (system/init [(track :a) (track :b) (track :c) (track :d)]))
+(assert (deep= (sorted (keys (system/needed-keys sys11 [:b]))) @[:a :b])
+        "needed-keys expands transitive deps")
+(expect-error "needed-keys rejects unknown keys" "unknown component"
+  |(system/needed-keys sys11 [:nope]))
+
+(system/start sys11 [:b])
+(assert (deep= subset-log @[[:start :a] [:start :b]])
+        "subset start touches only the closure, in dependency order")
+(assert (nil? (get-in sys11 [:states :c])) ":c never started")
+(assert (nil? (get-in sys11 [:states :d])) ":d never started")
+(system/stop sys11)
+(assert (deep= subset-log @[[:start :a] [:start :b] [:stop :b] [:stop :a]])
+        "stop after a subset start stops only what ran, in reverse")
+
+# a later full start picks up the not-yet-running rest
+(array/clear subset-log)
+(system/start sys11)
+(assert (deep= (sorted (map |($ 1) subset-log)) @[:a :b :c :d])
+        "full start after subset start starts everything")
+(system/stop sys11)
+
 # -- defcomponent + registry --------------------------------------------
 
 (def reg (system/registry))
