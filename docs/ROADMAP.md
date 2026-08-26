@@ -137,9 +137,9 @@
 
 ### 1.4 `void/rest` *(S)* → 1.5 `void/openapi` *(S)*
 
-- [ ] `defresource`: schemas на route → авто-валидация/coercion/сериализация; RFC 7807 problem+json
-- [ ] Pagination/sorting/filtering conventions
-- [ ] OpenAPI 3.1 как чистая проекция route table + schema registry; Swagger UI в dev; `void openapi export`
+- [x] `defresource`: schemas на route → авто-валидация/coercion/сериализация; RFC 7807 problem+json
+- [x] Pagination/sorting/filtering conventions
+- [x] OpenAPI 3.1 как чистая проекция route table + schema registry; Swagger UI в dev; `void openapi export` (функция + `:void.core/cli` contribution; бинарь — 1.6)
 
 ### 1.6 `void/cli` — минимум *(M→S в этой волне)*
 
