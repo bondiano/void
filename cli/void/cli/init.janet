@@ -15,6 +15,7 @@
 ### Command naming: a plain keyword :routes is `void routes`; a
 ### namespaced :openapi/export is `void openapi export`.
 
+(import void)
 (import void/core/init :as core)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -118,6 +119,7 @@
 
 (def builtin-help
   [["new NAME" "create a project skeleton in ./NAME"]
+   ["dev" "run the app in the :dev profile (watcher + netrepl by default)"]
    ["repl" "connect to the running app's netrepl (see void repl --help)"]
    ["version" "print the void/core version"]
    ["help" "this message"]])
@@ -177,6 +179,14 @@
              (print-help (when ok (plugin/extension boot :void.core/cli))))
     "version" (printf "void %s" core/version)
     "new" (new/create ;(drop 1 words))
+    # the one long-running built-in: the full run!/signals lifecycle in
+    # the :dev profile (--profile still wins) — `void new && void dev`
+    "dev" (do
+            (unless (empty? (drop 1 words))
+              (errorf "void dev takes no arguments (got %q) — profile via --profile"
+                      (string/join (drop 1 words) " ")))
+            (void/run! (merge (load-app (gopts :app))
+                              {:profile (or profile :dev)})))
     "repl" (repl/connect
              (tuple ;(drop 1 words))
              (fn netrepl-config []

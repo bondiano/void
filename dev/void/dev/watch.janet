@@ -11,6 +11,7 @@
 
 (import void/core/system :as system)
 (import void/core/plugin :as plugin)
+(import void/core/hooks :as hooks)
 
 # -- pure parts (testable without the component fiber) -------------------
 
@@ -108,6 +109,16 @@
   (each k (report :restarted) (eprintf "void/dev restarted %q" k))
   (each e (report :errors) (eprintf "void/dev reload error: %s" e)))
 
+(defn notify-reloaded!
+  "Fire the :void.dev/reloaded hook on the boot's registry after files
+  were reloaded — plugins rebuild what they precompute from module
+  code (void/http re-swaps its route table here). Handlers run
+  protected: a rebuild error is reported, the watcher survives."
+  [boot report]
+  (when (and boot (not (empty? (report :reloaded))))
+    (each e (hooks/run-protected! (boot :hooks) :void.dev/reloaded boot report)
+      (array/push (report :errors) e))))
+
 (defn tick!
   "One watcher pass: rescan, reload what changed against the current
   boot (plugin/current-boot). Returns the report, or nil when nothing
@@ -118,6 +129,7 @@
   (put inst :snapshot new)
   (unless (empty? files)
     (def report (apply-changes! plugin/current-boot files))
+    (notify-reloaded! plugin/current-boot report)
     (report-print report)
     report))
 
