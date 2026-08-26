@@ -286,8 +286,9 @@
       (array/push errors (string/format "%s: %s" label (string resolved))))
     (def [c-ok chain-or-err]
       (protect
-        (mw/chain (mw/select contribs rmeta)
-                  (if h-ok (resolved :call) identity))))
+        (let [selected (mw/select contribs rmeta)]
+          {:chain (mw/chain selected (if h-ok (resolved :call) identity))
+           :middleware (tuple ;(map |($ :name) selected))})))
     (unless c-ok
       (array/push errors (string/format "%s: %s" label (string chain-or-err))))
     (when (and (keyword? name) (not (in by-name name))
@@ -304,7 +305,8 @@
           :meta (freeze rmeta)
           :provenance (freeze (merged :provenance))
           :warnings (merged :warnings)
-          :chain chain-or-err
+          :chain (chain-or-err :chain)
+          :middleware (chain-or-err :middleware)
           :source (d :source)})
       (put by-name name entry)
       (array/push entries entry)))
@@ -431,8 +433,11 @@
       (explain-route table "/orders/42" :post)
 
   Returns {:name :method :pattern :params :handler :no-reload :meta
-  :layers {key [{:source :value} ...]} :text <human summary>} or nil
-  when nothing matches.``
+  :layers {key [{:source :value} ...]} :source :middleware :warnings
+  :text <human summary>} or nil when nothing matches. :middleware is
+  the resolved chain for this route (outermost first), :source the
+  route-source contribution it came from, :warnings the bare-key
+  warnings from the metadata merge.``
   [table path &opt method]
   (default method :get)
   (when-let [[e params] (match table method path)]
@@ -440,6 +445,7 @@
     (def lines @[])
     (each k (sorted (keys (e :meta)))
       (array/push lines (meta/explain-str merge-result k)))
+    (def warnings (get e :warnings []))
     {:name (e :name)
      :method (e :method)
      :pattern (e :pattern)
@@ -448,9 +454,20 @@
      :no-reload (e :no-reload)
      :meta (e :meta)
      :layers (e :provenance)
-     :text (string/format "%q %s -> %q (handler %q)\n  %s"
+     :source (e :source)
+     :middleware (e :middleware)
+     :warnings warnings
+     :text (string/format "%q %s -> %q (handler %q, source %q)\n  middleware: %s\n  %s%s"
                           (e :method) (e :pattern) (e :name) (e :handler)
-                          (string/join lines "\n  "))}))
+                          (e :source)
+                          (if (empty? (e :middleware))
+                            "none"
+                            (string/join (map |(string/format "%q" $) (e :middleware)) " -> "))
+                          (string/join lines "\n  ")
+                          (if (empty? warnings)
+                            ""
+                            (string "\n  warnings:\n    "
+                                    (string/join warnings "\n    "))))}))
 
 # -- atomic swap ---------------------------------------------------------
 

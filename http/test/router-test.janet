@@ -145,6 +145,11 @@
 (assert (= 2 (length hist)) "both layers recorded for the timeout")
 (assert (= :route (get (last hist) :source)) "the route layer set the final value")
 (assert (string/find "timeout" (ex :text)) "human text mentions the key")
+(assert (= :app (ex :source)) "the route-source is named")
+(assert (deep= (ex :middleware) [:guard :obs])
+        "the resolved middleware chain, outermost first")
+(assert (string/find "middleware:" (ex :text)) "human text lists the chain")
+(assert (empty? (ex :warnings)))
 (assert (nil? (router/explain-route table "/nope")) "no match -> nil")
 
 # -- build errors are batched --------------------------------------------
