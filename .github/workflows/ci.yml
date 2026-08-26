@@ -40,5 +40,11 @@ jobs:
       - name: Test void/htmx
         run: cd htmx && jpm test
 
+      - name: Test void/rest
+        run: cd rest && jpm test
+
+      - name: Test void/openapi
+        run: cd openapi && jpm test
+
       - name: Dry-run the full plugin composition
         run: janet scripts/dry-run.janet

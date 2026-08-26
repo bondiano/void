@@ -27,8 +27,10 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `http/` | `void/http` — HTTP kernel: net/ev server (keep-alive, limits, chunked, SSE, graceful drain), PEG router with symbol handlers and metadata merge, phased middleware, sessions/static/multipart, prefork workers (ADR-0015, 0010) | 1 |
 | `html/` | `void/html` — SSR view layer: hiccup pipeline (function components, layouts, partials), form helpers projected from schemas, fingerprinted asset manifest with dev passthrough, temple as the alternative engine behind `:void.html/engine` | 1 |
 | `htmx/` | `void/htmx` — htmx integration: hx-attribute builders, HX-\* request predicates and response headers, OOB swaps, fragment-without-layout answers on routes marked `:void.htmx/partial` | 1 |
+| `rest/` | `void/rest` — REST/JSON sugar over void/http: `:void.schema/*` route metadata drives request coercion+validation and response serialization, RFC 7807 problem+json, `defresource` CRUD groups, pagination/sorting/filtering conventions | 1 |
+| `openapi/` | `void/openapi` — OpenAPI 3.1 as a pure projection of the route table + schema registry, `/openapi.json` + Swagger UI in dev, export for CI | 1 |
 
-Upcoming waves (see SPEC.md §6): `void/rest`, `void/openapi`, `void/cli`, then data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+Upcoming waves (see SPEC.md §6): `void/cli`, then data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 
