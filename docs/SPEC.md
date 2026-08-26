@@ -136,6 +136,9 @@
 ### 3.6 Lifecycle / entrypoint
 `(void/run! {:plugins [...] :profile :prod})` — конфиг → граф → старт → сигналы (SIGTERM → graceful stop с таймаутом). Dev mode: то же + netrepl + file watcher.
 
+### 3.7 Logger (`void/core/log`) *(ADR-0018)*
+Structured-логи — примитив ядра (Fastify/pino-паритет), не observability-фича. Record = plain table (`:ts :level :ns :msg` + kv); API — макросы, аргументы не вычисляются при выключенном уровне; уровни per-namespace (префиксное дерево) со сменой в рантайме из REPL. Request-scoped контекст в dyn — `(log/with-context {:request-id id} ...)` (аналог child logger, per-fiber). Serializers и sinks — extension points `:void.core/log-serializer` / `:void.core/log-sink`: dev — pretty stderr, prod — JSON/JDN-lines через буферизованный канал + writer-fiber (ev loop не блокируется; переполнение → drop со счётчиком). Redact-пути поверх secret-механики config. `void/obs` (волна 3) добавляет trace-корреляцию, sampling и OTLP-sink.
+
 ---
 
 ## 4. Dev experience core (`void/dev` — plugin, но канонический)
@@ -145,6 +148,7 @@
 - REPL-хелперы: `(with-request {:method :get :uri "/x"} ...)` — прогнать запрос через полный middleware stack без сети; `(explain-route "/users/5")` — какой route, какие middleware, какая policy.
 - Dev error page: stack trace fiber'а, request snapshot, ссылки file:line.
 - `void/test`: fixtures как компоненты (поднять подмножество system), factories из schema-generator, snapshot testing для hiccup.
+- **Inject-тестирование** *(ADR-0017, Fastify-паритет)*: `test/client` + `(test/inject c {:method :post :uri "/orders" :json {...}})` — запрос через полный стек (routing → lifecycle-стадии → middleware → handler → рендер → сериализация тем же wire-кодом) без сокета; система поднимается `:only [:http/kernel]` — порт не занят. Cookie jar для сессионных сценариев, `:json`/`:form`-сахар, `:raw`-режим (сырые байты через серверный парсер — тесты лимитов/smuggling), хелперы `test/json`/`test/text`/`test/sse-events`.
 
 ---
 
@@ -159,7 +163,9 @@
 - Content negotiation, static files (etag, range), cookies, multipart.
 - Session (extension point `:void.http/session-store`; memory — тут, redis/db — в своих plugins).
 - Error handling: exception→response mapping, extension point для рендереров ошибок.
-- Extension points: middleware registration с приоритетами (числовые фазы как Spring `Ordered`), session stores, body codecs.
+- **Request lifecycle** *(ADR-0016, Fastify-паритет)*: именованные стадии `:on-request → :pre-parsing → :pre-validation → :pre-handler → :pre-serialization → :on-send` — зарезервированные слоты фазовой шкалы, компилируются в ту же цепочку; плюс внецепочечные `:on-response` (после записи в сокет), `:on-error`, `:on-timeout`. Global hooks — точка `:void.http/hook`, route-level — metadata `:void.http/hooks`. App-level: `:void.http/listening`, `:void.http/draining`, `:void.http/route-added` (аналог onRoute).
+- Компонентная пара `:http/kernel` (роутер, цепочки, hooks — ноль I/O) / `:http/server` (сокет, drain, prefork) — inject-тесты и REPL работают через kernel без порта (ADR-0017).
+- Extension points: middleware registration с приоритетами (числовые фазы как Spring `Ordered`), lifecycle hooks, session stores, body codecs.
 
 ### 5.2 `void/rest` — REST/JSON API *(S — сахар над http)*
 - `defresource`: request/response schemas на route → авто-валидация, coercion, сериализация; проблемы → RFC 7807 problem+json.
@@ -264,7 +270,7 @@ Repository API (Data Mapper, всегда доступен, работает с 
 - Dashboard (plugin `void/jobs-ui`, hiccup+htmx — dogfooding): очереди, retry/promote/remove, графики из void/obs.
 
 ### 5.13 `void/obs` — observability *(L, Spring-level это много)*
-- **Logs**: structured (JDN/JSON), контекст из dyn (request id, trace id) автоматически; уровни per-namespace, смена в рантайме/REPL.
+- **Logs**: ядро — `void/core/log` (§3.7, ADR-0018, доступно с волны 1); obs добавляет trace-id/span-id в log-context, sampling и экспорт (OTLP log-sink, файловые).
 - **Metrics**: counters/gauges/histograms; RED на каждый route из route table; runtime-метрики (GC — `gccollect` stats, fibers, pools). Экспорт: Prometheus text (S) + OTLP (после void/proto).
 - **Tracing**: span API, контекст в dyn (per-fiber — изоляция бесплатно), W3C traceparent propagation (in/out), OTLP export.
 - Auto-instrumentation через component-декораторы: db, redis, http-client, jobs, kafka — каждый плагин регистрирует свою в `:void.obs/instrumentations`.
@@ -320,15 +326,24 @@ Django-admin/Filament-класс, но данные-first: админка — **
 - **CQRS-слой** (опционально, как в Watermill): command bus (ровно один handler, ответ), event bus (fan-out); `defcommand-handler`/`defevent-handler` с schema на входе.
 - Волна 3 для core+memory+pg, kafka-backend — волна 5.
 
+### 5.23 `void/pressure` — load shedding *(S; ADR-0019)*
+Паритет fastify/under-pressure: процесс сам защищается от перегрузки, не дожидаясь неотзывчивости.
+- Sampler-компонент (fiber, `:sample-interval`): loop-lag (дрейф `ev/sleep` — метрика §8.4), heap (GC-статистика), rss (getrusage/ffi), custom-проверки через extension point `:void.pressure/check` (пул БД, глубина очередей).
+- Пороги `:max-loop-lag`/`:max-heap-bytes`/`:max-rss-bytes` → атомарный флаг `:under-pressure` с гистерезисом восстановления.
+- Middleware в раннем слоте (100): под давлением → 503 + `Retry-After` через стандартный error-путь (problem+json при void/rest); на спокойном пути — одна проверка флага. Metadata `:void.pressure/exempt` — `/health`/`/metrics` не режутся.
+- Contribution в `:void.core/health`, `(pressure/status)` в REPL, события `:pressure/high|recovered` в hooks-шину; метрики — через obs (волна 3).
+- Prefork: sampler per-worker (свой loop — своё давление), master агрегирует; SO_REUSEPORT раскидывает трафик от воркера, отвечающего мгновенным 503.
+- Волна 2 (зависит только от core + http).
+
 ---
 
 ## 6. Сводный граф работ и волны
 
 **Волна 0 — фундамент:** core/system → core/config → core/schema → core/plugin → void/dev (netrepl-интеграция сразу, чтобы всю остальную разработку вести в REPL — dogfooding с первого дня).
 
-**Волна 1 — вертикальный slice:** void/http → void/html + void/htmx → void/rest → void/openapi → void/cli (минимум: new/routes/repl). *Результат: можно строить HTMX-приложения, есть что показать.*
+**Волна 1 — вертикальный slice:** void/http → void/html + void/htmx → void/rest → void/openapi → void/cli (минимум: new/routes/repl) → core/log + request-lifecycle-стадии + inject-тестирование (ADR-0016..0018 — до заморозки контрактов). *Результат: можно строить HTMX-приложения, есть что показать.*
 
-**Волна 2 — данные:** void/db → db-sqlite → db-postgres → void/redis → void/cache → void/jobs (+cron). *Результат: продуктовый минимум, Laravel-паритет по ядру.*
+**Волна 2 — данные:** void/db → db-sqlite → db-postgres → void/redis → void/cache → void/jobs (+cron) → void/pressure (ADR-0019). *Результат: продуктовый минимум, Laravel-паритет по ядру.*
 
 **Волна 3 — enterprise:** void/obs (logs→metrics→Prometheus) → void/auth → void/authz → void/security → void/mail → void/bus (core + memory/pg backends, outbox).
 
@@ -361,14 +376,14 @@ Janet — bytecode-интерпретатор **без JIT**. По CPU-скор�
 - **Multi-core = prefork**: N процессов × SO_REUSEPORT (Linux раздаёт accept сам), никакого shared state между воркерами кроме БД/Redis. Это же — изоляция GC-пауз: пауза одного воркера не трогает остальных. `void/http` должен уметь `:workers :auto` из коробки.
 - **Не наш кейс**: 30k+ RPS в одном процессе. Реалистичная цель — тысячи RPS на воркер на I/O-путях, десятки тысяч на машину префорком; выше — ставь Go/Rust или CDN/proxy перед нами (static и так должен уходить в nginx/Cloudflare).
 
-### 8.2 Бюджеты (SLO фреймворка, проверяются в CI)
+### 8.2 Бюджеты (SLO фреймворка)
 
-Все цифры — **гипотезы до первого прогона bench-suite**, дальше фиксируются как regression-пороги (допустимая деградация между коммитами: 5%).
+Цифры были гипотезами до первого прогона bench-suite; с v0.1 B0/B1 **промерены** на референс-окружении — результаты, корректировки и причины зафиксированы в [BENCH-v0.1.md](BENCH-v0.1.md). Модель проверки: абсолютные бюджеты — на референс-окружении (`void bench budgets` против `bench/results/baseline.jdn`, прогон перед тегом), CI на shared-раннерах держит **относительные** regression-пороги (допустимая деградация между коммитами: 5%, merge-base ↔ head на одном раннере — ADR-0014). B2+ — гипотезы до своих волн.
 
 | Бенчмарк (1 воркер, 1 vCPU) | Бюджет p50 | Бюджет p99 | Throughput floor |
 |---|---|---|---|
-| B0 plaintext hello (router+middleware stack) | < 0.5 ms | < 3 ms | ≥ 20k RPS |
-| B1 JSON echo 1KB (parse+validate+serialize) | < 1 ms | < 5 ms | ≥ 8k RPS |
+| B0 plaintext hello (router+middleware stack) | < 2 ms (v0.1: было < 0.5, ниже пола методики — BENCH-v0.1.md) | < 3 ms | ≥ 20k RPS |
+| B1 JSON echo 1KB (parse+validate+serialize) | < 2.5 ms (v0.1: было < 1, ниже пола методики) | < 10 ms (v0.1: было < 5; GC-хвост, план в BENCH-v0.1.md) | ≥ 8k RPS |
 | B2 PG single query (pool, prepared) | < 3 ms | < 12 ms | ≥ 3k RPS |
 | B3 PG + hiccup SSR ~15KB | < 5 ms | < 20 ms | ≥ 1.5k RPS |
 | B4 WebSocket broadcast 1k conns | — | доставка < 50 ms | 10k msg/s |
@@ -536,6 +551,24 @@ Extension point = именованный контракт + стратегия �
 ```
 Между константами можно вставаться (3500). Тай-брейк при равной фазе — по имени plugin (детерминизм).
 
+### Request lifecycle — именованные стадии (v1, ADR-0016)
+
+Стадии — зарезервированные слоты той же шкалы: hooks компилируются в цепочку route при билде таблицы (стадия без hooks не порождает wrapper — не стоит ничего). Global — точка `:void.http/hook` (`{:stage :name :fn 'symbol}`), per-route — metadata `:void.http/hooks` (merge `:concat` по стадии). Замораживаются вместе с остальным контрактом v1.
+
+```
+ 500  :on-send            ответ: финальный response перед записью (headers, тело)
+1500  :on-request         запрос: routing свершился, (request :void/route) есть; тело — сырые байты
+1900  :pre-parsing        запрос: до body-кодеков
+5900  :pre-validation     запрос: до schema-валидации; сессия/auth уже есть
+9800  :pre-serialization  ответ: значение handler'а до рендера lazy views/кодеков
+9900  :pre-handler        запрос: последним перед handler'ом
+  —   :on-response        после записи ответа в сокет (вне цепочки; access-log, метрики)
+  —   :on-error           при exception, перед :void.http/error-renderer
+  —   :on-timeout         при отмене handler'а по :void.http/timeout
+```
+
+Hook запросной стадии — `(fn [request])`: nil — продолжить, response-map — короткое замыкание (ответные стадии отрабатывают). Ответные стадии — `(fn [request response])` → response; `:on-response` результат игнорирует; `:on-error` — `(fn [request err])`, может вернуть response. Hooks — символы (late binding, ADR-0002). Внецепочечные точки вызывает сервер/errors — inject-путь (ADR-0017) вызывает их тем же кодом.
+
 ### Базовые точки ядра (владелец void/core)
 
 | Точка | Cardinality | Что регистрируют |
@@ -547,14 +580,20 @@ Extension point = именованный контракт + стратегия �
 | `:void.core/schema-projection` | many | проекции schema (openapi, proto, forms) |
 | `:void.core/interface` | many | декларации интерфейсов для `:provides` |
 | `:void.core/hooks` | many | lifecycle hooks с фазой |
+| `:void.core/log-sink` | many | приёмники логов (pretty stderr, JSON-lines, OTLP из obs) — ADR-0018 |
+| `:void.core/log-serializer` | many | сериализаторы записей по ключу (`:err`, `:req`) — ADR-0018 |
 
-void/http добавляет `:void.http/middleware`, `:void.http/session-store`, `:void.http/body-codec`, `:void.http/error-renderer`, `:void.http/route-source` (модули приложения отдают routes тоже через точку!). void/obs — `:void.obs/instrument`, `:void.obs/exporter`. И т.д.
+void/http добавляет `:void.http/middleware`, `:void.http/hook` (lifecycle-стадии, ADR-0016), `:void.http/session-store`, `:void.http/body-codec`, `:void.http/error-renderer`, `:void.http/route-source` (модули приложения отдают routes тоже через точку!). void/obs — `:void.obs/instrument`, `:void.obs/exporter`. void/pressure — `:void.pressure/check` (ADR-0019). И т.д.
+
+Schema всех задекларированных точек — в автогенерируемом реестре [CONTRACTS.md](CONTRACTS.md) (заморожен с v0.1).
 
 ### 1.5 Версионирование и эволюция
 
 - `:void-api` в manifest: host отклоняет plugin с несовместимой мажорной версией protocol'а. Инкремент — только при breaking-изменении семантики manifest/extension механики.
-- Контракт КАЖДОЙ extension point версионируется её `:schema`: расширение — добавление `:optional` полей; переименование/ужесточение = новая точка (`:void.http/middleware2`) + deprecation период, host умеет алиасить.
+- Контракт КАЖДОЙ extension point версионируется её `:schema`: расширение — добавление `:optional` полей; переименование/ужесточение = новая точка (`:void.http/middleware2`) + deprecation период, host умеет алиасить (`defextension-point ... :aliases [:old-name]` — вклады в старое имя сворачиваются в новую точку с warning'ом).
 - Manifests сериализуемы → `void plugins lock` пишет lock-файл (plugin, version, contributions hash) — диффы окружений и «почему в проде другой middleware-стек» ловятся в CI.
+
+**Статус с v0.1:** оба контракта заморожены. Нормативный реестр — [CONTRACTS.md](CONTRACTS.md) (генерируется из деклараций, CI ловит дрейф); пошаговая deprecation-процедура — [CONTRIBUTING.md](../CONTRIBUTING.md#deprecation).
 
 ### 1.6 REPL-инструменты (обязательная часть контракта)
 
@@ -639,7 +678,9 @@ Route metadata — открытая map на каждом route; **главны�
 
 `:restrict` — важный для security ключей: `(explain-route "/admin/users")` печатает итог и происхождение каждого значения по слоям (как `config/explain`).
 
-### 2.5 Reserved-ключи ядра (v1, замораживаем)
+### 2.5 Reserved-ключи ядра (v1, заморожено в v0.1)
+
+Нормативный реестр — [CONTRACTS.md](CONTRACTS.md): там автогенерируемая таблица ключей, реально задекларированных в коде (v0.1 добавил `:void.rest/problems`, `:void.openapi/description`, `:void.openapi/id`), и таблица зарезервированных имён для plugins волн 2+. Таблица ниже — исходный дизайн-набросок.
 
 | Ключ | Тип | Merge | Читает |
 |---|---|---|---|
@@ -647,9 +688,10 @@ Route metadata — открытая map на каждом route; **главны�
 | `:void.http/middleware` | vector of keyword | concat | http kernel (выбор именованных middleware поверх фазовых) |
 | `:void.http/timeout` | number (s) | restrict(min) | http kernel |
 | `:void.http/max-body` | int (bytes) | restrict(min) | http kernel |
+| `:void.http/hooks` | {stage [symbol]} | concat (по стадии) | http kernel (route-level lifecycle hooks, ADR-0016) |
 | `:void.schema/params` `/query` `/body` `/headers` | schema | deep-merge | void/rest validation mw |
 | `:void.schema/response` | {status schema} | deep-merge | void/rest, void/openapi |
-| `:void.authz/policy` | kw / [kw] | replace* | void/authz mw (*group policy И route policy обе enforce'ятся — это concat по смыслу: `[:admin :users/read]`) |
+| `:void.authz/policy` | kw / [kw] | concat | void/authz mw (group policy И route policy обе enforce'ятся: `[:admin :users/read]`) |
 | `:void.auth/access` | :public/:required | restrict | void/auth |
 | `:void.security/csrf` | bool | restrict(true wins) | void/security |
 | `:void.security/rate` | {:limit :window} | restrict(min) | void/security |
