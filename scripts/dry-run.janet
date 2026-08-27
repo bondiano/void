@@ -1,7 +1,8 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
-### void/db-sqlite + void/db-http + void/dev + void/bench + the demo
-### plugin on top of the core extension points.
+### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
+### void/redis-http + void/dev + void/bench + the demo plugin on top of
+### the core extension points.
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
 ### non-zero with the batched error list. Run from the repository root:
@@ -28,6 +29,8 @@
 # native module: build it first (cd fdwait && jpm build).
 (array/insert module/paths 0
               [(string (os/cwd) "/fdwait/build/:all:.so") :native])
+(add-tree (string (os/cwd) "/redis"))
+(add-tree (string (os/cwd) "/cache"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -40,6 +43,11 @@
 (require "void/db-sqlite/init")
 (require "void/db-postgres/init")
 (require "void/db/http")
+(require "void/redis/init")
+(require "void/redis/http")
+(require "void/cache/init")
+(require "void/cache/redis")
+(require "void/cache/http")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "examples/demo/plugin")
@@ -47,12 +55,16 @@
 (def report
   (plugin/dry-run {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
                              :void/db :void/db-sqlite :void/db-postgres :void/db-http
+                             :void/redis :void/redis-http
+                             :void/cache :void/cache-redis :void/cache-http
                              :void/dev :void/bench :demo/greeter]
                    :profile :dev
-   # two drivers now provide :void/db-driver, which is exactly the
-   # ambiguity the kernel refuses to resolve on its own — the gate says
-   # which, the way an application's config would (see void/db-postgres)
-   :config {:cli {:void/db-driver {:impl :db.sqlite/driver}}}}))
+   # two drivers now provide :void/db-driver, and two stores provide
+   # :void/cache-store — exactly the ambiguity the kernel refuses to
+   # resolve on its own. The gate says which, the way an application's
+   # config would (see void/db-postgres, void/cache-redis)
+   :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
+                  :void/cache-store {:impl :cache/redis}}}}))
 
 (printf "dry-run ok (profile %q)" (report :profile))
 (printf "  plugins:    %j (active: %j)" (report :plugins) (report :active))
