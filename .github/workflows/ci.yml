@@ -8,6 +8,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    # void/db-postgres is an async driver against a real server or it is
+    # nothing: its integration suite runs when VOID_TEST_PG names one,
+    # and skips (loudly) when it does not — so CI is where it is a gate.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: void
+          POSTGRES_PASSWORD: void
+          POSTGRES_DB: void_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      VOID_TEST_PG: host=127.0.0.1 port=5432 user=void password=void dbname=void_test
+
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +50,15 @@ jobs:
           # the sqlite3 native module: void/db-sqlite needs it, and so
           # do the dry-run and contract gates, which load the driver
           cd "$GITHUB_WORKSPACE/db-sqlite" && sudo jpm deps
+          # libpq itself is opened at runtime through ffi/, so the
+          # client library is all void/db-postgres needs — no headers
+          sudo apt-get update && sudo apt-get install -y libpq5
+
+      - name: Build void/fdwait
+        # the monorepo's one native module (ADR-0011). void/db-postgres
+        # imports it, so the dry-run and contract gates need it built
+        # before they can load the plugin at all.
+        run: cd fdwait && jpm build
 
       - name: Test void/core
         run: cd core && jpm test
@@ -58,6 +89,12 @@ jobs:
 
       - name: Test void/db-sqlite
         run: cd db-sqlite && jpm test
+
+      - name: Test void/fdwait
+        run: cd fdwait && jpm test
+
+      - name: Test void/db-postgres
+        run: cd db-postgres && jpm test
 
       - name: Test void/bench
         run: cd bench && jpm test

@@ -22,6 +22,12 @@
 (add-tree (string (os/cwd) "/openapi"))
 (add-tree (string (os/cwd) "/db"))
 (add-tree (string (os/cwd) "/db-sqlite"))
+(add-tree (string (os/cwd) "/db-postgres"))
+(add-tree (string (os/cwd) "/fdwait"))
+# void/db-postgres reaches libpq through void/fdwait, the monorepo's one
+# native module: build it first (cd fdwait && jpm build).
+(array/insert module/paths 0
+              [(string (os/cwd) "/fdwait/build/:all:.so") :native])
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -32,6 +38,7 @@
 (require "void/openapi/init")
 (require "void/db/init")
 (require "void/db-sqlite/init")
+(require "void/db-postgres/init")
 (require "void/db/http")
 (require "void/dev/init")
 (require "void/bench/init")
@@ -39,9 +46,13 @@
 
 (def report
   (plugin/dry-run {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
-                             :void/db :void/db-sqlite :void/db-http
+                             :void/db :void/db-sqlite :void/db-postgres :void/db-http
                              :void/dev :void/bench :demo/greeter]
-                   :profile :dev}))
+                   :profile :dev
+   # two drivers now provide :void/db-driver, which is exactly the
+   # ambiguity the kernel refuses to resolve on its own — the gate says
+   # which, the way an application's config would (see void/db-postgres)
+   :config {:cli {:void/db-driver {:impl :db.sqlite/driver}}}}))
 
 (printf "dry-run ok (profile %q)" (report :profile))
 (printf "  plugins:    %j (active: %j)" (report :plugins) (report :active))

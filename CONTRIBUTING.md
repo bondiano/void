@@ -7,6 +7,20 @@ dry-runs the full composition (`janet scripts/dry-run.janet`) and checks
 that [docs/CONTRACTS.md](docs/CONTRACTS.md) matches the declarations
 (`janet scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`).
 
+Both gates load `void/db-postgres`, which imports the repository's one
+native module, so **build it once before running them**:
+
+```sh
+cd fdwait && jpm build
+```
+
+`void/db-postgres`'s integration tests need a server, named by
+`VOID_TEST_PG` — a conninfo or a `postgres://` URL. Without one they
+announce themselves as skipped instead of failing; CI sets it against a
+service container, which is where they are a real gate. What can be
+tested without a server (the connection string, the type codecs, the
+plugin's declarations) always runs.
+
 ## Frozen contracts and deprecation {#deprecation}
 
 Since v0.1 the Plugin API and Route Metadata contracts are **frozen**
