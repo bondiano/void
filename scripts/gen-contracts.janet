@@ -29,6 +29,7 @@
 # native module: build it first (cd fdwait && jpm build).
 (array/insert module/paths 0
               [(string (os/cwd) "/fdwait/build/:all:.so") :native])
+(add-tree (string (os/cwd) "/redis"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -42,6 +43,8 @@
 (require "void/db-sqlite/init")
 (require "void/db-postgres/init")
 (require "void/db/http")
+(require "void/redis/init")
+(require "void/redis/http")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -49,6 +52,7 @@
   (plugin/bootstrap
     {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
                :void/db :void/db-sqlite :void/db-postgres :void/db-http
+               :void/redis :void/redis-http
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, which is exactly the

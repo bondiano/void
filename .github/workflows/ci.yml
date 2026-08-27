@@ -9,10 +9,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # void/db-postgres is an async driver against a real server or it is
-    # nothing: its integration suite runs when VOID_TEST_PG names one,
-    # and skips (loudly) when it does not — so CI is where it is a gate.
+    # void/db-postgres and void/redis are clients of a real server or
+    # they are nothing: their integration suites run when VOID_TEST_PG /
+    # VOID_TEST_REDIS name one, and skip (loudly) when they do not — so
+    # CI is where they are a gate.
     services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
       postgres:
         image: postgres:16
         env:
@@ -29,6 +40,8 @@ jobs:
 
     env:
       VOID_TEST_PG: host=127.0.0.1 port=5432 user=void password=void dbname=void_test
+      # database 9, and every suite works under a prefix of its own
+      VOID_TEST_REDIS: redis://127.0.0.1:6379/9
 
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +66,8 @@ jobs:
           # libpq itself is opened at runtime through ffi/, so the
           # client library is all void/db-postgres needs — no headers
           sudo apt-get update && sudo apt-get install -y libpq5
+          # void/redis needs no client library at all (a connection is a
+          # net/ stream); spork, for its :json codec, came with dev
 
       - name: Build void/fdwait
         # the monorepo's one native module (ADR-0011). void/db-postgres
@@ -95,6 +110,9 @@ jobs:
 
       - name: Test void/db-postgres
         run: cd db-postgres && jpm test
+
+      - name: Test void/redis
+        run: cd redis && jpm test
 
       - name: Test void/bench
         run: cd bench && jpm test
