@@ -1,6 +1,6 @@
 # ADR-0017: Тестирование через inject — полный стек без сокета
 
-- Статус: proposed
+- Статус: accepted (реализован в v0.1)
 - Дата: 2026-08-26
 - Связанные разделы SPEC: §4, §5.1
 - Референс: [Fastify Testing](https://fastify.dev/docs/latest/Guides/Testing/) / light-my-request

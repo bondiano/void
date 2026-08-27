@@ -67,6 +67,26 @@ key plus a deprecation alias for the old name, never a mutation.
   {:doc [:optional :string] :methods [:optional :dictionary] :name :keyword}
   ```
 
+### `:void.core/log-serializer`
+
+- **owner:** `:void/core` · **cardinality:** `:many`
+- Log value serializers by record key (ADR-0018): {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :key :keyword}
+  ```
+
+### `:void.core/log-sink`
+
+- **owner:** `:void/core` · **cardinality:** `:many`
+- Log record sinks (ADR-0018): {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
 ### `:void.core/schema-projection`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
@@ -117,6 +137,16 @@ key plus a deprecation alias for the old name, never a mutation.
   {:fn :function :name :keyword :priority [:optional :int]}
   ```
 
+### `:void.http/hook`
+
+- **owner:** `:void/http` · **cardinality:** `:many`
+- Global request-lifecycle hooks (ADR-0016): {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :env [:optional :function] :fn [:or :function :symbol] :name :keyword :stage [:enum :on-request :pre-parsing :pre-validation :pre-handler :pre-serialization :on-send :on-response :on-error :on-timeout]}
+  ```
+
 ### `:void.http/middleware`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
@@ -161,9 +191,6 @@ key plus a deprecation alias for the old name, never a mutation.
 
 | Point | Owner-to-be | What it will register |
 |---|---|---|
-| `:void.http/hook` | `void/http` | request-lifecycle stage hooks (ADR-0016) |
-| `:void.core/log-sink` | `void/core` | log record sinks (ADR-0018) |
-| `:void.core/log-serializer` | `void/core` | log value serializers by key (ADR-0018) |
 | `:void.obs/instrument` | `void/obs` | auto-instrumentation hooks (wave 3) |
 | `:void.obs/exporter` | `void/obs` | metrics/traces exporters (waves 3-4) |
 | `:void.pressure/check` | `void/pressure` | load-shedding checks (ADR-0019) |
@@ -171,6 +198,31 @@ key plus a deprecation alias for the old name, never a mutation.
 | `:void.bus/backend` | `void/bus` | message-bus backends (wave 3, ADR-0012) |
 | `:void.bus/codec` | `void/bus` | message codecs (wave 3) |
 | `:void.admin/widget` `/page` `/dashboard-widget` `/menu` | `void/admin` | admin surfaces (wave 4) |
+
+## Request-lifecycle stages (ADR-0016)
+
+Frozen with v1: stage names and their phase slots. In-chain stages
+compile into the route chain as thin wrappers (an empty stage costs
+nothing); request-side hooks are `(fn [request])` — a response table
+short-circuits — response-side are `(fn [request response]) ->
+response`. Out-of-chain stages are called by the transport (socket
+and inject paths alike): `:on-response` after the bytes are written,
+`:on-error` before the error renderers, `:on-timeout` on a
+`:void.http/timeout` cancellation. Register globally through
+`:void.http/hook`, per-route through the `:void.http/hooks` metadata
+key.
+
+| Stage | Phase slot | Side |
+|---|---|---|
+| `:on-send` | 500 | response |
+| `:on-request` | 1500 | request |
+| `:pre-parsing` | 1900 | request |
+| `:pre-validation` | 5900 | request |
+| `:pre-serialization` | 9800 | response |
+| `:pre-handler` | 9900 | request |
+| `:on-response` | — (out of chain) | transport |
+| `:on-timeout` | — (out of chain) | transport |
+| `:on-error` | — (out of chain) | transport |
 
 ## Route metadata keys
 
@@ -188,6 +240,7 @@ layer.
 | Key | Declared by | Merge | Schema | Doc |
 |---|---|---|---|---|
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request with the fragment alone — the view response's layout is stripped before rendering |
+| `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
 | `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific layer may only lower it |
 | `:void.http/middleware` | `:void/http` | `:concat` | `[:vector :keyword]` | Named middleware this route opts into, concatenated group -> route |
 | `:void.http/timeout` | `:void/http` | `:restrict` + `:allow?` | `[:number {:min 0.001}]` | Handler deadline in seconds; a more specific layer may only lower it |
@@ -207,7 +260,6 @@ layer.
 
 | Key | Type | Merge | Owner-to-be |
 |---|---|---|---|
-| `:void.http/hooks` | {stage [symbol]} | concat (per stage) | void/http (route-level lifecycle stages, ADR-0016) |
 | `:void.authz/policy` | keyword / [keyword] | concat (group AND route both enforce) | void/authz (wave 3) |
 | `:void.auth/access` | :public / :required | restrict | void/auth (wave 3) |
 | `:void.security/csrf` | bool | restrict (true wins) | void/security (wave 3) |

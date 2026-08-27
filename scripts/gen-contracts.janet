@@ -24,6 +24,7 @@
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
+(import void/http/middleware :as mw)
 (require "void/http/init")
 (require "void/html/init")
 (require "void/htmx/init")
@@ -63,8 +64,7 @@
   land in waves 2+. The names and merge strategies are frozen with v1;
   each plugin declares its keys through :void.http/route-meta-key when
   it ships (an undeclared key stays a boot error until then).``
-  [["`:void.http/hooks`" "{stage [symbol]}" "concat (per stage)" "void/http (route-level lifecycle stages, ADR-0016)"]
-   ["`:void.authz/policy`" "keyword / [keyword]" "concat (group AND route both enforce)" "void/authz (wave 3)"]
+  [["`:void.authz/policy`" "keyword / [keyword]" "concat (group AND route both enforce)" "void/authz (wave 3)"]
    ["`:void.auth/access`" ":public / :required" "restrict" "void/auth (wave 3)"]
    ["`:void.security/csrf`" "bool" "restrict (true wins)" "void/security (wave 3)"]
    ["`:void.security/rate`" "{:limit :window}" "restrict (min)" "void/security (wave 3)"]
@@ -76,10 +76,7 @@
 (def reserved-points
   "Extension points reserved by SPEC part I §1.4/ADRs whose owner
   plugins land in waves 2+. Names are frozen with v1."
-  [["`:void.http/hook`" "void/http" "request-lifecycle stage hooks (ADR-0016)"]
-   ["`:void.core/log-sink`" "void/core" "log record sinks (ADR-0018)"]
-   ["`:void.core/log-serializer`" "void/core" "log value serializers by key (ADR-0018)"]
-   ["`:void.obs/instrument`" "void/obs" "auto-instrumentation hooks (wave 3)"]
+  [["`:void.obs/instrument`" "void/obs" "auto-instrumentation hooks (wave 3)"]
    ["`:void.obs/exporter`" "void/obs" "metrics/traces exporters (waves 3-4)"]
    ["`:void.pressure/check`" "void/pressure" "load-shedding checks (ADR-0019)"]
    ["`:void.jobs/backend`" "void/jobs" "job persistence backends (wave 2, ADR-0012)"]
@@ -141,6 +138,31 @@
 (p "|---|---|---|")
 (each [n o d] reserved-points
   (p "| %s | `%s` | %s |" n o d))
+(p "")
+
+(p "## Request-lifecycle stages (ADR-0016)")
+(p "")
+(p "Frozen with v1: stage names and their phase slots. In-chain stages")
+(p "compile into the route chain as thin wrappers (an empty stage costs")
+(p "nothing); request-side hooks are `(fn [request])` — a response table")
+(p "short-circuits — response-side are `(fn [request response]) ->")
+(p "response`. Out-of-chain stages are called by the transport (socket")
+(p "and inject paths alike): `:on-response` after the bytes are written,")
+(p "`:on-error` before the error renderers, `:on-timeout` on a")
+(p "`:void.http/timeout` cancellation. Register globally through")
+(p "`:void.http/hook`, per-route through the `:void.http/hooks` metadata")
+(p "key.")
+(p "")
+(p "| Stage | Phase slot | Side |")
+(p "|---|---|---|")
+(each s (sorted-by |(get mw/stage-slots $ 99999) (keys mw/stages))
+  (p "| `%q` | %s | %s |"
+     s
+     (if-let [slot (get mw/stage-slots s)] (string slot) "— (out of chain)")
+     (cond
+       (get mw/request-stages s) "request"
+       (get mw/stage-slots s) "response"
+       "transport")))
 (p "")
 
 (p "## Route metadata keys")
