@@ -182,24 +182,25 @@
                                            ;(get-in r [:void/route :hooks :on-error] [])))})
               req)))})
 
-# per-process random prefix + counter: unique, sortable, and no
-# cryptorand syscall on the hot path (pino's model)
+# per-process random prefix + counter (fastify's genReqId model: a bare
+# counter, no crypto and no header lookup on the hot path; the prefix
+# disambiguates processes/workers in aggregated logs)
 (def- request-id-prefix
   (let [b (os/cryptorand 4)]
     (string/join (seq [x :in b] (string/format "%02x" x)))))
 (var- request-id-counter 0)
 
-(defn- gen-request-id []
-  (string request-id-prefix "-" (++ request-id-counter)))
-
 (plugin/defcontribution :void.http/middleware
   {:name :void.http/request-id
    :phase middleware/phase/observability
-   :doc "Take or mint the request id ((req :request-id), x-request-id header respected) and bind it to the log context (ADR-0018)"
+   :doc "Mint the request id ((req :request-id)) and bind it to the log context (ADR-0018); config [:http :request-id-header] names a trusted inbound header to take instead (off by default, fastify-style)"
    :wrap (fn [handler]
+           # :wrap runs at table-build time — the context (and config)
+           # already exist, so the header choice costs nothing per request
+           (def hdr (get-in (context) [:config :request-id-header]))
            (fn request-id-mw [req]
-             (def id (or (ring/request-header req "x-request-id")
-                         (gen-request-id)))
+             (def id (or (when hdr (ring/request-header req hdr))
+                         (string request-id-prefix "-" (++ request-id-counter))))
              (put req :request-id id)
              (log/with-context {:request-id id}
                (handler req))))})
@@ -262,12 +263,13 @@
      :cookie (get scfg :cookie "void-session")}))
 
 (defn- access-log! [req resp]
-  (def ms
+  (def us
     (when-let [t (req :received)]
-      (string/format "%.2f" (* 1000 (- (os/clock :monotonic) t)))))
+      # integer microseconds: precise, and no float-repr noise in %j
+      (math/round (* 1000000 (- (os/clock :monotonic) t)))))
   (log/info "request" :ns "void.http.access"
             :method (req :method) :path (req :path)
-            :status (resp :status) :ms ms
+            :status (resp :status) :us us
             :request-id (req :request-id)))
 
 (defn- resolve-global-hooks
@@ -654,6 +656,7 @@
    :strict-meta [:optional :boolean]
    :dev-errors [:optional :boolean]
    :access-log [:optional :boolean]
+   :request-id-header [:optional :string]
    :session [:optional {:enabled [:optional :boolean]
                         :store [:optional :keyword]
                         :ttl [:optional [:number {:min 1}]]
