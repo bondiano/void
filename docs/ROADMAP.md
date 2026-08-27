@@ -14,11 +14,12 @@
 |---|---|
 | SPEC (обзор + контракты Plugin API / Route Metadata) | ✅ написан |
 | ADR 0001–0015 | ✅ accepted |
-| ADR 0016–0019 (lifecycle, inject-тесты, core/log, pressure) | 📝 proposed |
+| ADR 0016–0018 (lifecycle-стадии, inject-тесты, core/log) | ✅ реализованы в v0.1 |
+| ADR 0019 (pressure) | 📝 proposed (волна 3) |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина) и `void/run!` реализованы; deprecation-алиасы extension points (`:aliases`) |
-| `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart + хук `:void.dev/reloaded`, fixtures/factories (`:generator`-проекция) |
-| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware, sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload |
+| Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина), `void/run!`; deprecation-алиасы extension points (`:aliases`); **`void/core/log`** — structured logger (ADR-0018: lazy-макросы, ns-дерево уровней, dyn-контекст, pretty/jdn sinks, serializers/redact) |
+| `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart + хук `:void.dev/reloaded`, fixtures/factories (`:generator`-проекция); **`test/inject`** (ADR-0017: with-http, cookie jar, `:json`/`:form`/`:raw`, sse-events) |
+| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware + **lifecycle-стадии** (ADR-0016: `:void.http/hook`, `:void.http/hooks`, `:on-response`/`:on-error`/`:on-timeout`, request-id + access-log), sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload, **kernel/server split** (ADR-0017) |
 | `void/html` + `void/htmx` (1.2–1.3) | ✅ hiccup/temple за `:void.html/engine`, form-хелперы из schema, assets, hx-хелперы, `:void.htmx/partial` |
 | `void/rest` + `void/openapi` (1.4–1.5) | ✅ `defresource`, schema-валидация/coercion, problem+json, OpenAPI 3.1 проекция + Swagger UI |
 | `void/cli` (1.6) | ✅ `void new` / `void dev` / `void routes` / `void repl`; команды — extension point, subset-старт через `:needs` |
@@ -192,12 +193,12 @@
 
 ### Exit-критерии волны 1
 
-1. Demo-приложение (server-rendered HTMX, формы с валидацией из schema) работает; `void new && void dev` → рабочий цикл с hot reload.
-2. Контракты заморожены: reserved-ключи metadata v1 (включая `:void.http/hooks`), lifecycle-стадии v1 (имена+слоты, ADR-0016) и schema всех extension points зафиксированы в docs; дальнейшие изменения — только через deprecation (SPEC ч. II, 1.5).
-3. `explain-route` показывает происхождение каждого значения (п. 3 критериев готовности).
-4. B0/B1 в CI с порогами; бюджеты SPEC §8.2 проверены или скорректированы с фиксацией причин.
-5. Тесты demo-приложения ходят через `test/inject` без сокета (ADR-0017); access-log пишется через `void/core/log` на `:on-response` (ADR-0016/0018) — socket- и inject-пути проходят одни и те же стадии.
-6. Тег v0.1.
+1. [x] Demo-приложение (server-rendered HTMX, формы с валидацией из schema) работает — `examples/guestbook` (= smoke-тест в CI); `void new && void dev` → рабочий цикл с hot reload (live-хендлеры + авто-rebuild route table по хуку `:void.dev/reloaded`).
+2. [x] Контракты заморожены: reserved-ключи metadata v1 (включая `:void.http/hooks`), lifecycle-стадии v1 (имена+слоты, ADR-0016) и schema всех extension points зафиксированы в [CONTRACTS.md](CONTRACTS.md) (автогенерация из деклараций + drift-check в CI); дальнейшие изменения — только через deprecation ([CONTRIBUTING.md](../CONTRIBUTING.md#deprecation); alias-механика точек реализована в host).
+3. [x] `explain-route` показывает происхождение каждого значения (+ middleware/stage-цепочку, source, warnings).
+4. [x] B0/B1 в CI с порогами (относительный 5%-gate merge-base↔head); бюджеты §8.2 промерены на референс-окружении, корректировки и причины — [BENCH-v0.1.md](BENCH-v0.1.md); абсолютный gate — `void bench budgets`.
+5. [x] Тесты demo-приложения ходят через `test/inject` без сокета (ADR-0017; kernel/server split, cookie jar, `:raw`-байты wire-кодом); access-log пишется через `void/core/log` на `:on-response` (ADR-0016/0018) — socket- и inject-пути проходят одни и те же стадии (lifecycle-test + inject-test).
+6. [x] Тег v0.1.
 
 ---
 

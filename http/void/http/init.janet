@@ -20,9 +20,12 @@
 ### reverses routes, (http/rebuild!) rebuilds and atomically swaps the
 ### table after code changes.
 
+(import spork/json)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/meta :as meta)
+(import void/core/hooks :as corehooks)
+(import void/core/log :as log)
 (import ./wire :as wire)
 (import ./ring :as ring)
 (import ./router :as router)
@@ -50,6 +53,9 @@
 
 # -- extension points ----------------------------------------------------
 
+(defn- callable? [x]
+  (or (function? x) (cfunction? x)))
+
 (defn- unique-by [what f]
   (fn [contribs]
     (def seen @{})
@@ -69,6 +75,18 @@
            :doc [:optional :string]}
   :validate (unique-by "middleware" |($ :name))
   :reduce |(sorted-by |[($ :phase) ($ :name)] $))
+
+(plugin/defextension-point :void.http/hook
+  :doc "Global request-lifecycle hooks (ADR-0016): {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata"
+  :schema {:stage [:enum :on-request :pre-parsing :pre-validation
+                   :pre-handler :pre-serialization :on-send
+                   :on-response :on-error :on-timeout]
+           :name :keyword
+           :fn [:or :function :symbol]
+           :env [:optional :function]
+           :doc [:optional :string]}
+  :validate (unique-by "lifecycle hook" |($ :name))
+  :reduce |(sorted-by (fn [c] [(c :stage) (c :name)]) $))
 
 (plugin/defextension-point :void.http/route-meta-key
   :doc "Route metadata key declarations (ADR-0005): {:key :schema? :doc? :merge (:replace :concat :deep-merge :restrict)? :allow?}"
@@ -140,18 +158,51 @@
    :merge :restrict
    :allow? (fn [outer inner] (<= inner outer))})
 
+(plugin/defcontribution :void.http/route-meta-key
+  {:key :void.http/hooks
+   :schema :dictionary
+   :doc "Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks"
+   :merge :concat})
+
 # -- built-in middleware (through the same point other plugins use) ------
 
 (plugin/defcontribution :void.http/middleware
   {:name :void.http/panic-guard
    :phase middleware/phase/panic-guard
-   :doc "Exception -> response at the route chain edge (errors/wrap-panic)"
+   :doc "Exception -> response at the route chain edge (errors/wrap-panic; runs the :on-error stage hooks before the renderers)"
    :wrap (fn [handler]
            (fn panic-guard [req]
              (def ctx (context))
-             ((errors/wrap-panic handler {:renderers (ctx :renderers)
-                                          :dev (ctx :dev)})
+             ((errors/wrap-panic handler
+                                 {:renderers (ctx :renderers)
+                                  :dev (ctx :dev)
+                                  :on-error
+                                  (fn route-on-error [r]
+                                    (tuple ;(get ctx :on-error-global [])
+                                           ;(get-in r [:void/route :hooks :on-error] [])))})
               req)))})
+
+# per-process random prefix + counter: unique, sortable, and no
+# cryptorand syscall on the hot path (pino's model)
+(def- request-id-prefix
+  (let [b (os/cryptorand 4)]
+    (string/join (seq [x :in b] (string/format "%02x" x)))))
+(var- request-id-counter 0)
+
+(defn- gen-request-id []
+  (string request-id-prefix "-" (++ request-id-counter)))
+
+(plugin/defcontribution :void.http/middleware
+  {:name :void.http/request-id
+   :phase middleware/phase/observability
+   :doc "Take or mint the request id ((req :request-id), x-request-id header respected) and bind it to the log context (ADR-0018)"
+   :wrap (fn [handler]
+           (fn request-id-mw [req]
+             (def id (or (ring/request-header req "x-request-id")
+                         (gen-request-id)))
+             (put req :request-id id)
+             (log/with-context {:request-id id}
+               (handler req))))})
 
 (plugin/defcontribution :void.http/middleware
   {:name :void.http/parsing
@@ -210,6 +261,30 @@
      :ttl (get scfg :ttl 86400)
      :cookie (get scfg :cookie "void-session")}))
 
+(defn- access-log! [req resp]
+  (def ms
+    (when-let [t (req :received)]
+      (string/format "%.2f" (* 1000 (- (os/clock :monotonic) t)))))
+  (log/info "request" :ns "void.http.access"
+            :method (req :method) :path (req :path)
+            :status (resp :status) :ms ms
+            :request-id (req :request-id)))
+
+(defn- resolve-global-hooks
+  "The :void.http/hook contributions -> stage -> tuple of resolved
+  callables (symbols resolve against the contribution's :env, ADR-0002)."
+  [contribs]
+  (def by-stage @{})
+  (each c (or contribs [])
+    (def env (let [e (c :env)] (if (callable? e) (e) e)))
+    (def call (router/resolve-callable
+                (c :fn) env
+                (string/format "%q hook %q" (c :stage) (c :name))))
+    (array/push (or (get by-stage (c :stage))
+                    (let [a @[]] (put by-stage (c :stage) a) a))
+                call))
+  (freeze by-stage))
+
 (defn- make-handler [ctx static-cfg]
   (def cell (ctx :cell))
   (var h
@@ -227,8 +302,11 @@
     (set h (static/wrap-static h {:root (static-cfg :root)
                                   :prefix (get static-cfg :prefix "/")
                                   :index (get static-cfg :index "index.html")})))
-  # outer guard: 404/405/static and anything outside a route chain
-  (errors/wrap-panic h {:renderers (ctx :renderers) :dev (ctx :dev)}))
+  # outer guard: 404/405/static and anything outside a route chain —
+  # only the global :on-error hooks apply (no route matched)
+  (errors/wrap-panic h {:renderers (ctx :renderers)
+                        :dev (ctx :dev)
+                        :on-error (fn [_] (get ctx :on-error-global []))}))
 
 (defn build-context
   "Assemble the http context from a boot value: resolve the extension
@@ -248,35 +326,54 @@
       {:name (get-in c [:value :name] (c :plugin))
        :routes (get-in c [:value :routes])
        :env (get-in c [:value :env])}))
+  (def global-hooks (resolve-global-hooks (resolved :void.http/hook)))
   (def ctx
     @{:config cfg
       :workers workers
       :dev dev?
       :renderers (resolved :void.http/error-renderer)
       :codecs (resolved :void.http/body-codec)
+      :access-log (not= false (cfg :access-log))
+      :on-error-global (tuple ;(get global-hooks :on-error []))
+      :on-timeout-global (tuple ;(get global-hooks :on-timeout []))
+      :on-response-global (tuple ;(get global-hooks :on-response []))
       :session (build-session cfg (or (resolved :void.http/session-store) @{}) workers)})
   # the built-in middleware closures ((context)) must see this context
   # already while the table build evaluates their :when predicates
   (set current-context ctx)
-  (def table
-    (router/build-table
-      {:sources sources
-       :meta-keys (or (resolved :void.http/route-meta-key) @{})
-       :middleware (get-in boot [:extensions :void.http/middleware :contributions] [])
-       :strict (get cfg :strict-meta false)}))
+  (def build-args
+    {:sources sources
+     :meta-keys (or (resolved :void.http/route-meta-key) @{})
+     :middleware (get-in boot [:extensions :void.http/middleware :contributions] [])
+     :stage-hooks global-hooks
+     :strict (get cfg :strict-meta false)})
+  (def table (router/build-table build-args))
+  # the :void.http/route-added app hook (ADR-0016): plugins see every
+  # entry at build time (validation, derived registrations) — a
+  # handler error fails the boot
+  (each e (table :routes)
+    (corehooks/run! (boot :hooks) :void.http/route-added boot e))
   (def cell (router/cell table))
   (put ctx :cell cell)
-  (put ctx :build-args
-       {:sources sources
-        :meta-keys (or (resolved :void.http/route-meta-key) @{})
-        :middleware (get-in boot [:extensions :void.http/middleware :contributions] [])
-        :strict (get cfg :strict-meta false)})
+  (put ctx :build-args build-args)
   (put ctx :handler (make-handler ctx (cfg :static)))
   (put ctx :limits-fn
        (fn limits [method path]
          (when-let [[entry _] (router/match (router/current cell) method path)]
            {:max-body (get-in entry [:meta :void.http/max-body])
             :timeout (get-in entry [:meta :void.http/timeout])})))
+  (put ctx :notify-response
+       (fn notify-response [req resp]
+         (each h (ctx :on-response-global) (protect (h req resp)))
+         (each h (get-in req [:void/route :hooks :on-response] [])
+           (protect (h req resp)))
+         (when (ctx :access-log)
+           (protect (access-log! req resp)))))
+  (put ctx :notify-timeout
+       (fn notify-timeout [req]
+         (each h (ctx :on-timeout-global) (protect (h req)))
+         (each h (get-in req [:void/route :hooks :on-timeout] [])
+           (protect (h req)))))
   ctx)
 
 (plugin/defcontribution :void.core/hooks
@@ -286,12 +383,100 @@
    :doc "Build and validate the route table before anything listens"
    :fn (fn build! [boot] (build-context boot))})
 
-# -- the server component ------------------------------------------------
+(defn- request-from-raw
+  "A whole raw HTTP request (bytes) -> request table, through the same
+  wire parser the server uses (ADR-0017 :raw mode: limits, smuggling
+  vectors, malformed input). The body is the bytes past the head —
+  no chunked decoding in the inject path."
+  [raw]
+  (def head (wire/parse-request-head raw))
+  (cond
+    (nil? head) (error "raw request: incomplete head (no \\r\\n\\r\\n)")
+    (= :error head) (error "raw request: malformed head"))
+  (def raw-path (head :path))
+  (def [path qs] (wire/split-path raw-path))
+  (def body-bytes (string/slice raw (head :head-size)))
+  @{:method (keyword (string/ascii-lower (head :method)))
+    :path path
+    :raw-path raw-path
+    :query-string qs
+    :query (or (wire/parse-query qs) @{})
+    :headers (head :headers)
+    :http-version (head :http-version)
+    :received (os/clock :monotonic)
+    :body (if (empty? body-bytes) nil body-bytes)})
+
+(defn make-request
+  ``An in-memory request table from an inject/with-request spec
+  (ADR-0017): :method (:get, or :post once a body sugar is present),
+  :uri/:path, :headers, :body — plus sugar: :json <value> encodes and
+  sets the content type, :form <dict> urlencodes, :raw <bytes> parses
+  a whole HTTP request through the server's wire parser instead.``
+  [spec]
+  (if (get spec :raw)
+    (request-from-raw (get spec :raw))
+    (do
+      (def uri (or (get spec :uri) (get spec :path) "/"))
+      (def [path qs] (wire/split-path uri))
+      (def headers (merge @{} (get spec :headers {})))
+      (var body (get spec :body))
+      (var default-method :get)
+      (when-let [j (get spec :json)]
+        (set body (json/encode j))
+        (put headers "content-type" "application/json")
+        (set default-method :post))
+      (when-let [f (get spec :form)]
+        (set body (wire/encode-query f))
+        (put headers "content-type" "application/x-www-form-urlencoded")
+        (set default-method :post))
+      @{:method (get spec :method default-method)
+        :path path
+        :raw-path uri
+        :query-string qs
+        :query (or (wire/parse-query qs) @{})
+        :headers headers
+        :http-version 1
+        :received (os/clock :monotonic)
+        :body body})))
+
+
+# -- the kernel and server components (ADR-0017) -------------------------
+
+(defn- run-app-hook
+  "Run an app-level http hook (:void.http/listening / :draining) on
+  the current boot's registry, protected — transport notifications
+  never block start/stop."
+  [hook & args]
+  (when-let [b plugin/current-boot]
+    (each e (corehooks/run-protected! (b :hooks) hook b ;args)
+      (eprint e))))
+
+(def kernel-component
+  (system/component :http/kernel
+    :doc "The socket-free HTTP kernel: route table, precompiled chains
+    and lifecycle hooks, the composed handler — zero I/O. Tests start
+    :only [:http/kernel] (ADR-0017): the app is fully wired, no port
+    opens; test/inject and with-request run against it."
+    :start
+    (fn start [_ _]
+      (def ctx (context))
+      # a duck-typed surface: void/test's inject client drives the
+      # kernel through these fields alone — void/dev (wave 0) never
+      # imports void/http (wave 1)
+      @{:handler (ctx :handler)
+        :limits-fn (ctx :limits-fn)
+        :make-request make-request
+        :serialize server/serialize-response
+        :notify-response (ctx :notify-response)
+        :notify-timeout (ctx :notify-timeout)})
+    :health (fn health [_] {:status :up})))
 
 (def server-component
   (system/component :http/server
-    :doc "The HTTP listener — or, with :workers > 1 in the master
-    process, the prefork supervisor for the workers that listen."
+    :doc "The HTTP listener over :http/kernel — or, with :workers > 1
+    in the master process, the prefork supervisor for the workers that
+    listen."
+    :deps [:http/kernel]
     :config {:key :http}
     :start
     (fn start [_ cfg0]
@@ -300,21 +485,26 @@
       (if (and (> (ctx :workers) 1) (not (prefork/worker?)))
         @{:mode :master
           :master (prefork/start {:workers (ctx :workers)})}
-        @{:mode :server
-          :server (server/start
-                    (merge
-                      (tabseq [k :in [:host :port :max-header :max-body
-                                      :read-timeout :idle-timeout
-                                      :drain-timeout :max-connections]
-                               :when (not (nil? (get cfg k)))]
-                        k (cfg k))
-                      {:handler (ctx :handler)
-                       :limits-fn (ctx :limits-fn)}))}))
+        (do
+          (def srv (server/start
+                     (merge
+                       (tabseq [k :in [:host :port :max-header :max-body
+                                       :read-timeout :idle-timeout
+                                       :drain-timeout :max-connections]
+                                :when (not (nil? (get cfg k)))]
+                         k (cfg k))
+                       {:handler (ctx :handler)
+                        :limits-fn (ctx :limits-fn)
+                        :on-response (ctx :notify-response)
+                        :on-timeout (ctx :notify-timeout)})))
+          (run-app-hook :void.http/listening srv)
+          @{:mode :server :server srv})))
     :stop
     (fn stop [inst]
       (case (inst :mode)
         :master (prefork/stop (inst :master))
-        :server (server/stop (inst :server))))
+        :server (do (run-app-hook :void.http/draining (inst :server))
+                    (server/stop (inst :server)))))
     :health
     (fn health [inst]
       (case (inst :mode)
@@ -341,20 +531,11 @@
                           :headers {"content-type" "application/x-www-form-urlencoded"}
                           :body "title=x"})
 
-  Returns the response table.``
+  Accepts make-request's :json/:form/:raw sugar too. Returns the
+  response table (the REPL helper — test/inject in void/test adds the
+  cookie jar, wire serialization and the :on-response stage).``
   [spec]
-  (def ctx (context))
-  (def uri (or (get spec :uri) (get spec :path) "/"))
-  (def [path qs] (wire/split-path uri))
-  (def req @{:method (get spec :method :get)
-             :path path
-             :raw-path uri
-             :query-string qs
-             :query (or (wire/parse-query qs) @{})
-             :headers (merge @{} (get spec :headers {}))
-             :http-version 1
-             :body (get spec :body)})
-  ((ctx :handler) req))
+  (((context) :handler) (make-request spec)))
 
 (defn explain-route
   "The routing verdict and per-key metadata provenance for a path (see
@@ -472,6 +653,7 @@
    :max-connections [:optional [:int {:min 1}]]
    :strict-meta [:optional :boolean]
    :dev-errors [:optional :boolean]
+   :access-log [:optional :boolean]
    :session [:optional {:enabled [:optional :boolean]
                         :store [:optional :keyword]
                         :ttl [:optional [:number {:min 1}]]
@@ -495,4 +677,4 @@
                     :idle-timeout 75
                     :drain-timeout 15
                     :max-connections 1024}
-  :components [server-component])
+  :components [kernel-component server-component])

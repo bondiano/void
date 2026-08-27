@@ -23,7 +23,7 @@ ADR фиксируют архитектурные решения проекта 
 | [0013](0013-grpc-cherez-connect-protocol.md) | gRPC через Connect protocol на HTTP/1.1; protobuf — pure-Janet | accepted |
 | [0014](0014-performance-byudzhety-kak-ci-kontrakt.md) | Performance-бюджеты как CI-контракт; bench-suite в репозитории | accepted |
 | [0015](0015-svoj-http-server-spork-kak-referens.md) | Свой HTTP-сервер; spork/http — референс и донор парсеров | accepted |
-| [0016](0016-request-lifecycle-imenovannye-stadii.md) | Request lifecycle — именованные стадии как публичный контракт | proposed |
-| [0017](0017-inject-testirovanie-polnogo-steka-bez-soketa.md) | Тестирование через inject — полный стек без сокета | proposed |
-| [0018](0018-structured-logger-v-core.md) | Structured logger — ядро логов в `void/core/log` | proposed |
+| [0016](0016-request-lifecycle-imenovannye-stadii.md) | Request lifecycle — именованные стадии как публичный контракт | accepted |
+| [0017](0017-inject-testirovanie-polnogo-steka-bez-soketa.md) | Тестирование через inject — полный стек без сокета | accepted |
+| [0018](0018-structured-logger-v-core.md) | Structured logger — ядро логов в `void/core/log` | accepted |
 | [0019](0019-pressure-load-shedding.md) | `void/pressure` — load shedding по образцу under-pressure | proposed |

@@ -1,6 +1,6 @@
 # ADR-0018: Structured logger — ядро логов в `void/core/log`
 
-- Статус: proposed
+- Статус: accepted (реализован в v0.1)
 - Дата: 2026-08-26
 - Связанные разделы SPEC: §3.7 (новый), §5.13
 - Референс: [Fastify Logging](https://fastify.dev/docs/latest/Reference/Logging/) / pino

@@ -1,6 +1,6 @@
 # ADR-0016: Request lifecycle — именованные стадии как публичный контракт
 
-- Статус: proposed
+- Статус: accepted (реализован в v0.1)
 - Дата: 2026-08-26
 - Связанные разделы SPEC: §5.1, часть II §1.4 и §2.5
 - Референс: [Fastify Lifecycle](https://fastify.dev/docs/latest/Reference/Lifecycle/)

@@ -1,5 +1,21 @@
 (import ../void/core/meta :as meta)
 
+# -- :concat over dictionaries (per-slot concat, ADR-0016) ---------------
+
+(do
+  (def decls (meta/declarations
+               [(meta/declare-key :t/hooks :merge :concat)]))
+  (def r (meta/merge-layers decls
+                            [[:global {:t/hooks {:a [1] :b [2]}}]
+                             [:route {:t/hooks {:a [3] :c [4]} :name :x}]]))
+  (assert (empty? (r :errors)) (string/join (r :errors) ";"))
+  (assert (= {:a [1 3] :b [2] :c [4]} (get-in r [:value :t/hooks]))
+          "dictionary :concat concatenates per key")
+  (def bad (meta/merge-layers decls
+                              [[:global {:t/hooks [1]}]
+                               [:route {:t/hooks {:a [2]} :name :x}]]))
+  (assert (not (empty? (bad :errors))) "mixing shapes is an error"))
+
 (defn expect-error [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))

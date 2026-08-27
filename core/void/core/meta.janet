@@ -157,12 +157,35 @@
 
     :concat
     (cond
+      # {slot [items]} concats per slot — lifecycle hooks (ADR-0016):
+      # {:pre-handler [group-hook]} + {:pre-handler [route-hook]}
+      # -> {:pre-handler [group-hook route-hook]}
+      (dictionary? inner)
+      (if (and (not (nil? outer)) (not (dictionary? outer)))
+        (do (array/push errors
+                        (string/format "metadata key %q (layer %q): :concat cannot mix %q with dictionary %q"
+                                       key source outer inner))
+            outer)
+        (do
+          (def out (merge-into @{} (or outer {})))
+          (eachp [k v] inner
+            (if (indexed? v)
+              (put out k (tuple ;(get out k []) ;v))
+              (array/push errors
+                          (string/format "metadata key %q (layer %q): :concat dictionary values must be indexed, got %q under %q"
+                                         key source v k))))
+          (freeze out)))
       (not (indexed? inner))
       (do (array/push errors
                       (string/format "metadata key %q (layer %q): :concat expects an indexed value, got %q"
                                      key source inner))
           outer)
       (nil? outer) (tuple ;inner)
+      (and (not (nil? outer)) (not (indexed? outer)))
+      (do (array/push errors
+                      (string/format "metadata key %q (layer %q): :concat cannot mix dictionary %q with %q"
+                                     key source outer inner))
+          outer)
       (tuple ;outer ;inner))
 
     :deep-merge

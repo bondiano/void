@@ -1,14 +1,21 @@
 # The wave-1 example is also its smoke test (ROADMAP, сквозные
-# работы): boot the app exactly as `void dev` would — full plugin
-# lifecycle, no socket games beyond an ephemeral port — and drive the
-# guestbook loop through http/with-request: full page, invalid POST
-# re-rendered with schema errors, valid POST as an htmx fragment,
-# explain-route provenance.
+# работы), and it tests the way void apps are meant to be tested
+# (ADR-0017): kernel-only start — no port — with test/inject driving
+# the full production stack: routing, lifecycle stages, middleware,
+# schema validation, rendering, wire serialization. The access-log
+# lands through void/core/log on the :on-response stage — the same
+# record a socket request would produce (wave-1 exit criterion 5).
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
+(import void/core/log :as log)
+(import void/test :as test)
 (import void/http :as http)
 (import main)
+
+# capture the structured log records the app emits
+(def records @[])
+(log/set-sinks! [(fn [rec] (array/push records (freeze rec)))])
 
 (def opts
   (merge main/app
@@ -18,37 +25,48 @@
                                         :watch {:enabled false}}}}}))
 
 # the composition is valid before anything starts
-(def report (plugin/dry-run opts))
-(assert (report :ok) "dry-run passes")
+(assert ((plugin/dry-run opts) :ok) "dry-run passes")
 
-(def boot (plugin/start! opts))
-(defer (plugin/shutdown! boot 3)
+(test/with-http [c opts]
+
+  # log sinks survive the boot's log configuration
+  (log/set-sinks! [(fn [rec] (array/push records (freeze rec)))])
+
+  # kernel-only: the app is fully wired, no socket exists
+  (assert (nil? (get-in (c :boot) [:system :instances :http/server]))
+          "test/with-http starts :only [:http/kernel]")
 
   # -- GET /: server-rendered page with the schema-driven form -----------
-  (def page (http/with-request {:uri "/"}))
+  (def page (test/inject c {:uri "/"}))
   (assert (= 200 (page :status)))
-  (def body (string (page :body)))
+  (def body (test/text page))
   (assert (string/has-prefix? "<!DOCTYPE html>" body) "full page renders")
   (assert (string/find `action="/entries"` body) "the form targets POST /entries")
   (assert (string/find "hx-post" body) "the form is htmx-enhanced")
   (assert (string/find `name="message"` body) "schema fields become controls")
+  (assert (string/has-prefix? "HTTP/1.1 200" (page :raw))
+          ":raw carries the exact wire bytes")
+
+  # the access-log record fired on :on-response through void/core/log
+  (def access (filter |(= "void.http.access" ($ :ns)) records))
+  (assert (= 1 (length access)) "one access-log record per request")
+  (assert (= "/" ((access 0) :path)))
+  (assert (= 200 ((access 0) :status)))
+  (assert (string? ((access 0) :request-id))
+          "the request-id middleware bound the log context")
 
   # -- invalid POST: schema errors re-render the same form ---------------
-  (def bad (http/with-request
-             {:method :post :uri "/entries"
-              :headers {"content-type" "application/x-www-form-urlencoded"}
-              :body "name=&message="}))
-  (assert (string/find "field-errors" (string (bad :body)))
+  (def bad (test/inject c {:uri "/entries"
+                           :form {:name "" :message ""}}))
+  (assert (string/find "field-errors" (test/text bad))
           "schema/check errors land next to their fields")
 
   # -- valid POST as htmx request: fragment without layout ---------------
-  (def good (http/with-request
-              {:method :post :uri "/entries"
-               :headers {"content-type" "application/x-www-form-urlencoded"
-                         "hx-request" "true"}
-               :body "name=ada&message=first%20entry"}))
-  (assert (string/find "first entry" (string (good :body))) "the entry is listed")
-  (assert (not (string/find "<html" (string (good :body))))
+  (def good (test/inject c {:uri "/entries"
+                            :headers {"hx-request" "true"}
+                            :form {:name "ada" :message "first entry"}}))
+  (assert (string/find "first entry" (test/text good)) "the entry is listed")
+  (assert (not (string/find "<html" (test/text good)))
           ":void.htmx/partial answers htmx with the bare fragment")
 
   # -- explain-route: every value's origin, middleware chain -------------
@@ -60,4 +78,5 @@
           "the resolved middleware chain is visible")
   (assert (string/find "middleware:" (ex :text))))
 
+(log/set-sinks! nil)
 (print "guestbook smoke-test ok")
