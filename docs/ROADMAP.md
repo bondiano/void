@@ -1,6 +1,6 @@
 # ROADMAP: void
 
-> Дорожная карта реализации по [SPEC.md](SPEC.md) и [ADR 0001–0015](adr/README.md). Волны — из SPEC §6, критерии готовности контрактов — из SPEC, часть II. Документ живой: статусы обновляются, порядок внутри волны может меняться, порядок волн — нет.
+> Дорожная карта реализации по [SPEC.md](SPEC.md) и [ADR 0001–0019](adr/README.md). Волны — из SPEC §6, критерии готовности контрактов — из SPEC, часть II. Документ живой: статусы обновляются, порядок внутри волны может меняться, порядок волн — нет.
 
 **Правило зависимостей:** каждый plugin зависит только от `void/core` и plugins своей волны или более ранних. Волна считается закрытой не по «код написан», а по exit-критериям.
 
@@ -14,13 +14,20 @@
 |---|---|
 | SPEC (обзор + контракты Plugin API / Route Metadata) | ✅ написан |
 | ADR 0001–0015 | ✅ accepted |
+| ADR 0016–0019 (lifecycle, inject-тесты, core/log, pressure) | 📝 proposed |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
-| Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина) и `void/run!` реализованы |
-| `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart, fixtures/factories (`:generator`-проекция) |
-| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware, sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto` |
-| Всё остальное | не начато |
+| Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина) и `void/run!` реализованы; deprecation-алиасы extension points (`:aliases`) |
+| `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart + хук `:void.dev/reloaded`, fixtures/factories (`:generator`-проекция) |
+| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware, sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload |
+| `void/html` + `void/htmx` (1.2–1.3) | ✅ hiccup/temple за `:void.html/engine`, form-хелперы из schema, assets, hx-хелперы, `:void.htmx/partial` |
+| `void/rest` + `void/openapi` (1.4–1.5) | ✅ `defresource`, schema-валидация/coercion, problem+json, OpenAPI 3.1 проекция + Swagger UI |
+| `void/cli` (1.6) | ✅ `void new` / `void dev` / `void routes` / `void repl`; команды — extension point, subset-старт через `:needs` |
+| bench-suite (1.7) | ✅ B0/B1 + Go/FastAPI baselines, wrk/wrk2-методика, 5%-пороги в CI; бюджеты §8.2 промерены на референс-окружении — [BENCH-v0.1.md](BENCH-v0.1.md) |
+| Demo волны 1 | ✅ `examples/guestbook` (server-rendered HTMX, schema-формы) = smoke-тест в CI; тот же код генерирует `void new` |
+| **Контракты v1** | ✅ **заморожены в v0.1**: [CONTRACTS.md](CONTRACTS.md) (автогенерация из деклараций + drift-check в CI), deprecation-процедура — [CONTRIBUTING.md](../CONTRIBUTING.md#deprecation) |
+| Волны 2+ | не начаты |
 
-Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — спроектирован, требует **заморозки** в конце волны 0/начале волны 1; (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
+Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
 
 ---
 
@@ -29,7 +36,8 @@
 ```
 Волна 0  фундамент      core: system → config → schema → plugin → hooks → dev(netrepl)
 Волна 1  вертикаль      http → html → htmx → rest → openapi → cli(min) + bench B0/B1
-Волна 2  данные         db → sqlite → postgres → redis → cache → jobs + bench B2/B3
+                        + core/log → lifecycle-стадии → inject-тесты (до заморозки контрактов)
+Волна 2  данные         db → sqlite → postgres → redis → cache → jobs → pressure + bench B2/B3
 Волна 3  enterprise     obs → auth → authz → security → mail → bus(memory/pg + outbox)
 Волна 4  протоколы+admin proto → grpc(Connect) → obs-OTLP → ws → mcp → admin + bench B4
 Волна 5  тяжёлый FFI    kafka → db-mysql → oauth → i18n → datastar → tls
@@ -144,7 +152,8 @@
 ### 1.6 `void/cli` — минимум *(M→S в этой волне)*
 
 - [x] Бинарь `void`; команды — extension point; bootstrap подмножества системы (`:needs [...]`)
-- [x] `void new` (шаблон проекта), `void routes` (+`--keys`), `void repl` (netrepl-клиент)
+- [x] `void new` (шаблон проекта: HTMX-guestbook со schema-формой), `void routes` (+`--keys`), `void repl` (netrepl-клиент)
+- [x] `void dev` — полный `run!`-цикл в `:dev` профиле (watcher + netrepl); hot reload пересобирает route table через хук `:void.dev/reloaded` → `http/rebuild!` (live-чтение manifest registry)
 
 ### 1.7 Bench-suite: старт *(ADR-0014)*
 
@@ -152,13 +161,43 @@
 - [x] Первый прогон фиксирует baseline (`bench/results/baseline.jdn`) → пороги регрессии 5%; в CI (`bench.yml`) — относительное сравнение merge-base vs head на одном раннере (shared runners не доверяем абсолютным числам, ADR-0014)
 - [x] Baselines для калибровки: Go net/http, FastAPI — `bench/baselines/`, таргеты `go-*`/`fastapi-*` в том же суите
 
+### 1.8 `void/core/log` — structured logger *(S/M; ADR-0018)*
+
+- [ ] Принять ADR-0018
+- [ ] Ядро: record = plain table, макросы уровней (аргументы не вычисляются при выключенном уровне), уровни per-namespace (префиксное дерево) со сменой в рантайме из REPL
+- [ ] Контекст в dyn: `log/with-context` (child-logger-семантика), хелпер переноса в `ev/go`-таски
+- [ ] Sinks — point `:void.core/log-sink`: pretty stderr (dev, sync), JSON/JDN-lines через буферизованный канал + writer-fiber (prod; drop со счётчиком при переполнении, sync-flush на `:fatal`)
+- [ ] Serializers — point `:void.core/log-serializer` (`:err`, `:req`); `:redact`-пути поверх secret-механики config
+- [ ] http: request-id middleware (фаза observability) кладёт id в log-context; access-log на стадии `:on-response` (1.9)
+- [ ] Строка в bench-таблице: B1 с включённым access-log (overhead зафиксирован, §8.5 п. 4)
+
+### 1.9 Request lifecycle — именованные стадии *(S; ADR-0016)*
+
+- [ ] Принять ADR-0016; слоты/имена стадий v1 — в заморозку контрактов v0.1
+- [ ] Стадии в цепочке: `:on-request` (1500), `:pre-parsing` (1900), `:pre-validation` (5900), `:pre-serialization` (9800), `:pre-handler` (9900), `:on-send` (500) — компиляция hooks в цепочку route на билде таблицы, пустая стадия не порождает wrapper
+- [ ] Внецепочечные точки: `:on-response` (после записи в сокет — из сервера), `:on-error` (из errors перед renderer), `:on-timeout` (при deadline-отмене handler-task)
+- [ ] Регистрация: point `:void.http/hook` (global) + metadata-ключ `:void.http/hooks` (route-level, merge `:concat`, символы)
+- [ ] Короткое замыкание из hook'а (response-map) с прогоном ответных стадий
+- [ ] App-level: `:void.http/listening`, `:void.http/draining`, `:void.http/route-added` (аналог onRoute)
+- [ ] `explain-route` показывает hooks каждой стадии с provenance (global/group/route)
+
+### 1.10 `void/test` — inject-harness *(S; ADR-0017)*
+
+- [ ] Принять ADR-0017
+- [ ] Рефакторинг `void/http`: пара компонентов `:http/kernel` (цепочки/hooks/handler, ноль I/O) и `:http/server` (`:deps [:http/kernel]`; сокет, drain, prefork); `with-request`/REPL — через kernel
+- [ ] `test/client` (cookie jar, базовые заголовки) + `test/inject`: `:json`/`:form`-сахар, `:raw` (сырые байты через серверный wire-парсер — тесты лимитов/smuggling)
+- [ ] Fidelity: полный путь (routing → стадии 1.9 → middleware → handler → рендер lazy views → кодеки → `:on-send`) + сериализация ответа в память тем же `write-head`/`write-body` → `:on-response`; результат — response table + `:raw`-байты
+- [ ] Хелперы: `test/json`, `test/text`, `test/sse-events`; `test/with-http` (старт `:only [:http/kernel]` → клиент → guaranteed stop)
+- [ ] Тесты demo-приложения переведены на inject (сессия+CSRF+HTMX-фрагменты — сценарий login → авторизованный запрос)
+
 ### Exit-критерии волны 1
 
 1. Demo-приложение (server-rendered HTMX, формы с валидацией из schema) работает; `void new && void dev` → рабочий цикл с hot reload.
-2. Контракты заморожены: reserved-ключи metadata v1 и schema всех extension points зафиксированы в docs; дальнейшие изменения — только через deprecation (SPEC ч. II, 1.5).
+2. Контракты заморожены: reserved-ключи metadata v1 (включая `:void.http/hooks`), lifecycle-стадии v1 (имена+слоты, ADR-0016) и schema всех extension points зафиксированы в docs; дальнейшие изменения — только через deprecation (SPEC ч. II, 1.5).
 3. `explain-route` показывает происхождение каждого значения (п. 3 критериев готовности).
 4. B0/B1 в CI с порогами; бюджеты SPEC §8.2 проверены или скорректированы с фиксацией причин.
-5. Тег v0.1.
+5. Тесты demo-приложения ходят через `test/inject` без сокета (ADR-0017); access-log пишется через `void/core/log` на `:on-response` (ADR-0016/0018) — socket- и inject-пути проходят одни и те же стадии.
+6. Тег v0.1.
 
 ---
 
@@ -200,12 +239,23 @@
 
 - [ ] B2 (PG query), B3 (PG + SSR) в CI; проверка бюджетов ev-loop-lag/GC из §8.2
 
+### 2.6 `void/pressure` — load shedding *(S; ADR-0019)*
+
+- [ ] Принять ADR-0019
+- [ ] Sampler-компонент: loop-lag (дрейф `ev/sleep`), heap (GC-статистика), rss (getrusage/ffi); custom-проверки — point `:void.pressure/check`
+- [ ] Пороги `:max-loop-lag`/`:max-heap-bytes`/`:max-rss-bytes` → флаг `:under-pressure` с гистерезисом восстановления
+- [ ] Middleware в слоте 100: 503 + `Retry-After` через error-путь (problem+json при rest); metadata `:void.pressure/exempt` для `/health`/`/metrics`
+- [ ] Contribution в `:void.core/health` (degraded + причины), `(pressure/status)`, события `:pressure/high|recovered` в hooks-шину
+- [ ] Prefork: sampler per-worker, агрегация в master health
+- [ ] Калибровка порогов по умолчанию на B2/B3 (насыщение: быстрый 503 вместо роста latency у всех) — тест в CI
+
 ### Exit-критерии волны 2
 
 1. Demo: CRUD-приложение на Postgres с миграциями, background-джобами и кэшом; то же на SQLite сменой конфига.
 2. Драйвер PG не блокирует loop: тест «конкурентные pg_sleep + ticker» из прототипа — в CI.
 3. N+1-guard и dirty-tracking покрыты тестами; `void db erd` строит диаграмму из `:db/rels`.
-4. B2/B3 в CI. Тег v0.2.
+4. Тест насыщения (ADR-0019): под перегрузкой процесс отвечает быстрым 503 + `Retry-After`, `/health` (exempt) остаётся живым, после снятия нагрузки — `:pressure/recovered`.
+5. B2/B3 в CI. Тег v0.2.
 
 ---
 
@@ -215,7 +265,7 @@
 
 ### 3.1 `void/obs` *(L)*
 
-- [ ] Logs: structured (JDN/JSON), контекст из dyn (request-id/trace-id), уровни per-namespace, смена в рантайме
+- [ ] Logs: ядро уже в `void/core/log` с волны 1 (ADR-0018); здесь — trace-id/span-id в log-context, sampling, OTLP/файловые log-sinks
 - [ ] Metrics: counters/gauges/histograms; RED per route из route table; runtime (GC, fibers, pools); Prometheus text export
 - [ ] Tracing: span API в dyn (per-fiber), W3C traceparent in/out (OTLP-export — волна 4, после proto)
 - [ ] ev/loop-lag гистограмма (главный health-индикатор, §8.4); p99 «accept→handler»
@@ -310,10 +360,10 @@
 | Работа | Когда |
 |---|---|
 | CI: `jpm test` всех пакетов + `plugin/dry-run` + bench-пороги | с волны 0, наращивается |
-| Docs-сайт: генерация из деклараций (metadata-ключи, extension points, схемы) | каркас в волне 1, публикация к v0.4 |
+| Docs-сайт: генерация из деклараций (metadata-ключи, extension points, схемы) | каркас есть: `scripts/gen-contracts.janet` → [CONTRACTS.md](CONTRACTS.md) (+drift-check в CI); сайт — к v0.4 |
 | Sampling-профайлер в void/dev (`debug/stack` по таймеру) + `bench/trace-request` | волна 2 (понадобится для B2/B3) |
-| CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | к заморозке контрактов (v0.1) |
-| Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | с волны 1 |
+| CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | ✅ сделано к v0.1 ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
+| Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | идёт: `demo` (волна 0), `guestbook` (волна 1, в CI) |
 
 ---
 

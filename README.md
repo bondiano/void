@@ -8,7 +8,23 @@ A batteries-included web framework for [Janet](https://janet-lang.org/): Laravel
 
 ## Status
 
-**Pre-alpha / design phase.** The full specification lives in [SPEC.md](SPEC.md). The async-libpq feasibility risk has been retired by a working prototype (SPEC.md, Appendix A).
+**v0.1 — the wave-1 vertical slice.** You can build server-rendered HTMX applications: `void new myapp && cd myapp && void dev` gives you a schema-validated form app with hot reload (live handler redefinition *and* automatic route-table rebuilds) and a netrepl into the running process. The Plugin API and Route Metadata contracts are **frozen** — the registry is [docs/CONTRACTS.md](docs/CONTRACTS.md) (generated from the declarations, drift-checked in CI), the deprecation procedure is in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The full specification lives in [docs/SPEC.md](docs/SPEC.md), the wave plan in [docs/ROADMAP.md](docs/ROADMAP.md), performance budgets and the recorded baseline in [docs/BENCH-v0.1.md](docs/BENCH-v0.1.md). The async-libpq feasibility risk has been retired by a working prototype (SPEC, Appendix A).
+
+## Quick start
+
+```sh
+# in-repo, until the packages are published: put core/ http/ html/
+# htmx/ dev/ cli/ on the module path (jpm install from a checkout)
+void new guestbook
+cd guestbook
+void dev            # dev profile: file watcher + netrepl + the app
+void routes         # the route table, `void routes --keys` with metadata
+void repl           # repl into the running process
+```
+
+The generated app — the same one as [`examples/guestbook`](examples/guestbook) — is a server-rendered HTMX guestbook: one map schema drives the form markup, the coercing validation (`form/check`) and the re-render-with-errors loop; the POST route answers htmx requests with the bare fragment (`:void.htmx/partial`).
 
 ## Where void fits
 
@@ -29,10 +45,12 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `htmx/` | `void/htmx` — htmx integration: hx-attribute builders, HX-\* request predicates and response headers, OOB swaps, fragment-without-layout answers on routes marked `:void.htmx/partial` | 1 |
 | `rest/` | `void/rest` — REST/JSON sugar over void/http: `:void.schema/*` route metadata drives request coercion+validation and response serialization, RFC 7807 problem+json, `defresource` CRUD groups, pagination/sorting/filtering conventions | 1 |
 | `openapi/` | `void/openapi` — OpenAPI 3.1 as a pure projection of the route table + schema registry, `/openapi.json` + Swagger UI in dev, export for CI | 1 |
-| `cli/` | `void/cli` — the `void` binary: commands as the `:void.core/cli` extension point, subset bootstrap via `:needs`, `void new` / `void routes` / `void repl` | 1 |
+| `cli/` | `void/cli` — the `void` binary: commands as the `:void.core/cli` extension point, subset bootstrap via `:needs`, `void new` / `void dev` / `void routes` / `void repl` | 1 |
 | `bench/` | `void/bench` — bench-suite (ADR-0014): B\* mini-apps, wrk/wrk2 методика, Go/FastAPI calibration baselines, 5% regression thresholds in CI | 1 |
 
-Upcoming waves (see SPEC.md §6): `void/cli`, then data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+`examples/` holds one example application per wave (they double as smoke tests in CI): `examples/demo` (the wave-0 toy plugin), `examples/guestbook` (the wave-1 HTMX guestbook).
+
+Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 

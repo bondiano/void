@@ -52,5 +52,13 @@ jobs:
       - name: Test void/bench
         run: cd bench && jpm test
 
+      - name: Smoke-test the wave-1 example (guestbook)
+        run: cd examples/guestbook && jpm test
+
       - name: Dry-run the full plugin composition
         run: janet scripts/dry-run.janet
+
+      - name: Contract docs match the declarations (frozen v1)
+        run: |
+          janet scripts/gen-contracts.janet
+          git diff --exit-code docs/CONTRACTS.md
