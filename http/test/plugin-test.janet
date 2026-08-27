@@ -64,7 +64,8 @@
                    :config {:env @{}
                             :cli {:http {:port 0 :session {:enabled true}}}}}))
 (assert (report :ok))
-(assert (deep= [:http/server] (freeze (report :components))))
+(assert (deep= [:http/kernel :http/server] (freeze (report :components)))
+        "kernel + server components (ADR-0017)")
 (assert (= :void/http (get-in report [:extensions :void.http/middleware :owner])))
 
 # -- full boot -----------------------------------------------------------

@@ -177,45 +177,91 @@
     (when (= (chr "/") (s j)) (set i j)))
   i)
 
+(defn- resolve-binding
+  "A qualified symbol 'my-app.orders/show names binding `show` in
+  module \"my-app/orders\" (dots become path separators); a bare
+  symbol is looked up in `env`. Returns [module-env binding-name]."
+  [sym env what]
+  (def s (string sym))
+  (def i (last-slash s))
+  (def [menv nm]
+    (if i
+      [(require (string/replace-all "." "/" (string/slice s 0 i)))
+       (symbol (string/slice s (inc i)))]
+      [(or env (errorf "cannot resolve bare %s symbol %q without a module environment — qualify it (my-app.orders/show)" what sym))
+       sym]))
+  (def binding (get menv nm))
+  (unless (and binding (callable? (get binding :value)))
+    (errorf "%s %q does not resolve to a function%s"
+            what sym (if i "" " in the declaring module")))
+  [menv nm])
+
 (defn resolve-handler
   ``Resolve a handler declaration to {:call <fn per dispatch> :fn
   <current fn> :no-reload <bool>} against `env` (the declaring module's
-  environment, for bare symbols).
-
-  A qualified symbol 'my-app.orders/show names binding `show` in module
-  "my-app/orders" (dots become path separators); a bare symbol is
-  looked up in `env`. Either way the resolved *environment table* is
+  environment, for bare symbols). The resolved *environment table* is
   captured and the binding is read per call — module reloads that
   update the env in place (void/dev watch) are live without a rebuild.
   A function literal is called directly and marked :no-reload.``
   [handler &opt env]
-  (cond
-    (callable? handler)
+  (if (callable? handler)
     {:call (fn literal-handler [req] (handler req))
      :fn handler
      :no-reload true}
-
     (do
-      (def s (string handler))
-      (def i (last-slash s))
-      (def [menv nm]
-        (if i
-          [(require (string/replace-all "." "/" (string/slice s 0 i)))
-           (symbol (string/slice s (inc i)))]
-          [(or env (errorf "cannot resolve bare handler symbol %q without a module environment — qualify it (my-app.orders/show)" handler))
-           handler]))
-      (def binding (get menv nm))
-      (unless (and binding (callable? (get binding :value)))
-        (errorf "handler %q does not resolve to a function%s"
-                handler (if i "" " in the declaring module")))
+      (def [menv nm] (resolve-binding handler env "handler"))
       {:call (fn symbol-handler [req] ((in (in menv nm) :value) req))
-       :fn (get binding :value)
+       :fn (get-in menv [nm :value])
        :no-reload false})))
+
+(defn resolve-callable
+  "resolve-handler's variadic sibling for lifecycle hooks (ADR-0016):
+  fn-or-symbol -> (fn [& args]) with the same late-binding rule."
+  [h &opt env what]
+  (default what "lifecycle hook")
+  (cond
+    (callable? h) (fn [& args] (h ;args))
+    (symbol? h)
+    (let [[menv nm] (resolve-binding h env what)]
+      (fn hook-call [& args] ((in (in menv nm) :value) ;args)))
+    (errorf "%s must be a function or a symbol, got %q" what h)))
 
 # -- table build ---------------------------------------------------------
 
 (def- allowed-build-opts
-  {:sources true :meta-keys true :middleware true :strict true})
+  {:sources true :meta-keys true :middleware true :strict true
+   :stage-hooks true})
+
+(defn- stage-hooks-for
+  ``Per-route lifecycle hooks (ADR-0016): combine the global stage
+  hooks (`global` — stage -> tuple of resolved callables, from the
+  :void.http/hook point) with the route's :void.http/hooks metadata
+  (symbols resolved against the route's env; group hooks precede route
+  hooks via the :concat merge). In-chain stages become synthetic
+  middleware entries; out-of-chain stages (:on-response :on-error
+  :on-timeout) keep only the ROUTE-level hooks here — the transport
+  runs the global ones for every request, matched or not.``
+  [global rmeta env]
+  (def route-hooks (or (get rmeta :void.http/hooks) {}))
+  (eachk s route-hooks
+    (unless (get mw/stages s)
+      (errorf ":void.http/hooks: unknown stage %q (stages: %s)"
+              s (string/join (map |(string/format "%q" $)
+                                  (sorted (keys mw/stages)))
+                             " "))))
+  (def wrappers @[])
+  (def out @{})
+  (each s (sorted (keys mw/stages))
+    (def route-resolved
+      (seq [h :in (get route-hooks s [])]
+        (resolve-callable h env (string/format "%q hook" s))))
+    (if (get mw/out-of-chain-stages s)
+      (unless (empty? route-resolved)
+        (put out s (tuple ;route-resolved)))
+      (let [hooks (tuple ;(get global s []) ;route-resolved)]
+        (when-let [w (mw/stage-wrapper s hooks)]
+          (array/push wrappers w)))))
+  {:wrappers wrappers :out (freeze out)})
 
 (defn build-table
   ``Build an immutable route table from route sources
@@ -286,9 +332,13 @@
       (array/push errors (string/format "%s: %s" label (string resolved))))
     (def [c-ok chain-or-err]
       (protect
-        (let [selected (mw/select contribs rmeta)]
-          {:chain (mw/chain selected (if h-ok (resolved :call) identity))
-           :middleware (tuple ;(map |($ :name) selected))})))
+        (let [selected (mw/select contribs rmeta)
+              staged (stage-hooks-for (get opts :stage-hooks {}) rmeta (d :env))
+              combined (sorted-by (fn [m] [(m :phase) (string (m :name))])
+                                  (array ;selected ;(staged :wrappers)))]
+          {:chain (mw/chain combined (if h-ok (resolved :call) identity))
+           :middleware (tuple ;(map |($ :name) combined))
+           :hooks (staged :out)})))
     (unless c-ok
       (array/push errors (string/format "%s: %s" label (string chain-or-err))))
     (when (and (keyword? name) (not (in by-name name))
@@ -307,6 +357,7 @@
           :warnings (merged :warnings)
           :chain (chain-or-err :chain)
           :middleware (chain-or-err :middleware)
+          :hooks (chain-or-err :hooks)
           :source (d :source)})
       (put by-name name entry)
       (array/push entries entry)))

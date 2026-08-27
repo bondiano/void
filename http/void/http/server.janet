@@ -79,6 +79,16 @@
 
     (wire/write-body conn wbuf body)))
 
+(defn serialize-response
+  ``The exact bytes write-response would put on the socket, into a
+  buffer — the inject path's fidelity contract (ADR-0017). Fiber
+  bodies (chunked/SSE) are drained into the buffer as their frames.``
+  [req resp &opt close?]
+  (def out @"")
+  (def sink @{:write (fn [_ data] (buffer/push out data) nil)})
+  (write-response sink @"" req resp (truthy? close?))
+  out)
+
 # -- reads ---------------------------------------------------------------
 
 (defn- read-more
@@ -256,6 +266,7 @@
     :headers (head :headers)
     :http-version (head :http-version)
     :body body
+    :received (os/clock :monotonic)      # access-log duration base
     :connection conn})
 
 (defn- run-handler
@@ -264,7 +275,7 @@
   ev/with-deadline cancels the *root task*, and cancelling a long-lived
   loop fiber mid-ev-operation is exactly the upstream bug class of
   janet-lang/janet#1337/#1707 (see ADR-0015)."
-  [handler req timeout]
+  [handler req timeout &opt on-timeout]
   (if (nil? timeout)
     (handler req)
     (do
@@ -276,9 +287,13 @@
       (cond
         (= :ok sig) value
         (and (string? value) (string/find "deadline" value))
-        {:status 503
-         :headers @{"content-type" "text/plain; charset=utf-8"}
-         :body "503 handler timeout"}
+        (do
+          # the :on-timeout lifecycle stage (ADR-0016): the handler
+          # task was cancelled by its :void.http/timeout
+          (when on-timeout (protect (on-timeout req)))
+          {:status 503
+           :headers @{"content-type" "text/plain; charset=utf-8"}
+           :body "503 handler timeout"})
         (error value)))))
 
 (defn- serve-connection [state conn opts]
@@ -311,12 +326,16 @@
 
             (def [body consumed] (read-body conn buf head max-body opts))
             (def req (build-request conn head body))
-            (def resp (run-handler handler req (get limits :timeout)))
+            (def resp (run-handler handler req (get limits :timeout)
+                                   (opts :on-timeout)))
             (unless (and (dictionary? resp) (int? (resp :status)))
               (errorf "handler returned %q — expected a response table with :status"
                       resp))
             (def keep (and (keep-alive? head resp state)))
             (write-response conn wbuf req resp (not keep))
+            # :on-response (ADR-0016): after the bytes hit the socket
+            (when-let [notify (opts :on-response)]
+              (protect (notify req resp)))
             (consume! buf consumed)
             (put info :busy false)
             (set alive keep))))

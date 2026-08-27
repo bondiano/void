@@ -88,6 +88,9 @@
   ``The phase-0 panic guard. Options:
     :renderers  :void.http/error-renderer contributions, priority order
     :dev        truthy exposes stacktraces (dev error page)
+    :on-error   (fn [req err]) hooks — the :on-error lifecycle stage
+                (ADR-0016), run before the renderers; the first hook
+                returning a response table wins over rendering
     :log        (fn [err req trace]) — 500s reach it (aborts do not);
                 default prints to stderr``
   [handler &opt opts]
@@ -101,6 +104,11 @@
     (try
       (handler req)
       ([err fib]
+        # a :void.http/timeout cancellation must reach the server's
+        # deadline branch (503 + the :on-timeout stage), not the
+        # renderers — re-propagate it
+        (when (and (string? err) (string/find "deadline expired" err))
+          (propagate err fib))
         (def status
           (if (and (dictionary? err) (int? (err :http/status)))
             (err :http/status)
@@ -108,7 +116,17 @@
         (def trace (when fib (stacktrace-str fib err)))
         (when (>= status 500)
           (log err req trace))
-        (render (opts :renderers) err req
-                {:status status
-                 :dev (opts :dev)
-                 :stacktrace trace})))))
+        (var hooked nil)
+        # :on-error may be the hooks themselves or (fn [req] hooks) —
+        # the route layer adds per-route hooks at request time
+        (def eh (get opts :on-error []))
+        (each h (if (indexed? eh) eh (eh req))
+          (when (nil? hooked)
+            (def [ok r] (protect (h req err)))
+            (when (and ok (dictionary? r) (r :status))
+              (set hooked r))))
+        (or hooked
+            (render (opts :renderers) err req
+                    {:status status
+                     :dev (opts :dev)
+                     :stacktrace trace}))))))
