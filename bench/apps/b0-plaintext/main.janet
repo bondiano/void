@@ -35,9 +35,6 @@
   {:plugins [:void/http :bench/b0]
    :profile :prod
    :config {:cli {:http {:host "127.0.0.1"
-                         # B* measure the kernel price; the access-log
-                         # cost is its own bench line (ADR-0018, §8.5 p.4)
-                         :access-log false
                          :port (or (scan-number (or (os/getenv "PORT") ""))
                                    8100)}}}})
 
