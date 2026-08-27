@@ -23,7 +23,11 @@ jobs:
           cd /tmp/jpm && sudo janet bootstrap.janet
 
       - name: Install dependencies
-        run: cd dev && sudo jpm deps
+        run: |
+          cd "$GITHUB_WORKSPACE/dev" && sudo jpm deps
+          # the sqlite3 native module: void/db-sqlite needs it, and so
+          # do the dry-run and contract gates, which load the driver
+          cd "$GITHUB_WORKSPACE/db-sqlite" && sudo jpm deps
 
       - name: Test void/core
         run: cd core && jpm test
@@ -51,6 +55,9 @@ jobs:
 
       - name: Test void/db
         run: cd db && jpm test
+
+      - name: Test void/db-sqlite
+        run: cd db-sqlite && jpm test
 
       - name: Test void/bench
         run: cd bench && jpm test

@@ -47,10 +47,12 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `openapi/` | `void/openapi` — OpenAPI 3.1 as a pure projection of the route table + schema registry, `/openapi.json` + Swagger UI in dev, export for CI | 1 |
 | `cli/` | `void/cli` — the `void` binary: commands as the `:void.core/cli` extension point, subset bootstrap via `:needs`, `void new` / `void dev` / `void routes` / `void repl` | 1 |
 | `bench/` | `void/bench` — bench-suite (ADR-0014): B\* mini-apps, wrk/wrk2 методика, Go/FastAPI calibration baselines, 5% regression thresholds in CI | 1 |
+| `db/` | `void/db` — database kernel (ADR-0009): the `:void/db-driver` contract, fiber-aware pool with metrics, SQL as data, dyn-scoped transactions (plus `:void.db/txn` route metadata in `void/db-http`), migrations, Data Mapper entity layer with thin AR sugar and an N+1 guard | 2 |
+| `db-sqlite/` | `void/db-sqlite` — the reference driver: janet-lang/sqlite3 behind the contract, per-connection pragmas, RETURNING when the library has it, and the binding's sharp edges (no URI filenames, so `:memory:` is one connection) turned into boot errors rather than surprises | 2 |
 
 `examples/` holds one example application per wave (they double as smoke tests in CI): `examples/demo` (the wave-0 toy plugin), `examples/guestbook` (the wave-1 HTMX guestbook).
 
-Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the rest of the data wave (`void/db-postgres`, `void/redis`, `void/cache`, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 

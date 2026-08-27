@@ -26,8 +26,9 @@
 | bench-suite (1.7) | ✅ B0/B1 + Go/FastAPI baselines, wrk/wrk2-методика, 5%-пороги в CI; бюджеты §8.2 промерены на референс-окружении — [BENCH-v0.1.md](BENCH-v0.1.md) |
 | Demo волны 1 | ✅ `examples/guestbook` (server-rendered HTMX, schema-формы) = smoke-тест в CI; тот же код генерирует `void new` |
 | **Контракты v1** | ✅ **заморожены в v0.1**: [CONTRACTS.md](CONTRACTS.md) (автогенерация из деклараций + drift-check в CI), deprecation-процедура — [CONTRIBUTING.md](../CONTRIBUTING.md#deprecation) |
-| `void/db` (2.1) | ✅ ядро: контракт `:void/db-driver`, fiber-aware пул с метриками, SQL-как-данные, dyn-транзакции + `:void.db/txn` (plugin `void/db-http`), миграции и `void db migrate/rollback/status/new/erd`, Data Mapper + AR-сахар с N+1-guard (ADR-0009) |
-| Волна 2, остальное (2.2–2.6) | не начато — драйверы (sqlite/postgres/redis), cache, jobs, bench B2/B3, pressure |
+| `void/db` (2.1) | ✅ ядро: контракт `:void/db-driver`, fiber-aware пул с метриками, SQL-как-данные, dyn-транзакции + `:void.db/txn` (plugin `void/db-http`), миграции и `void db migrate/rollback/status/new/erd`, Data Mapper + AR-сахар с N+1-guard (ADR-0009); композиция входит в `dry-run`/`gen-contracts`, `:void.db/txn` — declared-строка [CONTRACTS.md](CONTRACTS.md) |
+| `void/db-sqlite` (2.2) | ✅ референс-реализация контракта драйвера поверх janet sqlite3: pragma-набор на соединение из `[:db-sqlite]`, детект RETURNING по версии, `BEGIN IMMEDIATE` + savepoints, файловый дефолт-путь, `:memory:` как одно keeper-соединение |
+| Волна 2, остальное (2.2–2.6) | не начато — драйверы postgres/redis, cache, jobs, bench B2/B3, pressure |
 | Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -220,11 +221,13 @@
 - [x] N+1-guard: `db/rel` вне preload — warning с местом вызова в dev, ошибка в `:strict`, `[:db :n1-guard]` в конфиге (в `:prod` по умолчанию off); callbacks на entity — НЕТ (ADR-0009)
 - [x] Инструментация драйвера: единая воронка исполнения (timing → метрики пула, `:debug`-строка sql/params/us в `void/core/log`) — точка подключения для `:void.obs/instrument` в волне 3
 - [x] `void db erd` — mermaid-проекция реестра entity (`erd.janet`); exit-критерий 3 волны закрыт заранее
-- [ ] Включить `void/db` в `scripts/dry-run.janet` и `gen-contracts` (нужен реальный драйвер — вместе с 2.2; до тех пор строка `:void.db/txn` в CONTRACTS остаётся в reserved-таблице, а контракт ключа зафиксирован тестом `db/test/plugin-test.janet`)
+- [x] `void/db` + `void/db-sqlite` + `void/db-http` включены в `scripts/dry-run.janet` и `gen-contracts` (реальный драйвер появился в 2.2); `:void.db/txn` переехал из reserved-таблицы CONTRACTS в declared, контракт ключа продолжает пиниться тестом `db/test/plugin-test.janet`
 
 ### 2.2 Драйверы
 
-- [ ] `void/db-sqlite` *(S)* — обёртка janet sqlite3; референс-реализация контракта драйвера
+- [x] `void/db-sqlite` *(S)* — обёртка janet sqlite3, референс-реализация контракта драйвера: pragma-набор на каждое новое соединение из `[:db-sqlite]` (WAL, `busy_timeout`, `foreign_keys` — sqlite по умолчанию FK не проверяет), RETURNING по детекту версии библиотеки (≥3.35, иначе перечитывание по `last_insert_rowid`), `BEGIN IMMEDIATE` по умолчанию (deferred-транзакция под пулом = классический SQLITE_BUSY при апгрейде блокировки) + savepoints, keeper-соединение компонента (кривой путь падает на старте, а не на первом запросе) — `db-sqlite/void/db-sqlite/driver.janet`
+  - границы биндинга, зафиксированные тестами: prepared-пары нет (ядро уходит на фолбэк `:execute`), мульти-statement строка компилируется целиком до выполнения (DDL и зависимые statements — массивом строк в миграции), NULL-колонка отсутствует в строке результата, вызовы синхронные и блокируют ev-цикл (за асинхронность отвечает `void/db-postgres`)
+  - URI-имена файлов выключены (`SQLITE_USE_URI` — compile-time опция, биндинг её не ставит), поэтому `file:...?mode=memory&cache=shared` не работает: путь берётся буквально и превращается в файл со странным именем. Отсюда два следствия — путь с префиксом `file:` драйвер отвергает с объяснением, а `:memory:` физически односоединенческая БД: драйвер отдаёт пулу одно и то же keeper-соединение, `[:db :pool :size]` > 1 с ней — ошибка старта с указанием, что править. Дефолтный путь поэтому файловый (`db/void.sqlite3`, родительский каталог создаётся)
 - [ ] `void/db-postgres` *(M; ADR-0011)* — производственный вариант прототипа: shim `void/fdwait` (обобщение pqwait), `PQsendQueryParams`/prepared, pipeline mode, NOTIFY, cancel, row-mode, TLS через libpq
 - [ ] `void/redis` *(M)* — RESP2/3 на PEG, pipelining, pub/sub; `:provides :void/cache :void/session-store :void/queue-backend`
 

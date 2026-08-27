@@ -1,6 +1,7 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
-### void/html + void/htmx + void/rest + void/openapi + void/dev +
-### void/bench + the demo plugin on top of the core extension points.
+### void/html + void/htmx + void/rest + void/openapi + void/db +
+### void/db-sqlite + void/db-http + void/dev + void/bench + the demo
+### plugin on top of the core extension points.
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
 ### non-zero with the batched error list. Run from the repository root:
@@ -19,6 +20,8 @@
 (add-tree (string (os/cwd) "/htmx"))
 (add-tree (string (os/cwd) "/rest"))
 (add-tree (string (os/cwd) "/openapi"))
+(add-tree (string (os/cwd) "/db"))
+(add-tree (string (os/cwd) "/db-sqlite"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -27,12 +30,16 @@
 (require "void/htmx/init")
 (require "void/rest/init")
 (require "void/openapi/init")
+(require "void/db/init")
+(require "void/db-sqlite/init")
+(require "void/db/http")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "examples/demo/plugin")
 
 (def report
   (plugin/dry-run {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
+                             :void/db :void/db-sqlite :void/db-http
                              :void/dev :void/bench :demo/greeter]
                    :profile :dev}))
 

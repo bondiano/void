@@ -146,9 +146,9 @@
           "and the route's chain carries the transaction wrapper")
 
   # -- the frozen v1 contract row for :void.db/txn ----------------------
-  # (CONTRACTS.md reserves the key with merge :replace; it is generated
-  # from the wave-1 composition, which cannot boot void/db until the
-  # sqlite driver lands — so the row is pinned here instead)
+  # (the generated CONTRACTS.md row comes from this very declaration —
+  # pinned here as well so the kernel's own suite fails on a change to
+  # the key, its owner or its merge strategy)
   (def txn-decl
     (find |(= :void.db/txn (get-in $ [:value :key]))
           (get-in boot [:extensions :void.http/route-meta-key :contributions])))
