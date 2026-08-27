@@ -49,6 +49,9 @@ jobs:
       - name: Test void/openapi
         run: cd openapi && jpm test
 
+      - name: Test void/db
+        run: cd db && jpm test
+
       - name: Test void/bench
         run: cd bench && jpm test
 

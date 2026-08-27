@@ -8,7 +8,7 @@
 
 ---
 
-## Текущее состояние (2026-08-26)
+## Текущее состояние (2026-08-27)
 
 | Что | Статус |
 |---|---|
@@ -26,7 +26,9 @@
 | bench-suite (1.7) | ✅ B0/B1 + Go/FastAPI baselines, wrk/wrk2-методика, 5%-пороги в CI; бюджеты §8.2 промерены на референс-окружении — [BENCH-v0.1.md](BENCH-v0.1.md) |
 | Demo волны 1 | ✅ `examples/guestbook` (server-rendered HTMX, schema-формы) = smoke-тест в CI; тот же код генерирует `void new` |
 | **Контракты v1** | ✅ **заморожены в v0.1**: [CONTRACTS.md](CONTRACTS.md) (автогенерация из деклараций + drift-check в CI), deprecation-процедура — [CONTRIBUTING.md](../CONTRIBUTING.md#deprecation) |
-| Волны 2+ | не начаты |
+| `void/db` (2.1) | ✅ ядро: контракт `:void/db-driver`, fiber-aware пул с метриками, SQL-как-данные, dyn-транзакции + `:void.db/txn` (plugin `void/db-http`), миграции и `void db migrate/rollback/status/new/erd`, Data Mapper + AR-сахар с N+1-guard (ADR-0009) |
+| Волна 2, остальное (2.2–2.6) | не начато — драйверы (sqlite/postgres/redis), cache, jobs, bench B2/B3, pressure |
+| Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
 
@@ -164,32 +166,32 @@
 
 ### 1.8 `void/core/log` — structured logger *(S/M; ADR-0018)*
 
-- [ ] Принять ADR-0018
-- [ ] Ядро: record = plain table, макросы уровней (аргументы не вычисляются при выключенном уровне), уровни per-namespace (префиксное дерево) со сменой в рантайме из REPL
-- [ ] Контекст в dyn: `log/with-context` (child-logger-семантика), хелпер переноса в `ev/go`-таски
-- [ ] Sinks — point `:void.core/log-sink`: pretty stderr (dev, sync), JSON/JDN-lines через буферизованный канал + writer-fiber (prod; drop со счётчиком при переполнении, sync-flush на `:fatal`)
-- [ ] Serializers — point `:void.core/log-serializer` (`:err`, `:req`); `:redact`-пути поверх secret-механики config
-- [ ] http: request-id middleware (фаза observability) кладёт id в log-context; access-log на стадии `:on-response` (1.9)
-- [ ] Строка в bench-таблице: B1 с включённым access-log (overhead зафиксирован, §8.5 п. 4)
+- [x] Принять ADR-0018
+- [x] Ядро: record = plain table, макросы уровней (аргументы не вычисляются при выключенном уровне), уровни per-namespace (префиксное дерево) со сменой в рантайме из REPL
+- [x] Контекст в dyn: `log/with-context` (child-logger-семантика), хелпер переноса в `ev/go`-таски
+- [x] Sinks — point `:void.core/log-sink`: pretty stderr (dev, sync), JSON/JDN-lines через буферизованный канал + writer-fiber (prod; drop со счётчиком при переполнении, sync-flush на `:fatal`)
+- [x] Serializers — point `:void.core/log-serializer` (`:err`, `:req`); `:redact`-пути поверх secret-механики config
+- [x] http: request-id middleware (фаза observability) кладёт id в log-context; access-log на стадии `:on-response` (1.9)
+- [x] Строка в bench-таблице: B1 с включённым access-log (overhead зафиксирован, §8.5 п. 4)
 
 ### 1.9 Request lifecycle — именованные стадии *(S; ADR-0016)*
 
-- [ ] Принять ADR-0016; слоты/имена стадий v1 — в заморозку контрактов v0.1
-- [ ] Стадии в цепочке: `:on-request` (1500), `:pre-parsing` (1900), `:pre-validation` (5900), `:pre-serialization` (9800), `:pre-handler` (9900), `:on-send` (500) — компиляция hooks в цепочку route на билде таблицы, пустая стадия не порождает wrapper
-- [ ] Внецепочечные точки: `:on-response` (после записи в сокет — из сервера), `:on-error` (из errors перед renderer), `:on-timeout` (при deadline-отмене handler-task)
-- [ ] Регистрация: point `:void.http/hook` (global) + metadata-ключ `:void.http/hooks` (route-level, merge `:concat`, символы)
-- [ ] Короткое замыкание из hook'а (response-map) с прогоном ответных стадий
-- [ ] App-level: `:void.http/listening`, `:void.http/draining`, `:void.http/route-added` (аналог onRoute)
-- [ ] `explain-route` показывает hooks каждой стадии с provenance (global/group/route)
+- [x] Принять ADR-0016; слоты/имена стадий v1 — в заморозку контрактов v0.1
+- [x] Стадии в цепочке: `:on-request` (1500), `:pre-parsing` (1900), `:pre-validation` (5900), `:pre-serialization` (9800), `:pre-handler` (9900), `:on-send` (500) — компиляция hooks в цепочку route на билде таблицы, пустая стадия не порождает wrapper
+- [x] Внецепочечные точки: `:on-response` (после записи в сокет — из сервера), `:on-error` (из errors перед renderer), `:on-timeout` (при deadline-отмене handler-task)
+- [x] Регистрация: point `:void.http/hook` (global) + metadata-ключ `:void.http/hooks` (route-level, merge `:concat`, символы)
+- [x] Короткое замыкание из hook'а (response-map) с прогоном ответных стадий
+- [x] App-level: `:void.http/listening`, `:void.http/draining`, `:void.http/route-added` (аналог onRoute)
+- [x] `explain-route` показывает hooks каждой стадии с provenance (global/group/route)
 
 ### 1.10 `void/test` — inject-harness *(S; ADR-0017)*
 
-- [ ] Принять ADR-0017
-- [ ] Рефакторинг `void/http`: пара компонентов `:http/kernel` (цепочки/hooks/handler, ноль I/O) и `:http/server` (`:deps [:http/kernel]`; сокет, drain, prefork); `with-request`/REPL — через kernel
-- [ ] `test/client` (cookie jar, базовые заголовки) + `test/inject`: `:json`/`:form`-сахар, `:raw` (сырые байты через серверный wire-парсер — тесты лимитов/smuggling)
-- [ ] Fidelity: полный путь (routing → стадии 1.9 → middleware → handler → рендер lazy views → кодеки → `:on-send`) + сериализация ответа в память тем же `write-head`/`write-body` → `:on-response`; результат — response table + `:raw`-байты
-- [ ] Хелперы: `test/json`, `test/text`, `test/sse-events`; `test/with-http` (старт `:only [:http/kernel]` → клиент → guaranteed stop)
-- [ ] Тесты demo-приложения переведены на inject (сессия+CSRF+HTMX-фрагменты — сценарий login → авторизованный запрос)
+- [x] Принять ADR-0017
+- [x] Рефакторинг `void/http`: пара компонентов `:http/kernel` (цепочки/hooks/handler, ноль I/O) и `:http/server` (`:deps [:http/kernel]`; сокет, drain, prefork); `with-request`/REPL — через kernel
+- [x] `test/client` (cookie jar, базовые заголовки) + `test/inject`: `:json`/`:form`-сахар, `:raw` (сырые байты через серверный wire-парсер — тесты лимитов/smuggling)
+- [x] Fidelity: полный путь (routing → стадии 1.9 → middleware → handler → рендер lazy views → кодеки → `:on-send`) + сериализация ответа в память тем же `write-head`/`write-body` → `:on-response`; результат — response table + `:raw`-байты
+- [x] Хелперы: `test/json`, `test/text`, `test/sse-events`; `test/with-http` (старт `:only [:http/kernel]` → клиент → guaranteed stop)
+- [x] Тесты demo-приложения переведены на inject (сессия+CSRF+HTMX-фрагменты — сценарий login → авторизованный запрос)
 
 ### Exit-критерии волны 1
 
@@ -208,15 +210,17 @@
 
 ### 2.1 `void/db` — kernel + entity layer *(M; ADR-0009)*
 
-- [ ] Интерфейс `:void/db-driver` (connect, query, tx, prepared, pool contract)
-- [ ] Fiber-aware пул: чекаут в dyn, авто-возврат; метрики пула (wait time)
-- [ ] Query builder (SQL как данные, диалекты через драйвер)
-- [ ] `(db/with-tx ...)` через dyn + декларативно `:void.db/txn` в route metadata
-- [ ] Migrations: janet up/down, таблица версий, `void db migrate/rollback/status`
-- [ ] Entity: `defentity` (= defschema + db-mapping), Repository API (`find/query/insert!/update!/delete!`, явный `:preload` batched-IN)
-- [ ] AR-сахар через table prototypes: snapshot в proto, `save!` диффит → partial UPDATE; `db/rel`
-- [ ] N+1-guard: `db/rel` вне preload — warning в dev, ошибка в `:strict`; callbacks на entity — НЕТ (ADR-0009)
-- [ ] Инструментация драйвера (timing → obs, когда появится)
+- [x] Интерфейс `:void/db-driver` (`:dialect/:connect/:close/:execute` + опц. prepared, tx, savepoints, `:ping`, `:insert-id`, `:returning`); `driver/normalize` валидирует и подставляет SQL-фолбэки — `db/void/db/driver.janet`
+- [x] Fiber-aware пул: чекаут в dyn (`with-conn`, авто-возврат через defer), ленивое открытие до `:size`, FIFO-очередь ожидающих с дедлайном в дочерней задаче (не `ev/with-deadline` на root task — класс багов ADR-0015), discard брошенного соединения освобождает слот; метрики (`:waits`/`:wait-us`/`:timeouts`/`:queries`/`:query-us`) → health — `pool.janet`
+- [x] Query builder (SQL как данные, диалекты в реестре: `:ansi`/`:sqlite`/`:postgres`); идентификаторы kebab→snake с квотированием, `[:val x]`/`[:raw s]`, `IS NULL` вместо `= ?`, пустой `IN` → `1 = 0` — `builder.janet`
+- [x] `(db/with-tx ...)` через dyn (вложенные — SAVEPOINT, `db/rollback!`, упавший COMMIT/ROLLBACK выкидывает соединение из пула) + декларативно `:void.db/txn` в route metadata — `state.janet`, отдельный plugin `void/db-http` (`http.janet`), чтобы CLI/воркер не тянул HTTP-ядро
+- [x] Migrations: janet up/down (функция, строка или массив SQL), таблица версий, транзакция на файл, drift-детект «версия применена, файла нет»; `void db migrate/rollback/status` + `void db new` — `migrate.janet`
+- [x] Entity: `defentity` (= defschema + db-mapping; биндинг — сама схема, так что `schema/select` даёт DTO), Repository API (`find/find!/query/one/count/exists?/insert!/insert-all!/update!/delete!/delete-where!`), явный `:preload` — один batched-IN на связь, с вложенностью — `entity.janet`
+- [x] AR-сахар через table prototypes: descriptor+snapshot в proto (`pp`/`keys` показывают только колонки), `save!` диффит → partial UPDATE, optimistic locking по `:db/version`; `db/rel`, `db/preload!`, опциональный identity map
+- [x] N+1-guard: `db/rel` вне preload — warning с местом вызова в dev, ошибка в `:strict`, `[:db :n1-guard]` в конфиге (в `:prod` по умолчанию off); callbacks на entity — НЕТ (ADR-0009)
+- [x] Инструментация драйвера: единая воронка исполнения (timing → метрики пула, `:debug`-строка sql/params/us в `void/core/log`) — точка подключения для `:void.obs/instrument` в волне 3
+- [x] `void db erd` — mermaid-проекция реестра entity (`erd.janet`); exit-критерий 3 волны закрыт заранее
+- [ ] Включить `void/db` в `scripts/dry-run.janet` и `gen-contracts` (нужен реальный драйвер — вместе с 2.2; до тех пор строка `:void.db/txn` в CONTRACTS остаётся в reserved-таблице, а контракт ключа зафиксирован тестом `db/test/plugin-test.janet`)
 
 ### 2.2 Драйверы
 
