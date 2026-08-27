@@ -18,6 +18,7 @@
 (import ./config :as config)
 (import ./schema :as schema)
 (import ./hooks :as hooks)
+(import ./log :as log)
 
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
@@ -503,6 +504,25 @@
        :validate (unique-names "health check")
        :reduce |(sorted-by |($ :name) $))
 
+     :void.core/log-sink
+     (extension-point :void.core/log-sink
+       :doc "Log record sinks (ADR-0018): {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink"
+       :schema {:name :keyword :fn :function :doc [:optional :string]}
+       :validate (unique-names "log sink")
+       :reduce |(sorted-by |($ :name) $))
+
+     :void.core/log-serializer
+     (extension-point :void.core/log-serializer
+       :doc "Log value serializers by record key (ADR-0018): {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer"
+       :schema {:key :keyword :fn :function :doc [:optional :string]}
+       :validate (fn [contribs]
+                   (def seen @{})
+                   (each c contribs
+                     (when (in seen (c :key))
+                       (errorf "duplicate log serializer for %q" (c :key)))
+                     (put seen (c :key) true)))
+       :reduce (fn [contribs] (tabseq [c :in contribs] (c :key) (c :fn))))
+
      :void.core/config-source
      (extension-point :void.core/config-source
        :doc "Extra config sources (vault, consul): {:name :fn :priority}; consumed on config (re)load"
@@ -926,6 +946,21 @@
   (def boot (if (get boot-or-opts :system)
               boot-or-opts
               (bootstrap* boot-or-opts true)))
+  # the logger comes up first (ADR-0018): [:log] slice + profile pick
+  # the built-in sink, contributed sinks/serializers install alongside
+  (def log-cfg (get-in boot [:config :values :log]))
+  (when log-cfg
+    (def check (schema/check log/Config log-cfg))
+    (unless (empty? (check :errors))
+      (errorf "[:log] config invalid: %s"
+              (string/join (map schema/error-str (check :errors)) "; "))))
+  (log/configure! log-cfg (boot :profile))
+  (when-let [sinks (get-in boot [:extensions :void.core/log-sink :resolved])]
+    (unless (empty? sinks)
+      (log/set-sinks! (array/concat (array ;(or (log/sinks) []))
+                                    ;(map |($ :fn) sinks)))))
+  (log/set-serializers!
+    (or (get-in boot [:extensions :void.core/log-serializer :resolved]) {}))
   (hooks/run! (boot :hooks) :config-loaded boot)
   (hooks/run! (boot :hooks) :before-start boot)
   (system/start (boot :system))
@@ -948,6 +983,7 @@
   (put boot :phase :stopped)
   (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
     (eprint e))
+  (log/close!)                    # stop async log writers (ADR-0018)
   boot)
 
 (defn dry-run
