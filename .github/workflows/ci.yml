@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     # void/db-postgres and void/redis are clients of a real server or
-    # they are nothing: their integration suites run when VOID_TEST_PG /
-    # VOID_TEST_REDIS name one, and skip (loudly) when they do not — so
-    # CI is where they are a gate.
+    # they are nothing, and void/cache's redis backend is one too: their
+    # integration suites run when VOID_TEST_PG / VOID_TEST_REDIS name a
+    # server, and skip (loudly) when they do not — so CI is where they
+    # are a gate.
     services:
       redis:
         image: redis:7
@@ -113,6 +114,9 @@ jobs:
 
       - name: Test void/redis
         run: cd redis && jpm test
+
+      - name: Test void/cache
+        run: cd cache && jpm test
 
       - name: Test void/bench
         run: cd bench && jpm test

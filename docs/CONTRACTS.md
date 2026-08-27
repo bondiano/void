@@ -4,7 +4,8 @@
 > declarations in the in-repo composition
 > (void/http void/html void/htmx void/rest void/openapi void/db
 > void/db-sqlite void/db-postgres void/db-http void/redis
-> void/redis-http void/dev void/bench)
+> void/redis-http void/cache void/cache-redis void/cache-http
+> void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -251,6 +252,7 @@ layer.
 
 | Key | Declared by | Merge | Schema | Doc |
 |---|---|---|---|---|
+| `:void.cache/response` | `:void/cache-http` | `:replace` | `{:ttl [:optional [:number {:min 0}]] :vary [:optional [:vector [:or :string :keyword]]]}` | Cache this route's 200 responses in the shared cache for :ttl seconds (0 opts out of a group's setting), keyed by method, path, query and the request headers named in :vary |
 | `:void.db/txn` | `:void/db-http` | `:replace` | `[:or :boolean {:isolation [:optional :keyword]}]` | Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN |
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request with the fragment alone — the view response's layout is stripped before rendering |
 | `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
@@ -279,7 +281,6 @@ layer.
 | `:void.security/rate` | {:limit :window} | restrict (min) | void/security (wave 3) |
 | `:void.obs/name` | string | replace | void/obs (wave 3) |
 | `:void.obs/sample-rate` | number 0..1 | replace | void/obs (wave 3) |
-| `:void.cache/response` | {:ttl :vary} | replace | void/cache (wave 2) |
 
 `:void.openapi/*` note: v0.1 declares `tags`, `summary`,
 `description`, `id`, `hidden`; further `:void.openapi/...` names

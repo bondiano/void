@@ -52,10 +52,11 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `fdwait/` | `void/fdwait` — the monorepo's one native module (~60 lines of C, ADR-0011): park a fiber until a descriptor owned by a C library is readable or writable, without touching it. What `ev/` cannot express, and the reason an FFI database driver needs no thread pool | 2 |
 | `db-postgres/` | `void/db-postgres` — Postgres over libpq's non-blocking API, driven from the ev loop through `void/fdwait`: prepared statements, real isolation levels and savepoints, single-row streaming, pipeline mode, LISTEN/NOTIFY on its own connection, cancellation, and TLS because libpq does it | 2 |
 | `redis/` | `void/redis` — RESP2/RESP3 in pure Janet on the ev loop (no native code, no client library): the wire format as a length-driven scanner plus a PEG, a fiber-aware pool, pipelining, value codecs behind `:void.redis/codec`, Lua scripts, and pub/sub on a connection of its own. `void/redis-http` (same package) contributes the `:redis` session store, which is what lets sessions and prefork workers coexist | 2 |
+| `cache/` | `void/cache` — the cache: the `:void/cache-store` contract and the `:void/cache` interface over it, an in-process store with TTLs and an exact LRU, read-through (`remember`) and memoization (`wrap`) with single-flight, and a store failure that degrades to a miss rather than to a 500. `void/cache-redis` (same package) puts it in redis; `void/cache-http` caches responses of routes marked `:void.cache/response` | 2 |
 
 `examples/` holds one example application per wave (they double as smoke tests in CI): `examples/demo` (the wave-0 toy plugin), `examples/guestbook` (the wave-1 HTMX guestbook).
 
-Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the rest of the data wave (`void/cache`, `void/jobs`, `void/pressure`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the rest of the data wave (`void/jobs`, `void/pressure`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 
