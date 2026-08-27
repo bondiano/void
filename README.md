@@ -47,10 +47,14 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `openapi/` | `void/openapi` — OpenAPI 3.1 as a pure projection of the route table + schema registry, `/openapi.json` + Swagger UI in dev, export for CI | 1 |
 | `cli/` | `void/cli` — the `void` binary: commands as the `:void.core/cli` extension point, subset bootstrap via `:needs`, `void new` / `void dev` / `void routes` / `void repl` | 1 |
 | `bench/` | `void/bench` — bench-suite (ADR-0014): B\* mini-apps, wrk/wrk2 методика, Go/FastAPI calibration baselines, 5% regression thresholds in CI | 1 |
+| `db/` | `void/db` — database kernel (ADR-0009): the `:void/db-driver` contract, fiber-aware pool with metrics, SQL as data, dyn-scoped transactions (plus `:void.db/txn` route metadata in `void/db-http`), migrations, Data Mapper entity layer with thin AR sugar and an N+1 guard | 2 |
+| `db-sqlite/` | `void/db-sqlite` — the reference driver: janet-lang/sqlite3 behind the contract, per-connection pragmas, RETURNING when the library has it, and the binding's sharp edges (no URI filenames, so `:memory:` is one connection) turned into boot errors rather than surprises | 2 |
+| `fdwait/` | `void/fdwait` — the monorepo's one native module (~60 lines of C, ADR-0011): park a fiber until a descriptor owned by a C library is readable or writable, without touching it. What `ev/` cannot express, and the reason an FFI database driver needs no thread pool | 2 |
+| `db-postgres/` | `void/db-postgres` — Postgres over libpq's non-blocking API, driven from the ev loop through `void/fdwait`: prepared statements, real isolation levels and savepoints, single-row streaming, pipeline mode, LISTEN/NOTIFY on its own connection, cancellation, and TLS because libpq does it | 2 |
 
 `examples/` holds one example application per wave (they double as smoke tests in CI): `examples/demo` (the wave-0 toy plugin), `examples/guestbook` (the wave-1 HTMX guestbook).
 
-Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): data (`void/db`, drivers, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the rest of the data wave (`void/redis`, `void/cache`, `void/jobs`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 
@@ -61,3 +65,18 @@ cd core
 jpm deps       # install dependencies (spork)
 jpm test       # run tests
 ```
+
+`void/db-postgres` additionally needs the monorepo's one native module
+built, and a Postgres to test against:
+
+```sh
+cd fdwait && jpm build        # void/fdwait — ~60 lines of C (ADR-0011)
+cd ../db-postgres && jpm test # config/types run everywhere; the rest
+                              # skips without a server
+
+VOID_TEST_PG="postgres://void:void@127.0.0.1:5432/void_test" jpm test
+```
+
+libpq itself is opened at runtime through `ffi/` (`brew install libpq`,
+`apt install libpq5`) — nothing links against it, and a machine without
+it is told so at boot rather than at install time.
