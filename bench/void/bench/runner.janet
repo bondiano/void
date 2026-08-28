@@ -58,7 +58,8 @@
   (put env :err logf)
   (def proc
     (os/spawn ["sh" "-c" (string "cd '" root "' && " (spec :cmd))] :ep env))
-  @{:proc proc :name name :port (spec :port) :log logpath :logf logf})
+  @{:proc proc :name name :port (spec :port) :log logpath :logf logf
+    :ready (spec :ready)})
 
 (defn stop-target
   "SIGTERM (graceful drain), SIGKILL after 10s of no exit."
@@ -71,10 +72,32 @@
   (protect (file/close (server :logf)))
   server)
 
+(defn- status-200? [port path]
+  (def [ok answered]
+    (protect
+      (with [conn (net/connect "127.0.0.1" (string port))]
+        (:write conn (string "GET " path " HTTP/1.1\r\nHost: bench\r\n"
+                             "Connection: close\r\n\r\n"))
+        (def buf @"")
+        (while (net/read conn 4096 buf 5))
+        (string/has-prefix? "HTTP/1.1 200" (string buf)))))
+  (and ok answered))
+
 (defn wait-ready
-  "Poll TCP until the target's port accepts, `timeout` seconds
-  (default 60 — `go build` and uvicorn cold starts count). On failure
-  the server is stopped and the log tail lands in the error."
+  ``Poll until the target is serving, `timeout` seconds (default 60 —
+  `go build` and uvicorn cold starts count): TCP accept, and then, for
+  a target carrying `:ready` (see targets/targets), a 200 from that
+  path.
+
+  The second half is not belt-and-braces. An app opens its listener in
+  `system/start` and does its own setup in `:after-start`, so the port
+  answers while B2/B3 are still seeding `bench_rows` — a warmup, or a
+  test, arriving in that window measures an empty table. The seeding
+  apps report 503 until the table is theirs (see the app sources), and
+  this is what waits for it.
+
+  On failure the server is stopped and the log tail lands in the
+  error.``
   [server &opt timeout]
   (default timeout 60)
   (def deadline (+ (os/clock) timeout))
@@ -84,6 +107,12 @@
     (if ok
       (do (:close stream) (set up true))
       (ev/sleep 0.1)))
+  (when (and up (server :ready))
+    (set up false)
+    (while (and (not up) (< (os/clock) deadline))
+      (if (status-200? (server :port) (server :ready))
+        (set up true)
+        (ev/sleep 0.1))))
   (unless up
     (stop-target server)
     (errorf "target %s never became ready on port %d — log tail (%s):\n%s"

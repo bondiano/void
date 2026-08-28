@@ -53,7 +53,13 @@
   environment; `exec` so signals reach the server, not the shell.
   Baselines (:baseline true) calibrate the class (ADR-0014) — Go
   net/http is the ceiling, FastAPI+uvicorn the Python class — and are
-  never checked against budgets.``
+  never checked against budgets.
+
+  Targets whose app has setup to do after the port opens carry
+  `:ready`: a path that answers 200 only once that setup is done (the
+  seeding B2/B3 answer 503 until `bench_rows` is filled). The runner
+  waits for it before warmup — a benchmark run against a half-seeded
+  table is a benchmark of nothing.``
   {:b0 {:doc "B0 plaintext hello — void router + full middleware stack"
         :bench :plaintext
         :port 8100
@@ -85,12 +91,14 @@
         :port 8102
         :budget :b2
         :needs-pg true
+        :ready "/db"
         :cmd "exec janet apps/b2-pg-query/main.janet"}
    :b3 {:doc "B3 Postgres + hiccup SSR ~15KB — the shape a void app actually is"
         :bench :pg-ssr
         :port 8103
         :budget :b3
         :needs-pg true
+        :ready "/rows"
         :cmd "exec janet apps/b3-pg-ssr/main.janet"}
    :go-plaintext {:doc "Go net/http baseline (the ceiling) — plaintext"
                   :bench :plaintext

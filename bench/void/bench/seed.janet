@@ -34,6 +34,21 @@
           "-" (string/format "%05d" i)
           " lorem ipsum dolor sit amet consectetur"))
 
+(var- filled false)
+
+(defn seeded?
+  ``Has `ensure!` finished in this process?
+
+  The apps seed at `:after-start`, which runs *after* `system/start`
+  has opened the listener: for the length of one seeding run the port
+  answers while the table is empty or half-full. A single-row read
+  cannot tell those apart (a random id in a half-filled table hits
+  about as often as it misses), so the flag is what the handlers gate
+  on and what `runner/wait-ready` waits out through them — a warmup
+  against a partial table is a benchmark of a different table.``
+  []
+  filled)
+
 (defn ensure!
   ``Create `bench_rows` if it is not there and fill it if it is empty.
   Idempotent: a second boot against the same database does nothing but
@@ -69,4 +84,5 @@
         {:kind :write :prepared false})
       (set i (inc upto)))
     (printf "bench: seeded %s with %d rows" table row-count))
+  (set filled true)
   row-count)

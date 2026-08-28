@@ -86,9 +86,12 @@
   (printf "b2/b3 smoke: SKIPPED (set %s or %s to a conninfo)"
           pg/env-var pg/fallback-env-var)
   (do
+    # :ready is why these two wait for a *served* table and not just an
+    # open port: the apps seed at :after-start, behind the listener
     (def b2 (runner/wait-ready
               (runner/start-target :test-b2
                                    {:port 8192
+                                    :ready "/db"
                                     :cmd "exec janet apps/b2-pg-query/main.janet"})
               60))
     (defer (runner/stop-target b2)
@@ -102,6 +105,7 @@
     (def b3 (runner/wait-ready
               (runner/start-target :test-b3
                                    {:port 8193
+                                    :ready "/rows"
                                     :cmd "exec janet apps/b3-pg-ssr/main.janet"})
               60))
     (defer (runner/stop-target b3)
