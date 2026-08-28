@@ -5,7 +5,7 @@
 > (void/http void/html void/htmx void/rest void/openapi void/db
 > void/db-sqlite void/db-postgres void/db-http void/redis
 > void/redis-http void/cache void/cache-redis void/cache-http
-> void/dev void/bench)
+> void/jobs void/jobs-db void/jobs-redis void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -207,7 +207,6 @@ key plus a deprecation alias for the old name, never a mutation.
 | `:void.obs/instrument` | `void/obs` | auto-instrumentation hooks (wave 3) |
 | `:void.obs/exporter` | `void/obs` | metrics/traces exporters (waves 3-4) |
 | `:void.pressure/check` | `void/pressure` | load-shedding checks (ADR-0019) |
-| `:void.jobs/backend` | `void/jobs` | job persistence backends (wave 2, ADR-0012) |
 | `:void.bus/backend` | `void/bus` | message-bus backends (wave 3, ADR-0012) |
 | `:void.bus/codec` | `void/bus` | message codecs (wave 3) |
 | `:void.admin/widget` `/page` `/dashboard-widget` `/menu` | `void/admin` | admin surfaces (wave 4) |

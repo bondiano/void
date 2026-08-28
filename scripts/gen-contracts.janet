@@ -31,6 +31,7 @@
               [(string (os/cwd) "/fdwait/build/:all:.so") :native])
 (add-tree (string (os/cwd) "/redis"))
 (add-tree (string (os/cwd) "/cache"))
+(add-tree (string (os/cwd) "/jobs"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -49,6 +50,9 @@
 (require "void/cache/init")
 (require "void/cache/redis")
 (require "void/cache/http")
+(require "void/jobs/init")
+(require "void/jobs/db")
+(require "void/jobs/redis")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -58,14 +62,17 @@
                :void/db :void/db-sqlite :void/db-postgres :void/db-http
                :void/redis :void/redis-http
                :void/cache :void/cache-redis :void/cache-http
+               :void/jobs :void/jobs-db :void/jobs-redis
                :void/dev :void/bench]
      :profile :dev
-     # two drivers now provide :void/db-driver, and two stores provide
-     # :void/cache-store — exactly the ambiguity the kernel refuses to
-     # resolve on its own. The gate says which, the way an application's
-     # config would (see void/db-postgres, void/cache-redis)
+     # two drivers now provide :void/db-driver, two stores provide
+     # :void/cache-store, and three backends provide :void/jobs-backend —
+     # exactly the ambiguity the kernel refuses to resolve on its own. The
+     # gate says which, the way an application's config would (see
+     # void/db-postgres, void/cache-redis, void/jobs-redis)
      :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
-                    :void/cache-store {:impl :cache/redis}}}}))
+                    :void/cache-store {:impl :cache/redis}
+                    :void/jobs-backend {:impl :jobs/redis}}}}))
 
 # -- deterministic rendering of schema shorthand -------------------------
 
@@ -105,7 +112,6 @@
   [["`:void.obs/instrument`" "void/obs" "auto-instrumentation hooks (wave 3)"]
    ["`:void.obs/exporter`" "void/obs" "metrics/traces exporters (waves 3-4)"]
    ["`:void.pressure/check`" "void/pressure" "load-shedding checks (ADR-0019)"]
-   ["`:void.jobs/backend`" "void/jobs" "job persistence backends (wave 2, ADR-0012)"]
    ["`:void.bus/backend`" "void/bus" "message-bus backends (wave 3, ADR-0012)"]
    ["`:void.bus/codec`" "void/bus" "message codecs (wave 3)"]
    ["`:void.admin/widget` `/page` `/dashboard-widget` `/menu`" "void/admin" "admin surfaces (wave 4)"]])
