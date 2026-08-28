@@ -13,6 +13,15 @@
 ### loop-lag and GC budgets can be measured from. `VOID_BENCH_PROBE=0`
 ### leaves it out — that is how its own cost gets measured.
 ###
+### `VOID_BENCH_OBS=1` adds void/obs + void/obs-http, which is the
+### `b1-obs` target: SPEC §8.2 budgets the instrumentation overhead at
+### ≤ 7% throughput, and that budget is this app run twice. Everything
+### obs does on a request is on: the root span at the default sampling
+### rate of 1, the RED counters and histograms, the queue-time
+### observation, the loop-lag sampler and the /metrics endpoint nobody
+### scrapes during the run. Turning any of it off would measure a
+### cheaper obs than the one an application gets by composing it.
+###
 ### `VOID_BENCH_PRESSURE=1` adds void/pressure + void/pressure-http,
 ### which is the `b1-pressure` target: SPEC §8.5 asks every plugin that
 ### contributes middleware for the row "B1 with my middleware = −X%",
@@ -33,6 +42,8 @@
 (require "void/bench/probe")
 (require "void/pressure/init")
 (require "void/pressure/http")
+(require "void/obs/init")
+(require "void/obs/http")
 
 (def Item
   {:sku :string
@@ -76,9 +87,14 @@
   "Is this the b1-pressure run (SPEC §8.5)?"
   (= "1" (os/getenv "VOID_BENCH_PRESSURE")))
 
+(def obs?
+  "Is this the b1-obs run (SPEC §8.2's ≤ 7% instrumentation budget)?"
+  (= "1" (os/getenv "VOID_BENCH_OBS")))
+
 (def app
   {:plugins [;(if (= "0" (os/getenv "VOID_BENCH_PROBE")) [] [:bench/probe])
              ;(if pressure? [:void/pressure :void/pressure-http] [])
+             ;(if obs? [:void/obs :void/obs-http] [])
              :void/http :void/rest :bench/b1]
    :profile :prod
    :config {:cli {:http {:host "127.0.0.1"

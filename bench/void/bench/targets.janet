@@ -72,6 +72,14 @@
                  # answer §8.5 asks every middleware author for. No
                  # budget of its own — B1's budget is B1's
                  :cmd "VOID_BENCH_PRESSURE=1 exec janet apps/b1-json-echo/main.janet"}
+   :b1-obs {:doc "B1 with void/obs in the chain — the SPEC §8.2 instrumentation-overhead row"
+            :bench :json
+            :port 8101
+            # the same app, two plugins heavier: `void bench b1 b1-obs`
+            # prints both rows, and the delta is what §8.2 budgets at
+            # ≤ 7% of throughput. No budget of its own — B1's is B1's,
+            # and obs is measured against B1, not against the SLO
+            :cmd "VOID_BENCH_OBS=1 exec janet apps/b1-json-echo/main.janet"}
    :b2 {:doc "B2 Postgres single query — pool, prepared statement, ev loop"
         :bench :pg-query
         :port 8102
@@ -114,7 +122,7 @@
 
 (def order
   "Report/`all` order."
-  [:b0 :b1 :b1-pressure :b2 :b3
+  [:b0 :b1 :b1-pressure :b1-obs :b2 :b3
    :go-plaintext :go-json :fastapi-plaintext :fastapi-json])
 
 (def default-targets

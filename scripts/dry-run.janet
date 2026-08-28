@@ -1,7 +1,7 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
 ### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
-### void/redis-http + void/cache + void/jobs + void/pressure +
+### void/redis-http + void/cache + void/jobs + void/pressure + void/obs +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
@@ -46,6 +46,8 @@
 (require "void/jobs/redis")
 (require "void/pressure/init")
 (require "void/pressure/http")
+(require "void/obs/init")
+(require "void/obs/http")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -58,6 +60,7 @@
                              :void/cache :void/cache-redis :void/cache-http
                              :void/jobs :void/jobs-db :void/jobs-redis
                              :void/pressure :void/pressure-http
+                             :void/obs :void/obs-http
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide

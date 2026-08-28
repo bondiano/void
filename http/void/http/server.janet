@@ -122,12 +122,22 @@
   (error {:reject status :message message}))
 
 (defn- read-head
-  "Fill buf until a full head is there. Returns the parsed head; throws
+  ``Fill buf until a full head is there. Returns the parsed head; throws
   {:reject ...} on limits/parse errors, {:hangup true} on EOF/idle
-  timeout between requests."
+  timeout between requests.
+
+  It also stamps `:arrived` on the connection info: the moment this
+  request's first bytes were in the process's hands — already there
+  for a pipelined one, the return of the first read for the rest. It
+  is what void/obs measures its queue time from (SPEC §8.4's
+  accept->handler), and it deliberately does not start at accept: a
+  client that opens a connection and sends a second later (every
+  browser preconnect) would otherwise report that second as this
+  process's backlog.``
   [conn buf info opts]
   (var head nil)
   (var scanned 0)
+  (put info :arrived (when (pos? (length buf)) (now)))
   (while (nil? head)
     (if-let [end (wire/head-end buf (max 0 (- scanned 3)))]
       (do
@@ -148,6 +158,8 @@
         (def r (read-more conn buf
                           (if waiting? (opts :idle-timeout) (opts :read-timeout))))
         (put info :busy true)
+        (when (and (nil? (info :arrived)) (pos? (length buf)))
+          (put info :arrived (now)))
         (cond
           (nil? r) (if waiting? (error {:hangup true}) (reject! 400))
           (= :timeout r) (if waiting? (error {:hangup true}) (reject! 408))))))
@@ -255,7 +267,7 @@
          (not= "close" conn-h)
          (= "keep-alive" conn-h))))
 
-(defn- build-request [conn head body]
+(defn- build-request [conn head body info]
   (def raw (head :path))
   (def [path qs] (wire/split-path raw))
   @{:method (keyword (string/ascii-lower (head :method)))
@@ -267,6 +279,7 @@
     :http-version (head :http-version)
     :body body
     :received (os/clock :monotonic)      # access-log duration base
+    :arrived (get info :arrived)         # queue-time base (see read-head)
     :connection conn})
 
 (defn- run-handler
@@ -325,7 +338,7 @@
                 (:write conn "HTTP/1.1 100 Continue\r\n\r\n")))
 
             (def [body consumed] (read-body conn buf head max-body opts))
-            (def req (build-request conn head body))
+            (def req (build-request conn head body info))
             (def resp (run-handler handler req (get limits :timeout)
                                    (opts :on-timeout)))
             (unless (and (dictionary? resp) (int? (resp :status)))

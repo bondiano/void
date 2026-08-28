@@ -33,6 +33,7 @@
 (add-tree (string (os/cwd) "/cache"))
 (add-tree (string (os/cwd) "/jobs"))
 (add-tree (string (os/cwd) "/pressure"))
+(add-tree (string (os/cwd) "/obs"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -56,6 +57,8 @@
 (require "void/jobs/redis")
 (require "void/pressure/init")
 (require "void/pressure/http")
+(require "void/obs/init")
+(require "void/obs/http")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -67,6 +70,7 @@
                :void/cache :void/cache-redis :void/cache-http
                :void/jobs :void/jobs-db :void/jobs-redis
                :void/pressure :void/pressure-http
+               :void/obs :void/obs-http
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide
@@ -106,16 +110,17 @@
   [["`:void.authz/policy`" "keyword / [keyword]" "concat (group AND route both enforce)" "void/authz (wave 3)"]
    ["`:void.auth/access`" ":public / :required" "restrict" "void/auth (wave 3)"]
    ["`:void.security/csrf`" "bool" "restrict (true wins)" "void/security (wave 3)"]
-   ["`:void.security/rate`" "{:limit :window}" "restrict (min)" "void/security (wave 3)"]
-   ["`:void.obs/name`" "string" "replace" "void/obs (wave 3)"]
-   ["`:void.obs/sample-rate`" "number 0..1" "replace" "void/obs (wave 3)"]])
+   # :void.obs/name and :void.obs/sample-rate left this table in wave 3:
+   # void/obs-http declares them, so they are generated from the
+   # declaration above like every other shipped key.
+   ["`:void.security/rate`" "{:limit :window}" "restrict (min)" "void/security (wave 3)"]])
 
 (def reserved-points
   "Extension points reserved by SPEC part I §1.4/ADRs whose owner
   plugins land in waves 2+. Names are frozen with v1."
-  [["`:void.obs/instrument`" "void/obs" "auto-instrumentation hooks (wave 3)"]
-   ["`:void.obs/exporter`" "void/obs" "metrics/traces exporters (waves 3-4)"]
-   ["`:void.bus/backend`" "void/bus" "message-bus backends (wave 3, ADR-0012)"]
+  # :void.obs/instrument and :void.obs/exporter left this table in wave
+  # 3: void/obs owns them, so they are generated above.
+  [["`:void.bus/backend`" "void/bus" "message-bus backends (wave 3, ADR-0012)"]
    ["`:void.bus/codec`" "void/bus" "message codecs (wave 3)"]
    ["`:void.admin/widget` `/page` `/dashboard-widget` `/menu`" "void/admin" "admin surfaces (wave 4)"]])
 

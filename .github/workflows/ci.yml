@@ -147,7 +147,8 @@ jobs:
           janet -e '(import void/http) (import void/html) (import void/htmx)
                     (import void/rest) (import void/openapi) (import void/db)
                     (import void/db-sqlite) (import void/redis) (import void/cache)
-                    (import void/jobs) (import void/pressure) (import void/dev)
+                    (import void/jobs) (import void/pressure) (import void/obs)
+                    (import void/dev)
                     (import void/fdwait)
                     (print "every package imports from the installed tree")'
 
