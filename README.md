@@ -53,10 +53,11 @@ Monorepo of scoped Janet packages, each installable on its own via jpm:
 | `db-postgres/` | `void/db-postgres` — Postgres over libpq's non-blocking API, driven from the ev loop through `void/fdwait`: prepared statements, real isolation levels and savepoints, single-row streaming, pipeline mode, LISTEN/NOTIFY on its own connection, cancellation, and TLS because libpq does it | 2 |
 | `redis/` | `void/redis` — RESP2/RESP3 in pure Janet on the ev loop (no native code, no client library): the wire format as a length-driven scanner plus a PEG, a fiber-aware pool, pipelining, value codecs behind `:void.redis/codec`, Lua scripts, and pub/sub on a connection of its own. `void/redis-http` (same package) contributes the `:redis` session store, which is what lets sessions and prefork workers coexist | 2 |
 | `cache/` | `void/cache` — the cache: the `:void/cache-store` contract and the `:void/cache` interface over it, an in-process store with TTLs and an exact LRU, read-through (`remember`) and memoization (`wrap`) with single-flight, and a store failure that degrades to a miss rather than to a 500. `void/cache-redis` (same package) puts it in redis; `void/cache-http` caches responses of routes marked `:void.cache/response` | 2 |
+| `jobs/` | `void/jobs` — background jobs: the `:void/jobs-backend` contract (eight functions over records, exactly one of which has to be atomic) and the `:void/jobs` interface over it, an in-process backend, `defjob` with retries, backoff+jitter, priorities, delays, uniqueness and a dead letter queue, parent-child flows, per-queue rate limiting and concurrency with group keys for fair scheduling, and `defschedule` cron that fires once across a fleet. `void/jobs-db` (same package) keeps the queue in the database, claiming with `FOR UPDATE SKIP LOCKED` where there is one; `void/jobs-redis` keeps it in redis, claiming with a Lua script that promotes, skips capped groups and marks the job running in one round trip | 2 |
 
 `examples/` holds one example application per wave (they double as smoke tests in CI): `examples/demo` (the wave-0 toy plugin), `examples/guestbook` (the wave-1 HTMX guestbook).
 
-Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the rest of the data wave (`void/jobs`, `void/pressure`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
+Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the rest of the data wave (`void/pressure`), enterprise (`void/obs`, `void/auth`, `void/authz`, `void/bus`), protocols and `void/admin`.
 
 ## Development
 

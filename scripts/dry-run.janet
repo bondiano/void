@@ -31,6 +31,7 @@
               [(string (os/cwd) "/fdwait/build/:all:.so") :native])
 (add-tree (string (os/cwd) "/redis"))
 (add-tree (string (os/cwd) "/cache"))
+(add-tree (string (os/cwd) "/jobs"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -48,6 +49,9 @@
 (require "void/cache/init")
 (require "void/cache/redis")
 (require "void/cache/http")
+(require "void/jobs/init")
+(require "void/jobs/db")
+(require "void/jobs/redis")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "examples/demo/plugin")
@@ -57,14 +61,17 @@
                              :void/db :void/db-sqlite :void/db-postgres :void/db-http
                              :void/redis :void/redis-http
                              :void/cache :void/cache-redis :void/cache-http
+                             :void/jobs :void/jobs-db :void/jobs-redis
                              :void/dev :void/bench :demo/greeter]
                    :profile :dev
-   # two drivers now provide :void/db-driver, and two stores provide
-   # :void/cache-store — exactly the ambiguity the kernel refuses to
-   # resolve on its own. The gate says which, the way an application's
-   # config would (see void/db-postgres, void/cache-redis)
+   # two drivers now provide :void/db-driver, two stores provide
+   # :void/cache-store, and three backends provide :void/jobs-backend —
+   # exactly the ambiguity the kernel refuses to resolve on its own. The
+   # gate says which, the way an application's config would (see
+   # void/db-postgres, void/cache-redis, void/jobs-redis)
    :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
-                  :void/cache-store {:impl :cache/redis}}}}))
+                  :void/cache-store {:impl :cache/redis}
+                  :void/jobs-backend {:impl :jobs/redis}}}}))
 
 (printf "dry-run ok (profile %q)" (report :profile))
 (printf "  plugins:    %j (active: %j)" (report :plugins) (report :active))

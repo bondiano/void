@@ -32,7 +32,8 @@
 | `void/db-postgres` (2.2) | ✅ libpq в non-blocking режиме на ev-цикле через `void/fdwait`, без thread pool: prepared-пара, single-row streaming, pipeline mode, LISTEN/NOTIFY на своём соединении, cancel, TLS силами libpq; handle переоткрывает мёртвое соединение под пулом |
 | `void/redis` (2.2) | ✅ RESP2/RESP3 в чистом Janet (сканер + PEG), fiber-aware пул, pipelining, кодеки за `:void.redis/codec`, Lua-скрипты, pub/sub на своём соединении; `void/redis-http` — session-store для `void/http` |
 | `void/cache` (2.3) | ✅ `:void/cache-store` (что реализуют) + `:void/cache` (от чего зависят), memory-store с TTL и точным LRU, `remember`/`wrap` с single-flight, упавший store деградирует в промах; `void/cache-redis` — store в redis, `void/cache-http` — `:void.cache/response` |
-| Волна 2, остальное (2.4–2.6) | не начато — jobs, bench B2/B3, pressure |
+| `void/jobs` (2.4) | ✅ `:void/jobs-backend` (восемь функций над записями, атомарен из них один — `claim!`) + `:void/jobs` (политика, enqueue, события); три backend'а на одном контракте и одна conformance-сюита на всех; `defjob` с ретраями/backoff+jitter/приоритетами/delayed/unique/DLQ, flows, rate limiting и concurrency per queue, group-ключи, `defschedule` на spork/cron с backend-локом; executor — фиберы `ev/`, а не spork/tasker (уточнение в ADR-0012) |
+| Волна 2, остальное (2.5–2.7) | не начато — bench B2/B3, pressure, дистрибуция (ADR-0020) |
 | Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -267,11 +268,20 @@
 
 ### 2.4 `void/jobs` *(M/L; ADR-0012)*
 
-- [ ] Поверх spork/tasker; persistence — point `:void.jobs/backend`: db (SKIP LOCKED polling), redis
-- [ ] `defjob` (символы → hot reload), retries backoff+jitter, приоритеты, delayed, unique, DLQ
-- [ ] Flows (parent-child DAG), rate limiting per queue, concurrency per worker, group-ключи
-- [ ] Repeatable: spork/cron, `defschedule`, single-instance через backend-lock
-- [ ] Lifecycle events в bus (появится в волне 3 — пока hooks)
+- [x] Persistence — интерфейс `:void/jobs-backend`: db (SKIP LOCKED polling), redis — пакет `jobs/`
+  - **executor — фиберы `ev/`, а не spork/tasker**, и это единственное место, где реализация расходится с буквой ADR-0012. ADR называл tasker до чтения его исходников; tasker исполняет **подпроцессы** (задача — массив argv для `os/spawn`, записи — файлы `task.jdn` на диске). `defjob` устроен противоположно по необходимости: handler — внутрипроцессная функция через символ (ADR-0002), замкнутая на компоненты поднятой системы, и argv, выражающего «вызови эту функцию в этом процессе», не существует; дисковые записи tasker'а — ровно то, что заменяет backend-контракт. Требование ADR «исполнитель, не блокирующий цикл» на `ev/` — это фибер (ADR-0010). Уточнение записано в ADR-0012 и в шапке `void/jobs/worker`
+  - **два интерфейса, как у db и cache**: `:void/jobs-backend` — то, что *реализуют* (восемь функций над записями; атомарен из них ровно один — `claim!`, и он и есть причина, по которой backend нужен вместо таблицы), `:void/jobs` — то, от чего *зависят*. Всё, что *решает* (сколько попыток, сколько ждать, что делает таймаут), живёт в runtime и одинаково под любым backend'ом — иначе контракт был бы не контрактом, а тремя разными очередями. Опциональные ключи (`reap!`, `touch!`, `lock!`/`unlock!`, `rate-take!`, `release-parent!`) имеют задокументированные фолбэки, а `capabilities` **выводит**, а не декларирует, какие из них настоящие: «rate limit — per process» оператор читает, а не обнаруживает
+  - **три backend'а — одна conformance-сюита** (`test-support/conformance.janet`): таблица в куче, строки в БД и хеши в redis отвечают на одни и те же восемь вопросов, и сюита, которая гоняла бы только in-process backend, была бы сюитой, которая контракт ни разу не проверила
+  - **у db-backend'а два пути claim'а, и оба под тестом**: на Postgres — один `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`, на остальных — select + перепроверенный update в транзакции (проигранная гонка остаётся проигранной, а не вторым запуском). Портируемый путь идёт против sqlite, SKIP-LOCKED — против настоящего Postgres по `VOID_TEST_PG` (`test/db-postgres-test.janet`), и там же проверяется свойство, ради которого SKIP LOCKED и берут: N одновременных claim'ов получают N **разных** записей. Убери `FOR UPDATE SKIP LOCKED` — сюита падает на дубликате, это проверено мутацией
+- [x] `defjob` (символы → hot reload), retries backoff+jitter, приоритеты, delayed, unique, DLQ
+- [x] Flows (parent-child DAG), rate limiting per queue, concurrency per worker, group-ключи
+  - четыре лимита — четыре разных механизма, потому что вопросы разные: concurrency воркера — это число фиберов; per-queue — счёт до claim'а; group — счёт до claim'а **и** `:skip-groups` в claim, чтобы запись не пришлось возвращать (это и есть fair scheduling: тенант с десятью тысячами задач не может занять все фиберы); rate limit — **после** claim'а, иначе лимитер тратил бы токен на каждый пустой опрос
+  - таймаут — `ev/deadline` на своей задаче, никогда `ev/with-deadline` вокруг: последнее отменяет корневую задачу (тот же класс багов, что задокументирован в ADR-0015)
+- [x] Repeatable: spork/cron, `defschedule`, single-instance через backend-lock
+  - лок берётся на **слот** (`jobs:schedule:<name>:<slot>`), а не на имя: слот — это то, что должно случиться один раз
+- [x] Lifecycle events в bus (появится в волне 3 — пока hooks)
+  - `:void.jobs/event` на реестре хуков ядра; события (`:enqueued` `:started` `:completed` `:failed` `:dead` `:stalled`) — это шов, который в волне 3 забирает `void/bus`
+- [x] CI: `jobs/` в тестовых шагах, все три плагина — в `scripts/dry-run.janet` и `gen-contracts` (гейт называет реализацию `:void/jobs-backend` так же, как это сделал бы конфиг приложения); `:void.jobs/backend` уезжает из reserved-таблицы CONTRACTS — backend оказался интерфейсом через `:provides`, как `:void/db-driver` и `:void/cache-store`, а не extension point
 
 ### 2.5 Bench
 
