@@ -76,6 +76,28 @@
 (def v (res :value))
 (assert (= :users/list (v :name)) ":name merges without declaration")
 (assert (= :admin (v :void.authz/policy)) ":replace — the specific layer wins")
+
+# a scalar layer under :concat counts as a list of one: CONTRACTS spells
+# :void.authz/policy "keyword / [keyword]", and a route that names a
+# single policy should not have to write brackets to satisfy the
+# strategy
+(def concat-decls
+  [(meta/declare-key :app/policy
+     :schema [:or :keyword [:vector :keyword]]
+     :merge :concat)])
+
+(def scalar-concat
+  (meta/merge-layers concat-decls
+    [[:group {:app/policy :admin}]
+     [:route {:app/policy [:orders/read]}]]))
+(assert (empty? (scalar-concat :errors)) (string/format "%q" (scalar-concat :errors)))
+(assert (deep= [:admin :orders/read] (get-in scalar-concat [:value :app/policy]))
+        "the scalar and the list concatenate in layer order")
+
+(def both-scalar
+  (meta/merge-layers concat-decls
+    [[:group {:app/policy :admin}] [:route {:app/policy :orders/read}]]))
+(assert (deep= [:admin :orders/read] (get-in both-scalar [:value :app/policy])))
 (assert (= [:audit :admin-log :cache] (v :void.http/middleware))
         ":concat — layers concatenate in order")
 (assert (= 5 (v :void.http/timeout)) ":restrict allows tightening")
