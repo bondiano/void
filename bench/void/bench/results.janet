@@ -115,6 +115,21 @@
 
               (and (< (e :delta) (- threshold))
                    (> (- b c) latency-floor-ms))
+              (array/push improvements e))))
+        # the loop's own lag under target load — the signal that moves
+        # first when something starts blocking (§8.4). Same absolute
+        # floor as the latencies: these numbers live below a
+        # millisecond, and a 5% move on 0.05ms is noise with a
+        # percentage sign on it
+        (let [b (get-in brow [:runtime :loop-lag :p99])
+              c (get-in crow [:runtime :loop-lag :p99])]
+          (when (and (number? b) (number? c) (pos? b))
+            (def e (entry tname :runtime :loop-lag-p99 b c))
+            (cond
+              (and (> (e :delta) threshold) (> (- c b) latency-floor-ms))
+              (array/push regressions e)
+
+              (and (< (e :delta) (- threshold)) (> (- b c) latency-floor-ms))
               (array/push improvements e)))))))
   {:regressions regressions :improvements improvements :missing missing})
 
@@ -146,9 +161,11 @@
 # -- budgets -------------------------------------------------------------
 
 (defn budget-notes
-  ``Check one row against a §8.2 budget ({:p50 :p99 :rps}). Latency
-  comes from the fixed-rate mode only; a missing measurement is
-  reported as unchecked. Returns [[:ok|:miss|:skip text] ...].``
+  ``Check one row against a §8.2 budget ({:p50 :p99 :rps} plus the
+  optional runtime keys :loop-lag-p99 and :loop-lag-max). Latency and
+  the runtime numbers come from the fixed-rate mode only; a missing
+  measurement is reported as unchecked. Returns
+  [[:ok|:miss|:skip text] ...].``
   [row budget]
   (def notes @[])
   (defn note [status text] (array/push notes [status text]))
@@ -163,4 +180,17 @@
       (note (if (< v (budget k)) :ok :miss)
             (string/format "%s %.2fms (budget < %.1fms)" k v (budget k)))
       (note :skip (string/format "%s not measured under fixed rate (wrk2 missing)" k))))
+  # the two budgets only the process itself can see (§8.2, §8.4): the
+  # loop-lag p99 under target load, and the GC maximum — which rides on
+  # loop-lag max because a stop-the-world pause on a single-threaded
+  # loop *is* loop lag of at least its own length, and janet reports no
+  # pause of its own (void/bench/probe)
+  (each [bkey pkey label] [[:loop-lag-p99 :p99 "loop-lag p99"]
+                           [:loop-lag-max :max "loop-lag max (GC pause bound)"]]
+    (when-let [limit (budget bkey)]
+      (def v (get-in row [:runtime :loop-lag pkey]))
+      (if (number? v)
+        (note (if (< v limit) :ok :miss)
+              (string/format "%s %.3fms (budget < %.1fms)" label v limit))
+        (note :skip (string/format "%s not measured (no probe in the target, or no wrk2)" label)))))
   notes)

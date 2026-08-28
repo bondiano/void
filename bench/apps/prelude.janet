@@ -17,3 +17,14 @@
 (add-tree (string repo "/core"))
 (add-tree (string repo "/http"))
 (add-tree (string repo "/rest"))
+(add-tree (string repo "/html"))
+(add-tree (string repo "/pressure"))
+(add-tree (string repo "/bench"))
+# B2/B3 reach Postgres through void/db + void/db-postgres, which reach
+# libpq through void/fdwait — the one native module, built out of tree
+# (cd fdwait && jpm build).
+(add-tree (string repo "/db"))
+(add-tree (string repo "/db-postgres"))
+(add-tree (string repo "/fdwait"))
+(array/insert module/paths 0
+              [(string repo "/fdwait/build/:all:.so") :native])

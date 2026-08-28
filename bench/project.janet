@@ -6,7 +6,11 @@
 
 # void-core (../core), void-http (../http) and void-rest (../rest) must
 # be on the module path as well; main.janet and the test suite wire
-# them up themselves.
+# them up themselves. The mini-apps reach further — ../html and
+# ../db + ../db-postgres + ../fdwait for B2/B3, ../pressure for the
+# probe's loop-lag meter and for b1-pressure — and wire that up
+# themselves in apps/prelude.janet, because the apps run as
+# subprocesses and the runner never imports them.
 
 (declare-source
   :source ["void"])

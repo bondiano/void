@@ -54,14 +54,48 @@ saturation is meaningless. Results land in `results/last.jdn`.
 |---|---|---|---|---|
 | `b0` | plaintext hello through router + full middleware stack | < 2 ms | < 3 ms | ≥ 20k RPS |
 | `b1` | JSON echo 1KB: codec parse + schema validate + serialize (void/rest) | < 2.5 ms | < 10 ms | ≥ 8k RPS |
+| `b2` | Postgres single query: pool, prepared statement, ev loop | < 3 ms | < 12 ms | ≥ 3k RPS |
+| `b3` | Postgres + hiccup SSR ~15KB — the shape a void app actually is | < 5 ms | < 20 ms | ≥ 1.5k RPS |
 
-B2 (PG query), B3 (PG + SSR) and B4 (WS broadcast) arrive with their
-waves — each is a row in `void/bench/targets.janet`, not new code.
-The B0/B1 budgets were verified against the recorded reference
-environment at v0.1 — measurements, the b0 p50 adjustment and its
-reasons live in [docs/BENCH-v0.1.md](../docs/BENCH-v0.1.md). Enforce
-them with `void bench budgets` (a saved result set) or `--budgets`
-(after a run); regression thresholds guard everything else.
+Every budgeted target also carries the two budgets nothing outside the
+process can see: **loop-lag p99 < 1 ms** under target load (§8.2, §8.4
+— "the main health indicator of an ev system"), and, on `b3`, **GC max
+pause < 10 ms**. Both come from `void/bench/probe`, a fiber inside the
+app sampling the lag it is actually experiencing, read off
+`/void/bench/probe` around the fixed-rate runs. The GC number rides on
+loop-lag's *maximum* on purpose: janet 1.41 reports no GC pause of its
+own, but a stop-the-world collection on a single-threaded loop **is**
+loop lag of at least its own length, so the maximum is a sound upper
+bound. §8.2's other GC half ("under 2% of total time") has no such
+bound and stays unmeasured. `VOID_BENCH_PROBE=0` runs an app without
+the probe — which is how the probe's own cost gets measured.
+
+B4 (WS broadcast) arrives with its wave — a row in
+`void/bench/targets.janet`, not new code. The B0/B1 budgets were
+verified against the recorded reference environment at v0.1 —
+measurements, the b0 p50 adjustment and its reasons live in
+[docs/BENCH-v0.1.md](../docs/BENCH-v0.1.md); B2/B3 are §8.2 hypotheses
+until the same is done for them. Enforce budgets with `void bench
+budgets` (a saved result set) or `--budgets` (after a run); regression
+thresholds guard everything else.
+
+## B2 and B3 need a database
+
+```sh
+export VOID_BENCH_PG="host=127.0.0.1 port=5432 user=void dbname=void_bench"
+janet main.janet b2 b3
+```
+
+`VOID_TEST_PG` is the fallback, so a checkout already set up to run the
+void/db-postgres suite needs nothing further. Without either, `b2` and
+`b3` **skip themselves loudly** rather than run against an imaginary
+server. The table they read (`bench_rows`, 10k rows) is created and
+seeded by the apps at `:after-start`, idempotently — a benchmark whose
+setup is a README step is a benchmark that runs against a
+differently-shaped table on somebody else's machine.
+
+Both read the same table on purpose: B3 − B2 is the cost of rendering,
+and a different query in each would make the delta unreadable.
 
 ## Baselines for calibration, not marketing
 
@@ -99,3 +133,11 @@ pair. A dedicated runner can later switch CI to the committed baseline.
 Every plugin that contributes middleware owes a row in the bench
 table: «B1 with my middleware = −X%». Run `b1` with and without your
 plugin in the app list and put the delta in your README.
+
+`b1-pressure` is that row for void/pressure, and the pattern to copy:
+the same B1 app with `VOID_BENCH_PRESSURE=1`, one plugin heavier, no
+budget of its own.
+
+```sh
+janet main.janet b1 b1-pressure     # both rows; the delta is the answer
+```

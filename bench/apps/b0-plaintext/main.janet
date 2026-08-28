@@ -1,11 +1,16 @@
 ### B0 — plaintext hello through the full router + middleware stack
-### (SPEC.md §8.2, ADR-0014). Budget: p50 < 0.5ms, p99 < 3ms,
+### (SPEC.md §8.2, ADR-0014). Budget: p50 < 2ms, p99 < 3ms,
 ### ≥ 20k RPS (1 worker, 1 vCPU).
 ###
 ### Deliberately nothing but void/http: the number this app produces
 ### is the price of the kernel itself — PEG routing, the precompiled
 ### middleware chain, wire I/O. PORT env overrides the listen port
 ### (default 8100).
+###
+### The app carries `bench/probe` (void/bench/probe): a fiber sampling
+### this process's own event-loop lag, which is the only place §8.2's
+### loop-lag and GC budgets can be measured from. `VOID_BENCH_PROBE=0`
+### leaves it out — that is how its own cost gets measured.
 
 (import ../prelude)
 (import void)
@@ -13,6 +18,7 @@
 (import void/http/router :as router)
 (import void/http/ring :as ring)
 (require "void/http/init")
+(require "void/bench/probe")
 
 (defn hello
   "GET / — the §8.2 B0 handler."
@@ -32,7 +38,8 @@
   :requires {:void/http ">=0.0.1"})
 
 (def app
-  {:plugins [:void/http :bench/b0]
+  {:plugins [;(if (= "0" (os/getenv "VOID_BENCH_PROBE")) [] [:bench/probe])
+             :void/http :bench/b0]
    :profile :prod
    :config {:cli {:http {:host "127.0.0.1"
                          :port (or (scan-number (or (os/getenv "PORT") ""))
