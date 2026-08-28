@@ -2,7 +2,9 @@
 
 A [void](https://github.com/bondiano/void) application — the wave-2
 demo: CRUD over `void/db`, with migrations, a background job and a
-cache, on **Postgres or sqlite, chosen by config**.
+cache, on **Postgres or sqlite, chosen by config**; and the wave-3
+one: signing in, a row-level policy, and the browser protections that
+come with composing three more plugins.
 
     void db migrate     # create the schema
     void dev            # run the app (dev profile: watcher + netrepl)
@@ -20,7 +22,9 @@ slice in `config/<profile>.janet`:
 Nothing else moves. `main.janet` is the only file that names a driver;
 the entities, the migrations, the handlers, the job and the cache are
 byte-for-byte the same on both — and `test/crud-test.janet` runs the
-whole suite twice, once per engine, so the claim stays true.
+whole suite twice, once per engine, so the claim stays true. Wave 3
+added seven plugins and no engine-specific line, so
+`test/auth-test.janet` runs twice as well.
 
 ## What is where
 
@@ -32,6 +36,8 @@ whole suite twice, once per engine, so the claim stays true.
 | `jobs.janet` | `defjob` with retries and `:unique :args`, plus a `defschedule` — the denormalized comment counter is kept true by a job, not by an entity callback |
 | `views.janet` | plain functions returning hiccup; `db/rel` as the relation accessor, which is what makes an unplanned N+1 visible |
 | `config/` | the layers: `default.janet` (shared), `<profile>.janet`, then `VOID_*`, then CLI overrides — `void config explain :cache :ttl` says which one won |
+| `app.janet` (wave 3) | `defpolicy :articles/own` — a pure function of a context; `:void.auth/access`, `:void.authz/policy` and `:void.authz/resource` as route metadata; the sign-in, sign-out and registration handlers |
+| `views.janet` (wave 3) | `authz/can?` deciding whether to draw the Edit control, and `security/htmx-meta` putting the CSRF token where htmx will find it |
 
 ## The parts worth reading twice
 
@@ -52,6 +58,53 @@ same transaction as the data it is counting.
 lookup; an unpreloaded one warns with the call site in dev and throws
 under `[:db :n1-guard] :strict`, which is what the suite runs under.
 The fix it names is always the same one: declare `:preload`.
+
+## The wave-3 half
+
+**The author is not a form field.** In wave 2 publishing an article
+carried a name and an email and invented an author when it did not
+recognise them. Now `POST /articles` carries `:void.auth/access
+:required` and the author is whoever is signed in — an identity is not
+something a form gets to claim to be.
+
+**"Their own" is one function, asked twice.**
+
+```janet
+(authz/defpolicy :articles/own
+  [ctx]
+  (or (= (authz/attr ctx :subject/id)
+         (string (authz/attr ctx :resource/author-id)))
+      "not the author of this article"))
+```
+
+The edit routes enforce it through `:void.authz/policy` +
+`:void.authz/resource`; `views/article-view` asks the *same* policy
+whether to draw the Edit control. A link that is drawn and a request
+that is allowed cannot drift apart, because there is one answer. The
+policy itself needs no attribute provider: `:subject/id` falls back to
+the id half of the subject string and `:resource/author-id` to a key of
+the row, so `test/auth-test.janet` tests it as a table of four cases
+with no database and no system anywhere.
+
+**Deny by default.** `config/default.janet` sets `[:authz :default
+:deny]`, so every route in `app.janet` names a policy — `:public` where
+it means it. A route that forgets one does not serve traffic and get
+audited later: it fails the boot, with the route named.
+
+**CSRF costs the application nothing.** No handler mentions it. The
+form helper renders the hidden field because `void/security` binds the
+slot `void/html` has carried since wave 1, and the layout carries the
+two `<meta>` tags and the `hx-headers` attribute that let the Delete
+button — an htmx request with no form around it — send the token too.
+The check applies to requests whose credential rode on a cookie, which
+is why the anonymous comment form still works and a JSON client would
+not need a token at all.
+
+**The authors table stayed the application's.** `void/auth-db` reads
+it (`[:auth-db :users]` in `config/default.janet` names the columns);
+the wave-3 migration adds one nullable `password_hash` and creates the
+two tables that belong to void, straight from `(auth-db/tables)` —
+DDL the plugin ships as data, in a migration the application owns.
 
 ## Running the suite
 

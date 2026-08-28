@@ -170,4 +170,60 @@
                                           (string (get-in boot [:system :instances :http/server :server :port]))))))
         "listener closed by shutdown")
 
+# -- :void.http/edge: outside routing, outside the panic guard ----------
+#
+# Middleware wraps one route's chain, so a 404 and a rendered 500 never
+# reach it. An edge wrapper does — which is the whole reason the point
+# exists (void/security's headers, ADR-0025 §3).
+
+(defn- boom [req] (error "handler blew up"))
+
+(def edge-routes
+  (router/routes {}
+    (router/GET "/fine" 'edge-ok {:name :edge/fine})
+    (router/GET "/boom" 'boom {:name :edge/boom})))
+
+(defn edge-ok [req] (ring/text 200 "fine"))
+
+(def edge-app
+  (plugin/manifest 'test/edge
+    :version "0.1.0"
+    :requires {:void/http ">=0.0.1"}
+    :contributes
+    {:void.http/route-source [{:name :test/edge :routes edge-routes
+                               :env (router/env-ref (curenv))}]
+     :void.http/edge [{:name :test/stamp
+                       :phase 9000
+                       :wrap (fn [handler]
+                               (fn [req]
+                                 (def resp (handler req))
+                                 (ring/header resp "x-stamped" "yes")))}
+                      {:name :test/outer
+                       :phase 100
+                       :wrap (fn [handler]
+                               (fn [req]
+                                 (def resp (handler req))
+                                 (ring/header resp "x-order"
+                                              (string (get-in resp [:headers "x-stamped"] "-")))))}]}))
+
+(def edge-boot
+  (plugin/start! {:plugins ["void/http/init" edge-app]
+                  :profile :test
+                  :config {:env @{} :cli {:log {:level :error}
+                                          :http {:port 0 :access-log false}}}}))
+
+(defer (plugin/shutdown! edge-boot 3)
+  (assert (= "yes" (get-in (http/with-request {:uri "/fine"}) [:headers "x-stamped"]))
+          "an edge wrapper sees an ordinary response")
+  (def missing (http/with-request {:uri "/no-such-path"}))
+  (assert (= 404 (missing :status)))
+  (assert (= "yes" (get-in missing [:headers "x-stamped"]))
+          "and a 404, which no route produced and no middleware ever sees")
+  (def blown (http/with-request {:uri "/boom"}))
+  (assert (= 500 (blown :status)))
+  (assert (= "yes" (get-in blown [:headers "x-stamped"]))
+          "and a 500 the panic guard rendered, because the edge is outside it")
+  (assert (= "yes" (get-in blown [:headers "x-order"]))
+          "lowest phase is outermost, so the phase-100 wrapper sees what the phase-9000 one did"))
+
 (print "plugin-test ok")

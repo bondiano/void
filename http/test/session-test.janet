@@ -74,4 +74,42 @@
 (assert (string/find "Max-Age=0" (get-in resp6 [:headers "set-cookie"]))
         "cookie expired on the client")
 
+# -- rotation (session fixation, ADR-0023 §8) ----------------------------
+
+((store :save) "fixated0fixated0fixated0fixated0" @{:visits 3} 60)
+
+(def [resp7 _] (run (fn [req]
+                      (session/rotate! req)
+                      (put (req :session) :user 9)
+                      (ring/response 200))
+                    "fixated0fixated0fixated0fixated0"))
+(def rotated-cookie (get-in resp7 [:headers "set-cookie"]))
+(assert rotated-cookie "a rotated session issues a new cookie")
+(assert (not (string/find "fixated0fixated0fixated0fixated0" rotated-cookie))
+        "and the new id is not the old one — an id that survives a login is session fixation")
+(assert (nil? ((store :load) "fixated0fixated0fixated0fixated0"))
+        "the old entry is gone from the store, or the fixated id still works")
+
+(def new-sid (first (peg/match '(* "void-session=" (<- (32 :h))) rotated-cookie)))
+(assert (deep= @{:visits 3 :user 9} ((store :load) new-sid))
+        "the data survives the rotation — only the id changes")
+
+# the response marker is the same instruction by another spelling
+((store :save) "second0second0second0second0abcd" @{:v 1} 60)
+(def [resp8 _] (run (fn [req] (merge-into (ring/response 200) {:session :rotate}))
+                    "second0second0second0second0abcd"))
+(assert (nil? ((store :load) "second0second0second0second0abcd")))
+(def sid8 (first (peg/match '(* "void-session=" (<- (32 :h)))
+                            (get-in resp8 [:headers "set-cookie"]))))
+(assert (deep= @{:v 1} ((store :load) sid8)))
+(assert (not (dictionary? :rotate)) "the marker is a keyword, so it cannot be mistaken for session data")
+
+# rotating a request that has no session yet is not an error: the id is
+# fresh anyway, which is what a login on an anonymous visit does
+(def [resp9 _] (run (fn [req]
+                      (session/rotate! req)
+                      (put (req :session) :user 1)
+                      (ring/response 200))))
+(assert (get-in resp9 [:headers "set-cookie"]))
+
 (print "session-test ok")

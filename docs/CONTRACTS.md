@@ -6,7 +6,9 @@
 > void/db-sqlite void/db-postgres void/db-http void/redis
 > void/redis-http void/cache void/cache-redis void/cache-http
 > void/jobs void/jobs-db void/jobs-redis void/pressure
-> void/pressure-http void/obs void/obs-http void/dev void/bench)
+> void/pressure-http void/obs void/obs-http void/crypto void/auth
+> void/auth-http void/auth-db void/authz void/authz-http
+> void/security void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -20,6 +22,56 @@ gain `:optional` fields; a rename or tightening is a **new** point or
 key plus a deprecation alias for the old name, never a mutation.
 
 ## Extension points
+
+### `:void.auth/deliver`
+
+- **owner:** `:void/auth` · **cardinality:** `:many`
+- Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires}. void/mail (3.5) will be one of these; until then an application delivers its own
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
+### `:void.auth/hasher`
+
+- **owner:** `:void/auth` · **cardinality:** `:many`
+- Password hashers behind PHC identifiers (ADR-0023): {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] "m=..,t=..") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes
+- **contribution schema:**
+
+  ```janet
+  {:cost-keys [:optional [:vector :keyword]] :derive :function :encode-params :function :name :keyword :version [:optional :int]}
+  ```
+
+### `:void.auth/strategy`
+
+- **owner:** `:void/auth` · **cardinality:** `:many`
+- Authentication strategies (ADR-0023): {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify
+- **contribution schema:**
+
+  ```janet
+  {:authenticate [:optional :function] :challenge [:optional :function] :cookie [:optional :boolean] :doc [:optional :string] :name :keyword :priority [:optional :int] :verify [:optional :function]}
+  ```
+
+### `:void.authz/policy`
+
+- **owner:** `:void/authz` · **cardinality:** `:many`
+- Policies contributed by a plugin (ADR-0024): {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
+### `:void.authz/provider`
+
+- **owner:** `:void/authz` · **cardinality:** `:many`
+- Attribute providers (ADR-0024): {:name :orders/brand :for :subject|:resource|:env :keys [:subject/brand-id]? :fn (fn [ctx] attrs) :needs [component-keys]?}; called when a policy first asks for one of its keys, and memoized for the rest of that decision
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :for [:enum :subject :resource :env] :keys [:optional [:vector :keyword]] :name :keyword :needs [:optional [:vector :keyword]]}
+  ```
 
 ### `:void.core/cli`
 
@@ -129,6 +181,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:content-type :string :decode :function :encode [:optional :function] :name :keyword}
+  ```
+
+### `:void.http/edge`
+
+- **owner:** `:void/http` · **cardinality:** `:many`
+- Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total.
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :name :keyword :phase [:optional :int] :wrap :function}
   ```
 
 ### `:void.http/error-renderer`
@@ -279,6 +341,10 @@ layer.
 
 | Key | Declared by | Merge | Schema | Doc |
 |---|---|---|---|---|
+| `:void.auth/access` | `:void/auth-http` | `:restrict` + `:allow?` | `[:enum :public :required]` | Whether this route needs an authenticated identity (SPEC part II §2.5). :restrict — a group that requires authentication cannot be loosened by a route inside it |
+| `:void.auth/strategies` | `:void/auth-http` | `:replace` | `[:vector :keyword]` | Which authentication strategies may answer for this route, in order — a login form that must not accept an API token, an API that must not accept a session cookie |
+| `:void.authz/policy` | `:void/authz-http` | `:concat` | `[:or :keyword [:vector :keyword]]` | Policy (or policies) enforced before the handler (SPEC part II §2.5). :concat — a group's policy and a route's are both enforced, and every one of them must allow |
+| `:void.authz/resource` | `:void/authz-http` | `:replace` | `:function` | (fn [request] resource) — what the policies of this route decide about. Without one the resource is nil and the policies see only the subject and the environment; a row-level check belongs in the handler, next to the query that loaded the row |
 | `:void.cache/response` | `:void/cache-http` | `:replace` | `{:ttl [:optional [:number {:min 0}]] :vary [:optional [:vector [:or :string :keyword]]]}` | Cache this route's 200 responses in the shared cache for :ttl seconds (0 opts out of a group's setting), keyed by method, path, query and the request headers named in :vary |
 | `:void.db/txn` | `:void/db-http` | `:replace` | `[:or :boolean {:isolation [:optional :keyword]}]` | Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN |
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request with the fragment alone — the view response's layout is stripped before rendering |
@@ -301,15 +367,14 @@ layer.
 | `:void.schema/params` | `:void/rest` | `:deep-merge` | `[:pred <fn> "must be a schema form"]` | Path-param schemas: {:id :int}; coerced and validated before the handler, failures answer 400 problem+json |
 | `:void.schema/query` | `:void/rest` | `:deep-merge` | `[:pred <fn> "must be a schema form"]` | Query-param map schema; coerced and validated before the handler, failures answer 400 problem+json |
 | `:void.schema/response` | `:void/rest` | `:deep-merge` | `[:map-of [:int {:max 599 :min 100}] [:pred <fn> "must be a schema form"]]` | Response schemas by status: {200 :Order 404 :Problem}; checked against rest/json payloads when [:rest :validate-responses], projected by void/openapi |
+| `:void.security/csrf` | `:void/security` | `:restrict` + `:allow?` | `:boolean` | Demand a CSRF token on this route even when the credential did not ride on a cookie (SPEC part II §2.5). :restrict, true wins — protection can be tightened by a more specific layer and never loosened, so there is no key that switches it off |
+| `:void.security/rate` | `:void/security` | `:restrict` + `:allow?` | `{:key [:optional [:or :keyword :function]] :limit [:int {:min 1}] :window [:number {:min 1}]}` | Rate limit for this route: {:limit 5 :window 60 :key :ip|:subject|(fn [req])}. :restrict — a route may only lower the rate it inherits, never raise it |
 
 ### Reserved key names (owners land in waves 2+)
 
 | Key | Type | Merge | Owner-to-be |
 |---|---|---|---|
-| `:void.authz/policy` | keyword / [keyword] | concat (group AND route both enforce) | void/authz (wave 3) |
-| `:void.auth/access` | :public / :required | restrict | void/auth (wave 3) |
-| `:void.security/csrf` | bool | restrict (true wins) | void/security (wave 3) |
-| `:void.security/rate` | {:limit :window} | restrict (min) | void/security (wave 3) |
+| — | — | — | *(none: every key SPEC part II §2.5 reserved is now declared by its owner)* |
 
 `:void.openapi/*` note: v0.1 declares `tags`, `summary`,
 `description`, `id`, `hidden`; further `:void.openapi/...` names

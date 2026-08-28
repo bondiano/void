@@ -2,7 +2,7 @@
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
 ### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs +
-### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
+### void/crypto + void/auth + void/auth-http + void/auth-db + void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
 ### is a projection of scripts/packages.janet, so a package added to the
@@ -48,6 +48,13 @@
 (require "void/pressure/http")
 (require "void/obs/init")
 (require "void/obs/http")
+(require "void/crypto/init")
+(require "void/auth/init")
+(require "void/auth/http")
+(require "void/auth/db")
+(require "void/authz/init")
+(require "void/authz/http")
+(require "void/security/init")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -61,6 +68,8 @@
                              :void/jobs :void/jobs-db :void/jobs-redis
                              :void/pressure :void/pressure-http
                              :void/obs :void/obs-http
+                             :void/crypto :void/auth :void/auth-http :void/auth-db
+               :void/authz :void/authz-http :void/security
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide
@@ -70,7 +79,12 @@
    # void/db-postgres, void/cache-redis, void/jobs-redis)
    :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
                   :void/cache-store {:impl :cache/redis}
-                  :void/jobs-backend {:impl :jobs/redis}}}}))
+                  :void/jobs-backend {:impl :jobs/redis}
+                  # and three more, now that void/auth ships memory
+                  # stores and void/auth-db ships database ones
+                  :void/auth-user-store {:impl :auth.db/users}
+                  :void/auth-token-store {:impl :auth.db/tokens}
+                  :void/auth-challenge-store {:impl :auth.db/challenges}}}}))
 
 (printf "dry-run ok (profile %q)" (report :profile))
 (printf "  plugins:    %j (active: %j)" (report :plugins) (report :active))

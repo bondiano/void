@@ -21,6 +21,7 @@
 (import void/db :as db)
 (import void/cache :as cache)
 (import void/jobs :as jobs)
+(import void/auth :as auth)
 (import ../main)
 (import ../entities :as e)
 (import ../jobs :as blog-jobs)
@@ -48,7 +49,11 @@
 
 (def app-tables
   "Dropped before every pass, newest first — the suite owns the schema."
-  ["comments" "articles" "authors" "schema_migrations"])
+  ["comments" "articles" "authors"
+   # void/auth-db's two tables, created by the wave-3 migration from
+   # `(auth-db/tables)` — DDL the plugin ships as data
+   "auth_challenges" "auth_tokens"
+   "schema_migrations"])
 
 (defn- drop-app-tables! []
   (each t app-tables
@@ -78,18 +83,22 @@
   (def report (plugin/dry-run opts))
   (assert (report :ok) (string label ": dry-run passes"))
 
-  (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue]})]
+  # wave 3 put three more components in the subset: the library every
+  # token is signed with, the auth registry the login path reads its
+  # stores from, and the policy registry the routes enforce through
+  (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue
+                                         :crypto/lib :auth/registry :authz/registry]})]
 
     # -- migrations ------------------------------------------------------
     (drop-app-tables!)
     (jobs/clear!)
 
     (def pending (db/migration-status "db/migrations"))
-    (assert (= 2 (length pending)) "two migrations on disk")
+    (assert (= 3 (length pending)) "three migrations on disk")
     (assert (not (some |($ :applied) pending)) "none applied yet")
 
     (def applied (db/migrate-up! {:dir "db/migrations"}))
-    (assert (= 2 (length applied)) "both migrations applied")
+    (assert (= 3 (length applied)) "all three applied")
     (assert (all |($ :applied) (db/migration-status "db/migrations"))
             "and the version table says so")
     (note "migrations applied")
@@ -99,40 +108,71 @@
     (def empty-page (test/inject c {:uri "/"}))
     (assert (= 200 (empty-page :status)))
     (assert (string/find "Nothing published yet" (text empty-page)))
-    (assert (string/find `name="title"` (text empty-page))
-            "the schema-driven form is on the page")
+    (assert (string/find "Sign in" (text empty-page))
+            "wave 3: an anonymous visitor is offered a way in, not a publish form")
+    (assert (not (string/find `name="title"` (text empty-page)))
+            "and cannot publish")
 
-    (def bad (test/inject c {:uri "/articles"
-                             :form {:title "" :body "" :name "" :email "nope"}}))
+    (assert (= 302 ((test/inject c {:uri "/articles" :form {:title "x" :body "y"}}) :status))
+            "posting anyway is a redirect to the sign-in page (:void.auth/access :required)")
+    (assert (= 0 (db/count e/Article)) "and nothing was written")
+
+    # -- signing in ------------------------------------------------------
+
+    (def registered
+      (test/inject c {:uri "/register"
+                      :form {:name "Ada" :email "ada@example.com"
+                             :password "correct horse battery"}}))
+    (assert (= 302 (registered :status)) (text registered))
+    (assert (= 1 (db/count e/Author)) "the account is an author row")
+    (def ada (db/one e/Author {:where [:= :email "ada@example.com"]}))
+    (assert (string/has-prefix? "$" (ada :password-hash))
+            "with a PHC string in the column, not a password")
+
+    (def signed-in (test/inject c {:uri "/"}))
+    (assert (string/find "Signed in as" (text signed-in)))
+    (assert (string/find `name="title"` (text signed-in))
+            "and now the schema-driven publish form is on the page")
+
+    # every non-GET request from here on carries the CSRF token: the
+    # session cookie makes the credential cookie-borne, which is
+    # exactly when void/security checks (ADR-0025 §1). The token is on
+    # the page because form/form splices it — the application asked for
+    # nothing
+    (def token
+      (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`)))
+                        (text signed-in))))
+    (assert token "the form carries a CSRF token")
+    (defn- post [uri &opt spec]
+      (test/inject c (merge {:uri uri :headers {"x-csrf-token" token}} (or spec {}))))
+    (note "sign-in ok")
+
+    # -- create ----------------------------------------------------------
+
+    (def bad (post "/articles" {:form {:title "" :body ""}}))
     (assert (string/find "field-errors" (text bad))
             "schema errors land next to their fields")
     (assert (= 0 (db/count e/Article)) "and nothing was written")
-    (assert (= 0 (db/count e/Author)) "not even the author half of the form")
 
     (def created
-      (test/inject c {:uri "/articles"
-                      :headers {"hx-request" "true"}
-                      :form {:title "Fibers all the way down"
-                             :body "A first article."
-                             :name "Ada" :email "ada@example.com"}}))
-    (assert (= 200 (created :status)))
+      (post "/articles" {:headers {"hx-request" "true" "x-csrf-token" token}
+                         :form {:title "Fibers all the way down"
+                                :body "A first article."}}))
+    (assert (= 200 (created :status)) (text created))
     (assert (not (string/find "<html" (text created)))
             ":void.htmx/partial answers htmx with the bare fragment")
     (assert (string/find "Fibers all the way down" (text created)))
     (assert (= 1 (db/count e/Article)) "the article is stored")
-    (assert (= 1 (db/count e/Author)) "and so is its author")
 
     (def article (db/one e/Article {:order-by [[:id :desc]]}))
     (def article-url (string "/articles/" (article :id)))
+    (assert (= (ada :id) (article :author-id))
+            "and it belongs to whoever was signed in — the author is not a form field any more")
 
-    # a second article by the same author reuses it — the whole point
-    # of doing the lookup and the two inserts under one :void.db/txn
-    (test/inject c {:uri "/articles"
-                    :form {:title "Second" :body "More."
-                           :name "Ada" :email "ada@example.com"}})
+    (post "/articles" {:form {:title "Second" :body "More."}})
     (assert (= 2 (db/count e/Article)))
-    (assert (= 1 (db/count e/Author)) "the author was found, not duplicated")
-    (note "create ok (two entities, one transaction)")
+    (assert (= 1 (db/count e/Author)) "still one account")
+    (note "create ok (the author is the identity)")
 
     # -- read: preloads, and the guard that proves they are there --------
 
@@ -172,9 +212,8 @@
     (assert (string/find "Fibers all the way down" (text edit-page))
             "the edit form is filled from the entity")
 
-    (def updated (test/inject c {:uri article-url
-                                 :form {:title "Fibers, revisited"
-                                        :body (article :body)}}))
+    (def updated (post article-url {:form {:title "Fibers, revisited"
+                                           :body (article :body)}}))
     (assert (= 302 (updated :status)) "a form post redirects to the article")
     (def again (db/find e/Article (article :id)))
     (assert (= "Fibers, revisited" (again :title)))
@@ -195,9 +234,9 @@
     (jobs/clear!)
     (cache/clear!)
     (def commented
-      (test/inject c {:uri (string article-url "/comments")
-                      :headers {"hx-request" "true"}
-                      :form {:author-name "Grace" :body "Nice one."}}))
+      (post (string article-url "/comments")
+            {:headers {"hx-request" "true" "x-csrf-token" token}
+             :form {:author-name "Grace" :body "Nice one."}}))
     (assert (= 200 (commented :status)))
     (assert (string/find "Nice one." (text commented)) "the comment is rendered")
     (assert (string/find "0 counted" (text commented))
@@ -208,8 +247,8 @@
     (assert (= :recount-comments ((first queued) :job)))
 
     # a burst on the same article collapses into the one run (:unique :args)
-    (test/inject c {:uri (string article-url "/comments")
-                    :form {:author-name "Grace" :body "And again."}})
+    (post (string article-url "/comments")
+          {:form {:author-name "Grace" :body "And again."}})
     (assert (= 1 (length (jobs/list-jobs {:queue :maintenance :state :pending})))
             ":unique :args collapsed the second enqueue into the first")
 
@@ -225,7 +264,7 @@
 
     # -- delete: the comments go with it ---------------------------------
 
-    (def gone (test/inject c {:uri article-url :method :delete}))
+    (def gone (post article-url {:method :delete}))
     (assert (or (= 204 (gone :status)) (= 302 (gone :status))))
     (assert (nil? (db/find e/Article (article :id))) "the article is gone")
     (assert (= 0 (db/count e/Comment {:where [:= :article-id (article :id)]}))
@@ -244,8 +283,8 @@
 
     # -- migrations roll back --------------------------------------------
 
-    (def reverted (db/migrate-down! {:dir "db/migrations" :step 2}))
-    (assert (= 2 (length reverted)) "both migrations rolled back")
+    (def reverted (db/migrate-down! {:dir "db/migrations" :step 3}))
+    (assert (= 3 (length reverted)) "every migration rolled back")
     (assert (not (some |($ :applied) (db/migration-status "db/migrations")))
             "the version table is empty again")
     (note "rollback ok")))

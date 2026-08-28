@@ -11,7 +11,9 @@
 ### did-you-mean, values get schema errors with paths) and recording
 ### the provenance of every value for explain-route-style tooling.
 ### Strategies: :replace (specific layer wins), :concat (lists are
-### concatenated), :deep-merge (maps merge recursively), :restrict (a
+### concatenated; a scalar layer counts as a list of one, so a single
+### policy may be written without brackets), :deep-merge (maps merge
+### recursively), :restrict (a
 ### more specific layer may only tighten — the guarantee for security
 ### keys; loosening is an error).
 
@@ -156,6 +158,14 @@
     :replace inner
 
     :concat
+    # A scalar layer is a list of one: `{:void.authz/policy :admin}` is
+    # the spelling the contract promises for a single policy (CONTRACTS
+    # says "keyword / [keyword]"), and having to write `[:admin]`
+    # because of how the strategy is implemented would be the merge
+    # strategy leaking into every route declaration.
+    (let [lift (fn [v] (if (or (nil? v) (dictionary? v) (indexed? v)) v [v]))
+          inner (lift inner)
+          outer (lift outer)]
     (cond
       # {slot [items]} concats per slot — lifecycle hooks (ADR-0016):
       # {:pre-handler [group-hook]} + {:pre-handler [route-hook]}
@@ -186,7 +196,7 @@
                       (string/format "metadata key %q (layer %q): :concat cannot mix dictionary %q with %q"
                                      key source outer inner))
           outer)
-      (tuple ;outer ;inner))
+      (tuple ;outer ;inner)))
 
     :deep-merge
     (if (nil? outer) inner (deep-merge* outer inner))
