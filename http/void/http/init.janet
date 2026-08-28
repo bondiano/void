@@ -114,6 +114,16 @@
            :env [:optional :function]}
   :validate (unique-by "route source" |($ :name)))
 
+(plugin/defextension-point :void.http/edge
+  :doc "Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total."
+  :schema {:name :keyword
+           :phase [:optional :int]
+           :wrap :function
+           :doc [:optional :string]}
+  :validate (unique-by "edge wrapper" |($ :name))
+  :reduce (fn [contribs]
+            (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
+
 (plugin/defextension-point :void.http/session-store
   :doc "Session store factories: {:name :make (fn [session-config] store)}; config [:http :session :store] picks one by name"
   :schema {:name :keyword :make :function}
@@ -331,9 +341,17 @@
                                   :index (get static-cfg :index "index.html")})))
   # outer guard: 404/405/static and anything outside a route chain —
   # only the global :on-error hooks apply (no route matched)
-  (errors/wrap-panic h {:renderers (ctx :renderers)
-                        :dev (ctx :dev)
-                        :on-error (fn [_] (get ctx :on-error-global []))}))
+  (set h (errors/wrap-panic h {:renderers (ctx :renderers)
+                               :dev (ctx :dev)
+                               :on-error (fn [_] (get ctx :on-error-global []))}))
+  # :void.http/edge wraps everything, the panic guard included: every
+  # response this process emits passes through here, which is what a
+  # security header and a CORS preflight for an unrouted path need.
+  # Lowest phase outermost, the same convention middleware uses.
+  (def edge (get ctx :edge []))
+  (loop [i :down-to [(dec (length edge)) 0]]
+    (set h (((in edge i) :wrap) h)))
+  h)
 
 (defn build-context
   "Assemble the http context from a boot value: resolve the extension
@@ -361,6 +379,7 @@
       :renderers (resolved :void.http/error-renderer)
       :codecs (resolved :void.http/body-codec)
       :access-log (not= false (cfg :access-log))
+      :edge (tuple ;(or (resolved :void.http/edge) []))
       :on-error-global (tuple ;(get global-hooks :on-error []))
       :on-timeout-global (tuple ;(get global-hooks :on-timeout []))
       :on-response-global (tuple ;(get global-hooks :on-response []))
