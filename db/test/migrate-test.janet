@@ -66,16 +66,25 @@
          (defn down [] "ALTER TABLE users DROP COLUMN email")`)
   (spit (string dir "/20260103_backfill.janet")
         `(defn up [] "UPDATE users SET email = ''")`)
+  # DDL as data: the step returns a statement map and the builder
+  # spells it for whatever dialect the driver speaks
+  (spit (string dir "/20260104_create_orders.janet")
+        `(defn up [] [{:create-table "orders"
+                       :columns [[:id :serial {:primary-key true}]
+                                 [:user-id :int {:null false :refs [:users :id]}]]}
+                      {:create-index "orders_user_idx" :on "orders"
+                       :columns [:user-id]}])
+         (defn down [] {:drop-table "orders"})`)
   (spit (string dir "/notes.txt") "not a migration")
 
-  (assert (= 3 (length (migrate/files dir))) "only migration files are picked up")
-  (assert (deep= @["20260101" "20260102" "20260103"]
+  (assert (= 4 (length (migrate/files dir))) "only migration files are picked up")
+  (assert (deep= @["20260101" "20260102" "20260103" "20260104"]
                  (map |($ :version) (migrate/files dir)))
           "ordered by version")
 
   # -- status before anything ran ----------------------------------------
   (def before (migrate/status dir))
-  (assert (= 3 (length before)) "every migration shows up")
+  (assert (= 4 (length before)) "every migration shows up")
   (assert (not (some |($ :applied) before)) "none applied yet")
 
   # -- up ----------------------------------------------------------------
@@ -90,13 +99,29 @@
   (assert (= 2 (length (filter |(= "BEGIN" $) sqls)))
           "each migration gets its own transaction")
 
-  (assert (= 1 (length (migrate/pending dir))) "one still pending")
+  (assert (= 2 (length (migrate/pending dir))) "two still pending")
+  (fake/clear! st)
   (migrate/up! {:dir dir})
-  (assert (= 3 (length versions)) "the rest applied")
+  (assert (= 4 (length versions)) "the rest applied")
   (assert (empty? (migrate/pending dir)) "nothing pending afterwards")
   (assert (empty? (migrate/up! {:dir dir})) "a second run is a no-op")
 
+  # the statement map became SQL for the driver's dialect
+  (def ddl-sqls (fake/sqls st))
+  (assert (some |(string/find `CREATE TABLE "orders"` $) ddl-sqls)
+          "a step may return a statement map — DDL as data (void/db/builder)")
+  (assert (some |(string/find `REFERENCES "users" ("id")` $) ddl-sqls)
+          "compiled the way the builder compiles everything else")
+  (assert (some |(string/find `CREATE INDEX "orders_user_idx"` $) ddl-sqls)
+          "and a tuple of them runs in order")
+
   # -- down --------------------------------------------------------------
+  (fake/clear! st)
+  (def ddl-back (migrate/down! {:dir dir}))
+  (assert (= "20260104" ((first ddl-back) :version)) "the newest applied one")
+  (assert (some |(string/find `DROP TABLE "orders"` $) (fake/sqls st))
+          "and its `down` is a statement map too")
+
   (def [ok err] (protect (migrate/down! {:dir dir})))
   (assert (not ok) "a migration without `down` refuses to roll back")
   (assert (string/find "irreversible" err) "and says so")

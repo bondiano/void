@@ -134,7 +134,18 @@
    :example/guestbook
    {:dir "examples/guestbook"
     :deps [:void/core :void/http :void/html :void/htmx :void/dev]
-    :example true :jpm [:spork]}})
+    :example true :jpm [:spork]}
+
+   :example/blog
+   # The wave-2 demo: the same CRUD application on either driver. Both
+   # are edges, because the suite runs against sqlite always and
+   # against Postgres when VOID_TEST_PG names a server — main.janet
+   # requires exactly one of them at boot.
+   {:dir "examples/blog"
+    :deps [:void/core :void/http :void/html :void/htmx
+           :void/db :void/db-sqlite :void/db-postgres
+           :void/cache :void/jobs :void/dev]
+    :example true :jpm [:spork :sqlite3]}})
 
 (def jpm-urls
   "External jpm dependencies, by the key packages name them with."
