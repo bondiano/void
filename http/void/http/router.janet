@@ -2,7 +2,8 @@
 ### (SPEC.md §5.1 + part II §2, ADR-0002, ADR-0005, ROADMAP 1.1).
 ###
 ### Routes are plain data: `route`/`GET`/`group`/`routes` are ordinary
-### functions building tables, macros nowhere. `build-table` turns the
+### functions building tables; the one macro, `defroutes`, writes the
+### route-source contribution around them. `build-table` turns the
 ### route sources into an immutable route table — patterns compiled to
 ### PEGs, metadata merged (global -> group -> route) through
 ### void/core/meta with provenance kept for explain, handler symbols
@@ -14,6 +15,7 @@
 ### value; the running server holds it through a one-slot `cell`, and
 ### `swap!` replaces it atomically — there is no half-rebuilt routing.
 
+(import void/core/plugin :as plugin)
 (import void/core/meta :as meta)
 (import ./middleware :as mw)
 (import ./wire :as wire)
@@ -65,6 +67,99 @@
     (errorf "routes expects a global metadata dictionary first, got %q" global))
   {:routes true :global global :children children})
 
+(defn env-ref
+  ``Wrap a module environment for a route-source :env inside a plugin
+  manifest: manifests are frozen, and freezing a raw env table would
+  walk the entire module graph (cycles included). The closure freezes
+  as an opaque value; build-table unwraps it.
+
+      :contributes {:void.http/route-source
+                    [{:name :my/app :routes my-routes
+                      :env (router/env-ref (curenv))}]}``
+  [env]
+  (fn wrapped-env [] env))
+
+# -- route source sugar (defroutes, ADR-0004) ----------------------------
+#
+# The layer above stays functions over data; `defroutes` is the one
+# macro — it writes the contribution boilerplate every application
+# module would otherwise repeat (name the source, wrap the routes, hand
+# over the env for late binding) and nothing else. Every form it does
+# not recognize is left alone and evaluated as data, so the two styles
+# mix inside one source.
+
+(def- method-keywords
+  {'GET :get 'HEAD :head 'POST :post 'PUT :put 'PATCH :patch
+   'DELETE :delete 'OPTIONS :options 'ANY :any})
+
+(defn- bare-handler
+  "The module-local handler symbol behind `home` or `'home`; a
+  qualified symbol (`my-app.orders/show`, an import alias) or any other
+  expression gives nil and is passed through untouched."
+  [h]
+  (def sym
+    (cond
+      (symbol? h) h
+      (and (tuple? h) (= 2 (length h)) (= 'quote (first h)) (symbol? (h 1))) (h 1)
+      nil))
+  (when (and sym (not (string/find "/" (string sym)))) sym))
+
+(defn- expand-route-form [form]
+  (def head (when (and (tuple? form) (not (empty? form))) (first form)))
+  (def method (when (symbol? head) (get method-keywords head)))
+  (cond
+    method
+    (do
+      (unless (or (= 3 (length form)) (= 4 (length form)))
+        (errorf "defroutes: (%s pattern handler [meta]) takes 2 or 3 arguments, got %q"
+                head form))
+      (def [_ pattern handler rmeta] form)
+      (def sym (bare-handler handler))
+      ~(,route ,method ,pattern
+               ,(if sym ~',sym handler)
+               ,(cond
+                  (nil? sym) rmeta
+                  (nil? rmeta) {:name (keyword sym)}
+                  ~(,merge {:name ,(keyword sym)} ,rmeta))))
+
+    (= 'group head)
+    (do
+      (when (< (length form) 3)
+        (errorf "defroutes: (group prefix meta & children) needs a prefix and a metadata layer, got %q"
+                form))
+      ~(,group ,(form 1) ,(form 2) ,;(map expand-route-form (slice form 3))))
+
+    form))
+
+(defmacro defroutes
+  ``This module's route source: the :void.http/route-source
+  contribution folded into the `defplugin` manifest later in the file —
+  sugar for `contribute!` + `routes` + `env-ref`:
+
+      (defroutes :guestbook/routes
+        (GET "/" home)
+        (POST "/entries" create-entry
+              {:name :entries/create :void.htmx/partial true}))
+
+  Inside the body `GET` `HEAD` `POST` `PUT` `PATCH` `DELETE` `OPTIONS`
+  `ANY` and `group` need no prefix; a bare handler symbol is quoted for
+  you (late binding, ADR-0002 — redefine it in the repl and the running
+  app picks it up) and names its route when :name is left out (`home`
+  -> :home). An optional leading dictionary is the global metadata
+  layer, and any form that is not one of those constructors is
+  evaluated as ordinary data and spliced in — `route`/`group`/`routes`
+  values built elsewhere still fit.``
+  [name & body]
+  (unless (keyword? name)
+    (errorf "defroutes: the route source name must be a keyword, got %q" name))
+  (def head (first body))
+  (def global (if (dictionary? head) head {}))
+  (def children (if (dictionary? head) (slice body 1) body))
+  ~(,plugin/contribute! :void.http/route-source
+                        {:name ,name
+                         :routes (,routes ,global ,;(map expand-route-form children))
+                         :env (,env-ref (curenv))}))
+
 # -- pattern compilation -------------------------------------------------
 
 (defn compile-pattern
@@ -110,18 +205,6 @@
        :static nil})))
 
 # -- flattening sources --------------------------------------------------
-
-(defn env-ref
-  ``Wrap a module environment for a route-source :env inside a plugin
-  manifest: manifests are frozen, and freezing a raw env table would
-  walk the entire module graph (cycles included). The closure freezes
-  as an opaque value; build-table unwraps it.
-
-      :contributes {:void.http/route-source
-                    [{:name :my/app :routes my-routes
-                      :env (router/env-ref (curenv))}]}``
-  [env]
-  (fn wrapped-env [] env))
 
 (defn- join-prefix [prefix pattern]
   (cond

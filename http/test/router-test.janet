@@ -1,4 +1,5 @@
 (import ../test-support/paths)
+(import void/core/plugin :as plugin)
 (import void/http/router :as router)
 (import void/http/middleware :as mw)
 (import void/core/meta :as meta)
@@ -194,6 +195,53 @@
              :meta-keys {}}))
 (assert (= "local" ((router/dispatch btab @{:method :get :path "/x"}) :body))
         "bare symbol resolves in the declaring env")
+
+# -- defroutes sugar -----------------------------------------------------
+
+(defn dr-home [req] {:status 200 :body "home"})
+(defn dr-create [req] {:status 201 :body "created"})
+(defn dr-users [req] {:status 200 :body "users"})
+
+(router/defroutes :sugar/app {:void.http/timeout 30}
+  (GET "/" dr-home)
+  (POST "/entries" dr-create {:name :entries/create :app/flag true})
+  (group "/admin" {:app/flag true}
+    (GET "/users" dr-users))
+  (router/GET "/raw" (fn [_] {:status 200 :body "raw"}) {:name :raw}))
+
+(plugin/defplugin sugar/app :version "0.0.1")
+
+(def sugar-source (first (get-in manifest [:contributes :void.http/route-source])))
+(assert (= :sugar/app (sugar-source :name)) "defroutes contributes a named route source")
+
+(def sugar-table
+  (router/build-table {:sources [sugar-source] :meta-keys meta-keys}))
+
+(def [sugar-home _] (router/match sugar-table :get "/"))
+(assert (= :dr-home (sugar-home :name)) "a bare handler symbol names its route")
+(assert (= 'dr-home (sugar-home :handler)) "and is quoted for late binding")
+(assert (not (sugar-home :no-reload)) "so the route reloads with the module")
+(assert (= 30 (get-in sugar-home [:meta :void.http/timeout]))
+        "the leading dictionary is the global metadata layer")
+
+(def [sugar-create _] (router/match sugar-table :post "/entries"))
+(assert (= :entries/create (sugar-create :name)) "an explicit :name wins")
+(assert (get-in sugar-create [:meta :app/flag]) "route metadata is kept")
+
+(def [sugar-users _] (router/match sugar-table :get "/admin/users"))
+(assert (= :dr-users (sugar-users :name)) "group children expand too")
+(assert (get-in sugar-users [:meta :app/flag]) "under the group metadata layer")
+
+(def [sugar-raw _] (router/match sugar-table :get "/raw"))
+(assert (sugar-raw :no-reload) "an unrecognized form is spliced in as plain data")
+
+(assert (= "home" ((router/dispatch sugar-table @{:method :get :path "/"}) :body))
+        "handlers resolve in the declaring module env")
+
+(assert (not (first (protect (macex1 '(router/defroutes "app" (GET "/" dr-home))))))
+        "the route source name must be a keyword")
+(assert (not (first (protect (macex1 '(router/defroutes :app (GET "/"))))))
+        "a method form takes a pattern and a handler")
 
 # -- atomic swap ---------------------------------------------------------
 
