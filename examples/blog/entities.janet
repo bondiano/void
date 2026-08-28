@@ -17,7 +17,13 @@
 (db/defentity Author
   {:id [:int {:db/pk true :db/type "integer"}]
    :name [:string {:min 1 :max 60 :db/type "text"}]
-   :email [:string {:format :email :db/unique true :db/type "text"}]}
+   :email [:string {:format :email :db/unique true :db/type "text"}]
+   # a PHC string (`$scrypt$ln=14,r=8,p=1$…`), written by
+   # `auth/hash-password` and read by void/auth-db's user store — which
+   # reads the table directly, so this field exists for the *writes*:
+   # registration and a password change. Optional, because the wave-2
+   # rows have none and an author without a password just cannot sign in.
+   :password-hash [:optional [:string {:db/type "text"}]]}
   :db/table "authors"
   :db/rels {:articles [:has-many :Article :author-id]})
 
@@ -46,14 +52,27 @@
 # -- form DTOs: projections of the entities above, not copies ------------
 
 (def NewArticle
-  ``What the new-article form submits — one form over two entities:
-  `merge` composes them, the outer `select` puts the fields in the
-  order the page asks for (ADR-0008). The handler splits the value
-  back into an author and an article inside one transaction.``
-  (schema/select
-    (schema/merge (schema/select Article [:title :body])
-                  (schema/select Author [:name :email]))
-    [:title :body :name :email]))
+  ``What the new-article form submits. In wave 2 this form carried the
+  author too — one form over two entities — and creating an article
+  invented an author on the spot. Wave 3 took that away: the author is
+  now whoever is signed in (`:void.auth/access :required` on the
+  route), so the form is the article and nothing else, and the
+  identity is not a field anybody can type.``
+  (schema/select Article [:title :body]))
+
+(def Registration
+  ``What the sign-up form submits: an author, plus a password that is
+  not a column. `schema/merge` composes the projection of the entity
+  with the one field that has no place in it — the hash is what the
+  table stores, and the plaintext exists for exactly the length of one
+  request (ADR-0023 §4).``
+  (schema/merge (schema/select Author [:name :email])
+                {:password [:string {:min 8 :max 200}]}))
+
+(def Credentials
+  "What the sign-in form submits."
+  {:email [:string {:format :email}]
+   :password [:string {:min 1 :max 200}]})
 
 (def EditArticle
   "What the edit form submits — the two columns `save!` may change."

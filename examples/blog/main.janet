@@ -8,6 +8,11 @@
 ### jobs and the cache are untouched — that is the claim wave 2 makes,
 ### and test/crud-test.janet runs the whole suite twice to keep it
 ### honest.
+###
+### Wave 3 added seven plugins and no engine-specific line: signing in,
+### deciding who may edit what, and the browser-facing protections are
+### the same list on sqlite and on Postgres (test/auth-test.janet runs
+### twice as well).
 (import void)
 (import void/http)
 (import void/html)
@@ -17,6 +22,13 @@
 (import void/cache)
 (import void/jobs)
 (import void/jobs/db)
+(import void/crypto)
+(import void/auth)
+(import void/auth/http)
+(import void/auth/db)
+(import void/authz)
+(import void/authz/http)
+(import void/security)
 (import void/dev)
 (import ./app)
 
@@ -40,6 +52,15 @@
    :void/db (load-driver) :void/db-http
    :void/cache
    :void/jobs :void/jobs-db
+   # wave 3: sign in, decide, and the four things a browser needs.
+   # void/auth-db reads the authors table this application already had
+   # (config/default.janet says which columns); void/authz reads the
+   # identity from a dyn key and never imports void/auth; void/security
+   # signs the CSRF token with void/crypto's HMAC.
+   :void/crypto
+   :void/auth :void/auth-http :void/auth-db
+   :void/authz :void/authz-http
+   :void/security
    :void/dev
    :blog/app])
 
