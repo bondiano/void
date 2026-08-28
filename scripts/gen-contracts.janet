@@ -34,6 +34,10 @@
 (add-tree (string (os/cwd) "/jobs"))
 (add-tree (string (os/cwd) "/pressure"))
 (add-tree (string (os/cwd) "/obs"))
+(add-tree (string (os/cwd) "/crypto"))
+(add-tree (string (os/cwd) "/auth"))
+(add-tree (string (os/cwd) "/authz"))
+(add-tree (string (os/cwd) "/security"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -59,6 +63,13 @@
 (require "void/pressure/http")
 (require "void/obs/init")
 (require "void/obs/http")
+(require "void/crypto/init")
+(require "void/auth/init")
+(require "void/auth/http")
+(require "void/auth/db")
+(require "void/authz/init")
+(require "void/authz/http")
+(require "void/security/init")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -71,6 +82,8 @@
                :void/jobs :void/jobs-db :void/jobs-redis
                :void/pressure :void/pressure-http
                :void/obs :void/obs-http
+               :void/crypto :void/auth :void/auth-http :void/auth-db
+               :void/authz :void/authz-http :void/security
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide
@@ -80,7 +93,10 @@
      # void/db-postgres, void/cache-redis, void/jobs-redis)
      :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
                     :void/cache-store {:impl :cache/redis}
-                    :void/jobs-backend {:impl :jobs/redis}}}}))
+                    :void/jobs-backend {:impl :jobs/redis}
+                    :void/auth-user-store {:impl :auth.db/users}
+                    :void/auth-token-store {:impl :auth.db/tokens}
+                    :void/auth-challenge-store {:impl :auth.db/challenges}}}}))
 
 # -- deterministic rendering of schema shorthand -------------------------
 
@@ -107,13 +123,15 @@
   land in waves 2+. The names and merge strategies are frozen with v1;
   each plugin declares its keys through :void.http/route-meta-key when
   it ships (an undeclared key stays a boot error until then).``
-  [["`:void.authz/policy`" "keyword / [keyword]" "concat (group AND route both enforce)" "void/authz (wave 3)"]
-   ["`:void.auth/access`" ":public / :required" "restrict" "void/auth (wave 3)"]
-   ["`:void.security/csrf`" "bool" "restrict (true wins)" "void/security (wave 3)"]
-   # :void.obs/name and :void.obs/sample-rate left this table in wave 3:
-   # void/obs-http declares them, so they are generated from the
-   # declaration above like every other shipped key.
-   ["`:void.security/rate`" "{:limit :window}" "restrict (min)" "void/security (wave 3)"]])
+  [# Wave 3 emptied this table of everything but the bus and admin
+   # points below: :void.auth/access, :void.authz/policy,
+   # :void.security/csrf and :void.security/rate are all declared by
+   # the plugins that own them now, so they are generated from the
+   # declarations above — the same thing that happened to
+   # :void.obs/name in wave 3.1.
+   # (:void.obs/name and :void.obs/sample-rate left it in 3.1 for the
+   # same reason.)
+   ])
 
 (def reserved-points
   "Extension points reserved by SPEC part I §1.4/ADRs whose owner
@@ -246,8 +264,10 @@
 (p "")
 (p "| Key | Type | Merge | Owner-to-be |")
 (p "|---|---|---|---|")
-(each [n t m o] reserved-keys
-  (p "| %s | %s | %s | %s |" n t m o))
+(if (empty? reserved-keys)
+  (p "| — | — | — | *(none: every key SPEC part II §2.5 reserved is now declared by its owner)* |")
+  (each [n t m o] reserved-keys
+    (p "| %s | %s | %s | %s |" n t m o)))
 (p "")
 (p "`:void.openapi/*` note: v0.1 declares `tags`, `summary`,")
 (p "`description`, `id`, `hidden`; further `:void.openapi/...` names")

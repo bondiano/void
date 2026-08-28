@@ -51,6 +51,14 @@
    # cannot express, and nothing else.
    {:dir "fdwait" :deps [] :native true}
 
+   :void/crypto
+   # Every cryptographic primitive void has, from the system libcrypto
+   # through ffi/ (ADR-0022): nothing is compiled and no jpm dependency
+   # pulls the library in — it is opened at :start from a configured
+   # path, the way void/db-postgres opens libpq (ADR-0011). spork is
+   # here for base64, which is an alphabet rather than cryptography.
+   {:dir "crypto" :deps [:void/core] :jpm [:spork]}
+
    :void/dev
    {:dir "dev" :deps [:void/core] :jpm [:spork]}
 
@@ -132,6 +140,37 @@
    {:dir "obs" :deps [:void/core :void/http :void/pressure]
     :test-deps [:void/dev :void/cache :void/rest] :jpm [:spork]}
 
+   :void/auth
+   # Every primitive comes from void/crypto (ADR-0022, ADR-0023): this
+   # package hashes nothing itself. void/http is void/auth-http's and
+   # void/db is void/auth-db's — separate plugins in this package, the
+   # void/cache — void/cache-redis split. The suite reaches void/dev for
+   # inject (ADR-0017) and void/db-sqlite for a real store under
+   # void/auth-db.
+   {:dir "auth" :deps [:void/core :void/crypto :void/http :void/db]
+    :test-deps [:void/dev :void/db-sqlite] :jpm [:spork]}
+
+   :void/authz
+   # No edge to void/auth, and that is the design (ADR-0024): the
+   # identity is read from the dyn key void/auth publishes, so an
+   # application with its own authentication gets the same
+   # authorization. void/http is void/authz-http's, a separate plugin
+   # in this package. The suite reaches void/auth (and void/crypto
+   # under it) to prove the seam works from both ends.
+   {:dir "authz" :deps [:void/core :void/http]
+    :test-deps [:void/dev :void/auth :void/crypto]}
+
+   :void/security
+   # void/crypto because every CSRF token is signed (ADR-0022 §6, the
+   # decision to have one token rather than two). No edge to void/auth
+   # or void/authz: the identity is a dyn key and the rate limiter keys
+   # on whatever it finds. The suite reaches html and htmx for the form
+   # slot and the meta tag, rest for the problem+json shape of a 429,
+   # cache for the shared-counter path and auth for the cookie-borne
+   # rule that decides when CSRF applies at all.
+   {:dir "security" :deps [:void/core :void/http :void/crypto]
+    :test-deps [:void/dev :void/html :void/htmx :void/rest :void/cache :void/auth]}
+
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
@@ -159,7 +198,11 @@
    {:dir "examples/blog"
     :deps [:void/core :void/http :void/html :void/htmx
            :void/db :void/db-sqlite :void/db-postgres
-           :void/cache :void/jobs :void/dev]
+           :void/cache :void/jobs
+           # wave 3: the demo signs people in, decides what they may
+           # edit and protects the forms — the exit criterion for 3.2-3.4
+           :void/crypto :void/auth :void/authz :void/security
+           :void/dev]
     :example true :jpm [:spork :sqlite3]}})
 
 (def jpm-urls

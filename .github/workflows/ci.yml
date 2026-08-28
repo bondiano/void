@@ -148,6 +148,7 @@ jobs:
                     (import void/rest) (import void/openapi) (import void/db)
                     (import void/db-sqlite) (import void/redis) (import void/cache)
                     (import void/jobs) (import void/pressure) (import void/obs)
+                    (import void/crypto) (import void/auth) (import void/authz) (import void/security)
                     (import void/dev)
                     (import void/fdwait)
                     (print "every package imports from the installed tree")'
@@ -174,3 +175,53 @@ jobs:
           mkdir -p jpm_tree
           cp -r "$HOME/void-tree/lib" jpm_tree/lib
           void routes | grep -q ':entries/create'
+
+  # void/crypto is ffi to a library the machine provides, so what it can
+  # do is a property of the machine (ADR-0022): the argon2id KDF needs
+  # OpenSSL 3.2, and the candidate list is platform-specific because on
+  # macOS loading libcrypto by soname *aborts the process*. Neither fact
+  # can be checked by reasoning, so both legs run the suite:
+  #
+  #   ubuntu-latest   OpenSSL 3.0  — argon2id absent, the skip path
+  #   macos-latest    Homebrew 3.x — argon2id present, and the one
+  #                                  platform where a wrong candidate
+  #                                  list kills the process
+  crypto:
+    name: void/crypto on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: brew install openssl@3
+
+      - name: Install Janet
+        run: |
+          git clone --depth 1 --branch v1.41.2 https://github.com/janet-lang/janet /tmp/janet
+          make -C /tmp/janet -j"$(getconf _NPROCESSORS_ONLN)"
+          sudo make -C /tmp/janet install
+
+      - name: Install jpm
+        run: |
+          git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm
+          cd /tmp/jpm && sudo janet bootstrap.janet
+
+      - name: Install dependencies
+        run: sudo jpm install https://github.com/janet-lang/spork.git
+
+      - name: Which library, and what it provides
+        # the suite asserts this too, but a failing run should say what
+        # it was running against before it says what broke
+        run: |
+          cd crypto
+          janet -e '(import ./test-support/paths) (import void/crypto :as c)
+                    (c/load!) (printf "%s %s" (c/version-text) (string/format "%q" (c/algorithms)))'
+
+      - name: Test void/crypto
+        run: cd crypto && jpm test

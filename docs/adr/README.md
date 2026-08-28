@@ -29,3 +29,7 @@ ADR фиксируют архитектурные решения проекта 
 | [0019](0019-pressure-load-shedding.md) | `void/pressure` — load shedding по образцу under-pressure | accepted |
 | [0020](0020-distribuciya-monorepo-kak-odin-jpm-bundle.md) | Дистрибуция — монорепо как один jpm-bundle, граф пакетов как данные | accepted |
 | [0021](0021-obs-metriki-spany-i-cena-instrumentacii.md) | `void/obs` — модель метрик, спан по требованию и цена инструментации | accepted |
+| [0022](0022-kriptografiya-cherez-libcrypto.md) | `void/crypto` — вся криптография одной системной библиотекой, с отказом на старте | accepted |
+| [0023](0023-auth-identity-i-strategii.md) | `void/auth` — identity как данные, стратегии как точка расширения | accepted |
+| [0024](0024-authz-abac-kak-dannye.md) | `void/authz` — ABAC: политика как чистая функция, решение как значение | accepted |
+| [0025](0025-security-csrf-zagolovki-limity.md) | `void/security` — CSRF по кукиным полномочиям, заголовки на краю, лимиты поверх контракта кэша | accepted |
