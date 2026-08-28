@@ -40,7 +40,7 @@
   [req]
   (rest/json (req :parsed-body)))
 
-(plugin/defcontribution :void.http/route-source
+(plugin/contribute! :void.http/route-source
   {:name :bench.b1/routes
    :routes (router/routes {}
              (router/POST "/echo" 'echo

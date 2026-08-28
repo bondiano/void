@@ -78,7 +78,7 @@
   there."
   defaults)
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 450
    :name :cache-http/capture-config
@@ -88,7 +88,7 @@
 
 # -- the metadata key ----------------------------------------------------
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.cache/response
    :schema {:ttl [:optional [:number {:min 0}]]
             :vary [:optional [:vector [:or :string :keyword]]]}
@@ -197,7 +197,7 @@
                         (get spec :ttl (settings :ttl))))
           (mark resp "MISS"))))))
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.cache/response
    # after parsing, before the session: a hit is answered without ever
    # opening one, which is also why a hit can carry no Set-Cookie

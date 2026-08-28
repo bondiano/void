@@ -49,7 +49,7 @@
 **Регистрация.** Глобально — новая точка `:void.http/hook`:
 
 ```janet
-(defcontribution :void.http/hook
+(contribute! :void.http/hook
   {:stage :on-request :name :tenant-resolve :fn 'my-app.tenant/resolve})
 ```
 

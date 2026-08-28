@@ -138,27 +138,27 @@
 
 # -- reserved metadata keys owned by the kernel (SPEC part II §2.5) ------
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.http/middleware
    :schema [:vector :keyword]
    :doc "Named middleware this route opts into, concatenated group -> route"
    :merge :concat})
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.http/timeout
    :schema [:number {:min 0.001}]
    :doc "Handler deadline in seconds; a more specific layer may only lower it"
    :merge :restrict
    :allow? (fn [outer inner] (<= inner outer))})
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.http/max-body
    :schema [:int {:min 0}]
    :doc "Request body cap in bytes; a more specific layer may only lower it"
    :merge :restrict
    :allow? (fn [outer inner] (<= inner outer))})
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.http/hooks
    :schema :dictionary
    :doc "Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks"
@@ -166,7 +166,7 @@
 
 # -- built-in middleware (through the same point other plugins use) ------
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.http/panic-guard
    :phase middleware/phase/panic-guard
    :doc "Exception -> response at the route chain edge (errors/wrap-panic; runs the :on-error stage hooks before the renderers)"
@@ -190,7 +190,7 @@
     (string/join (seq [x :in b] (string/format "%02x" x)))))
 (var- request-id-counter 0)
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.http/request-id
    :phase middleware/phase/observability
    :doc "Mint the request id ((req :request-id)) and bind it to the log context (ADR-0018); config [:http :request-id-header] names a trusted inbound header to take instead (off by default, fastify-style)"
@@ -205,7 +205,7 @@
              (log/with-context {:request-id id}
                (handler req))))})
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.http/parsing
    :phase middleware/phase/parsing
    :doc "Decode request bodies: urlencoded/multipart -> (req :form), registered body codecs -> (req :parsed-body)"
@@ -231,7 +231,7 @@
                        (get (context) :codecs []))))
              (handler req)))})
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.http/session
    :phase middleware/phase/session
    :doc "Cookie sessions over the configured :void.http/session-store"
@@ -241,7 +241,7 @@
              (def s (get (context) :session))
              (if s ((session/wrap-session handler s) req) (handler req))))})
 
-(plugin/defcontribution :void.http/session-store
+(plugin/contribute! :void.http/session-store
   {:name :memory
    :make (fn [_] (session/memory-store))})
 
@@ -378,7 +378,7 @@
            (protect (h req)))))
   ctx)
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 500
    :name :http/build-table
@@ -576,7 +576,7 @@
       (each k (sorted (filter |(not= :name $) (keys (e :meta))))
         (printf "  %q %q" k (get-in e [:meta k]))))))
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :routes
    :doc "Print the route table: void routes [--keys]"
    :fn (fn cli-routes [& args]
@@ -630,7 +630,7 @@
   (router/swap! (ctx :cell)
                 (router/build-table (merge args {:sources sources}))))
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :void.dev/reloaded
    :phase 500
    :name :http/rebuild-table

@@ -120,16 +120,14 @@
 
 # -- routes --------------------------------------------------------------
 
-(plugin/defcontribution :void.http/route-source
-  {:name :` name `/routes
-   :routes (router/routes {}
-             (router/GET "/" 'home {:name :home})
-             # :void.htmx/partial — an HX-Request gets the bare
-             # fragment; a plain form POST still gets the full page
-             (router/POST "/entries" 'create-entry
-                          {:name :entries/create
-                           :void.htmx/partial true}))
-   :env (router/env-ref (curenv))})
+# defroutes writes the :void.http/route-source contribution: handler
+# symbols are quoted for you (late binding) and name their route.
+(router/defroutes :` name `/routes
+  (GET "/" home)
+  # :void.htmx/partial — an HX-Request gets the bare fragment; a plain
+  # form POST still gets the full page
+  (POST "/entries" create-entry
+        {:name :entries/create :void.htmx/partial true}))
 
 (plugin/defplugin ` name `/app
   :doc "` name ` application plugin."

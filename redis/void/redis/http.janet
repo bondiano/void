@@ -77,7 +77,7 @@
    # process is running — there is nothing to sweep
    :sweep (fn sweep [] nil)})
 
-(plugin/defcontribution :void.http/session-store
+(plugin/contribute! :void.http/session-store
   {:name :redis
    # nothing is read from the http session slice here: the ttl arrives
    # with each save, and the key prefix belongs to [:redis :session],

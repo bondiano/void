@@ -67,7 +67,7 @@
 
 # -- the interface and the codec point -----------------------------------
 
-(plugin/defcontribution :void.core/interface
+(plugin/contribute! :void.core/interface
   {:name :void/redis
    :doc "A redis client: the :redis/client component's value ({:pool :codec :prefix}), which void/redis's own functions reach through state/active-client. Depend on the interface rather than the key to let a test stand a stub in its place."
    :methods {:pool "the connection pool (see void/redis/pool)"
@@ -179,7 +179,7 @@
   missing server is worth a warning.``
   nil)
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 450
    :name :redis/capture-boot
@@ -338,7 +338,7 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :redis/info
    :doc "Show what the redis client connected to: void redis info"
    :needs [:redis/client]
@@ -358,7 +358,7 @@
          (printf "pool        size %d, open %d, in use %d, idle %d"
                  (s :size) (s :created) (s :in-use) (s :idle)))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :redis/ping
    :doc "PING the configured server: void redis ping"
    :needs [:redis/client]

@@ -151,13 +151,13 @@
 
 # -- the partial middleware ----------------------------------------------
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.htmx/partial
    :schema :boolean
    :doc "Answer HX-Request with the fragment alone — the view response's layout is stripped before rendering"
    :merge :replace})
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.htmx/partial
    :phase 9500
    :doc "Strip the layout from view responses to htmx requests on routes marked :void.htmx/partial"

@@ -28,7 +28,7 @@
 
 # -- the driver interface ------------------------------------------------
 
-(plugin/defcontribution :void.core/interface
+(plugin/contribute! :void.core/interface
   {:name :void/db-driver
    :doc "A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint and :ping keys (see void/db/driver). A driver component declares :provides [:void/db-driver]; [:db :driver] picks between several."
    :methods {:connect "(fn [] conn)"
@@ -136,7 +136,7 @@
   N+1 guard mode (warn while developing, off in :prod)."
   nil)
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 450
    :name :db/capture-profile
@@ -198,7 +198,7 @@
                 (m :applied) "applied"
                 "pending")))))
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :db/migrate
    :doc "Apply pending migrations: void db migrate [--step N] [--to VERSION]"
    :needs [:db/pool]
@@ -216,7 +216,7 @@
            (print "nothing to migrate")
            (each m done (printf "applied %s_%s" (m :version) (m :name)))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :db/rollback
    :doc "Roll the last migration back: void db rollback [--step N] [--to VERSION]"
    :needs [:db/pool]
@@ -234,7 +234,7 @@
            (print "nothing to roll back")
            (each m done (printf "reverted %s_%s" (m :version) (m :name)))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :db/status
    :doc "Show migration state: void db status"
    :needs [:db/pool]
@@ -244,7 +244,7 @@
          (def opts (migration-opts (config-slice)))
          (print-status (migrate/status (opts :dir) (opts :table))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :db/new
    :doc "Scaffold a migration file: void db new NAME"
    :fn (fn cli-new [& args]
@@ -253,7 +253,7 @@
          (def opts (migration-opts (config-slice)))
          (print (migrate/create! (first args) (opts :dir))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :db/erd
    :doc "Print a Mermaid ER diagram of the registered entities: void db erd"
    :fn (fn cli-erd [& args]

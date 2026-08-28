@@ -54,14 +54,14 @@
 
 # -- the interfaces ------------------------------------------------------
 
-(plugin/defcontribution :void.core/interface
+(plugin/contribute! :void.core/interface
   {:name :void/cache
    :doc "A cache: the :cache/store component's value — a normalized store under a key prefix, with a default TTL, single-flight and an error policy. Depend on the interface rather than the key to let a test stand a stub in its place."
    :methods {:store "the :void/cache-store backend (see void/cache/store)"
              :prefix "the string every key is prefixed with"
              :ttl "the default time to live, in seconds (:none for no expiry)"}})
 
-(plugin/defcontribution :void.core/interface
+(plugin/contribute! :void.core/interface
   {:name :void/cache-store
    :doc "A cache backend: {:get :put :delete :clear} plus the optional :get-many/:put-many, :has?, :incr, :stats and :close keys (see void/cache/store). A store component declares :provides [:void/cache-store]; {:void/cache-store {:impl <key>}} picks between several."
    :methods {:get "(fn [key] value-or-nil)"
@@ -202,7 +202,7 @@
 (defn- with-cache [c f]
   (with-dyns [state/cache-dyn c] (f)))
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :cache/stats
    :doc "Show what the cache has been doing: void cache stats"
    :needs [:cache/store]
@@ -225,7 +225,7 @@
          (when-let [n (s :entries)]
            (printf "entries     %d of %d" n (get s :max-entries 0))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :cache/get
    :doc "Read one key: void cache get KEY"
    :needs [:cache/store]
@@ -238,7 +238,7 @@
            (printf "%s = %q" (with-cache c (fn [] (state/full-key k))) v)
            (printf "%s is not cached" (with-cache c (fn [] (state/full-key k))))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :cache/forget
    :doc "Drop one key: void cache forget KEY"
    :needs [:cache/store]
@@ -250,7 +250,7 @@
            (printf "dropped %s" (with-cache c (fn [] (state/full-key k))))
            (printf "%s was not cached" (with-cache c (fn [] (state/full-key k))))))})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :cache/clear
    :doc "Drop everything under the cache prefix: void cache clear"
    :needs [:cache/store]
