@@ -13,11 +13,12 @@
     `(declare-project
   :name "` name `"
   :description "A void application."
-  :dependencies ["https://github.com/janet-lang/spork.git"])
-
-# void-core / void-http / void-html / void-htmx / void-dev must be on
-# the module path as well — until the packages are published, jpm
-# install them from a void checkout (core/, http/, html/, htmx/, dev/).
+  # One dependency: void installs as a single bundle (ADR-0020), and
+  # everything it needs — spork, and the framework's own packages —
+  # comes with it. "jpm --local deps" pins this version in ./jpm_tree,
+  # which the void binary uses in preference to the tree it was
+  # installed into.
+  :dependencies ["https://github.com/bondiano/void.git"])
 `))
 
 (defn- render-main [name]
@@ -152,6 +153,7 @@
 A [void](https://github.com/bondiano/void) application — a
 server-rendered HTMX guestbook with schema-validated forms.
 
+    jpm --local deps    # pin void in ./jpm_tree (once, and after a bump)
     void dev            # run the app (dev profile: watcher + netrepl)
     void routes         # print the route table
     void repl           # repl into the running process

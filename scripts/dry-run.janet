@@ -4,37 +4,27 @@
 ### void/redis-http + void/cache + void/jobs + void/pressure +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
+### The plugin list below is the composition; the module path under it
+### is a projection of scripts/packages.janet, so a package added to the
+### graph is on the path here without a second edit (ADR-0020).
+###
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
-### non-zero with the batched error list. Run from the repository root:
+### non-zero with the batched error list. Run from anywhere:
 ###
 ###     janet scripts/dry-run.janet
 
-(defn- add-tree [root]
-  (array/insert module/paths 0 [(string root "/:all:/init.janet") :source])
-  (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
+(import ./packages :as packages)
 
-(add-tree (os/cwd))
-(add-tree (string (os/cwd) "/core"))
-(add-tree (string (os/cwd) "/dev"))
-(add-tree (string (os/cwd) "/http"))
-(add-tree (string (os/cwd) "/html"))
-(add-tree (string (os/cwd) "/htmx"))
-(add-tree (string (os/cwd) "/rest"))
-(add-tree (string (os/cwd) "/openapi"))
-(add-tree (string (os/cwd) "/db"))
-(add-tree (string (os/cwd) "/db-sqlite"))
-(add-tree (string (os/cwd) "/db-postgres"))
-(add-tree (string (os/cwd) "/fdwait"))
-# void/db-postgres reaches libpq through void/fdwait, the monorepo's one
-# native module: build it first (cd fdwait && jpm build).
-(array/insert module/paths 0
-              [(string (os/cwd) "/fdwait/build/:all:.so") :native])
-(add-tree (string (os/cwd) "/redis"))
-(add-tree (string (os/cwd) "/cache"))
-(add-tree (string (os/cwd) "/jobs"))
-(add-tree (string (os/cwd) "/pressure"))
-(add-tree (string (os/cwd) "/bench"))
+# Every package in the graph, on the module path — the composition gate
+# is the one place that loads all of them at once (ADR-0020). void/fdwait
+# is among them, so its native module has to be built first
+# (janet scripts/bootstrap.janet, or cd fdwait && jpm build).
+(packages/add-paths (packages/packages))
+
+# examples/demo is a single plugin file off the repository root, not a
+# package: it has no project.janet and no suite of its own.
+(array/insert module/paths 0 [(string packages/root "/:all:.janet") :source])
 
 (import void/core/plugin :as plugin)
 (require "void/http/init")

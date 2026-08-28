@@ -27,4 +27,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0017](0017-inject-testirovanie-polnogo-steka-bez-soketa.md) | Тестирование через inject — полный стек без сокета | accepted |
 | [0018](0018-structured-logger-v-core.md) | Structured logger — ядро логов в `void/core/log` | accepted |
 | [0019](0019-pressure-load-shedding.md) | `void/pressure` — load shedding по образцу under-pressure | accepted |
-| [0020](0020-distribuciya-monorepo-kak-odin-jpm-bundle.md) | Дистрибуция — монорепо как один jpm-bundle, граф пакетов как данные | proposed |
+| [0020](0020-distribuciya-monorepo-kak-odin-jpm-bundle.md) | Дистрибуция — монорепо как один jpm-bundle, граф пакетов как данные | accepted |

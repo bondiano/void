@@ -2,9 +2,13 @@
   :name "void-db"
   :description "void/db — database kernel: driver contract, fiber-aware pool, SQL-as-data query builder, dyn-scoped transactions, migrations, Data Mapper entity layer with thin AR sugar (SPEC §5.9, ADR-0009).")
 
-# void-core (../core) must be on the module path; void-http (../http)
-# only for the optional void/db-http plugin and its tests. The test
-# suite wires both up itself via test-support/paths.janet.
+# void-http is here for the optional void/db-http plugin only — same
+# package, separate plugin, so an application without HTTP pays
+# nothing for it.
+#
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
+# test-support/paths.janet.
 
 (declare-source
   :source ["void"])

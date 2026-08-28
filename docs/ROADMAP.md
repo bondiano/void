@@ -35,7 +35,8 @@
 | `void/jobs` (2.4) | ✅ `:void/jobs-backend` (восемь функций над записями, атомарен из них один — `claim!`) + `:void/jobs` (политика, enqueue, события); три backend'а на одном контракте и одна conformance-сюита на всех; `defjob` с ретраями/backoff+jitter/приоритетами/delayed/unique/DLQ, flows, rate limiting и concurrency per queue, group-ключи, `defschedule` на spork/cron с backend-локом; executor — фиберы `ev/`, а не spork/tasker (уточнение в ADR-0012) |
 | `void/pressure` (2.6) | ✅ `void/pressure` — sampler loop-lag/RSS, пороги с гистерезисом восстановления за одним boolean, `:void.pressure/check` для того, что рантайм измерить не может, события `:high`/`:recovered`; `void/pressure-http` — 503 + `Retry-After` в слоте 100 через `http/render-error` (вызовом, не броском), `:void.pressure/exempt` не оборачивается вовсе; тест насыщения на реальном сокете в CI |
 | bench B2/B3 (2.5) | ✅ B2 (PG query) и B3 (PG + SSR, 15001 байт) поверх одной таблицы, с service-контейнером в bench.yml; `void/bench/probe` — loop-lag изнутри процесса под нагрузкой (бюджеты §8.2 ev-loop-lag и GC, последний как граница сверху через максимум лага), сравнение loop-lag между коммитами, `b1-pressure` как строка §8.5 |
-| Волна 2, остальное (2.7) | не начато — дистрибуция (ADR-0020) |
+| Дистрибуция (2.7) | ✅ ADR-0020 accepted и реализован: монорепо ставится одним jpm-bundle `void`, граф пакетов в `scripts/packages.janet` — единственное место, где записано ребро между пакетами (шимы paths, `:source` bundle, шаги CI, dry-run — его проекции); `scripts/bootstrap.janet` + `scripts/void` для контрибьютора; job «чистая машина» в CI проверяет путь пользователя целиком |
+| Волна 2, остальное | ✅ закрыта; открыт хвост калибровки порогов pressure на референс-окружении (2.6) |
 | Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -322,13 +323,15 @@
 
 ### 2.7 Дистрибуция и установка *(S; ADR-0020)*
 
-- [ ] Принять ADR-0020
-- [ ] `scripts/packages.janet` — граф пакетов как данные; проекции: шимы `*/test-support/paths.janet` (16 копий → две строки), топологический порядок установки, матрица шагов CI, список деревьев в `scripts/dry-run.janet`
-- [ ] Корневой `project.janet` — bundle `void`: `declare-source` по деревьям пакетов, `declare-native` для `fdwait`, `declare-binscript cli/bin/void`; `janet-lang/sqlite3` остаётся runtime-требованием с ошибкой на `:start` (как libpq, ADR-0011)
-- [ ] `bin/void` подхватывает `./jpm_tree/lib` **до** `(import void/cli)` — иначе CLI из глобального дерева и `void/http` из проектного дают два экземпляра `void/core`; заодно снять лишний shebang
-- [ ] `void new` пишет настоящий `:dependencies` вместо комментария; Quick start в README становится исполняемым
-- [ ] `scripts/bootstrap.janet` (deps + `jpm build` для `fdwait`) и repo-relative дев-шим `scripts/void` — контрибьютор получает `void` без установки
-- [ ] CI: шаг «чистая машина» — установка bundle в изолированное дерево, `void new` + smoke сгенерированного проекта; путь пользователя становится гейтом, а не абзацем документации
+- [x] Принять ADR-0020
+- [x] `scripts/packages.janet` — граф пакетов как данные (`:deps` / `:test-deps` / `:jpm` / `:jpm-optional` / `:native`), плюс `check`, который отказывается от графа, расходящегося с деревом на диске. Проекции: шимы `*/test-support/paths.janet` (17 копий → две строки), `bench/apps/prelude.janet`, топологический порядок установки, `:source` корневого bundle, шаги `jpm test` в CI, список деревьев в `scripts/dry-run.janet`, набор внешних зависимостей (`deps` — для bundle, `dev-deps` — для чекаута)
+- [x] Корневой `project.janet` — bundle `void`: `declare-source` по деревьям пакетов, `declare-native` для `fdwait`, `declare-binscript cli/bin/void`; списки не написаны в нём, а импортированы из графа
+  - `janet-lang/sqlite3` в зависимости bundle не попадает, и ради этого `void/db-sqlite` резолвит биндинг при первом обращении вместо `(import sqlite3)`: с импортом в заголовке ломался бы не старт приложения с sqlite, а установка bundle у всех. Теперь это ошибка на `:start` с командой установки — ровно там же, где libpq (ADR-0011)
+- [x] `bin/void` подхватывает `./jpm_tree/lib` **до** `(import void/cli)` — иначе CLI из глобального дерева и `void/http` из проектного дают два экземпляра `void/core`; лишний shebang снят (jpm пишет свой), в CI это отдельная проверка
+- [x] `void new` пишет настоящий `:dependencies` вместо комментария; Quick start в README становится исполняемым
+- [x] `scripts/bootstrap.janet` (deps по графу + `jpm build` для `fdwait`, аргументы прокидываются в jpm — `--local`) и repo-relative дев-шим `scripts/void` — контрибьютор получает `void` без установки, из любого каталога
+- [x] CI: job «чистая машина» — `jpm --tree` install bundle в изолированное дерево, импорт всех пакетов из установленного дерева, `void new` + smoke сгенерированного проекта (`void routes`), один shebang в бинаре, и приоритет проектного `jpm_tree` над установленным; путь пользователя стал гейтом, а не абзацем документации
+  - Прежние 18 руками написанных шагов `jpm test` в `ci.yml` схлопнулись в один цикл по `janet scripts/packages.janet ci`
 
 ### Exit-критерии волны 2
 
@@ -446,7 +449,7 @@
 | Sampling-профайлер в void/dev (`debug/stack` по таймеру) + `bench/trace-request` | волна 2 (понадобится для B2/B3) |
 | CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | ✅ сделано к v0.1 ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | идёт: `demo` (волна 0), `guestbook` (волна 1, в CI) |
-| Дистрибуция: монорепо как один jpm-bundle, граф пакетов как данные (ADR-0020) | 2.7, к v0.2; `jpm quickbin` single-binary — 4.5 |
+| Дистрибуция: монорепо как один jpm-bundle, граф пакетов как данные (ADR-0020) | ✅ сделано в 2.7; `jpm quickbin` single-binary — 4.5 |
 
 ---
 

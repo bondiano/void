@@ -4,9 +4,9 @@
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
-# void-core (../core), void-http (../http) and void-rest (../rest)
-# must be on the module path as well; the test suite wires them up
-# itself via test-support/paths.janet.
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
+# test-support/paths.janet.
 
 (declare-source
   :source ["void"])

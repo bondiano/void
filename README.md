@@ -15,14 +15,20 @@ The full specification lives in [docs/SPEC.md](docs/SPEC.md), the wave plan in [
 ## Quick start
 
 ```sh
-# in-repo, until the packages are published: put core/ http/ html/
-# htmx/ dev/ cli/ on the module path (jpm install from a checkout)
+jpm install https://github.com/bondiano/void.git   # the whole framework, one bundle
+
 void new guestbook
 cd guestbook
+jpm --local deps    # pin this void in ./jpm_tree (the binary prefers it)
 void dev            # dev profile: file watcher + netrepl + the app
 void routes         # the route table, `void routes --keys` with metadata
 void repl           # repl into the running process
 ```
+
+Every line of that runs on a clean machine as a CI job, not as a
+paragraph here (ADR-0020). Installing needs a C compiler — spork, which
+`void/core` depends on, builds nine native modules of its own, and void
+adds one (`void/fdwait`, ~60 lines).
 
 The generated app — the same one as [`examples/guestbook`](examples/guestbook) — is a server-rendered HTMX guestbook: one map schema drives the form markup, the coercing validation (`form/check`) and the re-render-with-errors loop; the POST route answers htmx requests with the bare fragment (`:void.htmx/partial`). Out of the box every request carries a request-id bound to the log context and an access-log record lands through `void/core/log` on the `:on-response` lifecycle stage (ADR-0016/0018); tests drive the full stack in memory with `test/inject` — no sockets (ADR-0017).
 
@@ -34,7 +40,14 @@ Single binary < 5 MB, RSS < 50 MB, a live REPL into the production process, and 
 
 ## Repository layout
 
-Monorepo of scoped Janet packages, each installable on its own via jpm:
+Monorepo of scoped Janet packages. They install as **one** jpm bundle
+named `void` and release one version per wave — jpm resolves a
+dependency to a git repository with a `project.janet` in its root, and
+has no notion of a subdirectory (ADR-0020). The edges between the
+packages are declared once, as data, in
+[`scripts/packages.janet`](scripts/packages.janet); the bundle's source
+list, every test suite's module path, the CI steps and the dry-run gate
+are projections of it.
 
 | Directory | Package | Wave |
 |---|---|---|
@@ -62,20 +75,27 @@ Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): enterprise (`void/obs`, `
 
 ## Development
 
-Requires [Janet](https://janet-lang.org/) ≥ 1.41 and jpm.
+Requires [Janet](https://janet-lang.org/) ≥ 1.41, jpm and a C compiler.
 
 ```sh
-cd core
-jpm deps       # install dependencies (spork)
-jpm test       # run tests
+janet scripts/bootstrap.janet   # external deps + build void/fdwait
+cd core && jpm test             # any package; the module path is wired
+                                # from the graph, nothing is installed
 ```
 
-`void/db-postgres` additionally needs the monorepo's one native module
-built, and a Postgres to test against:
+Contributors never install void to use it — `scripts/void` is the CLI
+running straight off the checkout, so an edit in `core/` is live in the
+next command:
 
 ```sh
-cd fdwait && jpm build        # void/fdwait — ~60 lines of C (ADR-0011)
-cd ../db-postgres && jpm test # config/types run everywhere; the rest
+scripts/void new myapp
+cd myapp && ../scripts/void routes
+```
+
+`void/db-postgres` needs a Postgres to test against:
+
+```sh
+cd db-postgres && jpm test    # config/types run everywhere; the rest
                               # skips without a server
 
 VOID_TEST_PG="postgres://void:void@127.0.0.1:5432/void_test" jpm test
@@ -83,4 +103,7 @@ VOID_TEST_PG="postgres://void:void@127.0.0.1:5432/void_test" jpm test
 
 libpq itself is opened at runtime through `ffi/` (`brew install libpq`,
 `apt install libpq5`) — nothing links against it, and a machine without
-it is told so at boot rather than at install time.
+it is told so at boot rather than at install time. `janet-lang/sqlite3`
+is the same deal for `void/db-sqlite`: the bundle leaves the binding out
+on purpose, and the driver resolves it on first use, so an application
+that never lists `:void/db-sqlite` in its `:plugins` never needs it.

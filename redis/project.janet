@@ -8,9 +8,8 @@
 # net/ stream, which is the whole reason this plugin installs
 # anywhere Janet does. spork is here for one thing — the :json codec.
 #
-# void-core (../core) must be on the module path, and void-http
-# (../http) as well for void/redis-http, which contributes the session
-# store; the test suite wires them up itself via
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
 # test-support/paths.janet.
 
 (declare-source

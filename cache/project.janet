@@ -9,9 +9,9 @@
 # separate plugins in this package, so an application that wants
 # neither pays for neither.
 #
-# void-core (../core) must be on the module path, plus ../redis and
-# ../http for those two plugins; the test suite wires them up itself
-# via test-support/paths.janet.
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
+# test-support/paths.janet.
 
 (declare-source
   :source ["void"])

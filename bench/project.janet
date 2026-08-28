@@ -4,13 +4,11 @@
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
-# void-core (../core), void-http (../http) and void-rest (../rest) must
-# be on the module path as well; main.janet and the test suite wire
-# them up themselves. The mini-apps reach further — ../html and
-# ../db + ../db-postgres + ../fdwait for B2/B3, ../pressure for the
-# probe's loop-lag meter and for b1-pressure — and wire that up
-# themselves in apps/prelude.janet, because the apps run as
-# subprocesses and the runner never imports them.
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
+# test-support/paths.janet. The mini-apps ask for the same
+# set again in apps/prelude.janet: they run as subprocesses and the
+# runner never imports them.
 
 (declare-source
   :source ["void"])

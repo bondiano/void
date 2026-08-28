@@ -9,8 +9,8 @@
 # jobs it runs shedding under pressure) never drags the HTTP kernel in
 # — what void/cache-http is to void/cache.
 #
-# void-core (../core) must be on the module path, plus ../http for
-# that second plugin; the test suite wires them up itself via
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
 # test-support/paths.janet.
 
 (declare-source
