@@ -11,9 +11,20 @@
 ###
 ### The middleware (phase 3000) puts a mutable table at (req :session);
 ### a handler mutates it, or replaces it via (resp :session), or
-### destroys it with {:session :delete}. Session ids are 128-bit random
-### values from the OS; an id presented by the client but unknown to
-### the store is never adopted — a fresh one is issued on first save.
+### destroys it with {:session :delete}, or asks for a new id under the
+### same data with (session/rotate! req) — equivalently {:session
+### :rotate}. Session ids are 128-bit random values from the OS; an id
+### presented by the client but unknown to the store is never adopted —
+### a fresh one is issued on first save.
+###
+### **Why rotation is part of the contract.** A session id that survives
+### a change of privilege is session fixation: an attacker who can set
+### the cookie before a login (a subdomain, a shared machine, a link
+### with a session in it) holds a valid id afterwards. The only fix is
+### a new id at that moment, so `void/auth` (ADR-0023 §8) rotates on
+### every login, and it needs the session layer to be able to do it.
+### `rotate!` marks the *request*, because whoever logs a user in is
+### usually deep inside a handler and does not build the response.
 
 (import ./ring :as ring)
 
@@ -57,6 +68,23 @@
    :delete (fn delete [id] (put entries id nil))
    :sweep sweep})
 
+# -- rotation ------------------------------------------------------------
+
+(def rotate-key
+  "Request key `rotate!` sets and the middleware reads."
+  :void.http/session-rotate)
+
+(defn rotate!
+  ``Ask for a fresh session id on this request, keeping the data. Call
+  it whenever the identity behind a session changes — a login, a
+  privilege escalation, a password change — because an id that
+  survives that change is session fixation. Safe to call several
+  times, and safe on a request that has no session yet (one is issued
+  anyway).``
+  [req]
+  (put req rotate-key true)
+  nil)
+
 # -- middleware ----------------------------------------------------------
 
 (defn wrap-session
@@ -87,15 +115,25 @@
     (put req :session session)
     (def resp (handler req))
     (when (dictionary? resp)
-      (if (= :delete (resp :session))
+      (def marker (resp :session))
+      (if (= :delete marker)
         (do
           (when loaded ((store :delete) client-id))
           (ring/delete-cookie resp cookie-name cookie-opts))
         (do
-          (def out (or (resp :session) session))
-          (when (or loaded (not (empty? out)))
-            (def id (if loaded client-id (sid)))
+          # a marker keyword is an instruction, not data: only a
+          # dictionary replaces the session
+          (def out (if (dictionary? marker) marker session))
+          (def rotate?
+            (or (= :rotate marker) (truthy? (get req rotate-key))))
+          (when (or loaded rotate? (not (empty? out)))
+            # a rotated session gets a new id even though the old one
+            # was valid — that is the whole point — and the old entry
+            # goes, or the fixated id stays usable
+            (def fresh? (or rotate? (not loaded)))
+            (def id (if fresh? (sid) client-id))
+            (when (and rotate? loaded) ((store :delete) client-id))
             ((store :save) id out ttl)
-            (unless loaded
+            (when fresh?
               (ring/set-cookie resp cookie-name id cookie-opts))))))
     resp))
