@@ -297,13 +297,24 @@
 - [ ] Prefork: sampler per-worker, агрегация в master health
 - [ ] Калибровка порогов по умолчанию на B2/B3 (насыщение: быстрый 503 вместо роста latency у всех) — тест в CI
 
+### 2.7 Дистрибуция и установка *(S; ADR-0020)*
+
+- [ ] Принять ADR-0020
+- [ ] `scripts/packages.janet` — граф пакетов как данные; проекции: шимы `*/test-support/paths.janet` (16 копий → две строки), топологический порядок установки, матрица шагов CI, список деревьев в `scripts/dry-run.janet`
+- [ ] Корневой `project.janet` — bundle `void`: `declare-source` по деревьям пакетов, `declare-native` для `fdwait`, `declare-binscript cli/bin/void`; `janet-lang/sqlite3` остаётся runtime-требованием с ошибкой на `:start` (как libpq, ADR-0011)
+- [ ] `bin/void` подхватывает `./jpm_tree/lib` **до** `(import void/cli)` — иначе CLI из глобального дерева и `void/http` из проектного дают два экземпляра `void/core`; заодно снять лишний shebang
+- [ ] `void new` пишет настоящий `:dependencies` вместо комментария; Quick start в README становится исполняемым
+- [ ] `scripts/bootstrap.janet` (deps + `jpm build` для `fdwait`) и repo-relative дев-шим `scripts/void` — контрибьютор получает `void` без установки
+- [ ] CI: шаг «чистая машина» — установка bundle в изолированное дерево, `void new` + smoke сгенерированного проекта; путь пользователя становится гейтом, а не абзацем документации
+
 ### Exit-критерии волны 2
 
 1. Demo: CRUD-приложение на Postgres с миграциями, background-джобами и кэшом; то же на SQLite сменой конфига.
 2. Драйвер PG не блокирует loop: тест «конкурентные pg_sleep + ticker» из прототипа — в CI.
 3. N+1-guard и dirty-tracking покрыты тестами; `void db erd` строит диаграмму из `:db/rels`.
 4. Тест насыщения (ADR-0019): под перегрузкой процесс отвечает быстрым 503 + `Retry-After`, `/health` (exempt) остаётся живым, после снятия нагрузки — `:pressure/recovered`.
-5. B2/B3 в CI. Тег v0.2.
+5. Установка проверяется в CI на чистом дереве: bundle → `void new` → сгенерированный проект стартует и отвечает (ADR-0020).
+6. B2/B3 в CI. Тег v0.2.
 
 ---
 
@@ -412,6 +423,7 @@
 | Sampling-профайлер в void/dev (`debug/stack` по таймеру) + `bench/trace-request` | волна 2 (понадобится для B2/B3) |
 | CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | ✅ сделано к v0.1 ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | идёт: `demo` (волна 0), `guestbook` (волна 1, в CI) |
+| Дистрибуция: монорепо как один jpm-bundle, граф пакетов как данные (ADR-0020) | 2.7, к v0.2; `jpm quickbin` single-binary — 4.5 |
 
 ---
 
