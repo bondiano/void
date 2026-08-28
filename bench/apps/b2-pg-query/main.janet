@@ -31,12 +31,27 @@
 (def- select-row
   (string "SELECT id, number, label FROM " seed/table " WHERE id = $1"))
 
+(def- not-seeded
+  # the listener opens in system/start and the seeding runs at
+  # :after-start, so this window is real: a client can arrive while
+  # bench_rows is still filling, and a random id in a half-filled
+  # table hits about as often as it misses. Answering 200 (with a row,
+  # or with a null body) there would let a warmup measure a table that
+  # is not the benchmark's — 503 says what is true, and is what
+  # runner/wait-ready waits out (targets :ready).
+  (json/encode {:type "about:blank" :title "seeding"
+                :status 503 :detail "bench_rows is still being filled"}))
+
 (defn row
   "GET /db — one random row by primary key."
   [req]
-  (def id (inc (math/floor (* (math/random) seed/row-count))))
-  (def r (first (db/query-sql [select-row [id]])))
-  (ring/response 200 (json/encode r) @{"content-type" "application/json"}))
+  (if (seed/seeded?)
+    (let [id (inc (math/floor (* (math/random) seed/row-count)))
+          r (first (db/query-sql [select-row [id]]))]
+      (ring/response 200 (json/encode r) @{"content-type" "application/json"}))
+    (ring/response 503 not-seeded
+                   @{"content-type" "application/problem+json"
+                     "retry-after" "1"})))
 
 (plugin/contribute! :void.http/route-source
   {:name :bench.b2/routes

@@ -80,10 +80,16 @@ jobs:
 
       # Shorter than the local методика (2×30s vs 3×60s) — the verdict
       # is relative, both sides run under the same settings.
+      # b1-obs is B1 with void/obs in the chain: the delta against b1 in
+      # the same run is SPEC §8.2's instrumentation budget (≤ 7% of
+      # throughput), and having it here keeps that number from drifting
+      # unnoticed between waves. It has no budget of its own — B1's is
+      # B1's — and the merge-base comparison below simply ignores a
+      # target the baseline does not have.
       - name: Bench head
         run: |
           cd bench
-          janet main.janet b0 b1 b2 b3 --runs 2 --duration 30 --warmup 10 \
+          janet main.janet b0 b1 b1-obs b2 b3 --runs 2 --duration 30 --warmup 10 \
             --out /tmp/bench-head.jdn
 
       - name: Bench merge-base

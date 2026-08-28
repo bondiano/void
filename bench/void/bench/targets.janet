@@ -53,7 +53,13 @@
   environment; `exec` so signals reach the server, not the shell.
   Baselines (:baseline true) calibrate the class (ADR-0014) — Go
   net/http is the ceiling, FastAPI+uvicorn the Python class — and are
-  never checked against budgets.``
+  never checked against budgets.
+
+  Targets whose app has setup to do after the port opens carry
+  `:ready`: a path that answers 200 only once that setup is done (the
+  seeding B2/B3 answer 503 until `bench_rows` is filled). The runner
+  waits for it before warmup — a benchmark run against a half-seeded
+  table is a benchmark of nothing.``
   {:b0 {:doc "B0 plaintext hello — void router + full middleware stack"
         :bench :plaintext
         :port 8100
@@ -72,17 +78,27 @@
                  # answer §8.5 asks every middleware author for. No
                  # budget of its own — B1's budget is B1's
                  :cmd "VOID_BENCH_PRESSURE=1 exec janet apps/b1-json-echo/main.janet"}
+   :b1-obs {:doc "B1 with void/obs in the chain — the SPEC §8.2 instrumentation-overhead row"
+            :bench :json
+            :port 8101
+            # the same app, two plugins heavier: `void bench b1 b1-obs`
+            # prints both rows, and the delta is what §8.2 budgets at
+            # ≤ 7% of throughput. No budget of its own — B1's is B1's,
+            # and obs is measured against B1, not against the SLO
+            :cmd "VOID_BENCH_OBS=1 exec janet apps/b1-json-echo/main.janet"}
    :b2 {:doc "B2 Postgres single query — pool, prepared statement, ev loop"
         :bench :pg-query
         :port 8102
         :budget :b2
         :needs-pg true
+        :ready "/db"
         :cmd "exec janet apps/b2-pg-query/main.janet"}
    :b3 {:doc "B3 Postgres + hiccup SSR ~15KB — the shape a void app actually is"
         :bench :pg-ssr
         :port 8103
         :budget :b3
         :needs-pg true
+        :ready "/rows"
         :cmd "exec janet apps/b3-pg-ssr/main.janet"}
    :go-plaintext {:doc "Go net/http baseline (the ceiling) — plaintext"
                   :bench :plaintext
@@ -114,7 +130,7 @@
 
 (def order
   "Report/`all` order."
-  [:b0 :b1 :b1-pressure :b2 :b3
+  [:b0 :b1 :b1-pressure :b1-obs :b2 :b3
    :go-plaintext :go-json :fastapi-plaintext :fastapi-json])
 
 (def default-targets

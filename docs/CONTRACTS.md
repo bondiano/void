@@ -6,7 +6,7 @@
 > void/db-sqlite void/db-postgres void/db-http void/redis
 > void/redis-http void/cache void/cache-redis void/cache-http
 > void/jobs void/jobs-db void/jobs-redis void/pressure
-> void/pressure-http void/dev void/bench)
+> void/pressure-http void/obs void/obs-http void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -191,6 +191,26 @@ key plus a deprecation alias for the old name, never a mutation.
   {:make :function :name :keyword}
   ```
 
+### `:void.obs/exporter`
+
+- **owner:** `:void/obs` · **cardinality:** `:many`
+- Span exporters: {:name :fn (fn [span]) :doc?}; every finished sampled span is handed to each one, and an exporter that throws is logged rather than allowed to fail the request it was watching
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
+### `:void.obs/instrument`
+
+- **owner:** `:void/obs` · **cardinality:** `:many`
+- Auto-instrumentation (SPEC §5.13): {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :install :function :name :keyword :needs [:optional [:vector :keyword]]}
+  ```
+
 ### `:void.pressure/check`
 
 - **owner:** `:void/pressure` · **cardinality:** `:many`
@@ -215,8 +235,6 @@ key plus a deprecation alias for the old name, never a mutation.
 
 | Point | Owner-to-be | What it will register |
 |---|---|---|
-| `:void.obs/instrument` | `void/obs` | auto-instrumentation hooks (wave 3) |
-| `:void.obs/exporter` | `void/obs` | metrics/traces exporters (waves 3-4) |
 | `:void.bus/backend` | `void/bus` | message-bus backends (wave 3, ADR-0012) |
 | `:void.bus/codec` | `void/bus` | message codecs (wave 3) |
 | `:void.admin/widget` `/page` `/dashboard-widget` `/menu` | `void/admin` | admin surfaces (wave 4) |
@@ -268,6 +286,9 @@ layer.
 | `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific layer may only lower it |
 | `:void.http/middleware` | `:void/http` | `:concat` | `[:vector :keyword]` | Named middleware this route opts into, concatenated group -> route |
 | `:void.http/timeout` | `:void/http` | `:restrict` + `:allow?` | `[:number {:min 0.001}]` | Handler deadline in seconds; a more specific layer may only lower it |
+| `:void.obs/endpoint` | `:void/obs-http` | `:replace` | `:boolean` | An operator endpoint (health, readiness, metrics): it must answer while the process is refusing everything else, so void/pressure-http never sheds it |
+| `:void.obs/name` | `:void/obs-http` | `:replace` | `:string` | The name this route carries in metrics and spans (default: the route :name) |
+| `:void.obs/sample-rate` | `:void/obs-http` | `:replace` | `[:number {:max 1 :min 0}]` | Head sampling rate for this route's traces, overriding [:obs :trace :sample-rate] — a health endpoint at 0, a payment at 1 |
 | `:void.openapi/description` | `:void/openapi` | `:replace` | `:string` | Longer operation description (CommonMark) |
 | `:void.openapi/hidden` | `:void/openapi` | `:replace` | `:boolean` | Leave this route out of the document |
 | `:void.openapi/id` | `:void/openapi` | `:replace` | `:string` | operationId override (default: the route name, / -> .) |
@@ -289,8 +310,6 @@ layer.
 | `:void.auth/access` | :public / :required | restrict | void/auth (wave 3) |
 | `:void.security/csrf` | bool | restrict (true wins) | void/security (wave 3) |
 | `:void.security/rate` | {:limit :window} | restrict (min) | void/security (wave 3) |
-| `:void.obs/name` | string | replace | void/obs (wave 3) |
-| `:void.obs/sample-rate` | number 0..1 | replace | void/obs (wave 3) |
 
 `:void.openapi/*` note: v0.1 declares `tags`, `summary`,
 `description`, `id`, `hidden`; further `:void.openapi/...` names

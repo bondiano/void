@@ -40,6 +40,11 @@
 ### exempt, and the LB routing on it — because the 503s the clients
 ### see are deliberate and the ones the LB sees would not be.
 ###
+### void/obs-http's own `/health`, `/ready` and `/metrics` need no
+### such mark: they carry `:void.obs/endpoint`, and the predicate
+### below honours that key too (reading a key another plugin declares
+### costs nothing when that plugin is absent — the value is nil).
+###
 ### **What it costs a route that is not marked: one boolean.** There
 ### is no `:when` that would compile it out on a healthy process,
 ### because "healthy" is a runtime fact and the table is built at boot.
@@ -186,7 +191,16 @@
    # (500) and everything that costs anything
    :phase 100
    :doc "Answer 503 + Retry-After while the process is over its pressure thresholds (ADR-0019); routes marked :void.pressure/exempt are never wrapped"
-   :when (fn [rmeta] (not (get rmeta :void.pressure/exempt)))
+   # `:void.obs/endpoint` counts as exempt too, and reading a key
+   # void/obs-http declares costs nothing when it is not in the
+   # composition (an absent key is nil). An operator endpoint that
+   # answers 503 while the process sheds is the health check that
+   # takes the worker out of the load balancer at the moment it was
+   # trying to stay useful — the same argument the doc string above
+   # makes for /health, and obs's endpoints should not have to be
+   # marked twice.
+   :when (fn [rmeta] (not (or (get rmeta :void.pressure/exempt)
+                              (get rmeta :void.obs/endpoint))))
    :wrap (fn [handler]
            (fn pressure-shed [req]
              (if (state/under-pressure?)

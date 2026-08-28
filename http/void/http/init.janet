@@ -431,6 +431,7 @@
     :headers (head :headers)
     :http-version (head :http-version)
     :received (os/clock :monotonic)
+    :arrived (os/clock :monotonic)
     :body (if (empty? body-bytes) nil body-bytes)})
 
 (defn make-request
@@ -464,6 +465,9 @@
         :headers headers
         :http-version 1
         :received (os/clock :monotonic)
+        # the queue-time base the server stamps in read-head: on the
+        # inject path (ADR-0017) a request arrives when it is made
+        :arrived (os/clock :monotonic)
         :body body})))
 
 

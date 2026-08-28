@@ -22,6 +22,7 @@
 (import void)
 (import void/core/plugin :as plugin)
 (import void/http/router :as router)
+(import void/http/ring :as ring)
 (import void/html :as html)
 (import void/db :as db)
 (import void/bench/pg :as pg)
@@ -67,8 +68,17 @@
 (defn rows
   "GET /rows — a page of rows, server-rendered."
   [req]
-  (def from (inc (math/floor (* (math/random) (- seed/row-count page-size)))))
-  (html/page (document (db/query-sql [select-page [from]])) {:layout nil}))
+  # the listener opens in system/start and the seeding runs at
+  # :after-start: until the table is full this page is short, and a
+  # short page is a smaller document than the ~15KB §8.2 budgets. 503
+  # rather than a quietly cheaper benchmark — runner/wait-ready waits
+  # this out (targets :ready).
+  (if (seed/seeded?)
+    (let [from (inc (math/floor (* (math/random) (- seed/row-count page-size))))]
+      (html/page (document (db/query-sql [select-page [from]])) {:layout nil}))
+    (ring/response 503 "bench_rows is still being filled"
+                   @{"content-type" "text/plain; charset=utf-8"
+                     "retry-after" "1"})))
 
 (plugin/contribute! :void.http/route-source
   {:name :bench.b3/routes

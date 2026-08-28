@@ -119,12 +119,27 @@
    # it is in the composition.
    {:dir "pressure" :deps [:void/core :void/http] :test-deps [:void/rest]}
 
+   :void/obs
+   # void/pressure is here for its loop-lag *meter*
+   # (`void/pressure/sample`), the way void/bench/probe takes it — the
+   # module, never the plugin: a process that observes itself must not
+   # thereby start shedding. void/http is void/obs-http's, a separate
+   # plugin in this package (the void/cache — void/cache-http split).
+   # void/dev and void/cache are the suite's: inject for the endpoints,
+   # a real component for the instrumentation. void/rest is
+   # test-support/overhead-probe.janet's, which measures what obs costs
+   # a request on the B1 shape (§8.2's ≤ 7%).
+   {:dir "obs" :deps [:void/core :void/http :void/pressure]
+    :test-deps [:void/dev :void/cache :void/rest] :jpm [:spork]}
+
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
-   # B2/B3 (see bench/apps/prelude.janet, which asks for this same set).
+   # B2/B3, obs for the b1-obs row that measures §8.2's ≤ 7%
+   # instrumentation budget (see bench/apps/prelude.janet, which asks
+   # for this same set).
    {:dir "bench" :deps [:void/core :void/http :void/db :void/pressure]
-    :test-deps [:void/rest :void/html :void/db-postgres] :jpm [:spork]}
+    :test-deps [:void/rest :void/html :void/db-postgres :void/obs] :jpm [:spork]}
 
    # -- examples: smoke tests in CI, never part of the bundle ------------
    #

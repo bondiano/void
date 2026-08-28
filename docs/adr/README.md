@@ -28,3 +28,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0018](0018-structured-logger-v-core.md) | Structured logger — ядро логов в `void/core/log` | accepted |
 | [0019](0019-pressure-load-shedding.md) | `void/pressure` — load shedding по образцу under-pressure | accepted |
 | [0020](0020-distribuciya-monorepo-kak-odin-jpm-bundle.md) | Дистрибуция — монорепо как один jpm-bundle, граф пакетов как данные | accepted |
+| [0021](0021-obs-metriki-spany-i-cena-instrumentacii.md) | `void/obs` — модель метрик, спан по требованию и цена инструментации | accepted |
