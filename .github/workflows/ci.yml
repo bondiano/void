@@ -123,6 +123,9 @@ jobs:
       - name: Test void/jobs
         run: cd jobs && jpm test
 
+      - name: Test void/pressure
+        run: cd pressure && jpm test
+
       - name: Test void/bench
         run: cd bench && jpm test
 

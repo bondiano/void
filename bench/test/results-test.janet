@@ -76,14 +76,16 @@
 (def notes
   (results/budget-notes
     {:throughput {:rps 25000}
-     :latency {:rate 16000 :p50 0.4 :p99 2.9}}
+     :latency {:rate 16000 :p50 0.4 :p99 2.9}
+     :runtime {:loop-lag {:p50 0.05 :p99 0.4 :max 3}}}
     (targets/budgets :b0)))
 (assert (all |(= :ok (first $)) notes) "all §8.2 b0 budgets met")
 
 (def missed
   (results/budget-notes
     {:throughput {:rps 15000}
-     :latency {:rate 16000 :p50 2.7 :p99 2.0}}
+     :latency {:rate 16000 :p50 2.7 :p99 2.0}
+     :runtime {:loop-lag {:p50 0.05 :p99 0.4 :max 3}}}
     (targets/budgets :b0)))
 (assert (= :miss (first (missed 0))) "throughput floor missed")
 (assert (= :miss (first (missed 1))) "p50 budget missed")
@@ -92,6 +94,48 @@
 (def unmeasured
   (results/budget-notes {:throughput {:rps 25000}} (targets/budgets :b0)))
 (assert (= :skip (first (unmeasured 1))) "no wrk2 run -> latency unchecked")
+
+# -- the two budgets only the process itself can see (§8.2, §8.4) --------
+
+(def laggy
+  (results/budget-notes
+    {:throughput {:rps 25000}
+     :latency {:rate 16000 :p50 0.4 :p99 2.9}
+     :runtime {:loop-lag {:p50 0.9 :p99 4.2 :max 12}}}
+    (targets/budgets :b0)))
+(assert (deep= @[:miss] (distinct (map first (filter |(string/find "loop-lag" ($ 1)) laggy))))
+        "a loop that runs 4ms late under target load misses the §8.2 budget")
+
+(def unprobed
+  (results/budget-notes
+    {:throughput {:rps 25000} :latency {:rate 16000 :p50 0.4 :p99 2.9}}
+    (targets/budgets :b0)))
+(assert (= :skip (first (last unprobed)))
+        "a target with no probe leaves the runtime budget unmeasured, not unmet")
+
+(def gc-bound
+  (results/budget-notes
+    {:throughput {:rps 2000}
+     :latency {:rate 1200 :p50 3 :p99 15}
+     :runtime {:loop-lag {:p50 0.2 :p99 0.8 :max 14}}}
+    (targets/budgets :b3)))
+(assert (= :miss (first (last gc-bound)))
+        "B3 carries the GC budget as a loop-lag maximum — 14ms of lag bounds no 10ms pause")
+(assert (string/find "GC pause bound" ((last gc-bound) 1))
+        "and says so, because the bound is the argument")
+
+# -- loop-lag is compared between commits too ----------------------------
+
+(def lag-base {:rows {:b0 {:runtime {:loop-lag {:p99 0.3}}}}})
+(def lag-worse {:rows {:b0 {:runtime {:loop-lag {:p99 0.9}}}}})
+(def lag-cmp (results/compare-results lag-base lag-worse))
+(assert (= 1 (length (lag-cmp :regressions)))
+        "a loop-lag p99 that triples is a regression")
+(assert (= :loop-lag-p99 (get-in lag-cmp [:regressions 0 :metric])))
+
+(def lag-noise {:rows {:b0 {:runtime {:loop-lag {:p99 0.34}}}}})
+(assert (empty? ((results/compare-results lag-base lag-noise) :regressions))
+        "a move under the absolute floor is noise with a percentage sign on it")
 
 # -- the target tables are coherent --------------------------------------
 

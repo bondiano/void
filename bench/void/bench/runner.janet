@@ -9,9 +9,11 @@
 ### Results land in results/last.jdn; --record freezes them as the
 ### baseline, --check compares against it with the 5% thresholds.
 
+(import spork/json)
 (import ./targets :as targets)
 (import ./wrk :as wrk)
 (import ./results :as results)
+(import ./pg :as pg)
 
 (def- this-file (dyn *current-file*))
 
@@ -89,6 +91,37 @@
             (log-tail (server :log))))
   server)
 
+# -- the runtime probe (§8.2 loop-lag / GC budgets) ----------------------
+#
+# The app under load carries `bench/probe` and answers
+# targets/probe-path with the event-loop lag it has been experiencing.
+# The window is bracketed around the *fixed-rate* runs only: max
+# throughput saturates the loop on purpose, and "loop-lag p99 < 1 ms"
+# is a budget about target load (§8.2), not about saturation. An app
+# without the probe (VOID_BENCH_PROBE=0, a baseline written in Go)
+# answers 404 or nothing, and the runtime budgets go unmeasured rather
+# than unmet.
+
+(defn read-probe
+  ``GET the probe endpoint on `port`; the decoded stats, or nil when
+  the target has no probe. `reset` clears its reservoir after reading,
+  which is how a window is opened.``
+  [port &opt reset]
+  (def [ok body]
+    (protect
+      (with [conn (net/connect "127.0.0.1" (string port))]
+        (:write conn (string "GET " targets/probe-path
+                             (if reset "?reset=1" "")
+                             " HTTP/1.1\r\nHost: bench\r\n"
+                             "Connection: close\r\n\r\n"))
+        (def buf @"")
+        (while (net/read conn 4096 buf 5))
+        (def raw (string buf))
+        (def i (string/find "\r\n\r\n" raw))
+        (when (and i (string/has-prefix? "HTTP/1.1 200" raw))
+          (json/decode (string/slice raw (+ i 4)) true)))))
+  (when ok body))
+
 # -- one target ----------------------------------------------------------
 
 (defn- timed-runs [n opts]
@@ -129,13 +162,18 @@
                                            :duration (settings :duration)})))))
     (when-let [tool (tools :wrk2)]
       (printf "  latency @ %d rps (wrk2):" (bench :rate))
+      # open the runtime window on the fixed-rate runs and nothing else
+      (def probed (read-probe (spec :port) true))
       (put row :latency
            (merge (wrk/summarize
                     (timed-runs (settings :runs)
                                 (merge base-opts {:tool tool
                                                   :duration (settings :duration)
                                                   :rate (bench :rate)})))
-                  {:rate (bench :rate)})))
+                  {:rate (bench :rate)}))
+      (when probed
+        (when-let [after (read-probe (spec :port))]
+          (put row :runtime after))))
     row))
 
 # -- report --------------------------------------------------------------
@@ -168,6 +206,16 @@
       (printf "%-18s %-10s %-16s %10s %10s %10s"
               tname (row :bench) (string "latency@" (l :rate))
               "" (fmt-ms (l :p50)) (fmt-ms (l :p99))))
+    (when-let [ll (get-in row [:runtime :loop-lag])]
+      (printf "%-18s %-10s %-16s %10s %10s %10s"
+              "" "" "loop-lag" ""
+              (fmt-ms (ll :p50)) (fmt-ms (ll :p99)))
+      (printf "%-18s %-10s %-16s %10s %10s %10s"
+              "" "" "  max / rss" ""
+              (fmt-ms (ll :max))
+              (if-let [r (get-in row [:runtime :rss])]
+                (string/format "%.0fMiB" (/ r 1048576))
+                "—")))
     (each k [:non-2xx :socket-errors]
       (def n (+ (get-in row [:throughput k] 0) (get-in row [:latency k] 0)))
       (when (pos? n)
@@ -287,7 +335,11 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
   (each tname (filter |(get-in targets/targets [$ :budget]) targets/order)
     (def row (get-in res [:rows tname]))
     (if (nil? row)
-      (array/push failures (string/format "%s: not in this result set" tname))
+      (array/push failures
+                  (string/format "%s: not in this result set%s" tname
+                                 (if (get-in targets/targets [tname :needs-pg])
+                                   " (a database target — VOID_BENCH_PG)"
+                                   "")))
       (each [status text] (results/budget-notes
                             row
                             (targets/budgets (get-in targets/targets [tname :budget])))
@@ -349,8 +401,15 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
       (def rows @{})
       (each tname tnames
         (def spec (targets/targets tname))
-        (printf "· %s — %s" tname (spec :doc))
-        (put rows tname (run-target tname spec settings tools)))
+        (if (and (spec :needs-pg) (not (pg/available?)))
+          # loudly, and without failing: a laptop with no server still
+          # gets B0/B1, and a benchmark that quietly measures nothing
+          # is worse than one that says it did not run
+          (printf "!! %s skipped — no Postgres configured (set %s or %s)"
+                  tname pg/env-var pg/fallback-env-var)
+          (do
+            (printf "· %s — %s" tname (spec :doc))
+            (put rows tname (run-target tname spec settings tools)))))
       (def res {:env (results/environment) :settings settings :rows rows})
       (print-report res)
       (results/write-file (string root "/results/last.jdn") res)

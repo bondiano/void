@@ -32,6 +32,7 @@
 (add-tree (string (os/cwd) "/redis"))
 (add-tree (string (os/cwd) "/cache"))
 (add-tree (string (os/cwd) "/jobs"))
+(add-tree (string (os/cwd) "/pressure"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -53,6 +54,8 @@
 (require "void/jobs/init")
 (require "void/jobs/db")
 (require "void/jobs/redis")
+(require "void/pressure/init")
+(require "void/pressure/http")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -63,6 +66,7 @@
                :void/redis :void/redis-http
                :void/cache :void/cache-redis :void/cache-http
                :void/jobs :void/jobs-db :void/jobs-redis
+               :void/pressure :void/pressure-http
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide
@@ -111,7 +115,6 @@
   plugins land in waves 2+. Names are frozen with v1."
   [["`:void.obs/instrument`" "void/obs" "auto-instrumentation hooks (wave 3)"]
    ["`:void.obs/exporter`" "void/obs" "metrics/traces exporters (waves 3-4)"]
-   ["`:void.pressure/check`" "void/pressure" "load-shedding checks (ADR-0019)"]
    ["`:void.bus/backend`" "void/bus" "message-bus backends (wave 3, ADR-0012)"]
    ["`:void.bus/codec`" "void/bus" "message codecs (wave 3)"]
    ["`:void.admin/widget` `/page` `/dashboard-widget` `/menu`" "void/admin" "admin surfaces (wave 4)"]])

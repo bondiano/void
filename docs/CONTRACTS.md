@@ -5,7 +5,8 @@
 > (void/http void/html void/htmx void/rest void/openapi void/db
 > void/db-sqlite void/db-postgres void/db-http void/redis
 > void/redis-http void/cache void/cache-redis void/cache-http
-> void/jobs void/jobs-db void/jobs-redis void/dev void/bench)
+> void/jobs void/jobs-db void/jobs-redis void/pressure
+> void/pressure-http void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -190,6 +191,16 @@ key plus a deprecation alias for the old name, never a mutation.
   {:make :function :name :keyword}
   ```
 
+### `:void.pressure/check`
+
+- **owner:** `:void/pressure` · **cardinality:** `:many`
+- Custom pressure checks (ADR-0019): {:name :db/pool :fn (fn [] {:ok bool :reason ...}) :doc?}; a check that answers :ok false — or throws — is one more reason to shed
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
 ### `:void.redis/codec`
 
 - **owner:** `:void/redis` · **cardinality:** `:many`
@@ -206,7 +217,6 @@ key plus a deprecation alias for the old name, never a mutation.
 |---|---|---|
 | `:void.obs/instrument` | `void/obs` | auto-instrumentation hooks (wave 3) |
 | `:void.obs/exporter` | `void/obs` | metrics/traces exporters (waves 3-4) |
-| `:void.pressure/check` | `void/pressure` | load-shedding checks (ADR-0019) |
 | `:void.bus/backend` | `void/bus` | message-bus backends (wave 3, ADR-0012) |
 | `:void.bus/codec` | `void/bus` | message codecs (wave 3) |
 | `:void.admin/widget` `/page` `/dashboard-widget` `/menu` | `void/admin` | admin surfaces (wave 4) |
@@ -263,6 +273,7 @@ layer.
 | `:void.openapi/id` | `:void/openapi` | `:replace` | `:string` | operationId override (default: the route name, / -> .) |
 | `:void.openapi/summary` | `:void/openapi` | `:replace` | `:string` | One-line operation summary |
 | `:void.openapi/tags` | `:void/openapi` | `:replace` | `[:vector :keyword]` | Tags grouping this operation in the document |
+| `:void.pressure/exempt` | `:void/pressure-http` | `:replace` | `:boolean` | Never shed this route under load — health, metrics and drain endpoints, which is how an operator (and a load balancer) still sees a process that is refusing everything else |
 | `:void.rest/problems` | `:void/rest` | `:replace` | `:boolean` | Force (true) or suppress (false) problem+json error rendering for this route; unset falls back to schema'd-route/Accept detection |
 | `:void.schema/body` | `:void/rest` | `:deep-merge` | `[:pred <fn> "must be a schema form"]` | Request-body schema over the decoded JSON body (or coerced form fields); failures answer 422 problem+json |
 | `:void.schema/headers` | `:void/rest` | `:deep-merge` | `[:pred <fn> "must be a schema form"]` | Request-header map schema (keyword header names); validated before the handler, failures answer 400 problem+json |

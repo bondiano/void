@@ -245,6 +245,31 @@
   {:name :memory
    :make (fn [_] (session/memory-store))})
 
+# -- the error path, without the throw -----------------------------------
+
+(defn render-error
+  ``The response the error path would produce for `err` on `req` —
+  the :void.http/error-renderer contributions in priority order
+  (problem+json once void/rest is in the composition, the dev page in
+  dev, terse text otherwise), the built-in renderer as the floor —
+  reached by calling instead of by throwing. `status` overrides the
+  one carried by a structured error.
+
+  For middleware that *decides* on a status rather than failing at
+  one: load shedding (ADR-0019) answers 503 to requests it refuses,
+  and a throw there would buy a stacktrace per refused request at
+  exactly the moment the process has none to spare. Anything that is
+  genuinely an error still throws — the panic guard runs the
+  :on-error stage hooks, which this does not.``
+  [err req &opt status]
+  (def ctx (context))
+  (errors/render (ctx :renderers) err req
+                 {:status (or status
+                              (when (and (dictionary? err) (int? (err :http/status)))
+                                (err :http/status))
+                              500)
+                  :dev (ctx :dev)}))
+
 # -- context build (:before-start hook) ----------------------------------
 
 (defn- build-session [cfg stores workers]

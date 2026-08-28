@@ -8,18 +8,18 @@
 
 ---
 
-## Текущее состояние (2026-08-27)
+## Текущее состояние (2026-08-28)
 
 | Что | Статус |
 |---|---|
 | SPEC (обзор + контракты Plugin API / Route Metadata) | ✅ написан |
 | ADR 0001–0015 | ✅ accepted |
 | ADR 0016–0018 (lifecycle-стадии, inject-тесты, core/log) | ✅ реализованы в v0.1 |
-| ADR 0019 (pressure) | 📝 proposed (волна 3) |
+| ADR 0019 (pressure) | ✅ accepted и реализован в 2.6 (с уточнениями: два plugin'а, RSS вместо heap, 503 вызовом error-пути, никакой агрегации в prefork-master) |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
 | Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина), `void/run!`; deprecation-алиасы extension points (`:aliases`); **`void/core/log`** — structured logger (ADR-0018: lazy-макросы, ns-дерево уровней, dyn-контекст, pretty/jdn sinks, serializers/redact) |
 | `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart + хук `:void.dev/reloaded`, fixtures/factories (`:generator`-проекция); **`test/inject`** (ADR-0017: with-http, cookie jar, `:json`/`:form`/`:raw`, sse-events) |
-| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware + **lifecycle-стадии** (ADR-0016: `:void.http/hook`, `:void.http/hooks`, `:on-response`/`:on-error`/`:on-timeout`, request-id + access-log), sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload, **kernel/server split** (ADR-0017) |
+| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware + **lifecycle-стадии** (ADR-0016: `:void.http/hook`, `:void.http/hooks`, `:on-response`/`:on-error`/`:on-timeout`, request-id + access-log), sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload, **kernel/server split** (ADR-0017), `render-error` — error-путь вызовом, а не броском (для 2.6) |
 | `void/html` + `void/htmx` (1.2–1.3) | ✅ hiccup/temple за `:void.html/engine`, form-хелперы из schema, assets, hx-хелперы, `:void.htmx/partial` |
 | `void/rest` + `void/openapi` (1.4–1.5) | ✅ `defresource`, schema-валидация/coercion, problem+json, OpenAPI 3.1 проекция + Swagger UI |
 | `void/cli` (1.6) | ✅ `void new` / `void dev` / `void routes` / `void repl`; команды — extension point, subset-старт через `:needs` |
@@ -33,7 +33,9 @@
 | `void/redis` (2.2) | ✅ RESP2/RESP3 в чистом Janet (сканер + PEG), fiber-aware пул, pipelining, кодеки за `:void.redis/codec`, Lua-скрипты, pub/sub на своём соединении; `void/redis-http` — session-store для `void/http` |
 | `void/cache` (2.3) | ✅ `:void/cache-store` (что реализуют) + `:void/cache` (от чего зависят), memory-store с TTL и точным LRU, `remember`/`wrap` с single-flight, упавший store деградирует в промах; `void/cache-redis` — store в redis, `void/cache-http` — `:void.cache/response` |
 | `void/jobs` (2.4) | ✅ `:void/jobs-backend` (восемь функций над записями, атомарен из них один — `claim!`) + `:void/jobs` (политика, enqueue, события); три backend'а на одном контракте и одна conformance-сюита на всех; `defjob` с ретраями/backoff+jitter/приоритетами/delayed/unique/DLQ, flows, rate limiting и concurrency per queue, group-ключи, `defschedule` на spork/cron с backend-локом; executor — фиберы `ev/`, а не spork/tasker (уточнение в ADR-0012) |
-| Волна 2, остальное (2.5–2.7) | не начато — bench B2/B3, pressure, дистрибуция (ADR-0020) |
+| `void/pressure` (2.6) | ✅ `void/pressure` — sampler loop-lag/RSS, пороги с гистерезисом восстановления за одним boolean, `:void.pressure/check` для того, что рантайм измерить не может, события `:high`/`:recovered`; `void/pressure-http` — 503 + `Retry-After` в слоте 100 через `http/render-error` (вызовом, не броском), `:void.pressure/exempt` не оборачивается вовсе; тест насыщения на реальном сокете в CI |
+| bench B2/B3 (2.5) | ✅ B2 (PG query) и B3 (PG + SSR, 15001 байт) поверх одной таблицы, с service-контейнером в bench.yml; `void/bench/probe` — loop-lag изнутри процесса под нагрузкой (бюджеты §8.2 ev-loop-lag и GC, последний как граница сверху через максимум лага), сравнение loop-lag между коммитами, `b1-pressure` как строка §8.5 |
+| Волна 2, остальное (2.7) | не начато — дистрибуция (ADR-0020) |
 | Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -285,17 +287,48 @@
 
 ### 2.5 Bench
 
-- [ ] B2 (PG query), B3 (PG + SSR) в CI; проверка бюджетов ev-loop-lag/GC из §8.2
+- [x] B2 (PG query), B3 (PG + SSR) в CI
+  - обе читают **одну и ту же** таблицу (`bench_rows`, 10k строк): B3 − B2 должно быть ценой рендеринга, а не ценой другого запроса. Таблица создаётся и заполняется самим приложением на `:after-start`, идемпотентно — бенчмарк, чей setup это абзац в README, меряется против таблицы другой формы на чужой машине
+  - B2 кодирует ответ руками, мимо `void/rest`: этот конвейер меряет B1, и померив его дважды мы спрятали бы драйвер внутри него. B2 − B0 = запрос, checkout из пула и round trip, и больше ничего
+  - B3 рендерит 15001 байт (пришпилено тестом): §8.2 называет ~15KB, и payload, тихо ужавшийся вдвое, превратил бы бюджет B3 в бюджет другого бенчмарка
+  - без `VOID_BENCH_PG` (fallback — `VOID_TEST_PG`) обе **громко пропускаются**, а не падают: бенчмарк, который тихо померил ничто, хуже непрогнанного. В bench.yml поднят service-контейнер — это и делает их гейтом
+- [x] Проверка бюджетов ev-loop-lag/GC из §8.2
+  - **измерять снаружи нечем**: клиент видит следствие loop-lag'а размазанным по каждому числу latency; сам лаг видит только процесс. Поэтому `void/bench/probe` — fiber внутри приложения, сэмплирующий тем же метром, что и `void/pressure` (одна реализация loop-lag на монорепо: та, что реагирует, и та, что бюджетирует). Runner снимает его через `/void/bench/probe` **вокруг fixed-rate прогонов** и только их: wrk на max throughput насыщает loop по построению, а «loop-lag p99 < 1 ms» — бюджет про целевую нагрузку, не про насыщение
+  - **GC-бюджет едет на максимуме loop-lag**, и это не подмена: janet 1.41 не сообщает ни одной паузы, но stop-the-world сборка на однопоточном loop **и есть** loop lag не меньше собственной длины, так что `loop-lag max ≥ GC max pause` всегда. Проверка консервативна (максимум выше границы может быть и сборкой, и медленным хендлером) и не притворяется, что знает, чем именно. Вторая половина §8.2 («суммарно < 2% времени») такой границы не имеет — CPU хендлера изнутри неотличим от CPU сборщика — и остаётся неизмеренной, пока janet не начнёт считать сам
+  - loop-lag p99 сравнивается и между коммитами (тот же абсолютный пол 0.1 ms: эти числа живут ниже миллисекунды, и 5% от 0.05 ms — это шум со знаком процента)
+  - RSS печатается в отчёте, но **не гейт**: §8.2 называет «hello-app < 30 MB», а измеренное на ноутбуке b0 — 49 MiB. Прежде чем стать гейтом, эти цифры должны быть промерены на референс-окружении — ровно та же процедура, что B0/B1 прошли в v0.1
+- [x] `b1-pressure` — строка §8.5 для middleware из 2.6: тот же B1 с `VOID_BENCH_PRESSURE=1`. Замер на M4 Max: −0.2% и +0.6% за два прогона, то есть внутри шума прогон-к-прогону — middleware на спокойном пути это один разыменованный var
+- [ ] Калибровка абсолютных бюджетов B2/B3 на референс-окружении (BENCH-v0.2) — цифры §8.2 для них остаются гипотезами, как и было записано
 
 ### 2.6 `void/pressure` — load shedding *(S; ADR-0019)*
 
-- [ ] Принять ADR-0019
-- [ ] Sampler-компонент: loop-lag (дрейф `ev/sleep`), heap (GC-статистика), rss (getrusage/ffi); custom-проверки — point `:void.pressure/check`
-- [ ] Пороги `:max-loop-lag`/`:max-heap-bytes`/`:max-rss-bytes` → флаг `:under-pressure` с гистерезисом восстановления
-- [ ] Middleware в слоте 100: 503 + `Retry-After` через error-путь (problem+json при rest); metadata `:void.pressure/exempt` для `/health`/`/metrics`
-- [ ] Contribution в `:void.core/health` (degraded + причины), `(pressure/status)`, события `:pressure/high|recovered` в hooks-шину
-- [ ] Prefork: sampler per-worker, агрегация в master health
-- [ ] Калибровка порогов по умолчанию на B2/B3 (насыщение: быстрый 503 вместо роста latency у всех) — тест в CI
+- [x] Принять ADR-0019 — accepted, с уточнениями по итогам реализации (см. ниже и хвост ADR)
+- [x] Sampler-компонент: loop-lag (дрейф `ev/sleep`), rss; custom-проверки — point `:void.pressure/check`
+  - **два plugin'а, а не один** (ADR говорил «core + http»): `void/pressure` — sampler, пороги, флаг, health, события, только core; `void/pressure-http` — middleware и metadata-ключ. Тот же шов, что между `void/cache` и `void/cache-http`, и по той же причине: воркер, который крутит jobs и не слушает порт, имеет право знать, что его loop опаздывает, не поднимая ради этого HTTP-ядро
+  - **heap-метра нет, и это janet, а не пропуск**: `gccollect`/`gcinterval`/`gcsetinterval` — вся GC-поверхность 1.41, и ни одна не говорит, сколько байт на куче сейчас. Память меряется как RSS (`/proc/self/status`; на macOS mach `task_info(MACH_TASK_BASIC_INFO)` через `ffi/` — `getrusage` не подходит, `ru_maxrss` это high-water mark, с которого не восстановиться), `:max-heap-bytes` как ключ не существует. Сигнал без прибора репортится отсутствующим, и порог над ним не срабатывает никогда: «прибор сломан» не должно читаться как «всё хорошо»
+- [x] Пороги `:max-loop-lag`/`:max-rss-bytes` → флаг `:under-pressure` с гистерезисом восстановления
+  - гистерезис — не полировка, а сама фича: один и тот же порог в обе стороны превращает процесс на границе в процесс, который режет каждый второй запрос и восстанавливается между ними. Два барьера: срабатывание на `:max-loop-lag`, возврат — ниже `:recovery-ratio` × порог и `:recovery-samples` чистых замеров подряд. `:high`/`:recovered` — по одному на эпизод, а не на замер
+  - у custom-проверок гистерезиса нет и быть не может: «пул исчерпан» — не число, у которого бывает 80% себя. Проверка, которая бросила, считается давлением — проба, чей отказ значит «продолжайте», не проба
+- [x] Middleware в слоте 100: 503 + `Retry-After` через error-путь (problem+json при rest); metadata `:void.pressure/exempt` для `/health`/`/metrics`
+  - **вызовом, а не броском**: в `void/http` добавлена публичная `render-error` — те же `:void.http/error-renderer` в том же порядке. Буквальное «бросить 503» стоило бы стектрейса на каждый отвергнутый запрос и попадало бы в panic-логирование (`status >= 500`) — тысячи строк лога поверх перегрузки, ровно когда платить нечем
+  - exempt-маршрут не оборачивается вовсе: `:when` считается один раз на сборке таблицы, так что `/health` не может быть срезан и не стоит ничего. Паттерн для деплоя — `/health` exempt + routing LB по нему, иначе балансировщик выведет воркер ровно в тот момент, когда тот пытался остаться полезным
+- [x] Contribution в `:void.core/health` (degraded + причины), `(pressure/status)`, события `:pressure/high|recovered` в hooks-шину
+  - отвергнутые запросы логируются **раз за эпизод** (`[:pressure-http :log]`), а счётчик уезжает в событие `:recovered`: лог, который сам становится частью перегрузки, — не наблюдаемость
+- [x] Prefork: sampler per-worker, ~~агрегация в master health~~ — агрегировать нечем и незачем
+  - воркеры не делят ничего, кроме слушающего сокета (ADR-0010), канала до master'а нет. Вместо выдуманной агрегации master помечается `:mode :supervisor` и не сэмплирует вовсе: его loop простаивает по построению, и ноль с него был бы измерением ничьих запросов. Агрегация — это SO_REUSEPORT
+- [x] Тест насыщения в CI (exit-критерий 4): реальный сервер, реально заблокированный loop, реальный сокет — 503 + `Retry-After`, exempt `/health` жив, после снятия нагрузки `:recovered`. Длительность удержания loop'а рандомизирована: фиксированная фазируется с интервалом sampler'а и даёт один и тот же замер вечно
+- [x] Строка §8.5 для middleware: `b1-pressure` — тот же B1 на один plugin тяжелее (−0.2% / +0.6% за два прогона, внутри шума). Пороги там выключены (`:max-loop-lag 0`) при **работающем** sampler'е: вопрос §8.5 — что платит несрезанный запрос, а под max-throughput wrk loop насыщен по построению, и шедящий B1 мерил бы, как быстро void отвечает 503 (другое, куда более приятное число)
+- [ ] Калибровка порогов по умолчанию на B2/B3 на референс-окружении — вместе с калибровкой абсолютных бюджетов B2/B3 (2.5)
+
+### 2.7 Дистрибуция и установка *(S; ADR-0020)*
+
+- [ ] Принять ADR-0020
+- [ ] `scripts/packages.janet` — граф пакетов как данные; проекции: шимы `*/test-support/paths.janet` (16 копий → две строки), топологический порядок установки, матрица шагов CI, список деревьев в `scripts/dry-run.janet`
+- [ ] Корневой `project.janet` — bundle `void`: `declare-source` по деревьям пакетов, `declare-native` для `fdwait`, `declare-binscript cli/bin/void`; `janet-lang/sqlite3` остаётся runtime-требованием с ошибкой на `:start` (как libpq, ADR-0011)
+- [ ] `bin/void` подхватывает `./jpm_tree/lib` **до** `(import void/cli)` — иначе CLI из глобального дерева и `void/http` из проектного дают два экземпляра `void/core`; заодно снять лишний shebang
+- [ ] `void new` пишет настоящий `:dependencies` вместо комментария; Quick start в README становится исполняемым
+- [ ] `scripts/bootstrap.janet` (deps + `jpm build` для `fdwait`) и repo-relative дев-шим `scripts/void` — контрибьютор получает `void` без установки
+- [ ] CI: шаг «чистая машина» — установка bundle в изолированное дерево, `void new` + smoke сгенерированного проекта; путь пользователя становится гейтом, а не абзацем документации
 
 ### Exit-критерии волны 2
 
@@ -303,7 +336,8 @@
 2. Драйвер PG не блокирует loop: тест «конкурентные pg_sleep + ticker» из прототипа — в CI.
 3. N+1-guard и dirty-tracking покрыты тестами; `void db erd` строит диаграмму из `:db/rels`.
 4. Тест насыщения (ADR-0019): под перегрузкой процесс отвечает быстрым 503 + `Retry-After`, `/health` (exempt) остаётся живым, после снятия нагрузки — `:pressure/recovered`.
-5. B2/B3 в CI. Тег v0.2.
+5. Установка проверяется в CI на чистом дереве: bundle → `void new` → сгенерированный проект стартует и отвечает (ADR-0020).
+6. B2/B3 в CI. Тег v0.2.
 
 ---
 
@@ -412,6 +446,7 @@
 | Sampling-профайлер в void/dev (`debug/stack` по таймеру) + `bench/trace-request` | волна 2 (понадобится для B2/B3) |
 | CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | ✅ сделано к v0.1 ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | идёт: `demo` (волна 0), `guestbook` (волна 1, в CI) |
+| Дистрибуция: монорепо как один jpm-bundle, граф пакетов как данные (ADR-0020) | 2.7, к v0.2; `jpm quickbin` single-binary — 4.5 |
 
 ---
 
