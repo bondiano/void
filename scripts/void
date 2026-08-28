@@ -1,0 +1,22 @@
+#!/usr/bin/env janet
+### The void CLI straight out of the checkout — no install (ADR-0020).
+###
+###     scripts/void new demo
+###     cd demo && ../scripts/void routes
+###
+### Same shape as cli/bin/void, except the packages come from the
+### repository instead of a jpm tree: the graph puts every one of them
+### on module/paths, and only then is the CLI imported. A contributor
+### edits core/ and the next command already runs the edit.
+###
+### It works from any directory — the paths are derived from this file,
+### not from the working directory, which is where the application is.
+
+(import ./packages :as packages)
+
+(packages/add-paths (packages/packages))
+
+(import void/cli :as cli)
+
+(defn main [& args]
+  (cli/main ;args))

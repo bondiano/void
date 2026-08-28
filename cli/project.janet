@@ -4,8 +4,11 @@
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
-# void-core (../core) must be on the module path as well; the test
-# suite wires it up itself via test-support/paths.janet.
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
+# test-support/paths.janet. The suite reaches
+# further than the CLI does: it runs `void new` and then boots the
+# generated project, which is the full wave-1 plugin list.
 
 (declare-source
   :source ["void"])

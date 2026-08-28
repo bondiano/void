@@ -1,30 +1,12 @@
-### Module-path setup for the bench mini-apps: make the in-repo void
-### packages importable relative to this file, wherever the process was
-### launched from (the runner spawns the apps from the bench root; a
-### human may run them from anywhere).
+### Module-path setup for the bench mini-apps: the void packages they
+### reach, projected from the package graph (scripts/packages.janet,
+### ADR-0020) — B1's rest, B3's html, B2/B3's db + db-postgres over the
+### native void/fdwait, and pressure for the probe's loop-lag meter.
+###
+### The apps run as subprocesses the runner spawns from the bench root,
+### and a human may run one from anywhere, so the paths are derived from
+### file locations rather than from the working directory.
 
-(def- self (dyn *current-file*))
+(import ../../scripts/packages :as packages)
 
-(defn- dirname [p]
-  (def idxs (string/find-all "/" p))
-  (if (empty? idxs) "." (string/slice p 0 (last idxs))))
-
-(defn- add-tree [root]
-  (array/insert module/paths 0 [(string root "/:all:/init.janet") :source])
-  (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
-
-(def- repo (os/realpath (string (dirname self) "/../..")))
-(add-tree (string repo "/core"))
-(add-tree (string repo "/http"))
-(add-tree (string repo "/rest"))
-(add-tree (string repo "/html"))
-(add-tree (string repo "/pressure"))
-(add-tree (string repo "/bench"))
-# B2/B3 reach Postgres through void/db + void/db-postgres, which reach
-# libpq through void/fdwait — the one native module, built out of tree
-# (cd fdwait && jpm build).
-(add-tree (string repo "/db"))
-(add-tree (string repo "/db-postgres"))
-(add-tree (string repo "/fdwait"))
-(array/insert module/paths 0
-              [(string repo "/fdwait/build/:all:.so") :native])
+(packages/test-paths :void/bench)

@@ -40,7 +40,40 @@
 ###     ":memory:" therefore gets ONE connection, handed out to every
 ###     checkout — see `make` and the size check in ../init.
 
-(import sqlite3)
+### janet-lang/sqlite3 is resolved on first use, not imported: the void
+### bundle deliberately does not depend on it (ADR-0020). An application
+### that never lists :void/db-sqlite in its :plugins never reaches this
+### file; one that does opens the keeper connection at :start, so a
+### missing binding is a boot error with a line to copy — exactly where
+### libpq's is (ADR-0011). Importing it here would instead break the
+### *installation* of every application, sqlite or not.
+
+(var- binding nil)
+
+(defn- lib
+  "The sqlite3 module, required once and memoised."
+  []
+  (unless binding
+    (def [ok result] (protect (require "sqlite3")))
+    (unless ok
+      (errorf (string "void/db-sqlite needs janet-lang/sqlite3, and cannot load it:\n"
+                      "    %s\n"
+                      "  jpm install https://github.com/janet-lang/sqlite3.git")
+              (if (bytes? result) result (describe result))))
+    (set binding result))
+  binding)
+
+(defn- entry [name]
+  (or (get-in (lib) [name :value])
+      (errorf "janet-lang/sqlite3 has no %s — an incompatible version?" name)))
+
+# Named for the calls they stand in for, so the driver below reads as
+# though the module were imported.
+(defn- sqlite3/open [path] ((entry 'open) path))
+(defn- sqlite3/close [conn] ((entry 'close) conn))
+(defn- sqlite3/eval [conn sql &opt params]
+  (if params ((entry 'eval) conn sql params) ((entry 'eval) conn sql)))
+(defn- sqlite3/last-insert-rowid [conn] ((entry 'last-insert-rowid) conn))
 
 (def dialect
   "Builder dialect this driver speaks (registered by void/db/builder)."

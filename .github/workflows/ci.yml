@@ -59,16 +59,19 @@ jobs:
           cd /tmp/jpm && sudo janet bootstrap.janet
 
       - name: Install dependencies
+        # the list is the package graph's, not this file's (ADR-0020):
+        # spork for most of the tree, janet-lang/sqlite3 for
+        # void/db-sqlite's suite and for the dry-run and contract gates,
+        # which load the driver
         run: |
-          cd "$GITHUB_WORKSPACE/dev" && sudo jpm deps
-          # the sqlite3 native module: void/db-sqlite needs it, and so
-          # do the dry-run and contract gates, which load the driver
-          cd "$GITHUB_WORKSPACE/db-sqlite" && sudo jpm deps
+          for url in $(janet scripts/packages.janet dev-deps); do
+            sudo jpm install "$url"
+          done
           # libpq itself is opened at runtime through ffi/, so the
           # client library is all void/db-postgres needs — no headers
           sudo apt-get update && sudo apt-get install -y libpq5
           # void/redis needs no client library at all (a connection is a
-          # net/ stream); spork, for its :json codec, came with dev
+          # net/ stream)
 
       - name: Build void/fdwait
         # the monorepo's one native module (ADR-0011). void/db-postgres
@@ -78,59 +81,19 @@ jobs:
         # the same driver.
         run: cd fdwait && jpm build
 
-      - name: Test void/core
-        run: cd core && jpm test
+      - name: The package graph agrees with the tree on disk
+        run: janet scripts/packages.janet check
 
-      - name: Test void/dev
-        run: cd dev && jpm test
-
-      - name: Test void/cli
-        run: cd cli && jpm test
-
-      - name: Test void/http
-        run: cd http && jpm test
-
-      - name: Test void/html
-        run: cd html && jpm test
-
-      - name: Test void/htmx
-        run: cd htmx && jpm test
-
-      - name: Test void/rest
-        run: cd rest && jpm test
-
-      - name: Test void/openapi
-        run: cd openapi && jpm test
-
-      - name: Test void/db
-        run: cd db && jpm test
-
-      - name: Test void/db-sqlite
-        run: cd db-sqlite && jpm test
-
-      - name: Test void/fdwait
-        run: cd fdwait && jpm test
-
-      - name: Test void/db-postgres
-        run: cd db-postgres && jpm test
-
-      - name: Test void/redis
-        run: cd redis && jpm test
-
-      - name: Test void/cache
-        run: cd cache && jpm test
-
-      - name: Test void/jobs
-        run: cd jobs && jpm test
-
-      - name: Test void/pressure
-        run: cd pressure && jpm test
-
-      - name: Test void/bench
-        run: cd bench && jpm test
-
-      - name: Smoke-test the wave-1 example (guestbook)
-        run: cd examples/guestbook && jpm test
+      - name: Test every package
+        # the steps are a projection of scripts/packages.janet, in
+        # topological order, with the examples last — a package added to
+        # the graph is tested here without touching this file (ADR-0020)
+        run: |
+          while IFS=$'\t' read -r name dir; do
+            echo "::group::jpm test $name ($dir)"
+            ( cd "$dir" && jpm test )
+            echo "::endgroup::"
+          done < <(janet scripts/packages.janet ci)
 
       - name: Dry-run the full plugin composition
         run: janet scripts/dry-run.janet
@@ -139,3 +102,74 @@ jobs:
         run: |
           janet scripts/gen-contracts.janet
           git diff --exit-code docs/CONTRACTS.md
+
+  # The user's path, which nothing above touches: `jpm test` runs against
+  # the live sources in the checkout, so an installation that does not
+  # work is invisible to it. Here the bundle is installed into a tree
+  # with nothing else in it, and the README's Quick start is executed
+  # rather than described (ADR-0020).
+  install:
+    name: Clean machine — install the bundle, scaffold and smoke a project
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Janet
+        run: |
+          git clone --depth 1 --branch v1.41.2 https://github.com/janet-lang/janet /tmp/janet
+          make -C /tmp/janet -j"$(nproc)"
+          sudo make -C /tmp/janet install
+
+      - name: Install jpm
+        run: |
+          git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm
+          cd /tmp/jpm && sudo janet bootstrap.janet
+
+      - name: Install the void bundle into an isolated tree
+        # one `jpm install` of the repository root — no per-package
+        # steps, no module path wiring, nothing from the checkout on the
+        # path afterwards
+        run: |
+          jpm --tree="$HOME/void-tree" deps
+          jpm --tree="$HOME/void-tree" install
+          echo "JANET_PATH=$HOME/void-tree/lib" >> "$GITHUB_ENV"
+          echo "$HOME/void-tree/bin" >> "$GITHUB_PATH"
+
+      - name: The installed binary has exactly one shebang
+        # jpm writes it (:is-janet true); cli/bin/void must not carry
+        # one of its own
+        run: |
+          test "$(grep -c '^#!' "$HOME/void-tree/bin/void")" = 1
+
+      - name: The whole framework is importable as void/...
+        run: |
+          janet -e '(import void/http) (import void/html) (import void/htmx)
+                    (import void/rest) (import void/openapi) (import void/db)
+                    (import void/db-sqlite) (import void/redis) (import void/cache)
+                    (import void/jobs) (import void/pressure) (import void/dev)
+                    (import void/fdwait)
+                    (print "every package imports from the installed tree")'
+
+      - name: void new, then smoke the generated project
+        run: |
+          cd "$(mktemp -d)"
+          void version
+          void new smoke
+          cd smoke
+          # the manifest is a dependency, not a comment
+          grep -q 'https://github.com/bondiano/void.git' project.janet
+          void routes | tee /tmp/routes.txt
+          grep -q ':home' /tmp/routes.txt
+          grep -q ':entries/create' /tmp/routes.txt
+
+      - name: A project-local jpm_tree wins over the installed one
+        # the launcher swaps syspath before importing the CLI, so both
+        # halves of the process come from the same tree (ADR-0020)
+        run: |
+          cd "$(mktemp -d)"
+          void new pinned
+          cd pinned
+          mkdir -p jpm_tree
+          cp -r "$HOME/void-tree/lib" jpm_tree/lib
+          void routes | grep -q ':entries/create'

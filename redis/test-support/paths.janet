@@ -1,12 +1,6 @@
-# Test-suite module path setup: the in-repo void-core (../core),
-# void-http (../http — void/redis-http contributes a session store to
-# it) and this package's own sources, all importable as void/...
-# without installing any of them. jpm test runs each script with
-# cwd = redis/.
-(defn- add-tree [root]
-  (array/insert module/paths 0 [(string root "/:all:/init.janet") :source])
-  (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
-
-(add-tree (string (os/cwd) "/../core"))
-(add-tree (string (os/cwd) "/../http"))
-(add-tree (os/cwd))
+# Module path for this package's test suite: its own tree plus the void
+# packages its sources and its suite reach, projected from the package
+# graph (scripts/packages.janet, ADR-0020). jpm test runs each script
+# with cwd = the package directory.
+(import ../../scripts/packages :as packages)
+(packages/test-paths :void/redis)

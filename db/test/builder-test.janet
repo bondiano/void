@@ -97,6 +97,86 @@
 (assert (= `DELETE FROM "users" WHERE "id" = ?` s14) "delete")
 (assert (deep= [9] p14) "delete params")
 
+# -- DDL: the same statement, spelled by the dialect ---------------------
+
+(def create-users
+  {:create-table "users"
+   :columns [[:id :serial {:primary-key true}]
+             [:email :text {:null false :unique true}]
+             [:brand-id :int {:refs [:brands :id] :on-delete :cascade}]
+             [:signups :int {:null false :default 0}]
+             [:seen-at :timestamptz]
+             [:payload :jsonb]]})
+
+(def [ddl-sqlite ddl-params] (sql/format create-users :sqlite))
+(assert (empty? ddl-params) "DDL takes no parameters — a DEFAULT is part of the statement")
+(assert (string/find `"id" integer PRIMARY KEY` ddl-sqlite)
+        "sqlite numbers an integer primary key itself")
+(assert (string/find `"seen_at" text` ddl-sqlite)
+        "and has no timestamp type worth pretending about")
+(assert (string/find `"payload" text` ddl-sqlite) "nor a json one")
+
+(def [ddl-pg] (sql/format create-users :postgres))
+(assert (string/find `"id" serial PRIMARY KEY` ddl-pg) "postgres has serial")
+(assert (string/find `"seen_at" timestamp with time zone` ddl-pg) "and timestamptz")
+(assert (string/find `"payload" jsonb` ddl-pg) "and jsonb")
+
+(each ddl [ddl-sqlite ddl-pg]
+  (assert (string/find `"email" text NOT NULL UNIQUE` ddl) "column options")
+  (assert (string/find `"signups" integer NOT NULL DEFAULT 0` ddl) "literal default")
+  (assert (string/find `REFERENCES "brands" ("id") ON DELETE CASCADE` ddl)
+          "references, with the action spelled out"))
+
+(assert (string/find "CREATE TABLE IF NOT EXISTS"
+                     ((sql/format {:create-table "t" :if-not-exists true
+                                   :columns [[:id :int]]}) 0))
+        ":if-not-exists")
+
+(assert (= `CREATE TABLE "t" (
+  "a" integer,
+  "b" integer,
+  PRIMARY KEY ("a", "b")
+)`
+           ((sql/format {:create-table "t" :columns [[:a :int] [:b :int]]
+                         :primary-key [:a :b]}) 0))
+        "a composite primary key is a table-level clause")
+
+(assert (= `DROP TABLE IF EXISTS "users"`
+           ((sql/format {:drop-table "users" :if-exists true}) 0)))
+(assert (= `ALTER TABLE "users" ADD COLUMN "slug" text NOT NULL`
+           ((sql/format {:alter-table "users"
+                         :add-column [:slug :text {:null false}]}) 0)))
+(assert (= `ALTER TABLE "users" DROP COLUMN "slug"`
+           ((sql/format {:alter-table "users" :drop-column :slug}) 0)))
+(assert (= `ALTER TABLE "users" RENAME COLUMN "slug" TO "handle"`
+           ((sql/format {:alter-table "users" :rename-column [:slug :handle]}) 0)))
+(assert (= `CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email")`
+           ((sql/format {:create-index "users_email_idx" :on "users"
+                         :columns [:email] :unique true :if-not-exists true}) 0)))
+(assert (= `DROP INDEX IF EXISTS "users_email_idx"`
+           ((sql/format {:drop-index "users_email_idx" :if-exists true}) 0)))
+
+# what the builder has no spelling for is still reachable
+(assert (string/find `"doc" tsvector`
+                     ((sql/format {:create-table "t"
+                                   :columns [[:doc [:raw "tsvector"]]]}) 0))
+        "[:raw sql] is the escape hatch for a type only one engine has")
+
+(assert (not (first (protect (sql/format {:create-table "t"
+                                          :columns [[:a :timestampz]]}))))
+        "a mistyped column type names the ones that exist")
+(assert (not (first (protect (sql/format {:create-table "t"
+                                          :columns [[:a :int {:nul false}]]}))))
+        "a mistyped column option is an error, not a silent drop")
+(assert (not (first (protect (sql/format {:create-table "t" :columns []}))))
+        "a table with no columns is rejected")
+(assert (not (first (protect (sql/format {:alter-table "t"
+                                          :add-column [:a :int]
+                                          :drop-column :b}))))
+        "one change per :alter-table, because that is what the engines do")
+(assert (not (first (protect (sql/format {:create-index "i" :columns [:a]}))))
+        ":create-index needs :on")
+
 # -- rejected statements -------------------------------------------------
 
 (assert (not (first (protect (sql/format {:select [:*]})))) "select needs :from")

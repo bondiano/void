@@ -8,11 +8,11 @@
 # installs on a machine that has no Postgres client library and says
 # so at :start rather than at install time.
 #
-# void-core (../core), void-db (../db) and void-fdwait (../fdwait —
-# sources plus the native module in its build/ tree) must be on the
-# module path; the test suite wires them up itself via
-# test-support/paths.janet. void/fdwait is the one hard prerequisite:
-# build it first (cd ../fdwait && jpm build).
+# What has to be on the module path is a projection of the package graph
+# (scripts/packages.janet, ADR-0020), not prose: see
+# test-support/paths.janet. void/fdwait is the one hard
+# prerequisite, and it is C: build it first (janet
+# scripts/bootstrap.janet, or cd ../fdwait && jpm build).
 
 (declare-source
   :source ["void"])

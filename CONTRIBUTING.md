@@ -7,11 +7,29 @@ dry-runs the full composition (`janet scripts/dry-run.janet`) and checks
 that [docs/CONTRACTS.md](docs/CONTRACTS.md) matches the declarations
 (`janet scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`).
 
-Both gates load `void/db-postgres`, which imports the repository's one
-native module, so **build it once before running them**:
+Bootstrap a checkout once — it installs the external dependencies every
+package declares and builds `void/fdwait`, the repository's one native
+module, which both gates need because they load `void/db-postgres`:
 
 ```sh
-cd fdwait && jpm build
+janet scripts/bootstrap.janet          # add --local to keep it out of
+                                       # the system tree
+```
+
+Nothing else is installed: a package's test suite reaches the others
+through `test-support/paths.janet`, two lines that project the package
+graph in [`scripts/packages.janet`](scripts/packages.janet). **That
+graph is the only place an edge between packages is written** — the
+bundle's source list, every suite's module path, the CI test steps and
+the dry-run gate all read it, and `janet scripts/packages.janet check`
+refuses a graph that disagrees with the tree on disk. A new package, or
+a new dependency between two, is one edit there (ADR-0020).
+
+The CLI runs off the checkout too, so there is no install/edit loop:
+
+```sh
+scripts/void new myapp
+cd myapp && ../scripts/void routes
 ```
 
 `void/db-postgres`'s integration tests need a server, named by

@@ -5,15 +5,19 @@
 ### and (optionally) `down`:
 ###
 ###     (defn up []
-###       (db/execute-sql "CREATE TABLE users (id integer primary key,
-###                        email text not null unique)" []))
+###       {:create-table "users"
+###        :columns [[:id :serial {:primary-key true}]
+###                  [:email :text {:null false :unique true}]]})
 ###
-###     (defn down [] (db/execute-sql "DROP TABLE users" []))
+###     (defn down [] {:drop-table "users"})
 ###
-### SQL a step *returns* is executed too, so the shortest spelling —
-### (defn up [] "CREATE TABLE ...") or an array of statements — works
-### as it reads, and either binding may be a bare string instead of a
-### function when there is nothing to compute. The version is the filename
+### What a step *returns* is executed: a statement map (SQL as data —
+### void/db/builder compiles the DDL for whichever engine is running,
+### which is what keeps one migration file portable), a raw SQL string
+### for what the builder has no spelling for, or a tuple of either.
+### Either binding may be a bare value instead of a function when there
+### is nothing to compute, and a step that ran its own statements
+### through db/* and returns nothing is fine too. The version is the filename
 ### prefix, so ordering is lexicographic and stable across machines;
 ### `void db migrate` applies everything pending, each file in its own
 ### transaction (opt out with (def transaction? false) for statements
@@ -116,6 +120,11 @@
 (defn- run-sql [v]
   (cond
     (bytes? v) (state/execute-sql (string v) [] {:kind :write :prepared false})
+    # a statement map is SQL as data (void/db/builder), DDL included:
+    # {:create-table "authors" :columns [[:id :serial {:primary-key true}] ...]}
+    # compiles for the driver's own dialect, so one migration file runs
+    # on every engine
+    (dictionary? v) (state/run v {:kind :write :prepared false})
     (indexed? v) (each sql v (run-sql sql))
     # a step that did its own work through db/* returns whatever it
     # returns — only SQL values are executed
@@ -215,14 +224,21 @@
 
 (def- template
   ``### %s
+###
+### A step returns what it wants run: a statement map (SQL as data —
+### void/db/builder compiles the DDL for whichever engine is running),
+### a raw SQL string for what the builder has no spelling for, or a
+### tuple of either. `db` is imported for the steps that compute.
 (import void/db :as db)
 
 (defn up []
-  # (db/execute-sql "CREATE TABLE ..." [])
+  # {:create-table "things"
+  #  :columns [[:id :serial {:primary-key true}]
+  #            [:name :text {:null false}]]}
   )
 
 (defn down []
-  # (db/execute-sql "DROP TABLE ..." [])
+  # {:drop-table "things"}
   )
 ``)
 

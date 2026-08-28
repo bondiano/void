@@ -49,9 +49,30 @@
 
 (def- dialect-registry @{})
 
+(def ansi-types
+  ``The column types DDL statements are written in, and the SQL each
+  one becomes. Migrations name a type here rather than a spelling, so
+  the same declaration compiles on every engine; a dialect overrides
+  the entries it disagrees with (:types), and [:raw "tsvector"] is the
+  escape hatch for a type nobody but one engine has.``
+  {:int "integer" :integer "integer" :smallint "smallint" :bigint "bigint"
+   # an auto-numbering key: `[:id :serial {:primary-key true}]` is the
+   # whole of it on both engines
+   :serial "integer" :bigserial "bigint"
+   :text "text" :string "text" :varchar "varchar"
+   :bool "boolean" :boolean "boolean"
+   :real "real" :double "double precision"
+   :numeric "numeric" :decimal "numeric"
+   :date "date" :time "time"
+   :timestamp "timestamp" :timestamptz "timestamp with time zone"
+   :json "json" :jsonb "json"
+   :uuid "uuid" :blob "blob" :bytes "blob"})
+
 (defn register-dialect!
-  "Register a dialect: {:placeholder (fn [n] str) :quote (fn [name] str)?}.
-  Drivers name theirs through the :dialect key of the driver contract."
+  ``Register a dialect: {:placeholder (fn [n] str) :quote (fn [name] str)?
+  :types {type-keyword sql-string}?}. The types are merged over
+  `ansi-types`. Drivers name their dialect through the :dialect key of
+  the driver contract.``
   [name spec]
   (unless (keyword? name)
     (errorf "dialect name must be a keyword, got %q" name))
@@ -61,7 +82,8 @@
   (put dialect-registry name
        {:name name
         :placeholder ph
-        :quote (get spec :quote quote-ansi)})
+        :quote (get spec :quote quote-ansi)
+        :types (merge ansi-types (get spec :types {}))})
   name)
 
 (defn dialect
@@ -75,8 +97,21 @@
                            " "))))
 
 (register-dialect! :ansi {:placeholder (fn [_] "?")})
-(register-dialect! :sqlite {:placeholder (fn [_] "?")})
-(register-dialect! :postgres {:placeholder (fn [n] (string "$" n))})
+
+(register-dialect! :sqlite
+  {:placeholder (fn [_] "?")
+   # sqlite has type affinity rather than types: `integer primary key`
+   # is the rowid alias that numbers itself, and everything with no
+   # affinity of its own is honestly text
+   :types {:serial "integer" :bigserial "integer"
+           :double "real" :timestamp "text" :timestamptz "text"
+           :json "text" :jsonb "text" :uuid "text"}})
+
+(register-dialect! :postgres
+  {:placeholder (fn [n] (string "$" n))
+   :types {:serial "serial" :bigserial "bigserial"
+           :string "text" :jsonb "jsonb"
+           :blob "bytea" :bytes "bytea"}})
 
 # -- compilation context -------------------------------------------------
 
@@ -358,12 +393,185 @@
   (when-let [r (returning-str ctx (get stmt :returning))] (array/push parts r))
   (string/join parts " "))
 
+# -- DDL -----------------------------------------------------------------
+#
+# The same idea one level down: a migration says what the table is, not
+# how this engine spells it. Types come from the dialect's table
+# (`ansi-types` plus its overrides), so `[:id :serial {:primary-key
+# true}]` is `"id" integer PRIMARY KEY` on sqlite and `"id" serial
+# PRIMARY KEY` on Postgres — the dialect `if` that every hand-written
+# migration grows is written once, here.
+#
+# DDL takes no parameters: a DEFAULT is part of the statement, not a
+# bind value, so defaults render as literals and `format` hands back an
+# empty parameter tuple.
+
+(def- referential-actions
+  {:cascade "CASCADE" :restrict "RESTRICT" :set-null "SET NULL"
+   :set-default "SET DEFAULT" :no-action "NO ACTION"})
+
+(defn- literal
+  "A DDL literal — a DEFAULT is part of the statement, not a parameter."
+  [v]
+  (cond
+    (raw? v) (raw-sql v)
+    (= null v) "NULL"
+    (nil? v) "NULL"
+    (boolean? v) (if v "TRUE" "FALSE")
+    (number? v) (string v)
+    (bytes? v) (string "'" (string/replace-all "'" "''" (string v)) "'")
+    (errorf "sql DDL default must be a number, string, boolean or [:raw sql], got %q" v)))
+
+(defn- type-str [d t]
+  (cond
+    (raw? t) (raw-sql t)
+    (string? t) t
+    (keyword? t)
+    (or (get (d :types) t)
+        (errorf "sql DDL: unknown column type %q for dialect %q (known: %s)"
+                t (d :name)
+                (string/join (map |(string/format "%q" $) (sorted (keys (d :types)))) " ")))
+    (errorf "sql DDL column type must be a keyword, a string or [:raw sql], got %q" t)))
+
+(def- column-opts
+  {:primary-key true :null true :unique true :default true
+   :refs true :on-delete true :on-update true})
+
+(defn- references-str [d opts]
+  (when-let [r (get opts :refs)]
+    (def [table column]
+      (cond
+        (or (keyword? r) (string? r)) [r :id]
+        (and (indexed? r) (= 2 (length r))) [(r 0) (r 1)]
+        (errorf "sql DDL :refs must be a table or [table column], got %q" r)))
+    (def parts
+      @[(string "REFERENCES " (ident d table) " (" (ident d column) ")")])
+    (each [k word] [[:on-delete "ON DELETE"] [:on-update "ON UPDATE"]]
+      (when-let [a (get opts k)]
+        (array/push parts
+                    (string word " "
+                            (or (referential-actions a)
+                                (errorf "sql DDL %q must be one of %s, got %q"
+                                        k
+                                        (string/join (map |(string/format "%q" $)
+                                                          (sorted (keys referential-actions)))
+                                                     " ")
+                                        a))))))
+    (string/join parts " ")))
+
+(defn- column-str
+  ``One column of a :create-table (or the argument of an :add-column):
+  [name type] or [name type {opts}].``
+  [d col]
+  (unless (and (indexed? col) (or (= 2 (length col)) (= 3 (length col))))
+    (errorf "sql DDL column must be [name type] or [name type opts], got %q" col))
+  (def [cname ctype] col)
+  (def opts (get col 2 {}))
+  (unless (dictionary? opts)
+    (errorf "sql DDL column %q: options must be a map, got %q" cname opts))
+  (eachk k opts
+    (unless (in column-opts k)
+      (errorf "sql DDL column %q: unknown option %q (allowed: %s)"
+              cname k
+              (string/join (map |(string/format "%q" $) (sorted (keys column-opts))) " "))))
+  (def parts @[(ident d cname) (type-str d ctype)])
+  (when (get opts :primary-key) (array/push parts "PRIMARY KEY"))
+  (when (= false (get opts :null)) (array/push parts "NOT NULL"))
+  (when (get opts :unique) (array/push parts "UNIQUE"))
+  (when (in opts :default)
+    (array/push parts (string "DEFAULT " (literal (get opts :default)))))
+  (when-let [r (references-str d opts)] (array/push parts r))
+  (string/join parts " "))
+
+(def- create-table-keys
+  {:create-table true :columns true :if-not-exists true :primary-key true})
+
+(defn- compile-create-table [ctx stmt]
+  (check-keys stmt create-table-keys ":create-table")
+  (def d (ctx :d))
+  (def cols (get stmt :columns))
+  (unless (and (indexed? cols) (not (empty? cols)))
+    (errorf "sql :create-table %q needs :columns" (stmt :create-table)))
+  (def lines (map |(column-str d $) cols))
+  (when-let [pk (get stmt :primary-key)]
+    (unless (indexed? pk)
+      (errorf "sql :create-table :primary-key must be a tuple of columns, got %q" pk))
+    (array/push lines
+                (string "PRIMARY KEY (" (string/join (map |(ident d $) pk) ", ") ")")))
+  (string "CREATE TABLE "
+          (if (get stmt :if-not-exists) "IF NOT EXISTS " "")
+          (ident d (stmt :create-table))
+          " (\n  " (string/join lines ",\n  ") "\n)"))
+
+(def- drop-table-keys {:drop-table true :if-exists true :cascade true})
+
+(defn- compile-drop-table [ctx stmt]
+  (check-keys stmt drop-table-keys ":drop-table")
+  (string "DROP TABLE "
+          (if (get stmt :if-exists) "IF EXISTS " "")
+          (ident (ctx :d) (stmt :drop-table))
+          (if (get stmt :cascade) " CASCADE" "")))
+
+(def- alter-table-keys
+  {:alter-table true :add-column true :drop-column true
+   :rename-column true :rename-to true})
+
+(defn- compile-alter-table [ctx stmt]
+  (check-keys stmt alter-table-keys ":alter-table")
+  (def d (ctx :d))
+  (def head (string "ALTER TABLE " (ident d (stmt :alter-table)) " "))
+  (def actions
+    (filter identity
+      [(when-let [c (get stmt :add-column)]
+         (string "ADD COLUMN " (column-str d c)))
+       (when-let [c (get stmt :drop-column)]
+         (string "DROP COLUMN " (ident d c)))
+       (when-let [r (get stmt :rename-column)]
+         (unless (and (indexed? r) (= 2 (length r)))
+           (errorf "sql :alter-table :rename-column must be [from to], got %q" r))
+         (string "RENAME COLUMN " (ident d (r 0)) " TO " (ident d (r 1))))
+       (when-let [t (get stmt :rename-to)]
+         (string "RENAME TO " (ident d t)))]))
+  (unless (= 1 (length actions))
+    (errorf (string "sql :alter-table %q takes exactly one of :add-column "
+                    ":drop-column :rename-column :rename-to (got %d) — one "
+                    "statement per change, because that is what the engines do")
+            (stmt :alter-table) (length actions)))
+  (string head (first actions)))
+
+(def- create-index-keys
+  {:create-index true :on true :columns true :unique true :if-not-exists true})
+
+(defn- compile-create-index [ctx stmt]
+  (check-keys stmt create-index-keys ":create-index")
+  (def d (ctx :d))
+  (def cols (get stmt :columns))
+  (unless (and (indexed? cols) (not (empty? cols)))
+    (errorf "sql :create-index %q needs :columns" (stmt :create-index)))
+  (string "CREATE " (if (get stmt :unique) "UNIQUE " "") "INDEX "
+          (if (get stmt :if-not-exists) "IF NOT EXISTS " "")
+          (ident d (stmt :create-index))
+          " ON " (ident d (or (get stmt :on)
+                              (errorf "sql :create-index %q needs :on"
+                                      (stmt :create-index))))
+          " (" (string/join (map |(ident d $) cols) ", ") ")"))
+
+(def- drop-index-keys {:drop-index true :if-exists true :on true})
+
+(defn- compile-drop-index [ctx stmt]
+  (check-keys stmt drop-index-keys ":drop-index")
+  (string "DROP INDEX "
+          (if (get stmt :if-exists) "IF EXISTS " "")
+          (ident (ctx :d) (stmt :drop-index))))
+
 # -- entry point ---------------------------------------------------------
 
 (defn format
   ``Compile a statement map into [sql params] for a dialect (a name or
   a dialect value; default :ansi). The statement kind is the map's
-  head key: :select/:insert/:update/:delete.``
+  head key: :select/:insert/:update/:delete for data,
+  :create-table/:drop-table/:alter-table/:create-index/:drop-index for
+  schema (which never has parameters).``
   [stmt &opt dialect-or-name]
   (unless (dictionary? stmt)
     (errorf "sql statement must be a map, got %q" stmt))
@@ -379,7 +587,15 @@
       (get stmt :insert) (compile-insert ctx stmt)
       (get stmt :update) (compile-update ctx stmt)
       (get stmt :delete) (compile-delete ctx stmt)
+      (get stmt :create-table) (compile-create-table ctx stmt)
+      (get stmt :drop-table) (compile-drop-table ctx stmt)
+      (get stmt :alter-table) (compile-alter-table ctx stmt)
+      (get stmt :create-index) (compile-create-index ctx stmt)
+      (get stmt :drop-index) (compile-drop-index ctx stmt)
       # a bare {:from ...} still reads as a select
       (get stmt :from) (compile-select ctx stmt)
-      (errorf "sql: statement %q has no :select/:insert/:update/:delete" stmt)))
+      (errorf (string "sql: statement %q has no head key "
+                      "(:select :insert :update :delete :create-table "
+                      ":drop-table :alter-table :create-index :drop-index)")
+              stmt)))
   [sql (tuple ;(ctx :params))])

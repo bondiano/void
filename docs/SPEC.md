@@ -203,9 +203,9 @@ Structured-логи — примитив ядра (Fastify/pino-паритет),
 ### 5.9 `void/db` — database kernel *(M)*
 - Интерфейс `:void/db-driver` (connect, query, tx, prepared, pool contract).
 - Пул соединений (fiber-aware: чекаут — в dyn, авто-возврат).
-- Query builder honeysql-style: SQL как данные, диалекты через драйвер.
+- Query builder honeysql-style: SQL как данные, диалекты через драйвер. **DDL — те же statement-map'ы** (`:create-table`/`:drop-table`/`:alter-table`/`:create-index`/`:drop-index`) с типами-ключевыми словами, которые диалект раскрывает в свои (`:serial` → `integer` на sqlite, `serial` на Postgres): миграция описывает таблицу, а не то, как этот движок её пишет.
 - Транзакции: `(db/with-tx ...)` — dyn-scoped; декларативно через route metadata `:txn true`.
-- Migrations: janet-файлы up/down, таблица версий, `void db migrate/rollback/status`; генерация из diff entity-registry — v2.
+- Migrations: janet-файлы up/down (шаг возвращает statement-map, SQL-строку или массив того и другого), таблица версий, `void db migrate/rollback/status`; генерация из diff entity-registry — v2.
 - Инструментация: query timing → metrics/tracing автоматически (обёртка драйвера).
 
 **Entity layer: Data Mapper + лёгкий AR** *(часть void/db)*

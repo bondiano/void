@@ -26,7 +26,7 @@
 | bench-suite (1.7) | ✅ B0/B1 + Go/FastAPI baselines, wrk/wrk2-методика, 5%-пороги в CI; бюджеты §8.2 промерены на референс-окружении — [BENCH-v0.1.md](BENCH-v0.1.md) |
 | Demo волны 1 | ✅ `examples/guestbook` (server-rendered HTMX, schema-формы) = smoke-тест в CI; тот же код генерирует `void new` |
 | **Контракты v1** | ✅ **заморожены в v0.1**: [CONTRACTS.md](CONTRACTS.md) (автогенерация из деклараций + drift-check в CI), deprecation-процедура — [CONTRIBUTING.md](../CONTRIBUTING.md#deprecation) |
-| `void/db` (2.1) | ✅ ядро: контракт `:void/db-driver`, fiber-aware пул с метриками, SQL-как-данные, dyn-транзакции + `:void.db/txn` (plugin `void/db-http`), миграции и `void db migrate/rollback/status/new/erd`, Data Mapper + AR-сахар с N+1-guard (ADR-0009); композиция входит в `dry-run`/`gen-contracts`, `:void.db/txn` — declared-строка [CONTRACTS.md](CONTRACTS.md) |
+| `void/db` (2.1) | ✅ ядро: контракт `:void/db-driver`, fiber-aware пул с метриками, SQL-как-данные (DML **и DDL** одним билдером), dyn-транзакции + `:void.db/txn` (plugin `void/db-http`), миграции и `void db migrate/rollback/status/new/erd`, Data Mapper + AR-сахар с N+1-guard (ADR-0009); композиция входит в `dry-run`/`gen-contracts`, `:void.db/txn` — declared-строка [CONTRACTS.md](CONTRACTS.md) |
 | `void/db-sqlite` (2.2) | ✅ референс-реализация контракта драйвера поверх janet sqlite3: pragma-набор на соединение из `[:db-sqlite]`, детект RETURNING по версии, `BEGIN IMMEDIATE` + savepoints, файловый дефолт-путь, `:memory:` как одно keeper-соединение |
 | `void/fdwait` (2.2) | ✅ единственный нативный модуль монорепы (~60 строк C, ADR-0011): «усыпи fiber до readiness чужого fd», level-triggered, `dup(fd)` на watcher, переиспользование watcher'ов через `pair` |
 | `void/db-postgres` (2.2) | ✅ libpq в non-blocking режиме на ev-цикле через `void/fdwait`, без thread pool: prepared-пара, single-row streaming, pipeline mode, LISTEN/NOTIFY на своём соединении, cancel, TLS силами libpq; handle переоткрывает мёртвое соединение под пулом |
@@ -35,7 +35,9 @@
 | `void/jobs` (2.4) | ✅ `:void/jobs-backend` (восемь функций над записями, атомарен из них один — `claim!`) + `:void/jobs` (политика, enqueue, события); три backend'а на одном контракте и одна conformance-сюита на всех; `defjob` с ретраями/backoff+jitter/приоритетами/delayed/unique/DLQ, flows, rate limiting и concurrency per queue, group-ключи, `defschedule` на spork/cron с backend-локом; executor — фиберы `ev/`, а не spork/tasker (уточнение в ADR-0012) |
 | `void/pressure` (2.6) | ✅ `void/pressure` — sampler loop-lag/RSS, пороги с гистерезисом восстановления за одним boolean, `:void.pressure/check` для того, что рантайм измерить не может, события `:high`/`:recovered`; `void/pressure-http` — 503 + `Retry-After` в слоте 100 через `http/render-error` (вызовом, не броском), `:void.pressure/exempt` не оборачивается вовсе; тест насыщения на реальном сокете в CI |
 | bench B2/B3 (2.5) | ✅ B2 (PG query) и B3 (PG + SSR, 15001 байт) поверх одной таблицы, с service-контейнером в bench.yml; `void/bench/probe` — loop-lag изнутри процесса под нагрузкой (бюджеты §8.2 ev-loop-lag и GC, последний как граница сверху через максимум лага), сравнение loop-lag между коммитами, `b1-pressure` как строка §8.5 |
-| Волна 2, остальное (2.7) | не начато — дистрибуция (ADR-0020) |
+| Дистрибуция (2.7) | ✅ ADR-0020 accepted и реализован: монорепо ставится одним jpm-bundle `void`, граф пакетов в `scripts/packages.janet` — единственное место, где записано ребро между пакетами (шимы paths, `:source` bundle, шаги CI, dry-run — его проекции); `scripts/bootstrap.janet` + `scripts/void` для контрибьютора; job «чистая машина» в CI проверяет путь пользователя целиком |
+| Demo волны 2 (2.8) | ✅ `examples/blog` — CRUD на `void/db` + `void/jobs` + `void/cache`: сущности со связями, миграции как данные, `:void.db/txn` на маршрутах, явные `:preload`, денормализованный счётчик на джобе. `main.janet` — единственный файл, называющий драйвер; suite гоняется по разу на движок (sqlite всегда, Postgres по `VOID_TEST_PG`) |
+| Волна 2, остальное | ✅ закрыта, exit-критерии 1–6 закрыты, тег v0.2; открыт хвост калибровки абсолютных бюджетов B2/B3 и порогов pressure на референс-окружении (2.5, 2.6) |
 | Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -221,8 +223,9 @@
 - [x] Интерфейс `:void/db-driver` (`:dialect/:connect/:close/:execute` + опц. prepared, tx, savepoints, `:ping`, `:insert-id`, `:returning`); `driver/normalize` валидирует и подставляет SQL-фолбэки — `db/void/db/driver.janet`
 - [x] Fiber-aware пул: чекаут в dyn (`with-conn`, авто-возврат через defer), ленивое открытие до `:size`, FIFO-очередь ожидающих с дедлайном в дочерней задаче (не `ev/with-deadline` на root task — класс багов ADR-0015), discard брошенного соединения освобождает слот; метрики (`:waits`/`:wait-us`/`:timeouts`/`:queries`/`:query-us`) → health — `pool.janet`
 - [x] Query builder (SQL как данные, диалекты в реестре: `:ansi`/`:sqlite`/`:postgres`); идентификаторы kebab→snake с квотированием, `[:val x]`/`[:raw s]`, `IS NULL` вместо `= ?`, пустой `IN` → `1 = 0` — `builder.janet`
+- [x] **DDL там же, тем же билдером**: `:create-table`/`:drop-table`/`:alter-table`/`:create-index`/`:drop-index` — те же statement-map'ы, компилируемые под диалект. Типы колонок — ключевые слова (`:serial`, `:text`, `:timestamptz`, `:jsonb`), диалект держит свою таблицу поверх `ansi-types`: `[:id :serial {:primary-key true}]` → `"id" integer PRIMARY KEY` на sqlite и `"id" serial PRIMARY KEY` на Postgres, `[:raw "tsvector"]` — люк для того, что есть у одного движка. Параметров у DDL нет: `DEFAULT` — часть statement'а, а не bind-значение
 - [x] `(db/with-tx ...)` через dyn (вложенные — SAVEPOINT, `db/rollback!`, упавший COMMIT/ROLLBACK выкидывает соединение из пула) + декларативно `:void.db/txn` в route metadata — `state.janet`, отдельный plugin `void/db-http` (`http.janet`), чтобы CLI/воркер не тянул HTTP-ядро
-- [x] Migrations: janet up/down (функция, строка или массив SQL), таблица версий, транзакция на файл, drift-детект «версия применена, файла нет»; `void db migrate/rollback/status` + `void db new` — `migrate.janet`
+- [x] Migrations: janet up/down (шаг возвращает statement-map, строку SQL или массив того и другого), таблица версий, транзакция на файл, drift-детект «версия применена, файла нет»; `void db migrate/rollback/status` + `void db new` — `migrate.janet`. Генерация миграций из diff entity-registry — **v2** (SPEC §5.9): миграция описывает базу такой, какой она была, а не проекцию сегодняшних `defentity`
 - [x] Entity: `defentity` (= defschema + db-mapping; биндинг — сама схема, так что `schema/select` даёт DTO), Repository API (`find/find!/query/one/count/exists?/insert!/insert-all!/update!/delete!/delete-where!`), явный `:preload` — один batched-IN на связь, с вложенностью — `entity.janet`
 - [x] AR-сахар через table prototypes: descriptor+snapshot в proto (`pp`/`keys` показывают только колонки), `save!` диффит → partial UPDATE, optimistic locking по `:db/version`; `db/rel`, `db/preload!`, опциональный identity map
 - [x] N+1-guard: `db/rel` вне preload — warning с местом вызова в dev, ошибка в `:strict`, `[:db :n1-guard]` в конфиге (в `:prod` по умолчанию off); callbacks на entity — НЕТ (ADR-0009)
@@ -322,22 +325,33 @@
 
 ### 2.7 Дистрибуция и установка *(S; ADR-0020)*
 
-- [ ] Принять ADR-0020
-- [ ] `scripts/packages.janet` — граф пакетов как данные; проекции: шимы `*/test-support/paths.janet` (16 копий → две строки), топологический порядок установки, матрица шагов CI, список деревьев в `scripts/dry-run.janet`
-- [ ] Корневой `project.janet` — bundle `void`: `declare-source` по деревьям пакетов, `declare-native` для `fdwait`, `declare-binscript cli/bin/void`; `janet-lang/sqlite3` остаётся runtime-требованием с ошибкой на `:start` (как libpq, ADR-0011)
-- [ ] `bin/void` подхватывает `./jpm_tree/lib` **до** `(import void/cli)` — иначе CLI из глобального дерева и `void/http` из проектного дают два экземпляра `void/core`; заодно снять лишний shebang
-- [ ] `void new` пишет настоящий `:dependencies` вместо комментария; Quick start в README становится исполняемым
-- [ ] `scripts/bootstrap.janet` (deps + `jpm build` для `fdwait`) и repo-relative дев-шим `scripts/void` — контрибьютор получает `void` без установки
-- [ ] CI: шаг «чистая машина» — установка bundle в изолированное дерево, `void new` + smoke сгенерированного проекта; путь пользователя становится гейтом, а не абзацем документации
+- [x] Принять ADR-0020
+- [x] `scripts/packages.janet` — граф пакетов как данные (`:deps` / `:test-deps` / `:jpm` / `:jpm-optional` / `:native`), плюс `check`, который отказывается от графа, расходящегося с деревом на диске. Проекции: шимы `*/test-support/paths.janet` (17 копий → две строки), `bench/apps/prelude.janet`, топологический порядок установки, `:source` корневого bundle, шаги `jpm test` в CI, список деревьев в `scripts/dry-run.janet`, набор внешних зависимостей (`deps` — для bundle, `dev-deps` — для чекаута)
+- [x] Корневой `project.janet` — bundle `void`: `declare-source` по деревьям пакетов, `declare-native` для `fdwait`, `declare-binscript cli/bin/void`; списки не написаны в нём, а импортированы из графа
+  - `janet-lang/sqlite3` в зависимости bundle не попадает, и ради этого `void/db-sqlite` резолвит биндинг при первом обращении вместо `(import sqlite3)`: с импортом в заголовке ломался бы не старт приложения с sqlite, а установка bundle у всех. Теперь это ошибка на `:start` с командой установки — ровно там же, где libpq (ADR-0011)
+- [x] `bin/void` подхватывает `./jpm_tree/lib` **до** `(import void/cli)` — иначе CLI из глобального дерева и `void/http` из проектного дают два экземпляра `void/core`; лишний shebang снят (jpm пишет свой), в CI это отдельная проверка
+- [x] `void new` пишет настоящий `:dependencies` вместо комментария; Quick start в README становится исполняемым
+- [x] `scripts/bootstrap.janet` (deps по графу + `jpm build` для `fdwait`, аргументы прокидываются в jpm — `--local`) и repo-relative дев-шим `scripts/void` — контрибьютор получает `void` без установки, из любого каталога
+- [x] CI: job «чистая машина» — `jpm --tree` install bundle в изолированное дерево, импорт всех пакетов из установленного дерева, `void new` + smoke сгенерированного проекта (`void routes`), один shebang в бинаре, и приоритет проектного `jpm_tree` над установленным; путь пользователя стал гейтом, а не абзацем документации
+  - Прежние 18 руками написанных шагов `jpm test` в `ci.yml` схлопнулись в один цикл по `janet scripts/packages.janet ci`
+
+### 2.8 Demo волны 2 — `examples/blog`
+
+- [x] CRUD-приложение целиком на волне 2: `defentity` ×3 со связями, миграции, `:void.db/txn` на маршрутах, явные `:preload`, `cache/remember` на списке, денормализованный счётчик комментариев, который держит в тонусе `defjob` (`:unique :args`), `defschedule` — и всё это через `void/html` + `void/htmx`
+- [x] **Один и тот же код на обоих движках**: `main.janet` — единственный файл, называющий драйвер (`plugins`-функция от `:sqlite`/`:postgres`, `VOID_BLOG_DB` выбирает); сущности, миграции, хендлеры, джоба и кэш байт в байт одни. Миграции портируемы, потому что DDL — данные (2.1), а не строки на диалекте
+- [x] Тест = suite как функция от движка: sqlite всегда, Postgres когда `VOID_TEST_PG` называет сервер (в CI — называет), оба прохода прогоняют один и тот же список утверждений. Ни одного `case` по диалекту в утверждениях: если бы он понадобился, заявление о переносимости было бы ложным
+- [x] Запросы идут через `test/inject` (ADR-0017) — продакшен-стек без сокета; N+1-guard в тесте стоит в `:strict`, то есть незапланированная связь в приложении = падение, а не warning
 
 ### Exit-критерии волны 2
 
-1. Demo: CRUD-приложение на Postgres с миграциями, background-джобами и кэшом; то же на SQLite сменой конфига.
-2. Драйвер PG не блокирует loop: тест «конкурентные pg_sleep + ticker» из прототипа — в CI.
-3. N+1-guard и dirty-tracking покрыты тестами; `void db erd` строит диаграмму из `:db/rels`.
-4. Тест насыщения (ADR-0019): под перегрузкой процесс отвечает быстрым 503 + `Retry-After`, `/health` (exempt) остаётся живым, после снятия нагрузки — `:pressure/recovered`.
-5. Установка проверяется в CI на чистом дереве: bundle → `void new` → сгенерированный проект стартует и отвечает (ADR-0020).
-6. B2/B3 в CI. Тег v0.2.
+1. [x] Demo: CRUD-приложение на Postgres с миграциями, background-джобами и кэшом; то же на SQLite сменой конфига — `examples/blog` (2.8), suite прогоняется по разу на движок и в CI обе ветки — гейт.
+2. [x] Драйвер PG не блокирует loop: тест «конкурентные pg_sleep + ticker» из прототипа — в CI (`db-postgres/test/driver-test.janet`: N запросов `pg_sleep` с одного OS-треда занимают один сон, и ticker набирает свои тики всё это время).
+3. [x] N+1-guard и dirty-tracking покрыты тестами (`db/test/entity-test.janet` + сквозной прогон в `examples/blog/test/crud-test.janet` под `:strict`); `void db erd` строит диаграмму из `:db/rels` — включая `:db/pk`/`:db/fk`/`:db/unique`/`:db/type`.
+4. [x] Тест насыщения (ADR-0019): под перегрузкой процесс отвечает быстрым 503 + `Retry-After`, `/health` (exempt) остаётся живым, после снятия нагрузки — `:pressure/recovered`.
+5. [x] Установка проверяется в CI на чистом дереве: bundle → `void new` → сгенерированный проект стартует и отвечает (ADR-0020).
+6. [x] B2/B3 в CI. Тег v0.2.
+
+Открытым хвостом волна оставляет ровно одно, и записано это было заранее: абсолютные бюджеты B2/B3 и пороги `void/pressure` по умолчанию не откалиброваны — для этого нужно референс-окружение, а не CI-раннер (2.5, 2.6). Относительный 5%-гейт merge-base↔head работает и на них.
 
 ---
 
@@ -446,7 +460,7 @@
 | Sampling-профайлер в void/dev (`debug/stack` по таймеру) + `bench/trace-request` | волна 2 (понадобится для B2/B3) |
 | CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | ✅ сделано к v0.1 ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | идёт: `demo` (волна 0), `guestbook` (волна 1, в CI) |
-| Дистрибуция: монорепо как один jpm-bundle, граф пакетов как данные (ADR-0020) | 2.7, к v0.2; `jpm quickbin` single-binary — 4.5 |
+| Дистрибуция: монорепо как один jpm-bundle, граф пакетов как данные (ADR-0020) | ✅ сделано в 2.7; `jpm quickbin` single-binary — 4.5 |
 
 ---
 
