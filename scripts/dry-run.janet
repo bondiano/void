@@ -1,7 +1,8 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
 ### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
-### void/redis-http + void/dev + void/bench + the demo plugin on top of
+### void/redis-http + void/cache + void/jobs + void/pressure +
+### void/dev + void/bench + the demo plugin on top of
 ### the core extension points.
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
@@ -32,6 +33,7 @@
 (add-tree (string (os/cwd) "/redis"))
 (add-tree (string (os/cwd) "/cache"))
 (add-tree (string (os/cwd) "/jobs"))
+(add-tree (string (os/cwd) "/pressure"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -52,6 +54,8 @@
 (require "void/jobs/init")
 (require "void/jobs/db")
 (require "void/jobs/redis")
+(require "void/pressure/init")
+(require "void/pressure/http")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "examples/demo/plugin")
@@ -62,6 +66,7 @@
                              :void/redis :void/redis-http
                              :void/cache :void/cache-redis :void/cache-http
                              :void/jobs :void/jobs-db :void/jobs-redis
+                             :void/pressure :void/pressure-http
                              :void/dev :void/bench :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide

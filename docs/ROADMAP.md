@@ -8,18 +8,18 @@
 
 ---
 
-## Текущее состояние (2026-08-27)
+## Текущее состояние (2026-08-28)
 
 | Что | Статус |
 |---|---|
 | SPEC (обзор + контракты Plugin API / Route Metadata) | ✅ написан |
 | ADR 0001–0015 | ✅ accepted |
 | ADR 0016–0018 (lifecycle-стадии, inject-тесты, core/log) | ✅ реализованы в v0.1 |
-| ADR 0019 (pressure) | 📝 proposed (волна 3) |
+| ADR 0019 (pressure) | ✅ accepted и реализован в 2.6 (с уточнениями: два plugin'а, RSS вместо heap, 503 вызовом error-пути, никакой агрегации в prefork-master) |
 | Прототип async libpq × ev (`pqwait.c`, `proto2.janet`) | ✅ риск снят (ADR-0011, SPEC прил. A) |
 | Монорепо, `void/core` | ✅ `system`, `config`, `schema`, `plugin`, `meta`, `hooks` (+шина), `void/run!`; deprecation-алиасы extension points (`:aliases`); **`void/core/log`** — structured logger (ADR-0018: lazy-макросы, ns-дерево уровней, dyn-контекст, pretty/jdn sinks, serializers/redact) |
 | `void/dev` + `void/test` | ✅ netrepl-компонент, file watcher c авто-restart + хук `:void.dev/reloaded`, fixtures/factories (`:generator`-проекция); **`test/inject`** (ADR-0017: with-http, cookie jar, `:json`/`:form`/`:raw`, sse-events) |
-| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware + **lifecycle-стадии** (ADR-0016: `:void.http/hook`, `:void.http/hooks`, `:on-response`/`:on-error`/`:on-timeout`, request-id + access-log), sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload, **kernel/server split** (ADR-0017) |
+| `void/http` | ✅ HTTP kernel (1.1): сервер на net/ev (keep-alive, лимиты, chunked, SSE, drain), PEG-router с symbol-handlers и metadata-merge, фазовые middleware + **lifecycle-стадии** (ADR-0016: `:void.http/hook`, `:void.http/hooks`, `:on-response`/`:on-error`/`:on-timeout`, request-id + access-log), sessions/static/multipart/negotiation, error rendering, `with-request`/`explain-route`, prefork `:workers :auto`, rebuild route table по hot reload, **kernel/server split** (ADR-0017), `render-error` — error-путь вызовом, а не броском (для 2.6) |
 | `void/html` + `void/htmx` (1.2–1.3) | ✅ hiccup/temple за `:void.html/engine`, form-хелперы из schema, assets, hx-хелперы, `:void.htmx/partial` |
 | `void/rest` + `void/openapi` (1.4–1.5) | ✅ `defresource`, schema-валидация/coercion, problem+json, OpenAPI 3.1 проекция + Swagger UI |
 | `void/cli` (1.6) | ✅ `void new` / `void dev` / `void routes` / `void repl`; команды — extension point, subset-старт через `:needs` |
@@ -33,7 +33,8 @@
 | `void/redis` (2.2) | ✅ RESP2/RESP3 в чистом Janet (сканер + PEG), fiber-aware пул, pipelining, кодеки за `:void.redis/codec`, Lua-скрипты, pub/sub на своём соединении; `void/redis-http` — session-store для `void/http` |
 | `void/cache` (2.3) | ✅ `:void/cache-store` (что реализуют) + `:void/cache` (от чего зависят), memory-store с TTL и точным LRU, `remember`/`wrap` с single-flight, упавший store деградирует в промах; `void/cache-redis` — store в redis, `void/cache-http` — `:void.cache/response` |
 | `void/jobs` (2.4) | ✅ `:void/jobs-backend` (восемь функций над записями, атомарен из них один — `claim!`) + `:void/jobs` (политика, enqueue, события); три backend'а на одном контракте и одна conformance-сюита на всех; `defjob` с ретраями/backoff+jitter/приоритетами/delayed/unique/DLQ, flows, rate limiting и concurrency per queue, group-ключи, `defschedule` на spork/cron с backend-локом; executor — фиберы `ev/`, а не spork/tasker (уточнение в ADR-0012) |
-| Волна 2, остальное (2.5–2.7) | не начато — bench B2/B3, pressure, дистрибуция (ADR-0020) |
+| `void/pressure` (2.6) | ✅ `void/pressure` — sampler loop-lag/RSS, пороги с гистерезисом восстановления за одним boolean, `:void.pressure/check` для того, что рантайм измерить не может, события `:high`/`:recovered`; `void/pressure-http` — 503 + `Retry-After` в слоте 100 через `http/render-error` (вызовом, не броском), `:void.pressure/exempt` не оборачивается вовсе; тест насыщения на реальном сокете в CI |
+| Волна 2, остальное (2.5, 2.7) | не начато — bench B2/B3, дистрибуция (ADR-0020) |
 | Волны 3+ | не начаты |
 
 Открытые вопросы SPEC §7: (1) spork/http — закрыт (ADR-0015 accepted); (2) async libpq — закрыт; (3) формат route metadata — **заморожен в v0.1** ([CONTRACTS.md](CONTRACTS.md)); (4) naming/монорепо — закрыт; (5) `:void-api` versioning — заложен в скелет.
@@ -289,13 +290,22 @@
 
 ### 2.6 `void/pressure` — load shedding *(S; ADR-0019)*
 
-- [ ] Принять ADR-0019
-- [ ] Sampler-компонент: loop-lag (дрейф `ev/sleep`), heap (GC-статистика), rss (getrusage/ffi); custom-проверки — point `:void.pressure/check`
-- [ ] Пороги `:max-loop-lag`/`:max-heap-bytes`/`:max-rss-bytes` → флаг `:under-pressure` с гистерезисом восстановления
-- [ ] Middleware в слоте 100: 503 + `Retry-After` через error-путь (problem+json при rest); metadata `:void.pressure/exempt` для `/health`/`/metrics`
-- [ ] Contribution в `:void.core/health` (degraded + причины), `(pressure/status)`, события `:pressure/high|recovered` в hooks-шину
-- [ ] Prefork: sampler per-worker, агрегация в master health
-- [ ] Калибровка порогов по умолчанию на B2/B3 (насыщение: быстрый 503 вместо роста latency у всех) — тест в CI
+- [x] Принять ADR-0019 — accepted, с уточнениями по итогам реализации (см. ниже и хвост ADR)
+- [x] Sampler-компонент: loop-lag (дрейф `ev/sleep`), rss; custom-проверки — point `:void.pressure/check`
+  - **два plugin'а, а не один** (ADR говорил «core + http»): `void/pressure` — sampler, пороги, флаг, health, события, только core; `void/pressure-http` — middleware и metadata-ключ. Тот же шов, что между `void/cache` и `void/cache-http`, и по той же причине: воркер, который крутит jobs и не слушает порт, имеет право знать, что его loop опаздывает, не поднимая ради этого HTTP-ядро
+  - **heap-метра нет, и это janet, а не пропуск**: `gccollect`/`gcinterval`/`gcsetinterval` — вся GC-поверхность 1.41, и ни одна не говорит, сколько байт на куче сейчас. Память меряется как RSS (`/proc/self/status`; на macOS mach `task_info(MACH_TASK_BASIC_INFO)` через `ffi/` — `getrusage` не подходит, `ru_maxrss` это high-water mark, с которого не восстановиться), `:max-heap-bytes` как ключ не существует. Сигнал без прибора репортится отсутствующим, и порог над ним не срабатывает никогда: «прибор сломан» не должно читаться как «всё хорошо»
+- [x] Пороги `:max-loop-lag`/`:max-rss-bytes` → флаг `:under-pressure` с гистерезисом восстановления
+  - гистерезис — не полировка, а сама фича: один и тот же порог в обе стороны превращает процесс на границе в процесс, который режет каждый второй запрос и восстанавливается между ними. Два барьера: срабатывание на `:max-loop-lag`, возврат — ниже `:recovery-ratio` × порог и `:recovery-samples` чистых замеров подряд. `:high`/`:recovered` — по одному на эпизод, а не на замер
+  - у custom-проверок гистерезиса нет и быть не может: «пул исчерпан» — не число, у которого бывает 80% себя. Проверка, которая бросила, считается давлением — проба, чей отказ значит «продолжайте», не проба
+- [x] Middleware в слоте 100: 503 + `Retry-After` через error-путь (problem+json при rest); metadata `:void.pressure/exempt` для `/health`/`/metrics`
+  - **вызовом, а не броском**: в `void/http` добавлена публичная `render-error` — те же `:void.http/error-renderer` в том же порядке. Буквальное «бросить 503» стоило бы стектрейса на каждый отвергнутый запрос и попадало бы в panic-логирование (`status >= 500`) — тысячи строк лога поверх перегрузки, ровно когда платить нечем
+  - exempt-маршрут не оборачивается вовсе: `:when` считается один раз на сборке таблицы, так что `/health` не может быть срезан и не стоит ничего. Паттерн для деплоя — `/health` exempt + routing LB по нему, иначе балансировщик выведет воркер ровно в тот момент, когда тот пытался остаться полезным
+- [x] Contribution в `:void.core/health` (degraded + причины), `(pressure/status)`, события `:pressure/high|recovered` в hooks-шину
+  - отвергнутые запросы логируются **раз за эпизод** (`[:pressure-http :log]`), а счётчик уезжает в событие `:recovered`: лог, который сам становится частью перегрузки, — не наблюдаемость
+- [x] Prefork: sampler per-worker, ~~агрегация в master health~~ — агрегировать нечем и незачем
+  - воркеры не делят ничего, кроме слушающего сокета (ADR-0010), канала до master'а нет. Вместо выдуманной агрегации master помечается `:mode :supervisor` и не сэмплирует вовсе: его loop простаивает по построению, и ноль с него был бы измерением ничьих запросов. Агрегация — это SO_REUSEPORT
+- [x] Тест насыщения в CI (exit-критерий 4): реальный сервер, реально заблокированный loop, реальный сокет — 503 + `Retry-After`, exempt `/health` жив, после снятия нагрузки `:recovered`. Длительность удержания loop'а рандомизирована: фиксированная фазируется с интервалом sampler'а и даёт один и тот же замер вечно
+- [ ] Калибровка порогов по умолчанию на B2/B3 (насыщение: быстрый 503 вместо роста latency у всех) — вместе с 2.5
 
 ### 2.7 Дистрибуция и установка *(S; ADR-0020)*
 

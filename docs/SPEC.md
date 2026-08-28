@@ -328,11 +328,12 @@ Django-admin/Filament-класс, но данные-first: админка — **
 
 ### 5.23 `void/pressure` — load shedding *(S; ADR-0019)*
 Паритет fastify/under-pressure: процесс сам защищается от перегрузки, не дожидаясь неотзывчивости.
-- Sampler-компонент (fiber, `:sample-interval`): loop-lag (дрейф `ev/sleep` — метрика §8.4), heap (GC-статистика), rss (getrusage/ffi), custom-проверки через extension point `:void.pressure/check` (пул БД, глубина очередей).
-- Пороги `:max-loop-lag`/`:max-heap-bytes`/`:max-rss-bytes` → атомарный флаг `:under-pressure` с гистерезисом восстановления.
-- Middleware в раннем слоте (100): под давлением → 503 + `Retry-After` через стандартный error-путь (problem+json при void/rest); на спокойном пути — одна проверка флага. Metadata `:void.pressure/exempt` — `/health`/`/metrics` не режутся.
-- Contribution в `:void.core/health`, `(pressure/status)` в REPL, события `:pressure/high|recovered` в hooks-шину; метрики — через obs (волна 3).
-- Prefork: sampler per-worker (свой loop — своё давление), master агрегирует; SO_REUSEPORT раскидывает трафик от воркера, отвечающего мгновенным 503.
+- Два plugin'а: `void/pressure` (sampler, пороги, флаг, health, события — только core, годится воркеру и CLI) и `void/pressure-http` (middleware и metadata-ключ — единственное, чему нужен `void/http`). Тот же шов, что у `void/cache` / `void/cache-http`.
+- Sampler-компонент (fiber, `:sample-interval`): loop-lag (дрейф `ev/sleep` — метрика §8.4), rss (`/proc/self/status` на Linux, mach `task_info` через `ffi/` на macOS; где прибора нет — сигнал нулевой, а не выдуманный), custom-проверки через extension point `:void.pressure/check` (пул БД, глубина очередей). Heap-метра нет: janet 1.41 не сообщает занятость кучи (ADR-0019, уточнение).
+- Пороги `:max-loop-lag` (ms) / `:max-rss-bytes` → атомарный флаг `:under-pressure` с гистерезисом восстановления (`:recovery-ratio` × порог, `:recovery-samples` чистых замеров подряд).
+- Middleware в раннем слоте (100): под давлением → 503 + `Retry-After` через те же error-renderer'ы (`http/render-error` — вызовом, не броском: стектрейс на каждый отвергнутый запрос платится ровно тогда, когда платить нечем); problem+json при void/rest. На спокойном пути — одна проверка флага. Metadata `:void.pressure/exempt` — `/health`/`/metrics` не режутся (и не оборачиваются вовсе: `:when` считается на сборке таблицы).
+- Contribution в `:void.core/health`, `(pressure/status)` в REPL и `void pressure status`, события `:pressure/high|recovered` в hooks-шину; отвергнутые логируются раз за эпизод, счётчик — в `:recovered`. Метрики — через obs (волна 3).
+- Prefork: sampler per-worker (свой loop — своё давление), master помечается `:mode :supervisor` и не сэмплирует; агрегации нет и не нужно — SO_REUSEPORT раскидывает трафик от воркера, отвечающего мгновенным 503.
 - Волна 2 (зависит только от core + http).
 
 ---

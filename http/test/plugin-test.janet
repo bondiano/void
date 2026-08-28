@@ -104,6 +104,21 @@
   (assert (= 404 (r404 :status)))
   (assert (= "custom 404" (r404 :body)) "contributed renderer wins by priority")
 
+  # the same renderers, reached by calling instead of by throwing —
+  # what middleware that decides on a status rather than failing at one
+  # uses (load shedding, ADR-0019)
+  (def called (http/render-error {:http/status 404} (http/make-request {:uri "/x"})))
+  (assert (= 404 (called :status)))
+  (assert (= "custom 404" (called :body))
+          "render-error runs the contributed renderers, not a body of its own")
+  (def overridden (http/render-error {:http/status 500}
+                                     (http/make-request {:uri "/x"}) 404))
+  (assert (= "custom 404" (overridden :body)) "and an explicit status wins over the error's")
+  (def floored (http/render-error {:http/status 503} (http/make-request {:uri "/x"})))
+  (assert (= 503 (floored :status)))
+  (assert (string/find "503" (string (floored :body)))
+          "with the built-in renderer as the floor when nothing else answers")
+
   # urlencoded form parsing middleware
   (def r3 (http/with-request {:method :post :uri "/orders"
                               :headers {"content-type" "application/x-www-form-urlencoded"}
