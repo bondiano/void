@@ -56,20 +56,20 @@
    [:void.schema/query "Query-param map schema; coerced and validated before the handler, failures answer 400 problem+json"]
    [:void.schema/headers "Request-header map schema (keyword header names); validated before the handler, failures answer 400 problem+json"]
    [:void.schema/body "Request-body schema over the decoded JSON body (or coerced form fields); failures answer 422 problem+json"]]
-  (plugin/defcontribution :void.http/route-meta-key
+  (plugin/contribute! :void.http/route-meta-key
     {:key key
      :schema [:pred schema-form? "must be a schema form"]
      :doc doc
      :merge :deep-merge}))
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.schema/response
    :schema [:map-of [:int {:min 100 :max 599}]
             [:pred schema-form? "must be a schema form"]]
    :doc "Response schemas by status: {200 :Order 404 :Problem}; checked against rest/json payloads when [:rest :validate-responses], projected by void/openapi"
    :merge :deep-merge})
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.rest/problems
    :schema :boolean
    :doc "Force (true) or suppress (false) problem+json error rendering for this route; unset falls back to schema'd-route/Accept detection"
@@ -77,7 +77,7 @@
 
 # -- the JSON body codec -------------------------------------------------
 
-(plugin/defcontribution :void.http/body-codec
+(plugin/contribute! :void.http/body-codec
   {:name :void.rest/json
    :content-type "application/json"
    :decode (fn decode-json [body]
@@ -111,7 +111,7 @@
     (req :form) [(keywordize (req :form)) true]
     [nil false]))
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.rest/validate
    :phase middleware/phase/validation
    :doc "Coerce and validate request parts against the route's :void.schema/* keys; violations answer problem+json (400 request line parts, 422 body)"
@@ -194,7 +194,7 @@
                 (string/join (map schema/error-str (res :errors))
                              "\n  - "))))))
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.rest/serialize
    :phase middleware/phase/response
    :doc "Encode lazy (rest/json data) responses; with [:rest :validate-responses] check the payload against the route's :void.schema/response schema first"
@@ -222,7 +222,7 @@
     (let [a (ring/request-header req "accept")]
       (and a (not (nil? (string/find "json" a)))))))
 
-(plugin/defcontribution :void.http/error-renderer
+(plugin/contribute! :void.http/error-renderer
   {:name :void.rest/problem
    :priority 900
    :fn (fn render-problem [err req ctx]
@@ -261,7 +261,7 @@
                                (= :dev (boot :profile))
                                (cfg :validate-responses))}))
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 450
    :name :rest/build-context

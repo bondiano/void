@@ -1,4 +1,4 @@
-### demo/greeter — the wave-0 toy plugin (ROADMAP, exit criterion 2).
+### demo/greeter — the wave-0 toy plugin.
 ### The whole plugin cycle in one file: a config slice with schema and
 ### defaults, a stateful component providing the :demo/greeter
 ### interface, and contributions to the core cli/health extension
@@ -24,16 +24,16 @@
     :health (fn [inst] {:status (if (inst :greeting) :up :down)
                         :greeted (inst :greeted)})))
 
-(plugin/defcontribution :void.core/interface
+(plugin/contribute! :void.core/interface
   {:name :demo/greeter :doc "Greeting service: (greet inst who)"})
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :demo/greet
    :doc "Print a greeting for each NAME argument"
    :needs [:demo/greeter-service]
    :fn (fn [inst & names] (each n names (print (greet inst n))))})
 
-(plugin/defcontribution :void.core/health
+(plugin/contribute! :void.core/health
   {:name :demo/greeter-check
    :fn (fn [] {:status :up})})
 

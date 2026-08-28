@@ -62,7 +62,7 @@
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
 
-(plugin/defcontribution :void.html/engine
+(plugin/contribute! :void.html/engine
   {:name :hiccup
    :doc "The hiccup pipeline: a view is hiccup data or (fn [context] hiccup); a layout is (fn [content context] hiccup)"
    :render (fn hiccup-render [view context]
@@ -72,7 +72,7 @@
                  (layout content context)
                  content)))})
 
-(plugin/defcontribution :void.html/engine
+(plugin/contribute! :void.html/engine
   {:name :temple
    :doc "spork/temple templates: a view is a compiled template function, a layout template receives the rendered view as (args :content)"
    :render temple/engine-render})
@@ -133,7 +133,7 @@
   (put resp :body ((engine :render) (resp :void.html/content) render-context))
   resp)
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.html/render
    :phase middleware/phase/response
    :doc "Render lazy view responses (:void.html/content) through the selected engine"
@@ -195,7 +195,7 @@
          :engines engines
          :assets (build-assets-state (cfg :assets))}))
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 400
    :name :html/build-context

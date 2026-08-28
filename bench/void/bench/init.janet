@@ -10,7 +10,7 @@
 (import void/core/plugin :as plugin)
 (import ./runner :as runner)
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :bench
    :doc "Run the bench suite: void bench [TARGETS|all|baselines|list|compare] (--help for flags)"
    :fn (fn cli-bench [& args] (runner/run-cli args))})

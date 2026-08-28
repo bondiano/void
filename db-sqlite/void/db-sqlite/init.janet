@@ -78,7 +78,7 @@
   work at all.``
   nil)
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 450
    :name :db-sqlite/capture-boot

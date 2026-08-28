@@ -523,7 +523,7 @@ Extension point = именованный контракт + стратегия �
 Вклад (contribution):
 
 ```janet
-(defcontribution :void.http/middleware
+(contribute! :void.http/middleware
   {:name :redis-session :phase 3000 :wrap wrap-redis-session})
 ```
 
@@ -649,7 +649,7 @@ Route metadata — открытая map на каждом route; **главны�
 - Каждый plugin **декларирует свои ключи** через extension point `:void.http/route-meta-key`:
 
 ```janet
-(defcontribution :void.http/route-meta-key
+(contribute! :void.http/route-meta-key
   {:key :void.authz/policy
    :schema [:or :keyword [:vector :keyword]]
    :doc "Policy (or all-of vector) enforced before handler"

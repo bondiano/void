@@ -407,9 +407,9 @@
 (assert (string/find "hang/a" (string stop-err)))
 (assert (= [:b] (freeze stop-log)) "the hung component does not block the others")
 
-# -- defplugin + defcontribution / defextension-point --------------------
+# -- defplugin + contribute! / defextension-point ------------------------
 
-(plugin/defcontribution :void.core/health
+(plugin/contribute! :void.core/health
   {:name :dp-check :fn (fn [] {:status :up})})
 (plugin/defextension-point :test/dp-point
   :doc "point declared via defextension-point"
@@ -419,7 +419,7 @@
 
 (assert (= :test/dp (manifest :name)) "defplugin defines `manifest`")
 (assert (= 1 (length (get-in manifest [:contributes :void.core/health])))
-        "defcontribution lands in the manifest")
+        "contribute! lands in the manifest")
 (assert (get-in manifest [:extension-points :test/dp-point])
         "defextension-point lands in the manifest")
 (assert (= manifest (get plugin/manifest-registry :test/dp))

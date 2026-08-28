@@ -283,7 +283,7 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :db/postgres-info
    :doc "Show what the Postgres driver connected to: void db postgres-info"
    :needs [:db.postgres/driver]

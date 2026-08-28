@@ -96,7 +96,7 @@
 
 - [x] `defplugin` → manifest-struct: `:void-api`, `:version`, `:requires` (semver), `:config-key/-schema`, `:when`, `:components`, `:contributes`, `:extension-points`, `:on-load`
 - [x] `defextension-point`: `:schema`, `:cardinality` (`:many/:single/:single-required`), `:reduce`, `:validate`
-- [x] `defcontribution` + resolution: валидация по schema точки, ошибки с plugin-источником, did-you-mean для опечаток, «повисшие» вклады → ошибка
+- [x] `contribute!` + resolution: валидация по schema точки, ошибки с plugin-источником, did-you-mean для опечаток, «повисшие» вклады → ошибка
 - [x] Bootstrap-фазы: load → config → conditional → extension resolution → graph → start → ready; shutdown с таймаутом
 - [x] Базовые точки ядра: `:void.core/cli`, `/health`, `/config-source`, `/schema-type`, `/schema-projection`, `/interface`, `/hooks`
 - [x] REPL-инструменты: `(plugin/inspect)`, `(plugin/why :key)`, **`(plugin/dry-run ...)`** — фазы 1–5 без старта

@@ -51,12 +51,12 @@
     "operationId override (default: the route name, / -> .)"]
    [:void.openapi/hidden :boolean
     "Leave this route out of the document"]]
-  (plugin/defcontribution :void.http/route-meta-key
+  (plugin/contribute! :void.http/route-meta-key
     {:key key :schema sch :doc doc :merge :replace}))
 
 # -- the :openapi schema projection --------------------------------------
 
-(plugin/defcontribution :void.core/schema-projection
+(plugin/contribute! :void.core/schema-projection
   {:name :openapi
    :fn (fn openapi-projection [sch] (jsonschema/json-schema sch))})
 
@@ -250,7 +250,7 @@
                      "\n"))
   path)
 
-(plugin/defcontribution :void.core/cli
+(plugin/contribute! :void.core/cli
   {:name :openapi/export
    :doc "Write the OpenAPI 3.1 document to a file: void openapi export [path]"
    :fn (fn cli-export [& args] (export (first args)))})
@@ -269,7 +269,7 @@
                     (cfg :enabled))
          :info (get cfg :info {})}))
 
-(plugin/defcontribution :void.core/hooks
+(plugin/contribute! :void.core/hooks
   {:hook :before-start
    :phase 450
    :name :openapi/build-context

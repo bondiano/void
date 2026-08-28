@@ -199,14 +199,19 @@
        (keyword? (get x :name))
        (in cardinalities (get x :cardinality))))
 
-# -- module-level collector (defcontribution / defextension-point) -------
+# -- module-level collector (contribute! / defextension-point) -----------
 
 (def- collected @{:points @{} :contributes @{}})
 
 (defn contribute!
-  "Queue a contribution for the `defplugin` manifest of the module
-  being loaded (the macro `defcontribution` is sugar for this).
-  Returns the contribution."
+  ``Contribute a value to another plugin's extension point:
+
+      (contribute! :void.http/middleware
+        {:name :redis-session :phase 3000 :wrap wrap-redis-session})
+
+  The contribution lands in the manifest defined later in this module
+  with `defplugin` and is validated against the point's schema during
+  bootstrap phase 4. Returns the contribution.``
   [point-name value]
   (unless (keyword? point-name)
     (errorf "contribution target must be an extension-point keyword, got %q" point-name))
@@ -234,18 +239,6 @@
   module with `defplugin`. See `extension-point` for options."
   [name & kvs]
   ~(,declare-point! (,extension-point ,name ,;kvs)))
-
-(defmacro defcontribution
-  ``Contribute a value to another plugin's extension point:
-
-      (defcontribution :void.http/middleware
-        {:name :redis-session :phase 3000 :wrap wrap-redis-session})
-
-  The contribution lands in the manifest defined later in this module
-  with `defplugin` and is validated against the point's schema during
-  bootstrap phase 4.``
-  [point value]
-  ~(,contribute! ,point ,value))
 
 # -- manifests -----------------------------------------------------------
 
@@ -431,7 +424,7 @@
   m)
 
 (defn- merge-collected
-  "Fold the module-level defcontribution/defextension-point queue into
+  "Fold the module-level contribute!/defextension-point queue into
   a manifest and clear the queue."
   [m]
   (if (and (empty? (collected :points)) (empty? (collected :contributes)))
@@ -464,7 +457,7 @@
         :contributes {:void.core/health [redis-health]})
 
   Contributions and extension points declared earlier in the module via
-  `defcontribution` / `defextension-point` are folded in. The manifest
+  `contribute!` / `defextension-point` are folded in. The manifest
   is also registered in `manifest-registry`, so the project can list
   the plugin by keyword after requiring the module. The defining file
   is recorded as :source (overridable by passing :source explicitly).``

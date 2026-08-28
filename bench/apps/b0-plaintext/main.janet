@@ -20,7 +20,7 @@
   (ring/response 200 "Hello, World!"
                  @{"content-type" "text/plain; charset=utf-8"}))
 
-(plugin/defcontribution :void.http/route-source
+(plugin/contribute! :void.http/route-source
   {:name :bench.b0/routes
    :routes (router/routes {}
              (router/GET "/" 'hello {:name :hello}))

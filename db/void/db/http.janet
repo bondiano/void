@@ -24,7 +24,7 @@
 (import void/http/middleware :as middleware)
 (import ./state :as state)
 
-(plugin/defcontribution :void.http/route-meta-key
+(plugin/contribute! :void.http/route-meta-key
   {:key :void.db/txn
    :schema [:or :boolean {:isolation [:optional :keyword]}]
    :doc "Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN"
@@ -34,7 +34,7 @@
   (def v (get rmeta :void.db/txn))
   (if (dictionary? v) v {}))
 
-(plugin/defcontribution :void.http/middleware
+(plugin/contribute! :void.http/middleware
   {:name :void.db/txn
    :phase middleware/phase/business
    :doc "Wrap handlers of routes marked :void.db/txn in db/with-tx — a commit on the way out, a rollback on any error"
