@@ -2,7 +2,7 @@
 ###
 ### jpm resolves a dependency to a *git repository with a project.janet
 ### in its root* — there is no notion of a subdirectory. So the monorepo
-### installs as one bundle: the seventeen `void/` trees merge into a
+### installs as one bundle: every package's `void/` tree merges into a
 ### single <modpath>/void/, the one native module is built, and the CLI
 ### lands on PATH. void releases one version per wave, so per-package
 ### pinning would have been a fiction anyway (see the ADR's trade-offs).

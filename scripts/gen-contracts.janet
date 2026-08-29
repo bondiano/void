@@ -39,6 +39,7 @@
 (add-tree (string (os/cwd) "/authz"))
 (add-tree (string (os/cwd) "/security"))
 (add-tree (string (os/cwd) "/mail"))
+(add-tree (string (os/cwd) "/bus"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -74,6 +75,9 @@
 (require "void/mail/init")
 (require "void/mail/jobs")
 (require "void/mail/auth")
+(require "void/bus/init")
+(require "void/bus/db")
+(require "void/bus/jobs")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -89,6 +93,7 @@
                :void/crypto :void/auth :void/auth-http :void/auth-db
                :void/authz :void/authz-http :void/security
                :void/mail :void/mail-jobs :void/mail-auth
+               :void/bus :void/bus-db :void/bus-jobs
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide
@@ -96,7 +101,8 @@
      # exactly the ambiguity the kernel refuses to resolve on its own. The
      # gate says which, the way an application's config would (see
      # void/db-postgres, void/cache-redis, void/jobs-redis)
-     :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
+     :config {:cli {:bus {:backend :db}
+                    :void/db-driver {:impl :db.sqlite/driver}
                     :void/cache-store {:impl :cache/redis}
                     :void/jobs-backend {:impl :jobs/redis}
                     :void/auth-user-store {:impl :auth.db/users}
@@ -143,9 +149,11 @@
   plugins land in waves 2+. Names are frozen with v1."
   # :void.obs/instrument and :void.obs/exporter left this table in wave
   # 3: void/obs owns them, so they are generated above.
-  [["`:void.bus/backend`" "void/bus" "message-bus backends (wave 3, ADR-0012)"]
-   ["`:void.bus/codec`" "void/bus" "message codecs (wave 3)"]
-   ["`:void.admin/widget` `/page` `/dashboard-widget` `/menu`" "void/admin" "admin surfaces (wave 4)"]])
+  # :void.bus/backend and :void.bus/codec left this table in wave 3.6:
+  # void/bus owns them, so they are generated above — along with
+  # :void.bus/middleware, which the point-per-layer shape of the router
+  # asked for and which SPEC part II did not name.
+  [["`:void.admin/widget` `/page` `/dashboard-widget` `/menu`" "void/admin" "admin surfaces (wave 4)"]])
 
 # -- assemble ------------------------------------------------------------
 
