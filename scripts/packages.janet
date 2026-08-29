@@ -171,6 +171,20 @@
    {:dir "security" :deps [:void/core :void/http :void/crypto]
     :test-deps [:void/dev :void/html :void/htmx :void/rest :void/cache :void/auth]}
 
+   :void/mail
+   # A mail body is rendered through void/html's engine point, so it is
+   # written the way a page is and temple works for both — that edge is
+   # what "templates through void/html" (SPEC §5.19) means, and it is
+   # the only one the mailer itself has. void/jobs is void/mail-jobs'
+   # and void/auth is void/mail-auth's: two more plugins in this
+   # package, the void/cache — void/cache-http split again, so an
+   # application without a queue or without logins composes neither.
+   # The suite reaches void/dev for the inject client under the
+   # magic-link route and void/crypto because void/auth mints the code
+   # with it.
+   {:dir "mail" :deps [:void/core :void/html :void/jobs :void/auth]
+    :test-deps [:void/dev :void/crypto] :jpm [:spork]}
+
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
@@ -199,9 +213,13 @@
     :deps [:void/core :void/http :void/html :void/htmx
            :void/db :void/db-sqlite :void/db-postgres
            :void/cache :void/jobs
-           # wave 3: the demo signs people in, decides what they may
-           # edit and protects the forms — the exit criterion for 3.2-3.4
+           # wave 3: the demo signs people in (by password and by a
+           # link in the mail), decides what they may edit and protects
+           # the forms — the exit criterion for 3.2-3.5
            :void/crypto :void/auth :void/authz :void/security
+           # 3.5: the sign-in link is a letter, queued through the same
+           # void/jobs the counter runs in
+           :void/mail
            :void/dev]
     :example true :jpm [:spork :sqlite3]}})
 

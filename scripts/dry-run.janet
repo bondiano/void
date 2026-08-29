@@ -55,6 +55,9 @@
 (require "void/authz/init")
 (require "void/authz/http")
 (require "void/security/init")
+(require "void/mail/init")
+(require "void/mail/jobs")
+(require "void/mail/auth")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -69,7 +72,8 @@
                              :void/pressure :void/pressure-http
                              :void/obs :void/obs-http
                              :void/crypto :void/auth :void/auth-http :void/auth-db
-               :void/authz :void/authz-http :void/security
+                             :void/authz :void/authz-http :void/security
+                             :void/mail :void/mail-jobs :void/mail-auth
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide

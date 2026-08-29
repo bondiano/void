@@ -8,7 +8,8 @@
 > void/jobs void/jobs-db void/jobs-redis void/pressure
 > void/pressure-http void/obs void/obs-http void/crypto void/auth
 > void/auth-http void/auth-db void/authz void/authz-http
-> void/security void/dev void/bench)
+> void/security void/mail void/mail-jobs void/mail-auth void/dev
+> void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -26,7 +27,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.auth/deliver`
 
 - **owner:** `:void/auth` · **cardinality:** `:many`
-- Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires}. void/mail (3.5) will be one of these; until then an application delivers its own
+- Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires :to :claims :channel}. void/mail-auth is one of these, and an application that texts its codes contributes its own. Called by auth/challenge!, which refuses a challenge nobody delivered
 - **contribution schema:**
 
   ```janet
@@ -251,6 +252,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:make :function :name :keyword}
+  ```
+
+### `:void.mail/transport`
+
+- **owner:** `:void/mail` · **cardinality:** `:many`
+- Mail transports (ADR-0026): {:name :smtp :send (fn [delivery] receipt) :doc string?}; [:mail :transport] names the one this process uses. A delivery is {:message :bytes :id :at}; a receipt is {:transport :id :accepted :rejected}
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :health [:optional :function] :name :keyword :send :function}
   ```
 
 ### `:void.obs/exporter`
