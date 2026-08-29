@@ -6,10 +6,11 @@
 > void/db-sqlite void/db-postgres void/db-http void/redis
 > void/redis-http void/cache void/cache-redis void/cache-http
 > void/jobs void/jobs-db void/jobs-redis void/pressure
-> void/pressure-http void/obs void/obs-http void/crypto void/auth
-> void/auth-http void/auth-db void/authz void/authz-http
-> void/security void/mail void/mail-jobs void/mail-auth void/bus
-> void/bus-db void/bus-jobs void/dev void/bench)
+> void/pressure-http void/obs void/obs-http void/obs-otlp
+> void/crypto void/auth void/auth-http void/auth-db void/authz
+> void/authz-http void/security void/mail void/mail-jobs
+> void/mail-auth void/bus void/bus-db void/bus-jobs void/dev
+> void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.

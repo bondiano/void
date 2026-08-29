@@ -217,6 +217,36 @@
           (metrics/observe! job-duration [queue job] (- finished started))))))
   nil)
 
+# -- void/http's client --------------------------------------------------
+#
+# The one instrumentation with no component behind it: a client is a
+# module (void/http/client), its counters are process-wide, and there
+# is nothing in the system graph to name in `:needs`. It is skipped
+# where void/http is not on the module path and installs everywhere
+# else — including in a process that only *makes* requests.
+#
+# The OTLP exporter's own requests are in these numbers. That is not a
+# leak to be filtered: they are requests this process made, and an
+# exporter hammering a collector is exactly the thing an operator
+# wants to see here.
+
+(def client-requests (metrics/counter :void.http/client-requests-total {:doc "Outbound HTTP requests"}))
+(def client-responses (metrics/counter :void.http/client-responses-total {:doc "Outbound requests that got an answer"}))
+(def client-failures (metrics/counter :void.http/client-failures-total {:doc "Outbound requests that got none"}))
+(def client-timeouts (metrics/counter :void.http/client-timeouts-total {:doc "Outbound requests that timed out"}))
+(def client-connects (metrics/counter :void.http/client-connects-total {:doc "Connections opened"}))
+(def client-reconnects (metrics/counter :void.http/client-reconnects-total {:doc "Sockets reopened after the peer closed an idle keep-alive connection"}))
+(def client-seconds (metrics/counter :void.http/client-request-seconds-total {:doc "Total time spent waiting for outbound responses"}))
+(def client-bytes-out (metrics/counter :void.http/client-sent-bytes-total {:doc "Bytes written to outbound connections"}))
+(def client-bytes-in (metrics/counter :void.http/client-received-bytes-total {:doc "Bytes read from outbound connections"}))
+
+(def- client-metrics
+  [[client-requests :requests] [client-responses :responses]
+   [client-failures :failures] [client-timeouts :timeouts]
+   [client-connects :connects] [client-reconnects :reconnects]
+   [client-seconds :request-us us->s]
+   [client-bytes-out :bytes-out] [client-bytes-in :bytes-in]])
+
 # -- applying an instrumentation -----------------------------------------
 
 (defn- attach!
@@ -234,10 +264,12 @@
   docstring). Every one of them is skipped when its component is not
   in the composition.
 
-  There is no http-client instrumentation because void has no HTTP
-  client yet (ROADMAP 4.1). The outbound half of the contract exists
-  regardless — `trace/inject!` writes `traceparent` into whatever
-  makes the call.``
+  The http-client one is the exception to "each through its
+  component": `void/http/client` (ROADMAP 4.1) is a module with
+  process-wide counters and nothing in the system graph to name, so it
+  needs nothing and installs wherever void/http is on the module path.
+  The outbound trace context stays the caller's — `trace/inject!`
+  writes `traceparent` into the headers of whatever makes the call.``
   [{:name :void.db/pool
     :doc "Pool occupancy, checkout waits and statement timing from :db/pool"
     :needs [:db/pool]
@@ -264,6 +296,21 @@
                           (reader boot :void/cache
                                   (fn cache-stats [cache]
                                     (with-dyns [cache-dyn cache] (stats)))))))}
+
+   {:name :void.http/client
+    :doc "Outbound request rate, failures, reconnects and timing from void/http/client"
+    :needs []
+    :install (fn install-client [boot]
+               (when-let [stats (module-fn "void/http/client" 'stats)]
+                 (attach! client-metrics
+                          # nothing until the process has actually made
+                          # a request: a worker that never calls out
+                          # should report no series rather than nine
+                          # zeros, which is the same bargain `from`
+                          # makes for an absent stats key
+                          (fn read-client []
+                            (let [s (stats)]
+                              (when (pos? (get s :requests 0)) s))))))}
 
    {:name :void.jobs/events
     :doc "Job lifecycle events and execution time, off the :void.jobs/event hook"

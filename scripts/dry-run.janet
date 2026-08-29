@@ -1,7 +1,7 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
 ### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
-### void/redis-http + void/cache + void/jobs + void/pressure + void/obs +
+### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
 ### void/crypto + void/auth + void/auth-http + void/auth-db +
 ### void/bus + void/bus-db + void/bus-jobs + void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
@@ -49,6 +49,7 @@
 (require "void/pressure/http")
 (require "void/obs/init")
 (require "void/obs/http")
+(require "void/obs/otlp")
 (require "void/crypto/init")
 (require "void/auth/init")
 (require "void/auth/http")
@@ -74,7 +75,7 @@
                              :void/cache :void/cache-redis :void/cache-http
                              :void/jobs :void/jobs-db :void/jobs-redis
                              :void/pressure :void/pressure-http
-                             :void/obs :void/obs-http
+                             :void/obs :void/obs-http :void/obs-otlp
                              :void/crypto :void/auth :void/auth-http :void/auth-db
                              :void/authz :void/authz-http :void/security
                              :void/mail :void/mail-jobs :void/mail-auth

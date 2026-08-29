@@ -24,7 +24,7 @@
 (assert (index-of :obs/registry (report :components)))
 (assert (index-of :obs/tracer (report :components)))
 (assert (get-in report [:extensions :void.obs/exporter])
-        "it owns the exporter point the OTLP exporter of wave 4 will contribute to")
+        "it owns the exporter point void/obs-otlp contributes to (ADR-0027) — and owns it whether or not that plugin is composed")
 (assert (get-in report [:extensions :void.obs/instrument]))
 (assert (pos? (get-in report [:extensions :void.obs/instrument :contributions]))
         "and ships the instrumentations of the wave-2 data plugins itself")
@@ -33,7 +33,7 @@
   [[{:obs {:max-label-sets 0}} "a cardinality cap of zero"]
    [{:obs {:runtime {:interval 0}}} "a sampler that never samples"]
    [{:obs {:trace {:sample-rate 2}}} "a sampling rate above 1"]
-   [{:obs {:trace {:exporter :otlp}}} "an exporter that does not exist yet"]
+   [{:obs {:trace {:exporter :otlp}}} "an exporter that is a plugin (void/obs-otlp), not a value of this enum"]
    [{:obs {:log {:sample -1}}} "a negative log sampling rate"]
    [{:obs {:log {:file {}}}} "a file sink with no path"]
    [{:obs {:enabled "yes"}} "a flag that is not a boolean"]]
@@ -71,8 +71,8 @@
 (assert (pos? (s :metrics)))
 (assert (s :sampling))
 (assert (get-in s [:trace :enabled]))
-(assert (empty? (s :instrumented))
-        "nothing to instrument in a composition that is only obs")
+(assert (= [:void.http/client] (tuple ;(s :instrumented)))
+        "nothing to instrument in a composition that is only obs — except the HTTP client, which is a module rather than a component and reports no series until this process has actually called out")
 
 (def text (obs/render))
 (assert (string/find "# TYPE void_obs_loop_lag_seconds histogram" text)

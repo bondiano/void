@@ -44,13 +44,18 @@
 ### obs metrics` from a shell, and every log record inside a request
 ### carrying the trace id of the span it happened in.
 ###
-### **What is deliberately not here yet.** OTLP export — of spans, of
-### metrics and of logs — is wave 4 (ROADMAP 4.1), because OTLP over
-### HTTP needs an HTTP *client* and void has none until void/proto.
-### The seam is already in place and it is an extension point:
-### `:void.obs/exporter` receives every finished sampled span, so the
-### OTLP exporter lands as one more contribution rather than as a
-### change to any of this.
+###   void/obs-otlp  OTLP/HTTP export of the spans and the metrics to
+###                  a collector — ./otlp, wave 4 (ADR-0027). It
+###                  arrived as a *contribution* to `:void.obs/exporter`
+###                  and a second projection of `metrics/snapshot`, so
+###                  nothing in the tracer or the registry changed to
+###                  let it in — which is what the point was for.
+###
+### **What is deliberately not here.** An OTLP sink for *logs*. The
+### HTTP client the other two signals needed exists now, so this is a
+### choice and not a gap (ADR-0027 §7): every record that reaches the
+### file reaches a collector through the agent already reading it,
+### which is how most deployments would ship logs anyway.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -158,7 +163,8 @@
   the `:dev` profile — a span per line is how tracing is visible
   before there is a collector — and to `:none` everywhere else, since
   a production process should not pay for a log line per span nobody
-  reads. OTLP is wave 4.
+  reads. Composing `void/obs-otlp` is what points spans at a
+  collector, and it needs nothing from this value.
 
   `[:log :sample]` is 1 — no sampling. A framework that quietly
   dropped log records would be a support case nobody could

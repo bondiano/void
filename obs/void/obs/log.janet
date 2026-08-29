@@ -30,12 +30,13 @@
 ###                `reopen!` after a move); a log writer that renames
 ###                its own files is a second, worse cron.
 ###
-### **The OTLP log sink is wave 4, not a gap here.** OTLP/HTTP needs an
-### HTTP *client*, and void has none until void/proto (ROADMAP 4.1) —
-### the same reason the OTLP span exporter waits. Every log line that
-### reaches a file here reaches a collector through the agent that is
+### **There is no OTLP log sink, and that is now a choice.** The HTTP
+### client that spans and metrics needed exists (`void/http/client`,
+### ADR-0027 §7), so nothing technical is in the way: every log line
+### that reaches a file here reaches a collector through the agent
 ### already reading it (vector, fluent-bit, promtail), which is how
-### most deployments would ship it anyway.
+### most deployments would ship it anyway. The day that argument stops
+### holding, the sink is one contribution to `:void.core/log-sink`.
 ###
 ### **Sampling replaces the sink list rather than adding to it.**
 ### Contributed sinks are *additive* (plugin/start! appends them), and

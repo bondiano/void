@@ -45,9 +45,9 @@
 ###
 ### **Where spans go is not this module's business.** `:void.obs/exporter`
 ### contributions receive every finished sampled span; void/obs ships
-### the log exporter, and the OTLP exporter lands in wave 4 on top of
-### void/proto (ROADMAP 4.1) as one more contribution rather than as a
-### change here.
+### the log exporter and void/obs-otlp (./otlp, ADR-0027) ships the
+### OTLP one — which landed as one more contribution and not as a
+### change to anything here, which is what the point was for.
 
 (import void/core/log :as log)
 (import ./metrics :as metrics)
@@ -359,10 +359,10 @@
       (trace/inject! @{"content-type" "application/json"})
 
   This is the "traceparent out" half of ROADMAP 3.1 — the half that
-  does not need an HTTP client of our own (void has none yet; the
-  point of the exercise is that whatever makes the call, from
-  void/redis to a future void/http-client, propagates the context with
-  one call).``
+  does not need an HTTP client of our own — and now that void has one
+  (`void/http/client`, ADR-0027) it is still the caller who injects:
+  whatever makes the call, from void/redis to the client, propagates
+  the context with one call.``
   [headers &opt span]
   (default span (current))
   (when span

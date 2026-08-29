@@ -131,8 +131,10 @@
    # void/pressure is here for its loop-lag *meter*
    # (`void/pressure/sample`), the way void/bench/probe takes it — the
    # module, never the plugin: a process that observes itself must not
-   # thereby start shedding. void/http is void/obs-http's, a separate
-   # plugin in this package (the void/cache — void/cache-http split).
+   # thereby start shedding. void/http is two plugins' in this package
+   # (the void/cache — void/cache-http split): void/obs-http's server
+   # side, and void/obs-otlp's client — the OTLP exporter POSTs to a
+   # collector through void/http/client (ADR-0027).
    # void/dev and void/cache are the suite's: inject for the endpoints,
    # a real component for the instrumentation. void/rest is
    # test-support/overhead-probe.janet's, which measures what obs costs
