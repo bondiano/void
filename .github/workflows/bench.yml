@@ -17,6 +17,7 @@ on:
       - "db-postgres/**"
       - "fdwait/**"
       - "pressure/**"
+      - "ws/**"
       - "bench/**"
       - ".github/workflows/bench.yml"
 
@@ -86,10 +87,17 @@ jobs:
       # unnoticed between waves. It has no budget of its own — B1's is
       # B1's — and the merge-base comparison below simply ignores a
       # target the baseline does not have.
+      # b4 is the broadcast row (§8.2, ROADMAP 4.2): a thousand websocket
+      # connections in one room. It brings its own generator rather than
+      # wrk, and it needs a file-descriptor limit above the thousand it
+      # opens — the runner's report says how many it actually held, so a
+      # limit that quietly capped the run is visible rather than folded
+      # into the numbers.
       - name: Bench head
         run: |
+          ulimit -n 8192 || true
           cd bench
-          janet main.janet b0 b1 b1-obs b2 b3 --runs 2 --duration 30 --warmup 10 \
+          janet main.janet b0 b1 b1-obs b2 b3 b4 --runs 2 --duration 30 --warmup 10 \
             --out /tmp/bench-head.jdn
 
       - name: Bench merge-base
@@ -109,6 +117,10 @@ jobs:
             if [ -d /tmp/base/bench/apps/b2-pg-query ]; then
               BASE_TARGETS="$BASE_TARGETS b2 b3"
             fi
+            if [ -d /tmp/base/bench/apps/b4-ws-broadcast ]; then
+              BASE_TARGETS="$BASE_TARGETS b4"
+            fi
+            ulimit -n 8192 || true
             janet main.janet $BASE_TARGETS --runs 2 --duration 30 --warmup 10 \
               --out /tmp/bench-base.jdn
           else

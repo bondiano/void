@@ -40,6 +40,7 @@
 (add-tree (string (os/cwd) "/security"))
 (add-tree (string (os/cwd) "/mail"))
 (add-tree (string (os/cwd) "/bus"))
+(add-tree (string (os/cwd) "/ws"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -79,6 +80,8 @@
 (require "void/bus/init")
 (require "void/bus/db")
 (require "void/bus/jobs")
+(require "void/ws/init")
+(require "void/ws/htmx")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -95,6 +98,7 @@
                :void/authz :void/authz-http :void/security
                :void/mail :void/mail-jobs :void/mail-auth
                :void/bus :void/bus-db :void/bus-jobs
+               :void/ws :void/ws-htmx
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide

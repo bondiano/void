@@ -7,6 +7,8 @@
 ### iterable — including a fiber — streamed as chunked transfer coding
 ### (that is also how SSE flows). Header names are lowercase strings on
 ### both sides; a repeated header (set-cookie) is an array of values.
+### One more key ends HTTP instead of framing it: `:void.http/upgrade`
+### (see `upgrade` below) hands the socket to another protocol.
 ### This module only builds and reads tables — no I/O, no globals.
 
 (import ./wire :as wire)
@@ -66,6 +68,36 @@
   "The default 404."
   [&opt body]
   (text 404 (or body "not found")))
+
+(defn upgrade
+  ``A protocol-upgrade response: the head goes out as an ordinary
+  response (101 by default, with `headers`), and then `take-over` —
+  `(fn [connection leftover-bytes])` — owns the socket until it
+  returns, at which point the connection is closed.
+
+      (ring/upgrade @{"upgrade" "websocket"
+                      "connection" "Upgrade"
+                      "sec-websocket-accept" accept}
+                    (fn [conn rest] (ws-loop conn rest)))
+
+  `leftover-bytes` are the bytes that had already arrived behind the
+  request head — a client may send its first frame in the same packet
+  as the handshake, and dropping them would lose a message before the
+  new protocol had said a word.
+
+  This is the whole seam void/ws needs from the kernel: HTTP ends on
+  that socket, no keep-alive decision is taken and nothing else is
+  written. Everything before it — routing, sessions, authentication,
+  authorization, route metadata — happened the way it does for any
+  other route, because a handler that answers this is an ordinary
+  handler.``
+  [headers take-over &opt status]
+  (unless (function? take-over)
+    (errorf "ring/upgrade needs a (fn [connection leftover]) to hand the socket to, got %q"
+            take-over))
+  (def resp (response (or status 101) nil headers))
+  (put resp :void.http/upgrade take-over)
+  resp)
 
 # -- request access ------------------------------------------------------
 

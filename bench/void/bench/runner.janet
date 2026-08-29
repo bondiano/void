@@ -12,6 +12,7 @@
 (import spork/json)
 (import ./targets :as targets)
 (import ./wrk :as wrk)
+(import ./ws :as ws)
 (import ./results :as results)
 (import ./pg :as pg)
 
@@ -53,7 +54,11 @@
                         "GOMAXPROCS" "1"
                         # a go.work up the tree must not leak into the
                         # baseline build
-                        "GOWORK" "off"}))
+                        "GOWORK" "off"}
+                       # what the load shape has to tell the server —
+                       # B4's broadcast rate is the generator's number,
+                       # not a second copy of it in the :cmd string
+                       (get spec :env {})))
   (put env :out logf)
   (put env :err logf)
   (def proc
@@ -158,12 +163,48 @@
     (printf "    run %d/%d (%ds)..." (inc i) n (opts :duration))
     (wrk/run opts)))
 
+(defn- run-broadcast-target
+  ``B4's методика (ROADMAP 4.2): one generator run of its own, because
+  the load shape is a fan-out and wrk speaks HTTP. There is no second
+  mode to average against and no median over runs — the run is already
+  a fixed-rate one lasting `:duration` seconds, and the percentile it
+  reports is over every message it received.
+
+  The runtime window is opened the same way as for the fixed-rate wrk2
+  runs: the probe is reset before the run and read after, so the
+  loop-lag numbers are the ones the process saw while it was fanning
+  out.``
+  [name spec bench settings]
+  (def server
+    (wait-ready
+      (start-target name
+                    (merge spec {:env {"BENCH_BROADCAST_RATE"
+                                       (string (bench :rate))}}))))
+  (defer (stop-target server)
+    (def row @{:bench (spec :bench)})
+    (printf "  broadcast to %d connections (%d/s per connection):"
+            (bench :connections) (bench :rate))
+    (def probed (read-probe (spec :port) true))
+    (def report
+      (ws/run {:script (string root "/loadgen/ws-broadcast.janet")
+               :url (string "ws://127.0.0.1:" (spec :port) (bench :path))
+               :connections (bench :connections)
+               :duration (settings :duration)
+               :warmup (max (get bench :warmup 3) (settings :warmup))}))
+    (put row :broadcast (ws/summarize report))
+    (when probed
+      (when-let [after (read-probe (spec :port))]
+        (put row :runtime after)))
+    row))
+
 (defn run-target
   ``The full методика for one target: spawn → ready → warmup → runs ×
   duration per available mode → medians. `tools` is
   {:wrk <cmd-or-nil> :wrk2 <cmd-or-nil>}. Returns the result row.``
   [name spec settings tools]
   (def bench (targets/benches (spec :bench)))
+  (when (= :ws (bench :generator))
+    (break (run-broadcast-target name spec bench settings)))
   (def base-opts
     @{:url (string "http://127.0.0.1:" (spec :port) (bench :path))
       :threads (bench :threads)
@@ -235,6 +276,17 @@
       (printf "%-18s %-10s %-16s %10s %10s %10s"
               tname (row :bench) (string "latency@" (l :rate))
               "" (fmt-ms (l :p50)) (fmt-ms (l :p99))))
+    (when-let [b (row :broadcast)]
+      # :rps here is messages delivered to peers per second, and the
+      # percentiles are delivery time — the column headings mean what
+      # §8.2's B4 row means, not what its B0-B3 rows do
+      (printf "%-18s %-10s %-16s %10s %10s %10s"
+              tname (row :bench)
+              (string "delivery/" (b :connections) "c")
+              (fmt-rps (b :rps)) (fmt-ms (b :p50)) (fmt-ms (b :p99)))
+      (each k [:errors :closed :undecodable]
+        (when-let [n (get b k)]
+          (printf "%-18s !! %d %s" "" n k))))
     (when-let [ll (get-in row [:runtime :loop-lag])]
       (printf "%-18s %-10s %-16s %10s %10s %10s"
               "" "" "loop-lag" ""
@@ -426,7 +478,13 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
         {:runs (math/floor (num-flag flags :runs (if (flags :quick) 2 3)))
          :duration (math/floor (num-flag flags :duration (if (flags :quick) 5 60)))
          :warmup (math/floor (num-flag flags :warmup (if (flags :quick) 3 30)))})
-      (def tools (detect-tools))
+      # B4 brings its own generator, so a run that asks only for it
+      # needs neither wrk nor wrk2 on the machine
+      (def wrk-needed?
+        (some |(not= :ws (get-in targets/benches
+                                 [(get-in targets/targets [$ :bench]) :generator]))
+              tnames))
+      (def tools (if wrk-needed? (detect-tools) @{}))
       (def rows @{})
       (each tname tnames
         (def spec (targets/targets tname))
