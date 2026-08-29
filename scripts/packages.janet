@@ -223,6 +223,25 @@
     :deps [:void/core :void/http :void/html :void/htmx :void/dev]
     :example true :jpm [:spork]}
 
+   :example/shop
+   # The wave-3 demo, and the one that puts the whole framework in one
+   # application: catalog, cart, checkout, payments, an admin desk, a
+   # JSON API with its OpenAPI document, and the enterprise layer under
+   # all of it — obs, pressure, auth, authz, security, mail and bus.
+   # Both drivers are edges for the same reason blog's are: the suite
+   # runs on sqlite always and on Postgres when VOID_TEST_PG names a
+   # server, and main.janet requires exactly one of them at boot.
+   {:dir "examples/shop"
+    :deps [:void/core :void/http :void/html :void/htmx
+           :void/rest :void/openapi
+           :void/db :void/db-sqlite :void/db-postgres
+           :void/cache :void/jobs :void/redis
+           :void/obs :void/pressure
+           :void/crypto :void/auth :void/authz :void/security
+           :void/mail :void/bus
+           :void/dev]
+    :example true :jpm [:spork :sqlite3]}
+
    :example/blog
    # The wave-2 demo: the same CRUD application on either driver. Both
    # are edges, because the suite runs against sqlite always and

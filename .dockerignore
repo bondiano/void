@@ -1,0 +1,20 @@
+# Docker build context for examples/shop (its Dockerfile installs the
+# framework from this checkout, so the context is the repository root).
+# Everything here is either build output that must be rebuilt inside
+# the image or noise that would bust the layer cache.
+.git
+.github
+.omc
+**/jpm_tree
+**/build
+**/*.so
+**/*.dylib
+**/*.o
+**/*.a
+**/*.jimage
+**/*.sqlite3
+**/*.sqlite3-*
+**/tmp
+**/.tmp-*
+bench/results
+.DS_Store
