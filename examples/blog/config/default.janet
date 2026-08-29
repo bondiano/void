@@ -71,6 +71,20 @@
  :jobs {:queues {:maintenance {:concurrency 2}
                  :mail {:concurrency 2}}}
 
+ # -- wave 3.6 -----------------------------------------------------------
+ #
+ # The bus lives in the same database as the data, which is the whole
+ # reason `bus/publish-tx!` is possible: the audit message and the row
+ # it is about commit in one transaction (ADR-0012). :group is this
+ # application's default consumer group; ./audit reads under its own
+ # (:audit), so a slow trail never holds up the counter job.
+ #
+ # :codec :jdn rather than the default :json — nothing outside this
+ # process consumes these messages, and jdn round-trips a keyword. An
+ # application whose events are read by a second service leaves the
+ # default alone, which is why it is the default.
+ :bus {:backend :db :group :blog :codec :jdn}
+
  # Every route that is not explicitly public has to name a policy, and
  # a route that forgets one fails the *boot* rather than the request
  # (ADR-0024 §6). This is the posture an application takes on purpose.

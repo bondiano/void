@@ -13,6 +13,11 @@
 ### (by password or by a link in the mail), deciding who may edit what,
 ### and the browser-facing protections are the same list on sqlite and
 ### on Postgres (test/auth-test.janet runs twice as well).
+###
+### Wave 3.6 added three more and one file (./audit). The audit trail
+### is a bus consumer: no handler calls it, no entity has a callback,
+### and deleting ./audit stops the trail without changing anything
+### else.
 (import void)
 (import void/http)
 (import void/html)
@@ -32,6 +37,9 @@
 (import void/mail)
 (import void/mail/jobs)
 (import void/mail/auth)
+(import void/bus)
+(import void/bus/db)
+(import void/bus/jobs)
 (import void/dev)
 (import ./app)
 
@@ -68,6 +76,12 @@
    # queue this application already runs — void/mail-jobs is the whole
    # of that, and no handler mentions it (ADR-0026 §5)
    :void/mail :void/mail-jobs :void/mail-auth
+   # 3.6: the audit trail. void/bus-db puts the message log, the
+   # consumer cursors and the outbox in the same database as the data —
+   # so "the article exists" and "the trail says so" commit together
+   # (ADR-0012). void/bus-jobs puts the queue's own lifecycle on the
+   # bus, and the trail gets it for nothing
+   :void/bus :void/bus-db :void/bus-jobs
    :void/dev
    :blog/app])
 

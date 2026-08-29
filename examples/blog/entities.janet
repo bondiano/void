@@ -49,6 +49,21 @@
   :db/table "comments"
   :db/rels {:article [:belongs-to :Article :article-id]})
 
+# One line of the audit trail (wave 3.6). Written only by ./audit, and
+# only from a message: :message-id is unique, so a redelivery is
+# recognised by the *database* rather than by a consumer trusting
+# itself to be idempotent — which is the shape an at-least-once bus
+# asks a writer to have.
+(db/defentity AuditEvent
+  {:id [:int {:db/pk true :db/type "integer"}]
+   :message-id [:string {:db/unique true :db/type "text"}]
+   :topic [:string {:db/type "text"}]
+   :correlation-id [:string {:db/type "text"}]
+   :actor [:optional [:string {:db/type "text"}]]
+   :detail [:string {:db/type "text"}]
+   :at [:string {:db/type "text"}]}
+  :db/table "audit_events")
+
 # -- form DTOs: projections of the entities above, not copies ------------
 
 (def NewArticle

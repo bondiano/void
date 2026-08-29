@@ -58,7 +58,8 @@
                  :jobs-db {:table "blog_auth_test_jobs"}}})]))
 
 (def app-tables
-  ["comments" "articles" "authors" "auth_challenges" "auth_tokens" "schema_migrations"])
+  ["audit_events" "comments" "articles" "authors"
+   "auth_challenges" "auth_tokens" "schema_migrations"])
 
 (defn- drop-app-tables! []
   (each t app-tables
@@ -92,7 +93,11 @@
                           (engine :config))}})
 
   (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue
-                                         :crypto/lib :auth/registry :authz/registry]})]
+                                         :crypto/lib :auth/registry :authz/registry
+                                         # 3.6: every write announces
+                                         # itself on the bus, in the
+                                         # transaction that made it
+                                         :bus/broker :bus.db/schema]})]
     (drop-app-tables!)
     (db/migrate-up! {:dir "db/migrations"})
 

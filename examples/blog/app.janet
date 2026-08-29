@@ -27,6 +27,13 @@
 ### `:public` where it means it. A route that forgets one does not
 ### serve traffic and then get audited: it fails the boot.
 ###
+### Wave 3.6 added an audit trail and touched the handlers three
+### times, in the only way an audit trail should touch them: three
+### `audit/record-tx!` calls that publish a *fact* into the transaction
+### that made it. Nothing here writes an audit row, knows where one
+### goes or knows that ./audit exists — that file subscribes to the bus
+### and is deletable.
+###
 ### Handlers are registered as symbols, so a redefinition in the repl —
 ### or a save with `void dev` running — is live (ADR-0002).
 (import void/core/plugin :as plugin)
@@ -46,6 +53,7 @@
 (import ./entities :as e)
 (import ./views :as views)
 (import ./jobs :as blog-jobs)
+(import ./audit :as audit)
 
 # -- who is asking -------------------------------------------------------
 
@@ -56,6 +64,12 @@
   []
   (when-let [id (auth/current-user)]
     (scan-number (last (auth/subject-of (id :subject))))))
+
+(defn subject-string
+  "The signed-in subject as it goes into the audit trail (`author:42`),
+  or nil for a visitor."
+  []
+  (when-let [id (auth/current-user)] (id :subject)))
 
 (defn article-resource
   ``What the policy on the edit routes decides about: the row itself.
@@ -130,11 +144,14 @@
   (if (empty? (result :errors))
     (do
       (def v (result :value))
-      (db/insert! e/Article {:author-id (current-author-id)
-                             :title (v :title)
-                             :body (v :body)
-                             :comment-count 0
-                             :created-at (e/now)})
+      (def created
+        (db/insert! e/Article {:author-id (current-author-id)
+                               :title (v :title)
+                               :body (v :body)
+                               :comment-count 0
+                               :created-at (e/now)}))
+      (audit/record-tx! :article/published (subject-string)
+                        {:article (created :id) :title (v :title)})
       (invalidate-index!)
       (views/render-index (recent-articles) {}))
     (views/render-index (recent-articles) {:values (req :form)
@@ -271,6 +288,9 @@
       (unless (empty? changed)
         (log/info "article updated" :ns "blog.app"
                   :article (article :id) :columns (sorted (keys changed)))
+        (audit/record-tx! :article/updated (subject-string)
+                          {:article (article :id)
+                           :columns (map string (sorted (keys changed)))})
         (invalidate-index!))
       (ring/redirect (string "/articles/" (article :id))))
     (html/page (views/edit-view article (req :form) (result :errors))
@@ -281,6 +301,8 @@
   [req]
   (def article (load-article req))
   (db/delete! e/Article (article :id))
+  (audit/record-tx! :article/deleted (subject-string)
+                    {:article (article :id) :title (article :title)})
   (invalidate-index!)
   (if (htmx/request? req)
     (htmx/redirect (ring/response 204) "/")
@@ -301,6 +323,12 @@
                                    {:article-id (article :id)
                                     :created-at (e/now)}))
       (jobs/enqueue :recount-comments (article :id))
+      # the fact, into the transaction that made it (:void.db/txn true
+      # on the route): the trail cannot say a comment was posted that
+      # was not, and cannot miss one that was
+      (audit/record-tx! :comment/posted nil
+                        {:article (article :id)
+                         :author (get-in result [:value :author-name])})
       (html/page (views/article-view (load-article req)) {:layout views/layout}))
     (html/page (views/article-view article (req :form) (result :errors))
                {:layout views/layout})))
@@ -353,8 +381,17 @@
 
 # -- manifest ------------------------------------------------------------
 
+(plugin/contribute! :void.core/hooks
+  {:hook :after-start
+   # after the bus started its consumers (:bus/consume is 800): the
+   # first denial should have somewhere to go
+   :phase 900
+   :name :blog/audit
+   :doc "Turn void/authz's refusals into bus messages (see ./audit)"
+   :fn audit/install!})
+
 (plugin/defplugin blog/app
-  :doc "blog — a CRUD application on void/db, void/jobs and void/cache, with sign-in, a row-level policy and CSRF from wave 3."
+  :doc "blog — a CRUD application on void/db, void/jobs and void/cache, with sign-in, a row-level policy and CSRF from wave 3, and an audit trail that rides the transactional outbox from 3.6."
   :version "0.1.0"
   :requires {:void/http ">=0.0.1" :void/html ">=0.0.1" :void/htmx ">=0.0.1"
              :void/db ">=0.0.1" :void/db-http ">=0.0.1"
@@ -362,4 +399,7 @@
              :void/auth ">=0.0.1" :void/auth-http ">=0.0.1"
              :void/authz ">=0.0.1" :void/authz-http ">=0.0.1"
              :void/security ">=0.0.1"
-             :void/mail ">=0.0.1" :void/mail-auth ">=0.0.1"})
+             :void/mail ">=0.0.1" :void/mail-auth ">=0.0.1"
+             # 3.6: the audit trail is a bus consumer, and the facts it
+             # records ride the transactional outbox
+             :void/bus ">=0.0.1" :void/bus-db ">=0.0.1"})
