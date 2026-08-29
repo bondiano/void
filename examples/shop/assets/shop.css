@@ -1,0 +1,151 @@
+/* void shop — one stylesheet, served by void/http's static middleware
+   under [:html :assets :prefix] and linked through (html/asset …), so
+   the same markup works with the fingerprinted build. */
+
+:root {
+  --ink: #14161a;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --bg: #fbfbfc;
+  --accent: #2f5bea;
+  --accent-ink: #fff;
+  --ok: #12805c;
+  --warn: #b45309;
+  --bad: #b42318;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.site {
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+header.site .bar {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+header.site .brand {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+
+header.site nav { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+header.site nav form { display: inline; }
+header.site .who { color: var(--muted); font-size: 0.9rem; }
+
+.badge {
+  display: inline-block;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+main { max-width: 62rem; margin: 0 auto; padding: 1.75rem 1.25rem 4rem; }
+
+h1 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 0.35rem; }
+h2 { font-size: 1.2rem; margin: 2rem 0 0.75rem; }
+p.lede { color: var(--muted); margin-top: 0; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.card .name { font-weight: 600; }
+.card .sku { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.04em; }
+.card .price { font-variant-numeric: tabular-nums; font-weight: 600; }
+.card .stock { font-size: 0.85rem; color: var(--ok); }
+.card .stock.out { color: var(--bad); }
+
+table.lines { width: 100%; border-collapse: collapse; background: #fff; }
+table.lines th, table.lines td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.65rem 0.5rem;
+  text-align: left;
+}
+table.lines td.num, table.lines th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.lines tfoot td { font-weight: 600; border-bottom: none; }
+
+form.void-form { display: flex; flex-direction: column; gap: 0.6rem; max-width: 24rem; }
+form.void-form label { font-size: 0.9rem; color: var(--muted); }
+input, select, textarea {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+}
+input[type="number"] { width: 5rem; }
+
+button, .button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+button.quiet { background: #fff; color: var(--ink); border-color: var(--line); }
+
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem; }
+.panel { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem; }
+
+.notice { padding: 0.75rem 1rem; border-radius: var(--radius); background: #eef2ff; margin: 1rem 0; }
+.notice.bad { background: #fef2f2; color: var(--bad); }
+.notice.ok { background: #ecfdf5; color: var(--ok); }
+
+.field-errors { color: var(--bad); font-size: 0.85rem; margin: 0.1rem 0 0; }
+
+.status {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--accent);
+}
+.status.paid { background: #ecfdf5; color: var(--ok); }
+.status.shipped { background: #eef6ff; color: #1d4ed8; }
+.status.cancelled { background: #fef2f2; color: var(--bad); }
+
+footer.site { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding: 1.25rem; text-align: center; }

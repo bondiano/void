@@ -1,0 +1,5 @@
+jpm_tree/
+db/*.sqlite3
+db/*.sqlite3-*
+# the :file mail transport, in dev
+tmp/

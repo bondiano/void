@@ -19,6 +19,8 @@
     "/slow" (do (ev/sleep 0.3) (ring/text 200 "slow done"))
     "/boom" (error "unguarded")
     "/nil" nil
+    "/go" (ring/redirect "/hello")
+    "/gone" (ring/response 204)
     (ring/not-found)))
 
 (def inst
@@ -101,6 +103,36 @@
 (assert (= "hello" pb1))
 (assert (= 404 (p2 :status)) "handler-level 404 for unknown path")
 (:close conn)
+
+# -- an empty body is framed, or a keep-alive client waits forever -------
+#
+# A response with no body and no Content-Length ends when the
+# connection does (RFC 9112 §6.3). On a keep-alive connection that is a
+# client hanging until its own timeout — and `ring/redirect` has no
+# body, so it is every redirect an application ever sends. The bodyless
+# statuses are the exception: 204 must carry no Content-Length at all.
+
+(def kconn (connect))
+(:write kconn "POST /go HTTP/1.1\r\nHost: t\r\n\r\n")
+(def [hgo bgo] (read-response kconn))
+(assert (= 302 (hgo :status)))
+(assert (= "/hello" (get-in hgo [:headers "location"])))
+(assert (= "0" (get-in hgo [:headers "content-length"]))
+        "a bodyless redirect says so with Content-Length: 0")
+(assert (or (nil? bgo) (empty? bgo)))
+
+# and the proof that it is framed: the same connection answers again,
+# which a client could not have got to if it were still waiting for the
+# redirect's body
+(:write kconn "GET /hello HTTP/1.1\r\nHost: t\r\n\r\n")
+(def [hafter bafter] (read-response kconn))
+(assert (= "hello" bafter) "the connection carries on after an empty response")
+(:close kconn)
+
+(def [h204 _] (fetch "GET /gone HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
+(assert (= 204 (h204 :status)))
+(assert (nil? (get-in h204 [:headers "content-length"]))
+        "204 carries no Content-Length — RFC 9110 §8.6 forbids one")
 
 # -- HTTP/1.0 closes by default ------------------------------------------
 

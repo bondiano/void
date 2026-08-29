@@ -1,0 +1,198 @@
+### void shop — the whole thing, running.
+###
+###     docker compose up --build          the shop on http://localhost:8080
+###     docker compose --profile obs up    plus prometheus and grafana
+###
+### Six services, and every one of them is a claim this example makes
+### about void being deployable rather than demonstrable:
+###
+###   postgres   the data, the queue, the message log and the outbox —
+###              one database, because that is what makes an order and
+###              the fact that it happened commit together (ADR-0012)
+###   redis      sessions and the shared cache, which is what lets the
+###              web tier be more than one process (ADR-0010)
+###   mailpit    an SMTP relay with a web inbox: the receipts, the
+###              cancellations and the magic-link letters land in it
+###   migrate    a one-shot `void db migrate` + `void shop seed`
+###   web        the storefront and the JSON API
+###   worker     the same image, with the worker and the scheduler on
+###
+### web and worker run **the same image and the same code**; what
+### differs is two environment variables. That is the deployment shape
+### void/jobs is built for: the process that enqueues is usually not the
+### process that runs.
+
+name: void-shop
+
+x-app: &app
+  build:
+    context: ../..
+    dockerfile: examples/shop/Dockerfile
+  environment: &app-env
+    VOID_PROFILE: prod
+    VOID_SHOP_DB: postgres
+    VOID_SHOP_REDIS: "1"
+    # config/prod.janet reads these as {:secret "…"} references, so the
+    # values live in the environment and the config tree holds an opaque
+    # box that does not print (ADR-0007 §5). Change them for anything
+    # that is not a laptop.
+    SHOP_SECRET_KEY: development-signing-key-change-me
+    # every connection detail is an env var rather than a line in
+    # config/prod.janet, which is what lets one image run against any
+    # database (VOID_DB_POSTGRES__URL -> [:db-postgres :url])
+    VOID_DB_POSTGRES__URL: postgres://shop:shop@postgres:5432/shop
+    # redis is configured by parts rather than by a URL: [:redis :url]
+    # is read only for the keys the slice does not already carry, and
+    # the plugin's own defaults carry :host and :port, so a URL loses
+    # to them ([:db-postgres] has no such defaults, which is why the
+    # line above is a URL)
+    VOID_REDIS__HOST: redis
+    VOID_REDIS__PORT: "6379"
+    VOID_REDIS__DATABASE: "0"
+    VOID_MAIL__SMTP__HOST: mailpit
+    VOID_MAIL__SMTP__PORT: "1025"
+    VOID_MAIL__BASE_URL: http://localhost:8080
+    # /metrics answers this bearer token and nothing else
+    VOID_OBS_HTTP__TOKEN: prometheus-scrape-token
+    # /openapi.json and the Swagger UI at /docs are a dev-profile thing
+    # by default (void/openapi), and this compose file is a demo: they
+    # are on so the JSON side of the shop can be read without a
+    # checkout. A deployment that is not a demo leaves this out.
+    VOID_OPENAPI__ENABLED: "true"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    mailpit:
+      condition: service_started
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      # published so `psql` from the host can look at the outbox and the
+      # audit trail while the demo runs — that is the whole reason
+      - "55432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      # the inbox: http://localhost:8025 — open a receipt, click a
+      # magic-link letter, watch what void/mail-jobs actually sent
+      - "8025:8025"
+
+  # One shot, and it has to finish before anything serves: the schema
+  # is the application's (void/auth-db and void/bus-db ship their DDL
+  # as data, and the migration that creates their tables is ours —
+  # ADR-0023 §2), and the catalog has to exist for the shop to be
+  # worth opening. Both commands are idempotent.
+  migrate:
+    <<: *app
+    command: ["sh", "-c", "void --profile prod db migrate && void --profile prod shop seed"]
+    restart: "no"
+
+  web:
+    <<: *app
+    environment:
+      <<: *app-env
+      # sessions and the rate limiter's counters are in redis, so this
+      # can be scaled to more than one replica without a login working
+      # every other request
+      VOID_HTTP__WORKERS: "1"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+  # The same image and the same code, with two switches flipped. It
+  # serves HTTP too — nothing routes to it, but /health is what this
+  # healthcheck reads and /metrics is what prometheus scrapes, and a
+  # worker nobody can see the inside of is a worker nobody can debug.
+  worker:
+    <<: *app
+    environment:
+      <<: *app-env
+      VOID_JOBS__WORKER__ENABLED: "true"
+      VOID_JOBS__WORKER__QUEUES: "[:default :payments :mail :maintenance]"
+      # the nightly cart sweep (src/modules/cart/cart.jobs.janet).
+      # `defschedule` fires once across a fleet, so this stays true even
+      # with several workers
+      VOID_JOBS__SCHEDULER__ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+  # -- the observability profile ------------------------------------------
+  #
+  #     docker compose --profile obs up
+  #
+  # Both processes are scraped, because both of them do work: the web
+  # tier answers requests and the worker charges cards, and the
+  # interesting graph in a shop (payments retried, orders unpaid) is
+  # the worker's.
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: [obs]
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+      - worker
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: [obs]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./deploy/grafana:/etc/grafana/provisioning:ro
+    ports:
+      # http://localhost:3000 — the "void shop" dashboard is provisioned
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:

@@ -49,7 +49,9 @@
 
 (defn- write-response
   "Write a handler response. HEAD and 1xx/204/304 stay bodyless (HEAD
-  keeps the Content-Length a GET would have sent)."
+  keeps the Content-Length a GET would have sent); every other empty
+  body is framed as Content-Length: 0, so a keep-alive client knows the
+  response is over."
   [conn wbuf req resp close?]
   (def status (get resp :status 200))
   (def headers (merge @{} (get resp :headers {})))
@@ -74,6 +76,18 @@
 
     head?
     (do (buffer/push wbuf "\r\n")
+        (:write conn wbuf)
+        (buffer/clear wbuf))
+
+    # A response with no body still has to *say* that it has none.
+    # Without a Content-Length (and without chunking) the body ends
+    # when the connection does (RFC 9112 §6.3), so on a keep-alive
+    # connection the client waits — for the idle timeout, or forever.
+    # The bodyless statuses above must not carry the header; every
+    # other empty response must, and `ring/redirect` is the one every
+    # application meets first.
+    (nil? body)
+    (do (buffer/format wbuf "Content-Length: 0\r\n\r\n")
         (:write conn wbuf)
         (buffer/clear wbuf))
 
