@@ -49,7 +49,9 @@
 
 (def app-tables
   "Dropped before every pass, newest first — the suite owns the schema."
-  ["comments" "articles" "authors"
+  [# 3.6's own, created by the migration the audit trail needs
+   "audit_events"
+   "comments" "articles" "authors"
    # void/auth-db's two tables, created by the wave-3 migration from
    # `(auth-db/tables)` — DDL the plugin ships as data
    "auth_challenges" "auth_tokens"
@@ -85,20 +87,26 @@
 
   # wave 3 put three more components in the subset: the library every
   # token is signed with, the auth registry the login path reads its
-  # stores from, and the policy registry the routes enforce through
+  # stores from, and the policy registry the routes enforce through.
+  # 3.6 put two more: the broker every write announces itself on, and
+  # the schema component that creates the log it announces itself into
+  # — a handler that calls `bus/publish-tx!` in a composition without a
+  # bus fails the write, which is the correct answer and not one a test
+  # should be discovering
   (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue
-                                         :crypto/lib :auth/registry :authz/registry]})]
+                                         :crypto/lib :auth/registry :authz/registry
+                                         :bus/broker :bus.db/schema]})]
 
     # -- migrations ------------------------------------------------------
     (drop-app-tables!)
     (jobs/clear!)
 
     (def pending (db/migration-status "db/migrations"))
-    (assert (= 3 (length pending)) "three migrations on disk")
+    (assert (= 4 (length pending)) "four migrations on disk")
     (assert (not (some |($ :applied) pending)) "none applied yet")
 
     (def applied (db/migrate-up! {:dir "db/migrations"}))
-    (assert (= 3 (length applied)) "all three applied")
+    (assert (= 4 (length applied)) "all four applied")
     (assert (all |($ :applied) (db/migration-status "db/migrations"))
             "and the version table says so")
     (note "migrations applied")
@@ -283,8 +291,8 @@
 
     # -- migrations roll back --------------------------------------------
 
-    (def reverted (db/migrate-down! {:dir "db/migrations" :step 3}))
-    (assert (= 3 (length reverted)) "every migration rolled back")
+    (def reverted (db/migrate-down! {:dir "db/migrations" :step 4}))
+    (assert (= 4 (length reverted)) "every migration rolled back")
     (assert (not (some |($ :applied) (db/migration-status "db/migrations")))
             "the version table is empty again")
     (note "rollback ok")))

@@ -2,7 +2,8 @@
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
 ### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs +
-### void/crypto + void/auth + void/auth-http + void/auth-db + void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
+### void/crypto + void/auth + void/auth-http + void/auth-db +
+### void/bus + void/bus-db + void/bus-jobs + void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
 ### is a projection of scripts/packages.janet, so a package added to the
@@ -58,6 +59,9 @@
 (require "void/mail/init")
 (require "void/mail/jobs")
 (require "void/mail/auth")
+(require "void/bus/init")
+(require "void/bus/db")
+(require "void/bus/jobs")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -74,6 +78,7 @@
                              :void/crypto :void/auth :void/auth-http :void/auth-db
                              :void/authz :void/authz-http :void/security
                              :void/mail :void/mail-jobs :void/mail-auth
+                             :void/bus :void/bus-db :void/bus-jobs
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide
@@ -81,7 +86,11 @@
    # exactly the ambiguity the kernel refuses to resolve on its own. The
    # gate says which, the way an application's config would (see
    # void/db-postgres, void/cache-redis, void/jobs-redis)
-   :config {:cli {:void/db-driver {:impl :db.sqlite/driver}
+   # the bus picks its backend by *name* rather than by component
+   # (void/bus/backend on why): the gate says which, the way an
+   # application's config would
+   :config {:cli {:bus {:backend :db}
+                  :void/db-driver {:impl :db.sqlite/driver}
                   :void/cache-store {:impl :cache/redis}
                   :void/jobs-backend {:impl :jobs/redis}
                   # and three more, now that void/auth ships memory

@@ -185,6 +185,25 @@
    {:dir "mail" :deps [:void/core :void/html :void/jobs :void/auth]
     :test-deps [:void/dev :void/crypto] :jpm [:spork]}
 
+   :void/bus
+   # The messaging layer (ADR-0012). void/db is void/bus-db's — the
+   # message log, the cursors and the transactional outbox are rows,
+   # and they are rows in the application's own database on purpose;
+   # void/jobs is void/bus-jobs', which forwards the queue's lifecycle
+   # events onto the bus. Both are separate plugins in this package,
+   # the void/cache — void/cache-redis split, so an application whose
+   # messages never leave the process composes neither. The suite
+   # reaches void/db-sqlite for a real log to consume from,
+   # void/db-postgres for the LISTEN/NOTIFY and SKIP LOCKED paths
+   # (resolved with `require` only when VOID_TEST_PG names a server)
+   # void/obs to prove the trace continues out of a request and into a
+   # consumer — bus imports none of the three — and void/dev for
+   # `test/start!`, which boots the plugin the way an application
+   # would.
+   {:dir "bus" :deps [:void/core :void/db :void/jobs]
+    :test-deps [:void/db-sqlite :void/db-postgres :void/obs :void/dev]
+    :jpm [:spork]}
+
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
@@ -220,6 +239,9 @@
            # 3.5: the sign-in link is a letter, queued through the same
            # void/jobs the counter runs in
            :void/mail
+           # 3.6: the audit trail is a bus consumer, and the facts it
+           # records ride the transactional outbox
+           :void/bus
            :void/dev]
     :example true :jpm [:spork :sqlite3]}})
 

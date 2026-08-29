@@ -8,8 +8,8 @@
 > void/jobs void/jobs-db void/jobs-redis void/pressure
 > void/pressure-http void/obs void/obs-http void/crypto void/auth
 > void/auth-http void/auth-db void/authz void/authz-http
-> void/security void/mail void/mail-jobs void/mail-auth void/dev
-> void/bench)
+> void/security void/mail void/mail-jobs void/mail-auth void/bus
+> void/bus-db void/bus-jobs void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -72,6 +72,36 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:doc [:optional :string] :fn :function :for [:enum :subject :resource :env] :keys [:optional [:vector :keyword]] :name :keyword :needs [:optional [:vector :keyword]]}
+  ```
+
+### `:void.bus/backend`
+
+- **owner:** `:void/bus` · **cardinality:** `:many`
+- Message-bus backends (ADR-0012): {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :make :function :name :keyword}
+  ```
+
+### `:void.bus/codec`
+
+- **owner:** `:void/bus` · **cardinality:** `:many`
+- Message codecs: {:name :json :encode (fn [value] bytes) :decode (fn [bytes] value) :bytes? boolean?}; [:bus :codec] picks one by name. :bytes? false means the codec does not produce bytes at all (:raw), which a backend that stores them refuses at start
+- **contribution schema:**
+
+  ```janet
+  {:bytes? [:optional :boolean] :decode :function :doc [:optional :string] :encode :function :name :keyword}
+  ```
+
+### `:void.bus/middleware`
+
+- **owner:** `:void/bus` · **cardinality:** `:many`
+- Message middleware: {:name :phase :wrap (fn [handler handler-opts] handler') :named boolean? :when (fn [handler-opts] bool)?}; the same phase scale as :void.http/middleware, and the handler's own options as a second argument because a bus handler's options are fixed at declaration (see void/bus/middleware). A :named contribution applies only to handlers that list it under :middleware
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :name :keyword :named [:optional :boolean] :phase [:optional :number] :when [:optional :function] :wrap :function}
   ```
 
 ### `:void.core/cli`
@@ -308,8 +338,6 @@ key plus a deprecation alias for the old name, never a mutation.
 
 | Point | Owner-to-be | What it will register |
 |---|---|---|
-| `:void.bus/backend` | `void/bus` | message-bus backends (wave 3, ADR-0012) |
-| `:void.bus/codec` | `void/bus` | message codecs (wave 3) |
 | `:void.admin/widget` `/page` `/dashboard-widget` `/menu` | `void/admin` | admin surfaces (wave 4) |
 
 ## Request-lifecycle stages (ADR-0016)
