@@ -1,4 +1,4 @@
-### void/http/multipart — multipart/form-data parsing (SPEC.md §5.1).
+### void/http/multipart — multipart/form-data, both ways (SPEC.md §5.1).
 ###
 ### Pure functions over a fully-read body buffer (the server enforces
 ### :void.http/max-body before anything lands here; streaming uploads
@@ -6,6 +6,13 @@
 ### carry :name/:value, file parts add :filename/:content-type. The
 ### parts middleware exposes them as (req :multipart) and folds plain
 ### fields into (req :form).
+###
+### `encode` is the same table list turned back into a body, which is
+### what void/http/client posts when it uploads a file. It is here and
+### not in the client for the reason the parser is here: the boundary
+### rules, the header block and the CRLF framing are one format, and a
+### second copy of them would drift from this one. It also makes the
+### parser testable against its own output.
 
 (def- disposition-peg
   # content-disposition: form-data; name="a"; filename="b.txt"
@@ -39,13 +46,27 @@
            (string/trim (string/slice line (inc i))))))
   headers)
 
-(defn- parse-disposition [headers]
+(defn content-disposition
+  ``Parse a `Content-Disposition` header value into
+  `{:type "form-data" :name "avatar" :filename "me.png"}` — the
+  parameters as keywords, the disposition type under `:type`. Returns
+  an empty table for a value that parses as nothing.
+
+  Public because it is not only a multipart concern: a *response*
+  carries this header when a server hands over a download, and
+  void/http/client's caller reads the filename out of it with the same
+  function this module already needed.``
+  [value]
   (def out @{})
-  (when-let [d (get headers "content-disposition")]
-    (when-let [m (peg/match disposition-peg d)]
+  (when value
+    (when-let [m (peg/match disposition-peg (string value))]
+      (put out :type (first m))
       (loop [i :range [1 (length m) 2]]
         (put out (keyword (string/ascii-lower (m i))) (m (inc i))))))
   out)
+
+(defn- parse-disposition [headers]
+  (content-disposition (get headers "content-disposition")))
 
 (defn parse
   ``Parse a multipart body against its boundary into parts:
@@ -97,3 +118,63 @@
              (indexed? prev) (array/push prev (p :value))
              @[prev (p :value)]))))
   out)
+
+# -- building ------------------------------------------------------------
+
+(defn new-boundary
+  ``A boundary no body will contain: a fixed prefix and sixteen random
+  hex characters. Random rather than derived from the content, because
+  a boundary chosen by scanning the parts would have to scan them all
+  again after every edit — and the parts are files.``
+  []
+  (string "----voidFormBoundary"
+          (string/join (seq [x :in (os/cryptorand 8)] (string/format "%02x" x)))))
+
+(defn- quote-param [s]
+  # RFC 6266's quoted-string: a filename may carry a space, and a
+  # backslash or a quote in one is escaped rather than refused —
+  # the name comes from a caller who chose it, not from the wire
+  (string "\"" (string/replace-all "\"" "\\\"" (string/replace-all "\\" "\\\\" (string s))) "\""))
+
+(defn part-head
+  ``The header block of one part, without the boundary line. `part` is
+  the same table `parse` returns: `:name` (required), `:filename` and
+  `:content-type` optional, plus any extra `:headers`.``
+  [part]
+  (def name (or (part :name) (error "multipart: a part needs a :name")))
+  (def out @"")
+  (buffer/format out "Content-Disposition: form-data; name=%s" (quote-param name))
+  (when-let [f (part :filename)]
+    (buffer/format out "; filename=%s" (quote-param f)))
+  (buffer/push-string out "\r\n")
+  (when-let [ct (part :content-type)]
+    (buffer/format out "Content-Type: %s\r\n" ct))
+  (eachp [k v] (get part :headers {})
+    (def key (string/ascii-lower (string k)))
+    (unless (or (= key "content-disposition") (= key "content-type"))
+      (buffer/format out "%s: %V\r\n" key v)))
+  (string out))
+
+(defn encode
+  ``Build a `multipart/form-data` body out of parts:
+
+      (multipart/encode
+        [{:name "title" :value "cat"}
+         {:name "avatar" :filename "me.png"
+          :content-type "image/png" :value bytes}])
+      # -> {:body <bytes> :boundary "..." :content-type "multipart/form-data; boundary=..."}
+
+  The inverse of `parse`, and what a client posts when it uploads a
+  file. A value may be any byte sequence; a part with a `:filename`
+  is a file part, one without is a form field.``
+  [parts &opt bnd]
+  (def boundary (or bnd (new-boundary)))
+  (def out (buffer/new 1024))
+  (each part parts
+    (buffer/format out "--%s\r\n%s\r\n" boundary (part-head part))
+    (buffer/push out (or (part :value) ""))
+    (buffer/push-string out "\r\n"))
+  (buffer/format out "--%s--\r\n" boundary)
+  {:body (string out)
+   :boundary boundary
+   :content-type (string "multipart/form-data; boundary=" boundary)})

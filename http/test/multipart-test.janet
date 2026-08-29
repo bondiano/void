@@ -52,4 +52,35 @@
 # empty form (terminator right away)
 (assert (empty? (multipart/parse "--B--\r\n" "B")))
 
+
+# -- building, and the round trip ----------------------------------------
+
+(def enc (multipart/encode
+           [{:name "title" :value "cat \"quoted\""}
+            {:name "avatar" :filename "me png.png" :content-type "image/png"
+             :value "\x89PNG\r\n\x1a\n"}]))
+(assert (string/has-prefix? "multipart/form-data; boundary=" (enc :content-type))
+        "an encoded body brings the content type that describes it")
+(assert (string/find (enc :boundary) (enc :body)))
+
+(def back (multipart/parse (enc :body) (enc :boundary)))
+(assert (= 2 (length back)) "and the parser reads back what the encoder wrote — one format, one implementation")
+(assert (= "cat \"quoted\"" ((first back) :value)) "a quote in a value survives the header quoting")
+(def file (last back))
+(assert (= "avatar" (file :name)))
+(assert (= "me png.png" (file :filename)) "so does a space in a filename")
+(assert (= "image/png" (file :content-type)))
+(assert (= "\x89PNG\r\n\x1a\n" (file :value)) "and CRLF inside the bytes is not framing")
+(def folded (multipart/fields back))
+(assert (and (= 1 (length folded)) (= "cat \"quoted\"" (folded "title")))
+        "fields still folds only the parts that are not files")
+
+(assert (not= (multipart/new-boundary) (multipart/new-boundary))
+        "a boundary is fresh per body")
+
+(def disp (multipart/content-disposition "attachment; filename=\"report 2026.pdf\""))
+(assert (= "attachment" (disp :type))
+        "content-disposition is public because a response carries it too — this is a download, not a form part")
+(assert (= "report 2026.pdf" (disp :filename)))
+
 (print "multipart-test ok")

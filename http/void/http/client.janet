@@ -19,12 +19,19 @@
 ###               error with a text that says what to do instead —
 ###               a relay, a sidecar or a proxy next to the process,
 ###               the same answer void/mail gives for SMTP.
-###   redirects   a 30x comes back as a 30x. Following one is a policy
-###               (does a POST become a GET? is the new host allowed?)
-###               and a client that guesses it is a client that
-###               surprises somebody in production.
-###   cookies     a jar is session state, and session state belongs to
-###               whoever has a session.
+###   redirects   a 30x comes back as a 30x *unless the caller asked*.
+###               Following one is a policy — does a POST become a
+###               GET? is the new host allowed to see the
+###               Authorization header? — so it is `:follow <hops>`,
+###               off by default, with those two questions answered
+###               out loud in `follow-target` rather than guessed.
+###   cookies     a request sends the cookies it is given (`:cookies`)
+###               and a response hands back what the server set
+###               (`cookies`), attributes and all. What there is no
+###               jar: keeping them between requests is session state,
+###               and session state belongs to whoever has a session —
+###               with both halves parsed, that caller needs four
+###               lines and owns the policy.
 ###   retries     one, and only in the case where a retry is not a
 ###               decision: a *reused* keep-alive connection that the
 ###               peer had already closed. Every other failure comes
@@ -51,6 +58,7 @@
 ### knowledge that observability exists.
 
 (import ./wire :as wire)
+(import ./multipart :as multipart)
 
 (def default-ports
   "Port a scheme implies when the URL does not name one."
@@ -84,12 +92,14 @@
 
 (def- counters
   @{:requests 0 :responses 0 :failures 0 :timeouts 0
-    :connects 0 :reconnects 0 :bytes-out 0 :bytes-in 0 :request-us 0})
+    :connects 0 :reconnects 0 :redirects 0
+    :bytes-out 0 :bytes-in 0 :request-us 0})
 
 (defn stats
   "What this process's HTTP clients have done: requests, responses,
   failures, connections opened, sockets reopened under a reused
-  keep-alive, bytes each way and total time in microseconds."
+  keep-alive, redirects followed, bytes each way and total time in
+  microseconds."
   []
   (table/to-struct counters))
 
@@ -157,6 +167,54 @@
   (def implied (get default-ports scheme))
   (def h (if (string/find ":" host) (string "[" host "]") host))
   (if (= (string port) implied) h (string h ":" port)))
+
+(defn url
+  ``Compose a URL out of its parts — the inverse of `parse-url`:
+
+      (client/url {:host "example.test" :port 4318 :path "/v1/traces"
+                   :query {:tenant "acme"}})
+      # -> "http://example.test:4318/v1/traces?tenant=acme"
+
+  `:port` is left out when it is the scheme's own, so two URLs that
+  address the same place are written the same way.``
+  [parts]
+  (def scheme (string (get parts :scheme "http")))
+  (def host (or (get parts :host) (error "http client: url needs a :host")))
+  (def port (or (get parts :port) (get default-ports scheme)))
+  (def path (let [p (string (get parts :path "/"))]
+              (if (string/has-prefix? "/" p) p (string "/" p))))
+  (def qs (let [q (get parts :query)]
+            (cond
+              (nil? q) nil
+              (dictionary? q) (let [e (wire/encode-query q)] (if (empty? e) nil e))
+              (string? q) (if (empty? q) nil q))))
+  (string scheme "://" (authority-str host port scheme) path
+          (if qs (string "?" qs) "")))
+
+(defn resolve-url
+  ``Resolve a `Location` against the URL it came from, the way a
+  browser does: an absolute URL as it is, `//host/path` keeping the
+  scheme, `/path` keeping the authority, anything else relative to the
+  directory of the current path. This is what makes a `Location`
+  usable — servers send all four shapes and RFC 9110 allows them.``
+  [base location]
+  (def loc (string location))
+  (cond
+    (string/find "://" loc) loc
+
+    (string/has-prefix? "//" loc)
+    (let [b (parse-url base)] (string (b :scheme) ":" loc))
+
+    (string/has-prefix? "/" loc)
+    (let [b (parse-url base)]
+      (string (b :scheme) "://" (authority-str (b :host) (b :port) (b :scheme)) loc))
+
+    (let [b (parse-url base)
+          [path _] (wire/split-path (b :target))
+          dir (let [i (string/find-all "/" path)]
+                (if (empty? i) "/" (string/slice path 0 (inc (last i)))))]
+      (string (b :scheme) "://" (authority-str (b :host) (b :port) (b :scheme))
+              dir loc))))
 
 # -- writing a request ---------------------------------------------------
 
@@ -328,11 +386,54 @@
     :bytes consumed
     # what the *peer* said about the socket, which is what decides
     # whether the next request may reuse it
-    :close (or (string/find "close" conn-header)
-               (and (= 0 (head :http-version))
-                    (not (string/find "keep-alive" conn-header)))
-               (and (nil? cl) (nil? te) (not (bodyless? status method)))
-               false)})
+    :close (truthy?
+             (or (string/find "close" conn-header)
+                 (and (= 0 (head :http-version))
+                      (not (string/find "keep-alive" conn-header)))
+                 (and (nil? cl) (nil? te) (not (bodyless? status method)))))})
+
+# -- shaping a request ---------------------------------------------------
+#
+# A request is a table, and everything on it is data: the query is
+# pairs rather than a string somebody escaped by hand, the cookies are
+# names and values rather than a header, the body is a form or a file
+# list rather than bytes the caller had to frame. The encoders are the
+# ones the server already reads with (`wire/encode-query`,
+# `multipart/encode`), so a round trip through void is a round trip
+# through one implementation of each format.
+
+(defn target-of
+  ``The request target of a request table: `:target` (or `:path`) with
+  `:query` appended. `:query` is a dictionary or a ready query string,
+  and it *adds* to a query the target already carries rather than
+  replacing it — a caller that wrote `"/search?q=cat"` and passed
+  `{:page 2}` meant both.``
+  [req]
+  (def base (string (or (req :target) (req :path) "/")))
+  (def q (req :query))
+  (def qs (cond
+            (nil? q) nil
+            (dictionary? q) (let [e (wire/encode-query q)] (if (empty? e) nil e))
+            (let [e (string q)] (if (empty? e) nil e))))
+  (cond
+    (nil? qs) base
+    (string/find "?" base) (string base "&" qs)
+    (string base "?" qs)))
+
+(defn- body-of
+  ``The body bytes and the content type they imply. Exactly one of
+  `:body`, `:form` and `:multipart` may be given: a request with two
+  bodies is a mistake the wire cannot represent, and picking one of
+  them would be picking for the caller.``
+  [req]
+  (def given (filter |(not (nil? (req $))) [:body :form :multipart]))
+  (when (> (length given) 1)
+    (errorf "http client: a request carries one body, got %q" (tuple ;given)))
+  (cond
+    (req :form) [(wire/encode-query (req :form)) "application/x-www-form-urlencoded"]
+    (req :multipart) (let [enc (multipart/encode (req :multipart))]
+                       [(enc :body) (enc :content-type)])
+    [(req :body) nil]))
 
 # -- the client ----------------------------------------------------------
 
@@ -356,6 +457,10 @@
     :scheme scheme
     :authority (authority-str host port scheme)
     :headers (get opts :headers {})
+    # cookies every request on this client sends unless it names its
+    # own — a caller keeping a session does it here, in one place, and
+    # keeps owning the policy (see the module docstring on jars)
+    :cookies (get opts :cookies {})
     :timeout (get opts :timeout (defaults :timeout))
     :connect-timeout (get opts :connect-timeout (defaults :connect-timeout))
     :max-body (get opts :max-body (defaults :max-body))
@@ -448,10 +553,19 @@
   (def method (method-str (req :method)))
   (def close? (or (req :close) (not (client :keep-alive))))
   (def headers (merge (lower-keys (client :headers)) (lower-keys (req :headers))))
+  (def target (target-of req))
+  (def [body content-type] (body-of req))
+  # what the caller wrote wins over what the body implies: a form
+  # posted as text/plain is somebody testing a server, not a bug here
+  (when (and content-type (not (get headers "content-type")))
+    (put headers "content-type" content-type))
+  (def cookies (or (req :cookies) (client :cookies)))
+  (when (and cookies (not (get headers "cookie")) (not (empty? cookies)))
+    (put headers "cookie" (wire/cookie-header cookies)))
   (def bytes (format-request {:method method
-                              :target (or (req :target) (req :path) "/")
+                              :target target
                               :headers headers
-                              :body (req :body)
+                              :body body
                               :authority (client :authority)
                               :close close?}))
   (def started (os/clock :monotonic))
@@ -488,14 +602,131 @@
           (cond
             (and (dictionary? res) (res :void.http/timeout))
             (string/format "http client: %s %s to %s timed out after %q s"
-                           method (or (req :target) "/") (client :authority)
+                           method target (client :authority)
                            (client :timeout))
             (and (dictionary? res) (res :message))
             (string/format "http client: %s %s to %s — %s"
-                           method (or (req :target) "/") (client :authority)
+                           method target (client :authority)
                            (res :message))
             res)))))
   out)
+
+# -- what a caller asks of a response ------------------------------------
+#
+# A response is a table too, and these are the three questions a caller
+# asks of one that a `get` on a table does not answer: a repeated
+# header, the cookies the server set, and where a 30x points.
+
+(defn header
+  ``One response header by lowercase name. Repeated headers arrive as
+  arrays (`wire/parse-response-head`); this returns the first, and
+  `(resp :headers)` still holds all of them — the same contract
+  `ring/request-header` gives on the server side.``
+  [resp name]
+  (def v (get-in resp [:headers (string/ascii-lower (string name))]))
+  (if (indexed? v) (first v) v))
+
+(defn header-values
+  "Every value of one response header, as an array — `set-cookie` is
+  the header this exists for."
+  [resp name]
+  (def v (get-in resp [:headers (string/ascii-lower (string name))]))
+  (cond
+    (nil? v) @[]
+    (indexed? v) (array ;v)
+    @[v]))
+
+(defn cookies
+  ``The cookies a response set, parsed whole:
+
+      [{:name "session" :value "abc" :path "/" :max-age 3600
+        :http-only true :same-site :lax} ...]
+
+  Attributes and all, because dropping them would leave a caller
+  unable to tell a session cookie from a permanent one — and keeping
+  them is what makes a jar somebody else's four lines rather than
+  somebody else's guess.``
+  [resp]
+  (filter truthy? (map wire/parse-set-cookie (header-values resp "set-cookie"))))
+
+(defn cookie-values
+  "The response's cookies as a name -> value table — what to hand back
+  to `:cookies` on the next request."
+  [resp]
+  (tabseq [c :in (cookies resp)] (c :name) (c :value)))
+
+(def redirect-statuses
+  ``The statuses that name another place to look, and what they do to
+  the method:
+
+    301 302  a POST becomes a GET, the way every browser and every
+             other client resolved this decades ago; a HEAD stays a
+             HEAD
+    303      always a GET — the status exists to say "the answer is
+             elsewhere, go and read it"
+    307 308  the method and the body are preserved, which is the whole
+             reason these two were added``
+  {301 :maybe-get 302 :maybe-get 303 :get 307 :keep 308 :keep})
+
+(defn redirect?
+  "Does this response point somewhere else (a 30x with a Location)?"
+  [resp]
+  (truthy? (and (get redirect-statuses (resp :status))
+                (header resp "location"))))
+
+(defn follow-target
+  ``Where a redirect leads, as the request that would go there:
+  `{:url :method :body :headers}` — or nil when the response is not a
+  redirect. `base` is the URL this response answered.
+
+  Two questions are answered here rather than guessed:
+
+    the method  by `redirect-statuses` above — and when it becomes a
+                GET, the body goes with it, because a GET carrying the
+                body of a POST is a request nobody meant to send.
+    the headers `authorization` and `cookie` are dropped when the
+                redirect crosses to another host, port or scheme.
+                Sending a credential to whatever a `Location` names is
+                how a redirect becomes an exfiltration.``
+  [resp base req]
+  (when (redirect? resp)
+    (def next-url (resolve-url base (header resp "location")))
+    (def rule (get redirect-statuses (resp :status)))
+    (def method (method-str (get req :method :get)))
+    (def keep-method
+      (case rule
+        :keep true
+        :get false
+        (or (= "GET" method) (= "HEAD" method))))
+    (def from (parse-url base))
+    (def to (parse-url next-url))
+    (def same-origin (and (= (from :scheme) (to :scheme))
+                          (= (from :host) (to :host))
+                          (= (string (from :port)) (string (to :port)))))
+    # built key by key rather than merged over the previous request: a
+    # janet table cannot hold a nil, so "this request has no body any
+    # more" and "no opinion about the body" are the same value, and a
+    # merge would carry a POST's body into the GET that follows it.
+    # The query goes for the same reason — it is part of the Location
+    # now, and appending the old one would ask a different question.
+    (def out @{:url next-url
+               :method (if keep-method (get req :method :get) :get)
+               :headers (if same-origin
+                          (get req :headers {})
+                          (tabseq [[k v] :pairs (lower-keys (get req :headers {}))
+                                   :when (not (or (= k "authorization")
+                                                  (= k "cookie")))]
+                            k v))})
+    (when same-origin
+      (when-let [c (get req :cookies)] (put out :cookies c)))
+    (when keep-method
+      (each k [:body :form :multipart]
+        (when-let [v (get req k)] (put out k v))))
+    (each k [:timeout :connect-timeout :max-body :user-agent :follow]
+      (when-let [v (get req k)] (put out k v)))
+    out))
+
+# -- one-shot requests ---------------------------------------------------
 
 (defn request
   ``One request to an absolute URL, on a connection of its own:
@@ -504,25 +735,87 @@
                        :headers {"content-type" "application/json"}
                        :body payload})
 
+  Everything `send!` takes is taken here too — `:query`, `:cookies`,
+  `:form`, `:multipart`, `:timeout`, `:max-body`.
+
+  `:follow n` follows up to n redirects (default 0 — a 30x comes back
+  as a 30x). The response then carries `:url`, the URL that finally
+  answered, and `:redirects`, the ones it went through; running out of
+  hops is an error rather than a 30x pretending to be an answer, since
+  a caller who asked to be taken there is not equipped to find a loop
+  in the response. See `follow-target` for what a redirect does to the
+  method and to credentials.
+
   The connection is opened, used and closed — for anything repeated,
   `open` a client and `send!` on it.``
   [opts]
-  (def u (parse-url (or (opts :url) (error "http client: request needs a :url"))))
-  (def client (open (merge opts {:host (u :host) :port (u :port) :keep-alive false})))
-  (defer (close! client)
-    (send! client (merge opts {:target (u :target) :close true}))))
+  (var current (merge opts {:url (or (opts :url)
+                                     (error "http client: request needs a :url"))}))
+  (def hops (get opts :follow 0))
+  (def visited @[])
+  (var out nil)
+  (var left hops)
+  (while (nil? out)
+    (def url (current :url))
+    (def u (parse-url url))
+    (def client (open (merge current {:host (u :host) :port (u :port)
+                                      :keep-alive false})))
+    (def resp (defer (close! client)
+                (send! client (merge current {:target (u :target) :close true}))))
+    (def next-req (when (pos? left) (follow-target resp url current)))
+    (if next-req
+      (do
+        (array/push visited url)
+        (-- left)
+        (count! :redirects 1)
+        (set current next-req))
+      (do
+        (when (and (pos? hops) (redirect? resp))
+          (errorf "http client: %s redirected more than %d times (last: %s)"
+                  (opts :url) hops url))
+        (put resp :url url)
+        (put resp :redirects (tuple ;visited))
+        (set out resp))))
+  out)
 
-# `get` and `post` shadow the core `get` inside this module, which is
-# why they are the last two things in the file: everything above uses
-# the real one. At a call site they read the way they should —
-# `(client/get url)`.
+# `get` and the method sugar below shadow the core `get` inside this
+# module, which is why they are the last things in the file: everything
+# above uses the real one. At a call site they read the way they should
+# — `(client/get url)`.
 
 (defn get
   "GET an absolute URL — `request` with the method filled in."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :get})))
 
+(defn head
+  "HEAD an absolute URL — the headers of a GET without its body."
+  [url &opt opts]
+  (request (merge (or opts {}) {:url url :method :head})))
+
+(defn options
+  "OPTIONS an absolute URL — what the server says it will accept."
+  [url &opt opts]
+  (request (merge (or opts {}) {:url url :method :options})))
+
+(defn delete
+  "DELETE an absolute URL."
+  [url &opt opts]
+  (request (merge (or opts {}) {:url url :method :delete})))
+
 (defn post
-  "POST a body to an absolute URL."
+  ``POST a body to an absolute URL. `body` is bytes; a form or an
+  upload goes through `:form` / `:multipart` in `opts`, and passing
+  both is an error rather than a silent choice.``
   [url body &opt opts]
   (request (merge (or opts {}) {:url url :method :post :body body})))
+
+(defn put
+  "PUT a body to an absolute URL."
+  [url body &opt opts]
+  (request (merge (or opts {}) {:url url :method :put :body body})))
+
+(defn patch
+  "PATCH a body to an absolute URL."
+  [url body &opt opts]
+  (request (merge (or opts {}) {:url url :method :patch :body body})))

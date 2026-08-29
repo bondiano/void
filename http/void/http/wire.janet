@@ -155,6 +155,33 @@
       (buffer/format out "%%%02X" b)))
   (string out))
 
+(defn url-decode
+  ``Percent-decode a string — the inverse of `url-encode`, for the
+  places a value arrives already encoded and no query grammar is
+  running over it (a cookie value, a `Content-Disposition` filename).
+
+  `+` is left alone unless `space-plus` says otherwise, and that is
+  the whole reason this takes an argument: `+` means a space in a
+  *query string* and means a plus everywhere else, and a cookie
+  carrying base64 (every session token, every JWT) would come back
+  corrupted by the query rule.``
+  [s &opt space-plus]
+  (def str (string s))
+  (def out (buffer/new (length str)))
+  (var i 0)
+  (def n (length str))
+  (while (< i n)
+    (def b (in str i))
+    (cond
+      (and (= b (chr "%")) (< (+ i 2) n))
+      (if-let [v (scan-number (string "0x" (string/slice str (+ i 1) (+ i 3))))]
+        (do (buffer/push-byte out v) (+= i 3))
+        (do (buffer/push-byte out b) (++ i)))
+      (and space-plus (= b (chr "+")))
+      (do (buffer/push-byte out (chr " ")) (++ i))
+      (do (buffer/push-byte out b) (++ i))))
+  (string out))
+
 (defn encode-query
   "Encode a dictionary into a query string (no leading ?). A true value
   renders the bare key, an indexed value repeats the key."
@@ -194,6 +221,16 @@
     [(string/slice path 0 q) (string/slice path (inc q))]
     [path nil]))
 
+(defn path-segments
+  ``The non-empty segments of a path: `"/one//two/"` -> `@["one"
+  "two"]`. What a client does with a `Location` it has to reason about
+  and what a caller does with a target it did not build itself; the
+  router has its own splitter because it compiles patterns, and this
+  is the one for a path in hand.``
+  [path]
+  (def [p _] (split-path (string path)))
+  (filter |(not (empty? $)) (string/split "/" p)))
+
 (defn parse-query
   "Parse a query string (without the leading ?) into a table. Values are
   percent-decoded, + becomes space, duplicate keys accumulate into
@@ -213,13 +250,82 @@
      :main '(some (* (<- :content) :eql (<- :content) (? :sep)))}))
 
 (defn parse-cookies
-  "Parse a Cookie header value into a table of cookie names to values.
-  Returns an empty table when s is nil or has no cookie pairs."
+  ``Parse a Cookie header value into a table of cookie names to values.
+  Returns an empty table when s is nil or has no cookie pairs.
+
+  Values are percent-decoded, because `ring/cookie-str` percent-encodes
+  them on the way out: a cookie whose value came back as `a%20b` after
+  being set as `a b` would be a round trip through this framework that
+  does not close.``
   [s]
-  (or (-?>> s
-            (peg/match cookie-grammar)
-            (apply table))
-      @{}))
+  (def raw (or (-?>> s
+                     (peg/match cookie-grammar)
+                     (apply table))
+               @{}))
+  (eachp [k v] raw (put raw k (url-decode v)))
+  raw)
+
+(defn cookie-header
+  ``Format a `Cookie` request header value from a dictionary or a list
+  of pairs:
+
+      (wire/cookie-header {"session" "abc" "theme" "dark"})
+      # -> "session=abc; theme=dark"
+
+  Values are percent-encoded, the way `ring/cookie-str` writes them on
+  the way out — a client that sends back what a server set must send
+  back the same bytes.``
+  [cookies]
+  (def pairs
+    (if (dictionary? cookies)
+      (seq [k :in (sorted (map string (keys cookies)))]
+        [k (or (get cookies k) (get cookies (keyword k)))])
+      (map |[(string (in $ 0)) (in $ 1)] cookies)))
+  (string/join
+    (seq [[k v] :in pairs] (string k "=" (url-encode (string v))))
+    "; "))
+
+(def- same-site-keywords
+  {"strict" :strict "lax" :lax "none" :none})
+
+(defn parse-set-cookie
+  ``Parse one `Set-Cookie` header value into a table:
+
+      {:name "session" :value "abc" :path "/" :domain "example.test"
+       :max-age 3600 :expires "Wed, 21 Oct 2026 07:28:00 GMT"
+       :secure true :http-only true :same-site :lax}
+
+  The inverse of `ring/cookie-str`, and the half a *client* needs:
+  everything past the name and value is an attribute the server is
+  asking the caller to honour, and a client that dropped them could
+  not tell a session cookie from a permanent one. Returns nil when
+  there is no `name=value` at the front — a malformed header is
+  ignored rather than raised, the way an inbound `traceparent` is.``
+  [value]
+  (when value
+    (def parts (string/split ";" (string value)))
+    (def head (string/trim (first parts)))
+    (def eq (string/find "=" head))
+    (def name (when eq (string/trim (string/slice head 0 eq))))
+    (when (and name (not (empty? name)))
+      (def out @{:name name
+                 :value (url-decode (string/trim (string/slice head (inc eq))))})
+      (each attr (drop 1 parts)
+        (def a (string/trim attr))
+        (def i (string/find "=" a))
+        (def k (string/ascii-lower (if i (string/trim (string/slice a 0 i)) a)))
+        (def v (when i (string/trim (string/slice a (inc i)))))
+        (case k
+          "path" (put out :path v)
+          "domain" (put out :domain v)
+          "expires" (put out :expires v)
+          "max-age" (put out :max-age (scan-number v))
+          "secure" (put out :secure true)
+          "httponly" (put out :http-only true)
+          "samesite" (put out :same-site (get same-site-keywords
+                                              (string/ascii-lower (or v "")) v))
+          nil))
+      out)))
 
 # -- status messages -----------------------------------------------------
 
