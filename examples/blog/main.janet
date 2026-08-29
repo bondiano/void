@@ -9,10 +9,10 @@
 ### and test/crud-test.janet runs the whole suite twice to keep it
 ### honest.
 ###
-### Wave 3 added seven plugins and no engine-specific line: signing in,
-### deciding who may edit what, and the browser-facing protections are
-### the same list on sqlite and on Postgres (test/auth-test.janet runs
-### twice as well).
+### Wave 3 added ten plugins and no engine-specific line: signing in
+### (by password or by a link in the mail), deciding who may edit what,
+### and the browser-facing protections are the same list on sqlite and
+### on Postgres (test/auth-test.janet runs twice as well).
 (import void)
 (import void/http)
 (import void/html)
@@ -29,6 +29,9 @@
 (import void/authz)
 (import void/authz/http)
 (import void/security)
+(import void/mail)
+(import void/mail/jobs)
+(import void/mail/auth)
 (import void/dev)
 (import ./app)
 
@@ -61,6 +64,10 @@
    :void/auth :void/auth-http :void/auth-db
    :void/authz :void/authz-http
    :void/security
+   # 3.5: the sign-in link is a letter, and it goes out through the
+   # queue this application already runs — void/mail-jobs is the whole
+   # of that, and no handler mentions it (ADR-0026 §5)
+   :void/mail :void/mail-jobs :void/mail-auth
    :void/dev
    :blog/app])
 

@@ -74,6 +74,12 @@
   {:email [:string {:format :email}]
    :password [:string {:min 1 :max 200}]})
 
+(def MagicLink
+  ``What the "mail me a link" form submits — an address and nothing
+  else. There is no password here on purpose: this is the form for
+  the visitor who does not have one to hand.``
+  {:email [:string {:format :email}]})
+
 (def EditArticle
   "What the edit form submits — the two columns `save!` may change."
   (schema/select Article [:title :body]))

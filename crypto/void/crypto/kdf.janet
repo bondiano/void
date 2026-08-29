@@ -165,7 +165,10 @@
       (def ctx-free (bound handle "EVP_KDF_CTX_free" :void :ptr))
       (def derive (bound handle "EVP_KDF_derive" :int :ptr :ptr :size :ptr))
       (def kdf (fetch nil "ARGON2ID" nil))
-      (unless kdf (error "this libcrypto has EVP_KDF_fetch but no ARGON2ID provider"))
+      (unless kdf
+        (error (string "argon2id needs OpenSSL 3.2 or newer; this library has the EVP_KDF "
+                       "interface (3.0) but no ARGON2ID behind it. Use :scrypt, or install "
+                       "a newer OpenSSL")))
       (def ctx (ctx-new kdf))
       (kdf-free kdf)
       (unless ctx (error "EVP_KDF_CTX_new failed"))

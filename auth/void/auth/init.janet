@@ -89,7 +89,7 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.auth/deliver
-  :doc "Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires}. void/mail (3.5) will be one of these; until then an application delivers its own"
+  :doc "Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires :to :claims :channel}. void/mail-auth is one of these, and an application that texts its codes contributes its own. Called by auth/challenge!, which refuses a challenge nobody delivered"
   :schema {:name :keyword
            :doc [:optional :string]
            :fn :function}
@@ -193,6 +193,72 @@
 
 (def issue-challenge "See challenge/issue — a magic link or a one-time code." challenge-mod/issue)
 (def redeem-challenge "See challenge/redeem." challenge-mod/redeem)
+
+(defn deliverers
+  "The :void.auth/deliver contributions this composition resolved, or
+  an empty list before it started."
+  []
+  (get (or (state/active) {}) :deliver []))
+
+(defn challenge!
+  ``Issue a magic link (or a one-time code) for `subject` **and get it
+  to the person** — the half of ADR-0023 §7 that waited for a delivery
+  to exist (`void/mail-auth` is one, 3.5):
+
+      (auth/challenge! (string "user:" (user :id)) {:to (user :email)})
+
+  `opts` is `challenge/issue`'s (`:kind` :link or :otp, `:ttl`,
+  `:claims`, `:handle`) plus what the delivery needs: `:to` (an
+  address, however the deliverer reads one) and `:channel` (which
+  deliverer this is for, when a composition has several).
+
+  Every deliverer is called and each decides whether the payload is
+  its business — one that did nothing returns nil. **A challenge
+  nobody delivered is an error**: the code exists, the visitor is
+  waiting for it, and the alternative is a login page that spins
+  forever with nothing in any log.
+
+  Returns `{:handle :kind :expires :delivered}` — deliberately
+  *without* the code, which exists only inside this call and inside
+  whatever carried it away.``
+  [subject &opt opts]
+  (default opts {})
+  (def issued (challenge-mod/issue (state/challenges) subject opts))
+  (def payload
+    (merge issued {:subject subject
+                   :claims (get opts :claims {})
+                   :to (get opts :to)
+                   :channel (get opts :channel)}))
+  (def delivered
+    (seq [d :in (deliverers)
+          :let [[ok result] (protect ((d :fn) payload))]]
+      (unless ok
+        (log/error "a challenge delivery failed" :ns log-ns
+                   :deliverer (d :name) :kind (issued :kind) :err (string result))
+        (error result))
+      (when result (d :name))))
+  (def names (filter |(not (nil? $)) delivered))
+  (when (empty? names)
+    (errorf (string "a %s challenge for %s was issued and nobody delivered it. "
+                    "Registered deliverers: %s — add :void/mail-auth (with "
+                    ":void/mail under it), or contribute your own "
+                    ":void.auth/deliver")
+            (issued :kind) subject
+            (if (empty? (deliverers))
+              "none"
+              (string/join (map |(string/format "%q" ($ :name)) (deliverers)) " "))))
+  (log/info "challenge delivered" :ns log-ns
+            :kind (issued :kind) :subject subject :via names)
+  {:handle (issued :handle)
+   :kind (issued :kind)
+   :expires (issued :expires)
+   :delivered names})
+
+(defn redeem!
+  ``Redeem a challenge against the active store — `redeem-challenge`
+  without having to name the store. Returns an identity or nil.``
+  [handle code &opt opts]
+  (challenge-mod/redeem (state/challenges) handle code opts))
 
 (def encode-jwt "See jwt/encode-token." jwt-mod/encode-token)
 (def decode-jwt "See jwt/decode-token — {:ok true :claims} or {:ok false :reason}." jwt-mod/decode-token)

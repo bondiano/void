@@ -31,10 +31,14 @@
 ###
 ### Two other facts are load-bearing:
 ###
-###   * `EVP_KDF_*` (argon2id) is optional. OpenSSL grew the ARGON2ID
-###     KDF in 3.2; Ubuntu 24.04 LTS ships 3.0. The symbols are marked
-###     :optional, `algorithms` reports what is actually there, and the
-###     default hasher is scrypt, which has been present since 1.1.
+###   * `EVP_KDF_*` (argon2id) is optional, and **the symbols are only
+###     half the question**. The `EVP_KDF` interface arrived in OpenSSL
+###     3.0; the ARGON2ID implementation behind it arrived in 3.2. A 3.0
+###     library — Ubuntu 24.04 LTS ships one — exports every symbol
+###     below and still fetches nothing, so "has EVP_KDF_fetch" is not
+###     "can do argon2id". `load!` asks the library for the KDF and
+###     `algorithms` reports what came back. The default hasher is
+###     scrypt, which has been present since 1.1.
 ###   * A `char *` return that can be NULL must be declared :ptr, not
 ###     :string — janet builds a string straight off the pointer, and
 ###     off NULL that is a segfault rather than an error. Only
@@ -112,7 +116,8 @@
 (defssl EVP_PBE_scrypt :int :ptr :size :ptr :size :uint64 :uint64 :uint64 :uint64 :ptr :size)
 (defssl PKCS5_PBKDF2_HMAC :int :ptr :int :ptr :int :int :ptr :int :ptr)
 
-# argon2id — OpenSSL 3.2+ only (see the module docstring)
+# argon2id — the EVP_KDF interface is 3.0+, the ARGON2ID implementation
+# behind it is 3.2+, and only the fetch tells them apart (module docstring)
 (defssl EVP_KDF_fetch :ptr :ptr :string :ptr :optional)
 (defssl EVP_KDF_free :void :ptr :optional)
 (defssl EVP_KDF_CTX_new :ptr :ptr :optional)
@@ -152,6 +157,12 @@
   `load!` would have failed. `algorithms` reads it."
   @[])
 
+(var argon2id?
+  ``Whether this library can actually derive with argon2id — probed by
+  `load!`, never inferred from `missing`. See the module docstring: a
+  3.0 library has every `EVP_KDF_*` symbol and no ARGON2ID.``
+  false)
+
 (defn available?
   "Has a libcrypto been loaded into these bindings?"
   []
@@ -165,6 +176,28 @@
     path [path]
     (os/getenv path-env) [(os/getenv path-env)]
     default-candidates))
+
+(defn- drain-errors
+  ``Empty OpenSSL's error queue. A call that is *expected* to fail
+  still leaves its entry there, and an entry left behind is the one
+  `last-error` hands to whoever fails next — a wrong message about an
+  unrelated operation.``
+  []
+  (while (not (zero? (int/to-number (ERR_get_error))))))
+
+(defn- probe-argon2id
+  ``Ask this library for the ARGON2ID KDF and see what comes back.
+  This is the whole reason the check is a probe and not a version
+  comparison or a symbol lookup: the symbols say 3.0, the KDF says
+  3.2, and only one of those answers is the question being asked.``
+  []
+  (if (or (nil? EVP_KDF_fetch) (nil? EVP_KDF_free))
+    false
+    (let [[ok kdf] (protect (EVP_KDF_fetch nil "ARGON2ID" nil))]
+      (cond
+        (not ok) (do (drain-errors) false)
+        kdf (do (EVP_KDF_free kdf) true)
+        (do (drain-errors) false)))))
 
 (defn- try-open [path]
   (def [ok lib] (protect (ffi/native path)))
@@ -211,9 +244,9 @@
 
       (errorf "%s has no symbol %s — is it really libcrypto?" found (b :symbol))))
   (set missing absent)
-  (set library library-path)
   (set library-path found)
   (set library lib)
+  (set argon2id? (probe-argon2id))
   found)
 
 (defn handle
@@ -256,12 +289,12 @@
   ``What this particular library gives us, as a table of
   algorithm -> true/false. The interesting entry is :argon2id: it
   needs OpenSSL 3.2, and an LTS distribution may be on 3.0 — which is
-  a fact about the machine, reported rather than guessed at.``
+  a fact about the machine, probed at `load!` rather than guessed at.``
   []
   (if (available?)
     @{:sha1 true :sha256 true :sha384 true :sha512 true
       :hmac true :scrypt true :pbkdf2 true
-      :argon2id (not (nil? EVP_KDF_fetch))
+      :argon2id argon2id?
       :rs256 true :es256 true}
     @{}))
 

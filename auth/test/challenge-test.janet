@@ -57,4 +57,60 @@
 (assert (nil? (challenge/redeem codes "nothing" "123456")))
 (assert (nil? (challenge/redeem codes "user:2" nil)))
 
+# -- issuing and delivering in one call ----------------------------------
+#
+# `challenge!` is the half that waited for a delivery to exist (3.5,
+# ADR-0026 §6). It reads the stores and the deliverers off the running
+# auth value, and the dyn is the seam that stands one in front of it
+# without booting anything.
+
+(import void/auth :as auth)
+(import void/auth/state :as state)
+(import void/core/log :as log)
+
+(log/set-level! "void" :fatal)
+
+(defn- with-deliverers [ds f]
+  (with-dyns [state/auth-dyn (state/make {:challenges codes :deliver ds})]
+    (f)))
+
+(def seen @[])
+(def issued
+  (with-deliverers [{:name :test/mail
+                     :fn (fn [ch] (array/push seen ch) :sent)}
+                    {:name :test/sms
+                     # a deliverer that is not for this payload does
+                     # nothing and says nothing
+                     :fn (fn [ch] (when (= :sms (ch :channel)) :sent))}]
+    (fn [] (auth/challenge! "user:9" {:to "ada@example.com" :claims {:name "Ada"}}))))
+
+(assert (deep= @[:test/mail] (issued :delivered)) "only the deliverer that took it is reported")
+(assert (nil? (issued :code))
+        "the code is not in the return value: it exists inside the call and inside whatever carried it away")
+
+(def payload (first seen))
+(assert (= "ada@example.com" (payload :to)))
+(assert (= "user:9" (payload :subject)))
+(assert (= "Ada" (get-in payload [:claims :name])))
+(assert (payload :code) "the deliverer is the one place the code exists")
+
+(def id (with-deliverers [] (fn [] (auth/redeem! (issued :handle) (payload :code)))))
+(assert (= "user:9" (id :subject)) "and the code it carried is the one that redeems")
+
+(def [ok err]
+  (protect (with-deliverers [{:name :test/sms :fn (fn [ch] nil)}]
+             (fn [] (auth/challenge! "user:9" {:to "ada@example.com"})))))
+(assert (not ok)
+        "a challenge nobody delivered is an error: the visitor is waiting for a code that is not coming")
+(assert (string/find "nobody delivered it" (string err)))
+
+(assert (not (first (protect (with-deliverers []
+                               (fn [] (auth/challenge! "user:9" {}))))))
+        "and so is one in a composition with no deliverer at all")
+
+(assert (not (first (protect (with-deliverers [{:name :test/boom
+                                                :fn (fn [_] (error "smtp is down"))}]
+                               (fn [] (auth/challenge! "user:9" {:to "a@b.co"}))))))
+        "a deliverer that failed is a failure of the call — the caller is telling somebody to check their mail")
+
 (print "challenge-test ok")

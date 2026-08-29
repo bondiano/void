@@ -63,7 +63,14 @@
 (assert (boolean? (algos :argon2id))
         "argon2id is reported, never assumed: it needs OpenSSL 3.2 and an LTS distribution may ship 3.0")
 (assert (= (algos :argon2id) (>= (+ (* 100 major) minor) 302))
-        "and what is reported matches the version that was found")
+        (string/format
+          (string "argon2id reported as %q by OpenSSL %d.%d — the EVP_KDF symbols arrived "
+                  "in 3.0 and the ARGON2ID implementation in 3.2, so the answer has to come "
+                  "from fetching the KDF, not from the symbol table")
+          (algos :argon2id) major minor))
+(when (not (empty? lib/missing))
+  (assert (not (algos :argon2id))
+          "a library without the EVP_KDF symbols cannot derive with argon2id either"))
 
 (each sym lib/missing
   (assert (string/has-prefix? "EVP_KDF" sym)

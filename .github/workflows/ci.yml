@@ -149,6 +149,7 @@ jobs:
                     (import void/db-sqlite) (import void/redis) (import void/cache)
                     (import void/jobs) (import void/pressure) (import void/obs)
                     (import void/crypto) (import void/auth) (import void/authz) (import void/security)
+                    (import void/mail)
                     (import void/dev)
                     (import void/fdwait)
                     (print "every package imports from the installed tree")'
