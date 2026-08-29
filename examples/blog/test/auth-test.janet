@@ -20,6 +20,8 @@
 (import void/auth :as auth)
 (import void/authz :as authz)
 (import void/authz/policy :as policy)
+(import void/jobs :as jobs)
+(import void/mail :as mail)
 (import ../main)
 (import ../app)
 (import ../entities :as e)
@@ -81,7 +83,12 @@
                            # registers and signs in a dozen times, and
                            # what scrypt costs is pinned in void/crypto
                            :auth {:scrypt {:ln 10}}
-                           :crypto {:kdf {:in-thread false}}}
+                           :crypto {:kdf {:in-thread false}}
+                           # the letters this suite reads back; the
+                           # application's own default writes .eml
+                           # files, which is right for `void dev` and
+                           # useless to an assertion
+                           :mail {:transport :memory}}
                           (engine :config))}})
 
   (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue
@@ -246,6 +253,71 @@
                     :status))
             "and so does commenting: the route says :public, which under deny-by-default is a statement rather than a silence")
     (note "anonymous ok")
+
+    # -- the sign-in link ------------------------------------------------
+    #
+    # The last piece of the wave-3 exit criterion (ROADMAP): the
+    # application issues a challenge and says nothing else about it —
+    # the letter, the URL and the one-time code belong to
+    # void/mail-auth (ADR-0026 §6), and it goes out through the queue
+    # this application already runs.
+
+    (jobs/clear!)
+    (mail/clear-outbox!)
+    (def link-client (test/client (c :boot)))
+    (def link-token (token-of (test/inject link-client {:uri "/"})))
+
+    (defn- ask-for-link [email]
+      (test/inject link-client {:uri "/sign-in/magic"
+                                :headers {"x-csrf-token" link-token}
+                                :form {:email email}}))
+
+    (def asked (ask-for-link "ada@example.com"))
+    (assert (string/find "on its way" (text asked)))
+    (assert (empty? (mail/outbox))
+            "nothing was sent on the request fiber: composing void/mail-jobs is the whole of \"through the queue\", and no handler mentions it")
+    (assert (= 1 (length (jobs/list-jobs {:queue :mail :state :pending})))
+            "the letter is a job in the same queue the counter runs in")
+
+    (assert (= 1 (jobs/drain!)) "the worker sends it")
+    (assert (= 1 (length (mail/outbox))))
+
+    (def letter (get-in (mail/outbox) [0]))
+    (assert (string/find "To: ada@example.com" (letter :bytes)))
+    (assert (not (string/find "correct horse" (letter :bytes))))
+
+    # the link, as a mail client would see it: undo the transfer
+    # encoding, then read it out of the text part
+    (def decoded (string/replace-all "=3D" "="
+                                     (string/replace-all "=\r\n" "" (letter :bytes))))
+    (def magic
+      (first (peg/match ~(any (+ (<- (* "/auth/magic?h="
+                                        (some (if-not (set "&\"< \r\n") 1))
+                                        "&c="
+                                        (some (if-not (set "&\"< \r\n") 1))))
+                                 1))
+                        decoded)))
+    (assert magic "the letter carries the link")
+
+    (def followed (test/inject link-client {:uri magic}))
+    (assert (= 302 (followed :status)) "and following it signs the visitor in")
+    (def as-ada (test/inject link-client {:uri "/"}))
+    (assert (string/find "Signed in as" (text as-ada)))
+    (assert (string/find "Ada" (text as-ada))
+            "greeted by the claim that travelled on the challenge — no second query")
+
+    (def again (test/inject (test/client (c :boot)) {:uri magic}))
+    (assert (string/find "expired or has already been used" (text again))
+            "a link works once: redeem takes the challenge out of the store before it checks the code")
+
+    (jobs/clear!)
+    (mail/clear-outbox!)
+    (def stranger (ask-for-link "nobody@example.com"))
+    (assert (= (message-of asked) (message-of stranger))
+            "an address with no account gets the same page — anything else is a way to ask this blog who its authors are")
+    (assert (empty? (jobs/list-jobs {:queue :mail}))
+            "and no letter is queued for it")
+    (note "magic link ok")
 
     # -- the decision log -------------------------------------------------
 

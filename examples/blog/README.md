@@ -3,8 +3,9 @@
 A [void](https://github.com/bondiano/void) application — the wave-2
 demo: CRUD over `void/db`, with migrations, a background job and a
 cache, on **Postgres or sqlite, chosen by config**; and the wave-3
-one: signing in, a row-level policy, and the browser protections that
-come with composing three more plugins.
+one: signing in (by password, or by a link that arrives in the mail),
+a row-level policy, and the browser protections that come with
+composing a few more plugins.
 
     void db migrate     # create the schema
     void dev            # run the app (dev profile: watcher + netrepl)
@@ -23,7 +24,7 @@ Nothing else moves. `main.janet` is the only file that names a driver;
 the entities, the migrations, the handlers, the job and the cache are
 byte-for-byte the same on both — and `test/crud-test.janet` runs the
 whole suite twice, once per engine, so the claim stays true. Wave 3
-added seven plugins and no engine-specific line, so
+added ten plugins and no engine-specific line, so
 `test/auth-test.janet` runs twice as well.
 
 ## What is where
@@ -38,6 +39,7 @@ added seven plugins and no engine-specific line, so
 | `config/` | the layers: `default.janet` (shared), `<profile>.janet`, then `VOID_*`, then CLI overrides — `void config explain :cache :ttl` says which one won |
 | `app.janet` (wave 3) | `defpolicy :articles/own` — a pure function of a context; `:void.auth/access`, `:void.authz/policy` and `:void.authz/resource` as route metadata; the sign-in, sign-out and registration handlers |
 | `views.janet` (wave 3) | `authz/can?` deciding whether to draw the Edit control, and `security/htmx-meta` putting the CSRF token where htmx will find it |
+| `app.janet` (wave 3.5) | `auth/challenge!` — the whole of "mail me a sign-in link" — and the route the link lands on; the letter itself is `void/mail-auth`'s |
 
 ## The parts worth reading twice
 
@@ -99,6 +101,18 @@ button — an htmx request with no form around it — send the token too.
 The check applies to requests whose credential rode on a cookie, which
 is why the anonymous comment form still works and a JSON client would
 not need a token at all.
+
+**A sign-in link is one call, and no template.** `request-link` asks
+`auth/challenge!` for a single-use code and stops there: the letter,
+its URL and its expiry line come from `void/mail-auth` (`(set
+mail-auth/link-view …)` replaces the letter without an extension
+point). Because `void/mail-jobs` is in the composition, the letter is
+rendered on the request and **sent by the worker** — the handler does
+not know that and does not have to; `void jobs work` is what puts it
+in an inbox, and in development `[:mail :transport] :file` writes it
+into `tmp/mail` as a `.eml` that opens in a mail client. The page says
+the same thing whether or not the address has an account, for the same
+reason the password path does.
 
 **The authors table stayed the application's.** `void/auth-db` reads
 it (`[:auth-db :users]` in `config/default.janet` names the columns);

@@ -21,8 +21,6 @@
  # counter change
  :cache {:prefix "blog:" :ttl 60}
 
- :jobs {:queues {:maintenance {:concurrency 2}}}
-
  # -- wave 3 -------------------------------------------------------------
  #
  # Three interfaces now have two implementations each — the memory
@@ -51,6 +49,27 @@
  # A browser application: an unauthenticated request to a protected
  # route belongs on the sign-in page, not on a 401.
  :auth-http {:unauthenticated :redirect :login-path "/"}
+
+ # Mail. In development every letter is written into tmp/mail as a
+ # .eml — open one and it renders in a mail client, which is what the
+ # sign-in link should be looked at in. In production this has to be
+ # :smtp (or a transport the application contributes): a transport that
+ # keeps mail rather than sending it is a boot error in the :prod
+ # profile, because a deployment that silently mails nothing looks
+ # exactly like one that works (ADR-0026 §2).
+ #
+ # :base-url is not optional decoration — a letter has no origin, so
+ # the link in it must be absolute, and a relative one is an error at
+ # render time rather than a dead link in an inbox.
+ :mail {:transport :file
+        :from "blog <no-reply@blog.example>"
+        :base-url "http://localhost:8080"}
+
+ # void/mail-jobs is in the composition, so mail/send hands the
+ # rendered letter to the queue and `void jobs work` sends it. The
+ # queue is the same one the counter job runs in.
+ :jobs {:queues {:maintenance {:concurrency 2}
+                 :mail {:concurrency 2}}}
 
  # Every route that is not explicitly public has to name a policy, and
  # a route that forgets one fails the *boot* rather than the request

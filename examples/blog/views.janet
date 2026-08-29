@@ -95,6 +95,16 @@
      :fields {:password {:type "password"}}
      :submit "Sign in"}))
 
+(defn magic-link-form
+  ``The other way in: an address, and a link arrives by mail
+  (void/mail-auth). The visitor types nothing they have to remember,
+  and the blog stores no password for them until they want one.``
+  [&opt values]
+  (form/form e/MagicLink
+    {:action "/sign-in/magic"
+     :values values
+     :submit "Mail me a sign-in link"}))
+
 (defn register-form
   "The same, plus a name — the account this blog knows an author by."
   [&opt values errors]
@@ -123,6 +133,8 @@
      [:div {:id "join"}
       [:h2 "Sign in"]
       (sign-in-form (get state :sign-in))
+      [:h2 "Or get a link by mail"]
+      (magic-link-form (get state :magic-link))
       [:h2 "Or create an account"]
       (register-form (get state :register) (get state :register-errors))])])
 
