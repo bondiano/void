@@ -6,10 +6,11 @@
 > void/db-sqlite void/db-postgres void/db-http void/redis
 > void/redis-http void/cache void/cache-redis void/cache-http
 > void/jobs void/jobs-db void/jobs-redis void/pressure
-> void/pressure-http void/obs void/obs-http void/crypto void/auth
-> void/auth-http void/auth-db void/authz void/authz-http
-> void/security void/mail void/mail-jobs void/mail-auth void/bus
-> void/bus-db void/bus-jobs void/dev void/bench)
+> void/pressure-http void/obs void/obs-http void/obs-otlp
+> void/crypto void/auth void/auth-http void/auth-db void/authz
+> void/authz-http void/security void/mail void/mail-jobs
+> void/mail-auth void/bus void/bus-db void/bus-jobs void/ws
+> void/ws-htmx void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -408,6 +409,7 @@ layer.
 | `:void.schema/response` | `:void/rest` | `:deep-merge` | `[:map-of [:int {:max 599 :min 100}] [:pred <fn> "must be a schema form"]]` | Response schemas by status: {200 :Order 404 :Problem}; checked against rest/json payloads when [:rest :validate-responses], projected by void/openapi |
 | `:void.security/csrf` | `:void/security` | `:restrict` + `:allow?` | `:boolean` | Demand a CSRF token on this route even when the credential did not ride on a cookie (SPEC part II §2.5). :restrict, true wins — protection can be tightened by a more specific layer and never loosened, so there is no key that switches it off |
 | `:void.security/rate` | `:void/security` | `:restrict` + `:allow?` | `{:key [:optional [:or :keyword :function]] :limit [:int {:min 1}] :window [:number {:min 1}]}` | Rate limit for this route: {:limit 5 :window 60 :key :ip|:subject|(fn [req])}. :restrict — a route may only lower the rate it inherits, never raise it |
+| `:void.ws/socket` | `:void/ws` | `:replace` | `:boolean` | This route answers a WebSocket handshake: no handler deadline may apply to it, and `void routes` says so |
 
 ### Reserved key names (owners land in waves 2+)
 

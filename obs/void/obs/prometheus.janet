@@ -3,8 +3,9 @@
 ###
 ### A pure projection of `metrics/snapshot`: data in, one string out,
 ### no state and no I/O. That is what makes it testable without a
-### server and what makes the OTLP exporter of wave 4 a *second*
-### projection of the same snapshot rather than a second metric model.
+### server and what made the OTLP exporter (./otlp) a *second*
+### projection of the same snapshot rather than a second metric model —
+### same values, same names, same units.
 ###
 ### The format is the 0.0.4 text exposition every Prometheus-compatible
 ### scraper reads (and the one `promtool check metrics` validates):

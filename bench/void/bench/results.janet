@@ -116,6 +116,29 @@
               (and (< (e :delta) (- threshold))
                    (> (- b c) latency-floor-ms))
               (array/push improvements e))))
+        # B4's own two numbers (ROADMAP 4.2): messages delivered per
+        # second, higher better, and delivery p50/p99, lower better.
+        # They live in their own mode because they mean something
+        # different from a request's — the comparison must not put a
+        # fan-out and a request latency in the same column
+        (let [b (get-in brow [:broadcast :rps])
+              c (get-in crow [:broadcast :rps])]
+          (when (and (number? b) (number? c) (pos? b))
+            (def e (entry tname :broadcast :rps b c))
+            (cond
+              (< (e :delta) (- threshold)) (array/push regressions e)
+              (> (e :delta) threshold) (array/push improvements e))))
+        (each k [:p50 :p99]
+          (def b (get-in brow [:broadcast k]))
+          (def c (get-in crow [:broadcast k]))
+          (when (and (number? b) (number? c) (pos? b))
+            (def e (entry tname :broadcast k b c))
+            (cond
+              (and (> (e :delta) threshold) (> (- c b) latency-floor-ms))
+              (array/push regressions e)
+
+              (and (< (e :delta) (- threshold)) (> (- b c) latency-floor-ms))
+              (array/push improvements e))))
         # the loop's own lag under target load — the signal that moves
         # first when something starts blocking (§8.4). Same absolute
         # floor as the latencies: these numbers live below a
@@ -160,15 +183,56 @@
 
 # -- budgets -------------------------------------------------------------
 
+(defn- broadcast-notes
+  ``B4's budget (§8.2's last row): delivery under 50 ms to a thousand
+  connections at 10k messages a second. Nothing else applies to it —
+  there is no request throughput and no request latency in a fan-out,
+  and a check that reported them as unmeasured would be reporting the
+  absence of numbers that do not exist.``
+  [row budget note]
+  (def b (get row :broadcast))
+  (if (nil? b)
+    (note :skip "the broadcast generator did not run")
+    (do
+      (def conns (get b :connections 0))
+      (note (if (>= conns (budget :connections)) :ok :miss)
+            (string/format "%d connections held (budget %d)"
+                           conns (budget :connections)))
+      (def rps (get b :rps))
+      (if (number? rps)
+        (note (if (>= rps (budget :rps)) :ok :miss)
+              (string/format "%.0f messages/s delivered (floor %d)"
+                             rps (budget :rps)))
+        (note :skip "message rate not measured"))
+      (def p99 (get b :p99))
+      (if (number? p99)
+        (note (if (< p99 (budget :delivery-p99)) :ok :miss)
+              (string/format "delivery p99 %.2fms (budget < %.1fms)"
+                             p99 (budget :delivery-p99)))
+        (note :skip "delivery p99 not measured"))
+      (each k [:errors :closed]
+        (when-let [n (get b k)]
+          (note :miss (string/format "%d %s during the run" n k)))))))
+
 (defn budget-notes
   ``Check one row against a §8.2 budget ({:p50 :p99 :rps} plus the
   optional runtime keys :loop-lag-p99 and :loop-lag-max). Latency and
   the runtime numbers come from the fixed-rate mode only; a missing
-  measurement is reported as unchecked. Returns
-  [[:ok|:miss|:skip text] ...].``
+  measurement is reported as unchecked. A budget carrying
+  `:kind :broadcast` (B4) is checked against its own metrics instead.
+  Returns [[:ok|:miss|:skip text] ...].``
   [row budget]
   (def notes @[])
   (defn note [status text] (array/push notes [status text]))
+  (when (= :broadcast (get budget :kind))
+    (broadcast-notes row budget note)
+    (when-let [limit (budget :loop-lag-p99)]
+      (def v (get-in row [:runtime :loop-lag :p99]))
+      (if (number? v)
+        (note (if (< v limit) :ok :miss)
+              (string/format "loop-lag p99 %.3fms (budget < %.1fms)" v limit))
+        (note :skip "loop-lag p99 not measured (no probe in the target)")))
+    (break notes))
   (def rps (get-in row [:throughput :rps]))
   (if (number? rps)
     (note (if (>= rps (budget :rps)) :ok :miss)

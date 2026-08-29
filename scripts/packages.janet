@@ -131,8 +131,10 @@
    # void/pressure is here for its loop-lag *meter*
    # (`void/pressure/sample`), the way void/bench/probe takes it — the
    # module, never the plugin: a process that observes itself must not
-   # thereby start shedding. void/http is void/obs-http's, a separate
-   # plugin in this package (the void/cache — void/cache-http split).
+   # thereby start shedding. void/http is two plugins' in this package
+   # (the void/cache — void/cache-http split): void/obs-http's server
+   # side, and void/obs-otlp's client — the OTLP exporter POSTs to a
+   # collector through void/http/client (ADR-0027).
    # void/dev and void/cache are the suite's: inject for the endpoints,
    # a real component for the instrumentation. void/rest is
    # test-support/overhead-probe.janet's, which measures what obs costs
@@ -204,14 +206,27 @@
     :test-deps [:void/db-sqlite :void/db-postgres :void/obs :void/dev]
     :jpm [:spork]}
 
+   :void/ws
+   # WebSocket over the HTTP kernel (ADR-0028): the handshake is
+   # answered from an ordinary route handler, so the only edge is
+   # void/http — everything that protects a route already protects a
+   # socket. spork is here for base64, an alphabet rather than
+   # cryptography (the same reason void/crypto declares it), and there
+   # is deliberately no edge to void/crypto: see ws/void/ws/sha1.janet.
+   # void/html and void/htmx are void/ws-htmx's, a separate plugin in
+   # this package — the void/cache — void/cache-http split again.
+   {:dir "ws" :deps [:void/core :void/http :void/html :void/htmx]
+    :test-deps [:void/dev] :jpm [:spork]}
+
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
    # B2/B3, obs for the b1-obs row that measures §8.2's ≤ 7%
-   # instrumentation budget (see bench/apps/prelude.janet, which asks
-   # for this same set).
+   # instrumentation budget, ws for B4's broadcast (see
+   # bench/apps/prelude.janet, which asks for this same set).
    {:dir "bench" :deps [:void/core :void/http :void/db :void/pressure]
-    :test-deps [:void/rest :void/html :void/db-postgres :void/obs] :jpm [:spork]}
+    :test-deps [:void/rest :void/html :void/db-postgres :void/obs :void/ws]
+    :jpm [:spork]}
 
    # -- examples: smoke tests in CI, never part of the bundle ------------
    #

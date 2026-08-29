@@ -34,3 +34,5 @@ ADR фиксируют архитектурные решения проекта 
 | [0024](0024-authz-abac-kak-dannye.md) | `void/authz` — ABAC: политика как чистая функция, решение как значение | accepted |
 | [0025](0025-security-csrf-zagolovki-limity.md) | `void/security` — CSRF по кукиным полномочиям, заголовки на краю, лимиты поверх контракта кэша | accepted |
 | [0026](0026-mail-soobshenie-kak-dannye-dostavka-kak-kompoziciya.md) | `void/mail` — сообщение как данные, доставка как решение композиции | accepted |
+| [0027](0027-otlp-eksport-json-i-http-klient.md) | OTLP-экспорт — JSON до `void/proto`, HTTP-клиент как часть ядра | accepted |
+| [0028](0028-websocket-kak-marshrut-perehvat-soedineniya.md) | WebSocket — это маршрут; ядро отдаёт соединение, комнаты остаются в процессе | accepted |

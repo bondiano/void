@@ -18,6 +18,13 @@
 ### (fn [request] response) plus an optional :limits-fn giving the
 ### per-route [max-body timeout] before the body is read. Wiring lives
 ### in void/http/init.
+###
+### A response may also end HTTP on that socket: `:void.http/upgrade`
+### (see ring/upgrade) is a function the loop calls after the head is
+### written, handing it the connection and whatever bytes arrived
+### behind the request. It is what RFC 6455 calls a protocol upgrade
+### and what void/ws is built on — the kernel itself stays ignorant of
+### the protocol that takes over.
 
 (import ./wire :as wire)
 
@@ -358,12 +365,33 @@
             (unless (and (dictionary? resp) (int? (resp :status)))
               (errorf "handler returned %q — expected a response table with :status"
                       resp))
-            (def keep (and (keep-alive? head resp state)))
-            (write-response conn wbuf req resp (not keep))
-            # :on-response (ADR-0016): after the bytes hit the socket
+            (def upgrade (get resp :void.http/upgrade))
+            (def keep (and (nil? upgrade) (keep-alive? head resp state)))
+            (write-response conn wbuf req resp (and (not keep) (nil? upgrade)))
+            # :on-response (ADR-0016): after the bytes hit the socket.
+            # An upgrade is notified here too, and deliberately before
+            # the handover: the access log line is about the *request*
+            # that was answered 101, and it should be written when that
+            # answer went out rather than hours later when the socket
+            # closes.
             (when-let [notify (opts :on-response)]
               (protect (notify req resp)))
             (consume! buf consumed)
+            (when upgrade
+              # HTTP is over on this socket. Bytes already read past
+              # the request head belong to the new protocol — a client
+              # is allowed to send its first frame right behind the
+              # handshake — so they are handed over rather than
+              # dropped. The protect is not belt and braces: past this
+              # point the peer is no longer speaking HTTP, and the
+              # loop's last-resort 500 would put an HTTP response into
+              # the middle of somebody's frame stream.
+              (def rest (string buf))
+              (buffer/clear buf)
+              (def [ok err] (protect (upgrade conn rest)))
+              (unless ok
+                (eprintf "http upgraded connection error: %s"
+                         (if (string? err) err (describe err)))))
             (put info :busy false)
             (set alive keep))))
       (unless ok

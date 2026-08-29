@@ -136,4 +136,36 @@
   (assert (not (first (protect (wire/write-body conn @"" [42]))))
           "non-byte chunk raises"))
 
+
+# -- percent decoding, cookies both ways ---------------------------------
+
+(assert (= "a b+c" (wire/url-decode "a%20b+c"))
+        "+ is a plus everywhere but a query string, and a cookie carrying base64 must survive")
+(assert (= "a b c" (wire/url-decode "a%20b+c" true)) "unless the caller says it is a query")
+
+(assert (= "session=abc; theme=dark%20mode"
+           (wire/cookie-header {"session" "abc" "theme" "dark mode"}))
+        "a Cookie header is built the way ring/cookie-str writes the values")
+
+(def sc (wire/parse-set-cookie "session=a%20b; Path=/; Domain=example.test; Max-Age=3600; HttpOnly; Secure; SameSite=Lax"))
+(assert (= "session" (sc :name)))
+(assert (= "a b" (sc :value)) "the value is decoded")
+(assert (= "/" (sc :path)))
+(assert (= "example.test" (sc :domain)))
+(assert (= 3600 (sc :max-age)) "and Max-Age is a number, not the string it arrived as")
+(assert (sc :http-only))
+(assert (sc :secure))
+(assert (= :lax (sc :same-site)))
+(assert (nil? (wire/parse-set-cookie "nonsense")) "a malformed header is ignored, not raised")
+(assert (nil? (wire/parse-set-cookie "=orphan")) "and so is one with no name")
+
+(assert (= "a b" ((wire/parse-cookies "x=a%20b") "x"))
+        "what ring/cookie-str encoded on the way out is decoded on the way in — the round trip closes")
+(assert (= "ey+J/9" ((wire/parse-cookies "jwt=ey+J/9") "jwt"))
+        "and a + in a cookie stays a +, because that is what session tokens are made of")
+
+(assert (= ["one" "two"] (tuple ;(wire/path-segments "/one//two/?x=1")))
+        "path segments drop the empties and the query")
+(assert (empty? (wire/path-segments "/")))
+
 (print "wire-test: all assertions passed")

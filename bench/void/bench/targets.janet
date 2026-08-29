@@ -29,7 +29,25 @@
    :pg-ssr {:path "/rows"
             :threads 4
             :connections 64
-            :rate 1200}})
+            :rate 1200}
+   # B4 is not an HTTP shape and is not driven by wrk: `:generator :ws`
+   # sends the runner to void/bench/ws and loadgen/ws-broadcast.janet
+   # instead. `:connections` is §8.2's thousand and `:rate` the
+   # server's broadcasts per second (the runner passes it on as
+   # BENCH_BROADCAST_RATE), so the fan-out is 12000 messages a second
+   # against a 10k floor.
+   #
+   # The headroom is the same convention the wrk2 rates follow from
+   # the other side: a gate run at exactly its budget measures the
+   # rounding at the edges of the window rather than the system. A
+   # server that cannot keep up shows it in the delivery percentile
+   # and in messages that never arrive, not in a rate the generator
+   # was never sent.
+   :broadcast {:path "/ws"
+               :generator :ws
+               :connections 1000
+               :rate 12
+               :warmup 3}})
 
 (def budgets
   "SPEC §8.2 budgets (1 worker, 1 vCPU), verified against the recorded
@@ -45,7 +63,25 @@
    # single-threaded loop is loop lag of at least its own length and
    # janet 1.41 reports no pause of its own (void/bench/probe)
    :b2 {:p50 3 :p99 12 :rps 3000 :loop-lag-p99 1}
-   :b3 {:p50 5 :p99 20 :rps 1500 :loop-lag-p99 1 :loop-lag-max 10}})
+   :b3 {:p50 5 :p99 20 :rps 1500 :loop-lag-p99 1 :loop-lag-max 10}
+   # B4 has a kind of its own because it has metrics of its own: §8.2
+   # gives it no p50/p99 and no request throughput, only "delivery
+   # < 50 ms" to 1000 connections at 10k msg/s. `:rps` here counts
+   # messages delivered to peers per second.
+   #
+   # It deliberately carries no :loop-lag-p99, and that is an argument
+   # rather than an omission. §8.4's "p99 < 1 ms under target load" is
+   # a budget about a loop that is *waiting* between units of work: a
+   # request arrives, is served, and the lag measures how late the
+   # loop was to notice. A broadcast is the opposite shape — the
+   # target load is one burst of a thousand writes per tick, so the
+   # lag during a tick *is* the fan-out, and a 1 ms p99 would mean the
+   # whole fan-out finished inside a millisecond. What that budget is
+   # a proxy for — is the loop keeping up? — is measured directly here
+   # by the delivery percentile. The loop-lag numbers are still read
+   # from the probe and printed with the row; they are just not a gate
+   # on this shape.
+   :b4 {:kind :broadcast :delivery-p99 50 :rps 10000 :connections 1000}})
 
 (def targets
   ``target -> how to serve it. :cmd is a sh line run from the bench
@@ -100,6 +136,14 @@
         :needs-pg true
         :ready "/rows"
         :cmd "exec janet apps/b3-pg-ssr/main.janet"}
+   :b4 {:doc "B4 WebSocket broadcast — 1k connections in one room, delivery measured at the peers"
+        :bench :broadcast
+        :port 8104
+        :budget :b4
+        # the socket route is what the generator opens; /stats is what
+        # a human watching the run reads
+        :ready "/stats"
+        :cmd "exec janet apps/b4-ws-broadcast/main.janet"}
    :go-plaintext {:doc "Go net/http baseline (the ceiling) — plaintext"
                   :bench :plaintext
                   :port 8180
@@ -130,15 +174,14 @@
 
 (def order
   "Report/`all` order."
-  [:b0 :b1 :b1-pressure :b1-obs :b2 :b3
+  [:b0 :b1 :b1-pressure :b1-obs :b2 :b3 :b4
    :go-plaintext :go-json :fastapi-plaintext :fastapi-json])
 
 (def default-targets
-  ``What a bare `void bench` runs: the four B* rows §8.2 budgets in
-  wave 2. B2/B3 skip themselves when no Postgres is configured (see
-  void/bench/pg) rather than fail — a laptop without a server still
-  gets B0/B1.``
-  [:b0 :b1 :b2 :b3])
+  ``What a bare `void bench` runs: every B* row §8.2 budgets. B2/B3
+  skip themselves when no Postgres is configured (see void/bench/pg)
+  rather than fail — a laptop without a server still gets B0/B1/B4.``
+  [:b0 :b1 :b2 :b3 :b4])
 
 (def pg-targets
   "Targets that need a Postgres to mean anything."

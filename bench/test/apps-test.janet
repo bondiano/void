@@ -6,6 +6,8 @@
 (import spork/json)
 (import void/bench/runner :as runner)
 (import void/bench/pg :as pg)
+(import void/bench/ws :as bws)
+(import void/ws/client :as wsc)
 
 (defn- http-request [port req]
   (def s (net/connect "127.0.0.1" (string port)))
@@ -73,6 +75,61 @@
           "b1 rejects a schema-violating body with 422")
   (assert (string/find "application/problem+json" bad)
           "the rejection is problem+json"))
+
+# -- B4 the broadcast benchmark ------------------------------------------
+#
+# A handful of connections rather than the thousand the методика uses:
+# the smoke test proves the app fans out and the generator's report
+# parses, not that the budget is met (that is `void bench b4`).
+
+(def b4 (runner/wait-ready
+          (runner/start-target :test-b4
+                               {:port 8194
+                                :ready "/stats"
+                                :env {"BENCH_BROADCAST_RATE" "20"}
+                                :cmd "exec janet apps/b4-ws-broadcast/main.janet"})
+          30))
+(defer (runner/stop-target b4)
+  (def peers (seq [_ :range [0 3]] (wsc/connect "ws://127.0.0.1:8194/ws")))
+  (def first-message (wsc/receive (first peers) 5))
+  (assert (= :text (first-message :type)) "b4 broadcasts text")
+  (def decoded (json/decode (first-message :data) true))
+  (assert (number? (decoded :t))
+          "carrying the monotonic clock the generator measures delivery against")
+  (each peer (drop 1 peers)
+    (assert (wsc/receive peer 5) "every peer in the room is reached"))
+
+  (def stats
+    (json/decode
+      (let [resp (http-request 8194
+                               "GET /stats HTTP/1.1\r\nhost: bench\r\nconnection: close\r\n\r\n")]
+        (string/slice resp (+ 4 (string/find "\r\n\r\n" resp))))
+      true))
+  (assert (= 3 (stats :connections)))
+  (assert (= 20 (stats :rate)) "the runner's :env reached the app")
+  (assert (zero? (stats :overflows))
+          "and nobody's outbound queue overflowed at three connections")
+  (each peer peers (wsc/close! peer)))
+
+# the generator's own report format, without running one
+(def report
+  (bws/parse (string "opening 2 connections ...\n"
+                     "BENCH-WS "
+                     (json/encode {:connections 2 :requested 2 :duration 5
+                                   :messages 100 :rps 20 :errors 0 :closed 0
+                                   :undecodable 0
+                                   :delivery {:samples 100 :p50 1.5 :p99 4.0
+                                              :p90 2.0 :p999 5.0 :max 6.0
+                                              :mean 1.7}})
+                     "\n"))
+  )
+(def row (bws/summarize report))
+(assert (= 20 (row :rps)))
+(assert (= 4.0 (row :p99)))
+(assert (nil? (row :errors)) "a clean run carries no error counters at all")
+
+(def [ok] (protect (bws/parse "the generator said nothing useful")))
+(assert (not ok) "a run with no report is a failure, never an empty row")
 
 (print "apps-test ok")
 
