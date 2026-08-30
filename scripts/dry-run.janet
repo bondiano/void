@@ -4,6 +4,7 @@
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
 ### void/crypto + void/auth + void/auth-http + void/auth-db +
 ### void/bus + void/bus-db + void/bus-jobs + void/ws + void/ws-htmx +
+### void/proto + void/grpc +
 ### void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
@@ -68,6 +69,8 @@
 (require "void/bus/jobs")
 (require "void/ws/init")
 (require "void/ws/htmx")
+(require "void/proto/init")
+(require "void/grpc/init")
 (require "void/mcp/init")
 (require "void/mcp/http")
 (require "void/mcp/obs")
@@ -92,6 +95,7 @@
                              :void/mail :void/mail-jobs :void/mail-auth
                              :void/bus :void/bus-db :void/bus-jobs
                              :void/ws :void/ws-htmx
+                             :void/proto :void/grpc
                              :void/mcp :void/mcp-http :void/mcp-obs
                              :void/admin :void/admin-jobs :void/admin-mcp
                              :void/dev :void/bench :bench/probe :demo/greeter]

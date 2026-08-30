@@ -10,8 +10,9 @@
 > void/crypto void/auth void/auth-http void/auth-db void/auth-oauth
 > void/authz void/authz-http void/security void/mail void/mail-jobs
 > void/mail-auth void/bus void/bus-db void/bus-jobs void/ws
-> void/ws-htmx void/mcp void/mcp-http void/mcp-obs void/admin
-> void/admin-jobs void/admin-mcp void/dev void/bench)
+> void/ws-htmx void/proto void/grpc void/mcp void/mcp-http
+> void/mcp-obs void/admin void/admin-jobs void/admin-mcp void/dev
+> void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -266,6 +267,16 @@ key plus a deprecation alias for the old name, never a mutation.
   {:ask :function :doc [:optional :string] :name :keyword :needs [:optional [:vector :keyword]] :what :string}
   ```
 
+### `:void.grpc/codec`
+
+- **owner:** `:void/grpc` · **cardinality:** `:many`
+- Connect codecs: {:name :void.grpc/proto :content-type "application/proto" :aliases [...]? :encoding "proto" :encode (fn [message value] bytes) :decode (fn [message bytes] value)}. `:encoding` is the name Connect's GET form uses in ?encoding=; the first codec whose content type matches a request serves it. void/grpc ships the two the protocol defines, and the point exists because a fleet that speaks a third one internally should not need a second server
+- **contribution schema:**
+
+  ```janet
+  {:aliases [:optional [:vector :string]] :content-type :string :decode :function :doc [:optional :string] :encode :function :encoding :string :encoding-aliases [:optional [:vector :string]] :name :keyword}
+  ```
+
 ### `:void.html/engine`
 
 - **owner:** `:void/html` · **cardinality:** `:many`
@@ -416,6 +427,16 @@ key plus a deprecation alias for the old name, never a mutation.
   {:doc [:optional :string] :fn :function :name :keyword}
   ```
 
+### `:void.proto/file`
+
+- **owner:** `:void/proto` · **cardinality:** `:many`
+- `.proto` files a plugin ships: {:name :orders/api :path "protos/orders.proto" :paths ["vendor/protos"]?}. Loaded and registered at :before-start, before any route table is built, so void/grpc can project a service declared in a file the application never imported. A plugin that would rather have its descriptors baked into its module uses `proto/defproto` and contributes nothing
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :name :keyword :path :string :paths [:optional [:vector :string]]}
+  ```
+
 ### `:void.redis/codec`
 
 - **owner:** `:void/redis` · **cardinality:** `:many`
@@ -473,6 +494,8 @@ layer.
 | `:void.authz/resource` | `:void/authz-http` | `:replace` | `:function` | (fn [request] resource) — what the policies of this route decide about. Without one the resource is nil and the policies see only the subject and the environment; a row-level check belongs in the handler, next to the query that loaded the row |
 | `:void.cache/response` | `:void/cache-http` | `:replace` | `{:ttl [:optional [:number {:min 0}]] :vary [:optional [:vector [:or :string :keyword]]]}` | Cache this route's 200 responses in the shared cache for :ttl seconds (0 opts out of a group's setting), keyed by method, path, query and the request headers named in :vary |
 | `:void.db/txn` | `:void/db-http` | `:replace` | `[:or :boolean {:isolation [:optional :keyword]}]` | Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN |
+| `:void.grpc/method` | `:void/grpc` | `:replace` | `:keyword` | The RPC method this route serves — set by void/grpc's projection; its presence is what the Connect error renderer keys on |
+| `:void.grpc/service` | `:void/grpc` | `:replace` | `:keyword` | The RPC service this route serves — set by void/grpc's projection, so a middleware can tell an RPC method from a page |
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request with the fragment alone — the view response's layout is stripped before rendering |
 | `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
 | `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific layer may only lower it |

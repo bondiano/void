@@ -220,6 +220,27 @@
    {:dir "ws" :deps [:void/core :void/http :void/html :void/htmx]
     :test-deps [:void/dev] :jpm [:spork]}
 
+   :void/proto
+   # protobuf, and no transport (ADR-0013): the codec, the `.proto`
+   # parser and the JSON mapping are pure Janet over void/core's schema
+   # layer, which is the one edge — void/proto/schema registers two
+   # custom types and the :proto projection SPEC §3.3 reserved for it.
+   # void/grpc is where a socket appears. The suite reaches void/dev for
+   # nothing at all and says so by not listing it.
+   {:dir "proto" :deps [:void/core] :jpm [:spork]}
+
+   :void/grpc
+   # Connect-RPC over the HTTP kernel (ADR-0013): a method is a route,
+   # so void/http is the only transport edge and every policy that
+   # protects a route — void/authz, void/security, void/obs — protects
+   # an RPC method without knowing one exists. void/proto is the codec
+   # on both sides of it. The suite reaches void/dev for inject
+   # (ADR-0017), void/rest because the problem+json renderer and the
+   # Connect error renderer have to coexist in one composition, and
+   # void/authz to prove a policy on an RPC method is the same policy.
+   {:dir "grpc" :deps [:void/core :void/http :void/proto]
+    :test-deps [:void/dev :void/rest :void/authz] :jpm [:spork]}
+
    :void/mcp
    # The application as an MCP server (ADR-0031). void/openapi is a
    # *module* edge and not a plugin one: ./registry projects a

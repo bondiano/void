@@ -1,0 +1,60 @@
+// The file the parser suite reads: a .proto that uses most of what
+// proto3 has, so the grammar is exercised by a file rather than by a
+// string in an assertion.
+syntax = "proto3";
+
+package shop.orders;
+
+import "google/protobuf/timestamp.proto";
+import "shop/catalog.proto";
+
+option java_package = "com.example.shop";
+
+/* Where an order is in its life. */
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_PLACED = 1;
+  STATUS_SHIPPED = 2;
+}
+
+message Line {
+  shop.catalog.Product product = 1;
+  int32 quantity = 2;
+}
+
+message Order {
+  string id = 1;
+  int64 total_cents = 2 [json_name = "total"];
+  repeated Line lines = 3;
+  map<string, string> labels = 4;
+  optional string note = 5;
+  Status status = 6;
+  google.protobuf.Timestamp placed_at = 7;
+
+  oneof payment {
+    string card_token = 8;
+    bool on_account = 9;
+  }
+
+  reserved 10, 11 to 15;
+
+  message Address {
+    string city = 1;
+    string street = 2;
+  }
+  Address ship_to = 16;
+}
+
+message GetOrderRequest { string id = 1; }
+message ListOrdersRequest { int32 limit = 1; }
+message ListOrdersResponse { repeated Order orders = 1; }
+
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc PlaceOrder(Order) returns (Order);
+}

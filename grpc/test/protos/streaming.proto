@@ -1,0 +1,11 @@
+// A service void/grpc refuses to mount: streaming is a v2 decision
+// (ADR-0013), and the refusal belongs at the declaration.
+syntax = "proto3";
+
+package shop.feed;
+
+message Tick { int64 at = 1; }
+
+service FeedService {
+  rpc Watch(Tick) returns (stream Tick);
+}

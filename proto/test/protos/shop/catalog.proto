@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package shop.catalog;
+
+message Product {
+  string sku = 1;
+  string title = 2;
+  int64 price_cents = 3;
+}
