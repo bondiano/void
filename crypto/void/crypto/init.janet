@@ -214,6 +214,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :crypto/info
+   :read-only? true
    :doc "Show which libcrypto is open and what it provides: void crypto info"
    :needs [:crypto/lib]
    # :needs instances come first, then the string arguments

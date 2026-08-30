@@ -12,6 +12,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bench
+   :read-only? false
    :doc "Run the bench suite: void bench [TARGETS|all|baselines|list|compare] (--help for flags)"
    :fn (fn cli-bench [& args] (runner/run-cli args))})
 

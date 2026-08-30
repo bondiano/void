@@ -107,4 +107,12 @@
  # Every route that is not explicitly public has to name a policy, and
  # a route that forgets one fails the *boot* rather than the request
  # (ADR-0024 §6). This is the posture an application takes on purpose.
- :authz {:default :deny}}
+ :authz {:default :deny}
+
+ # The back office (ADR-0029). One line opens it, and the line names a
+ # policy rather than saying `true`: until it is here, every admin
+ # route refuses everybody, including the person who just deployed it.
+ # `:blog/staff` is defined in ./admin.janet, which is also the only
+ # place to edit to narrow it.
+ :admin {:access :blog/staff
+         :title "blog admin"}}

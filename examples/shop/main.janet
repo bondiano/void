@@ -1,9 +1,10 @@
 ### shop — entrypoint. Run with `void dev` (or `janet main.janet`);
 ### the void CLI (void routes, void db migrate, void jobs work, void
-### shop seed, ...) reads the app binding below.
+### shop seed, void mcp serve, ...) reads the app binding below.
 ###
-### The composition is the whole point of this example. Thirty void
-### plugins plus this application's own (thirty-three with redis), and
+### The composition is the whole point of this example. Thirty-two
+### void plugins plus this application's own (thirty-five with redis),
+### and
 ### the application code that knows about any of them is the route
 ### metadata in each module's controller: the transactions, the
 ### identity, the policies, the CSRF token, the rate limits, the
@@ -48,6 +49,8 @@
 (import void/bus)
 (import void/bus/db)
 (import void/bus/jobs)
+(import void/mcp)
+(import void/mcp/obs)
 (import void/dev)
 (import ./src/app)
 
@@ -115,6 +118,18 @@
    # messaging: the log and the outbox in the database, and the
    # queue's own lifecycle forwarded onto the bus
    :void/bus :void/bus-db :void/bus-jobs
+
+   # the same application to an agent: `void mcp serve` speaks MCP on
+   # stdin/stdout, and every tool it offers is a command an operator
+   # already runs — `void jobs stats`, `void bus tail`, `void db
+   # status` — because each of those declared itself read-only.
+   # Nothing that writes is there: `void db migrate` and this
+   # application's own `void shop seed` are withheld until somebody
+   # puts them in [:mcp :tools] (ADR-0031). The HTTP transport
+   # (:void/mcp-http) is deliberately *not* composed here: it is one
+   # more line and one token, and an example should not hand out a
+   # tool endpoint by default
+   :void/mcp :void/mcp-obs
 
    ;(if (get opts :redis) (redis-plugins) [])
 

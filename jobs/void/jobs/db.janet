@@ -596,6 +596,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs-db/ddl
+   :read-only? true
    :doc "Print the SQL this backend needs: void jobs-db ddl"
    :fn (fn cli-ddl [& args]
          (unless (empty? args)

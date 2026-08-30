@@ -72,6 +72,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :shop/seed
+   :read-only? false
    :doc "Fill an empty shop with a catalog and two accounts: void shop seed"
    # the components this command needs started, and no others: a pool
    # to write through, the auth registry for the user store and the

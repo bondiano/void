@@ -337,6 +337,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :auth/sweep
+   :read-only? false
    :doc "Delete expired one-time codes: void auth sweep"
    :needs [:auth.db/challenges]
    :fn (fn cli-sweep [challenges & args]

@@ -219,6 +219,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :cache/stats
+   :read-only? true
    :doc "Show what the cache has been doing: void cache stats"
    :needs [:cache/store]
    # :needs instances come first, then the string arguments
@@ -242,6 +243,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :cache/get
+   :read-only? true
    :doc "Read one key: void cache get KEY"
    :needs [:cache/store]
    :fn (fn cli-get [c & args]
@@ -255,6 +257,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :cache/forget
+   :read-only? false
    :doc "Drop one key: void cache forget KEY"
    :needs [:cache/store]
    :fn (fn cli-forget [c & args]
@@ -267,6 +270,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :cache/clear
+   :read-only? false
    :doc "Drop everything under the cache prefix: void cache clear"
    :needs [:cache/store]
    :fn (fn cli-clear [c & args]

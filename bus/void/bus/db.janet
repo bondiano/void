@@ -764,6 +764,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus-db/ddl
+   :read-only? true
    :doc "Print the DDL of the message log, the cursors and the outbox: void bus-db ddl"
    :needs [:db/pool]
    :fn (fn cli-ddl [_ & args]
@@ -775,6 +776,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus-db/cursors
+   :read-only? true
    :doc "Where each consumer group has got to: void bus-db cursors"
    :needs [:bus.db/schema :db/pool]
    :fn (fn cli-cursors [_ _pool & args]
@@ -807,6 +809,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus-db/outbox
+   :read-only? true
    :doc "What the outbox still owes: void bus-db outbox"
    :needs [:bus.db/schema :db/pool]
    :fn (fn cli-outbox [_ _pool & args]

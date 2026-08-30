@@ -90,7 +90,6 @@
 
 (import spork/json)
 (import void/core/plugin :as plugin)
-(import void/core/system :as system)
 (import void/http/ring :as ring)
 (import void/http/router :as router)
 (import void/http/server :as server)
@@ -433,28 +432,15 @@
     (ring/response 200 (prometheus/render (metrics/snapshot))
                    @{"content-type" prometheus/content-type})))
 
-(defn- check-value [c]
-  (def [ok v] (protect ((c :fn))))
-  (if ok v {:status :down :reason (if (string? v) v (describe v))}))
-
 (defn health-report
-  ``The health of this process as data: every running component's
-  `:health`, plus every `:void.core/health` contribution, plus the
-  aggregate. `:down` anywhere is `:down` here; `:degraded` (what
-  void/pressure reports while it sheds) is not down — a process that
-  is refusing some requests on purpose is still the process the load
-  balancer should keep, and taking it out is how one overloaded
-  worker becomes two.``
+  ``The health of this process as data — `plugin/health` (every
+  running component's `:health` plus every `:void.core/health`
+  contribution, folded) with this endpoint's own readiness flag on
+  top. The fold moved into the core when it got a second reader
+  (void/mcp publishes the same report as a resource); `:ready` stays
+  here, because draining is the HTTP server's state and nobody else's.``
   []
-  (def sys (get boot-ref :system))
-  (def base (if sys (system/health sys) {:status :up :components {}}))
-  (def checks
-    (tabseq [c :in (get-in boot-ref [:extensions :void.core/health :resolved] [])]
-      (c :name) (check-value c)))
-  (def all (merge (base :components) checks))
-  {:status (if (some |(= :down (get $ :status)) (values all)) :down :up)
-   :ready ready
-   :components all})
+  (merge (plugin/health boot-ref) {:ready ready}))
 
 (defn- json-response [status value]
   # every value that reaches here has been through jsonable: a health

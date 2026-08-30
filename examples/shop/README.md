@@ -37,8 +37,8 @@ code go" is the question a framework's examples usually leave to
 taste.
 
 ```
-main.janet              the composition — thirty void plugins plus this one,
-                        and the two things a deployment changes
+main.janet              the composition — thirty-two void plugins plus this
+                        one, and the two things a deployment changes
 config/                 the layers: default.janet, then <profile>.janet, then
                         VOID_*, then CLI overrides (`void config explain
                         :cache :ttl` says which one won)
@@ -212,6 +212,25 @@ hook the audit trail subscribes to, and a header that asked would put a
 refusal on the trail for every page view by every visitor. The route is
 where that decision is made (`admin/admin.controller.janet`), and it is
 made once.
+
+**The shop is an MCP server, and nobody wrote one.** `:void/mcp` is in
+the composition and `void mcp tools` prints thirty tools and seventeen
+resources: every tool is a command the operators already run (`void
+jobs stats`, `void bus tail`, `void db status`, `void authz explain`),
+every schema resource is a `defschema` out of `src/`, and the health
+report is the one `GET /health` serves. Nothing was declared twice —
+which is why nothing can drift. Nothing that writes is offered either:
+`db migrate`, `jobs work`, `mail send` and this application's own `shop
+seed` are absent because each of them declared that it changes
+something, and the default exposes only what said `:read-only? true`
+(ADR-0031). Handing an agent the seeder is a line of config —
+`{:mcp {:tools [:shop/seed]}}` — and it is the operator's line, not the
+framework's. `test/mcp-test.janet` asserts both halves of that list.
+
+The HTTP transport (`:void/mcp-http`, `POST /mcp`) is deliberately
+*not* composed here: it is one more plugin and one token, and an
+example should not leave a tool endpoint open on the port it tells you
+to run.
 
 ## Running the suite
 

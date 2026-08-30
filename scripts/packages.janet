@@ -146,9 +146,11 @@
    # Every primitive comes from void/crypto (ADR-0022, ADR-0023): this
    # package hashes nothing itself. void/http is void/auth-http's and
    # void/db is void/auth-db's — separate plugins in this package, the
-   # void/cache — void/cache-redis split. The suite reaches void/dev for
-   # inject (ADR-0017) and void/db-sqlite for a real store under
-   # void/auth-db.
+   # void/cache — void/cache-redis split. void/auth-oauth is a fourth
+   # (ADR-0032) and needs no new edge: it verifies JWS with
+   # void/crypto/sign and talks to the issuer with void/http/client,
+   # both already here. The suite reaches void/dev for inject
+   # (ADR-0017) and void/db-sqlite for a real store under void/auth-db.
    {:dir "auth" :deps [:void/core :void/crypto :void/http :void/db]
     :test-deps [:void/dev :void/db-sqlite] :jpm [:spork]}
 
@@ -218,6 +220,38 @@
    {:dir "ws" :deps [:void/core :void/http :void/html :void/htmx]
     :test-deps [:void/dev] :jpm [:spork]}
 
+   :void/mcp
+   # The application as an MCP server (ADR-0031). void/openapi is a
+   # *module* edge and not a plugin one: ./registry projects a
+   # registered schema into JSON Schema with void/openapi/jsonschema,
+   # the way void/obs takes void/pressure's loop-lag meter without
+   # composing the shedder. void/http is void/mcp-http's and void/obs
+   # is void/mcp-obs's — two more plugins in this package, the
+   # void/cache — void/cache-http split, so an agent talking to a jobs
+   # worker over stdio composes neither. The suite reaches void/dev for
+   # inject (ADR-0017) under the HTTP transport.
+   {:dir "mcp" :deps [:void/core :void/http :void/openapi :void/obs]
+    :test-deps [:void/dev] :jpm [:spork]}
+
+   :void/admin
+   # The back office as a projection of what the application already
+   # declared (ADR-0029). Every edge here is one the projection reads
+   # from: void/db for the entity descriptor and the repository,
+   # void/html for the form projection and the view responses,
+   # void/htmx for the fragment half of the same route, void/authz for
+   # the gate and the per-action policies. void/jobs is
+   # void/admin-jobs' and void/mcp is void/admin-mcp's — two more
+   # plugins in this package, the void/cache — void/cache-http split,
+   # so an admin with no heavy actions composes no queue and an
+   # application with no agent composes no MCP server. The suite
+   # reaches void/dev for inject (ADR-0017), void/db-sqlite for a real
+   # database to CRUD against and void/security for the CSRF slot the
+   # forms carry.
+   {:dir "admin" :deps [:void/core :void/http :void/html :void/htmx
+                        :void/db :void/authz :void/jobs :void/mcp]
+    :test-deps [:void/dev :void/db-sqlite :void/security]
+    :jpm [:spork]}
+
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
@@ -253,7 +287,7 @@
            :void/cache :void/jobs :void/redis
            :void/obs :void/pressure
            :void/crypto :void/auth :void/authz :void/security
-           :void/mail :void/bus
+           :void/mail :void/bus :void/mcp
            :void/dev]
     :example true :jpm [:spork :sqlite3]}
 
@@ -276,6 +310,11 @@
            # 3.6: the audit trail is a bus consumer, and the facts it
            # records ride the transactional outbox
            :void/bus
+           # 4.4: the back office, which is ./admin.janet and nothing
+           # else — four declarations over the entities wave 2 wrote,
+           # projected into pages for a person and (void/admin-mcp,
+           # which lives in the same package) into tools for an agent
+           :void/admin :void/mcp
            :void/dev]
     :example true :jpm [:spork :sqlite3]}})
 

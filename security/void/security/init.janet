@@ -465,6 +465,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :security/headers
+   :read-only? true
    :doc "Show the security headers, the CSP and what is enabled: void security headers"
    :fn (fn cli-headers [& args]
          (unless (empty? args)

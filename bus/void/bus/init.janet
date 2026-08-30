@@ -454,6 +454,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus/stats
+   :read-only? true
    :doc "What this process's bus is and what it has carried: void bus stats"
    :needs [:bus/broker]
    :fn (fn cli-stats [br & args]
@@ -481,6 +482,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus/handlers
+   :read-only? true
    :doc "Every declared handler, its topic and its group: void bus handlers"
    :fn (fn cli-handlers [& args]
          (unless (empty? args)
@@ -499,6 +501,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus/publish
+   :read-only? false
    :doc "Publish a message by hand: void bus publish TOPIC 'jdn payload'"
    :needs [:bus/broker]
    :fn (fn cli-publish [br & args]
@@ -511,6 +514,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus/tail
+   :read-only? true
    :doc "The messages the in-process backend has seen: void bus tail [--limit N]"
    :needs [:bus/broker]
    :fn (fn cli-tail [br & args]
@@ -522,6 +526,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :bus/consume
+   :read-only? false
    :doc "Consume in the foreground, the way a worker process does: void bus consume"
    :needs [:bus/broker]
    :fn (fn cli-consume [br & args]

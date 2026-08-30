@@ -200,6 +200,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db/migrate
+   :read-only? false
    :doc "Apply pending migrations: void db migrate [--step N] [--to VERSION]"
    :needs [:db/pool]
    :fn (fn cli-migrate [_ & args]
@@ -218,6 +219,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db/rollback
+   :read-only? false
    :doc "Roll the last migration back: void db rollback [--step N] [--to VERSION]"
    :needs [:db/pool]
    :fn (fn cli-rollback [_ & args]
@@ -236,6 +238,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db/status
+   :read-only? true
    :doc "Show migration state: void db status"
    :needs [:db/pool]
    :fn (fn cli-status [_ & args]
@@ -246,6 +249,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db/new
+   :read-only? false
    :doc "Scaffold a migration file: void db new NAME"
    :fn (fn cli-new [& args]
          (unless (= 1 (length args))
@@ -255,6 +259,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db/erd
+   :read-only? true
    :doc "Print a Mermaid ER diagram of the registered entities: void db erd"
    :fn (fn cli-erd [& args]
          (unless (empty? args)

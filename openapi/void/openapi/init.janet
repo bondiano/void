@@ -252,6 +252,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :openapi/export
+   :read-only? false
    :doc "Write the OpenAPI 3.1 document to a file: void openapi export [path]"
    :fn (fn cli-export [& args] (export (first args)))})
 

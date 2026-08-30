@@ -423,6 +423,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :auth/hash
+   :read-only? true
    :doc "Hash a password with the configured hasher: void auth hash <password>"
    :needs [:auth/registry]
    :fn (fn cli-hash [_ & args]
@@ -432,6 +433,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :auth/strategies
+   :read-only? true
    :doc "List the authentication strategies in this composition: void auth strategies"
    :needs [:auth/registry]
    :fn (fn cli-strategies [_ & args]
@@ -451,6 +453,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :auth/token
+   :read-only? false
    :doc "Mint an API token: void auth token <subject> [name]"
    :needs [:auth/registry]
    :fn (fn cli-token [value & args]
