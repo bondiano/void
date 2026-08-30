@@ -1,0 +1,40 @@
+// The service the suite serves and calls. It is a .proto rather than a
+// Janet declaration on purpose: `defservice` binds handlers to a shape
+// that came from a file, and the suite should exercise that path.
+syntax = "proto3";
+
+package shop.orders;
+
+import "google/protobuf/timestamp.proto";
+
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_PLACED = 1;
+  STATUS_SHIPPED = 2;
+}
+
+message Order {
+  string id = 1;
+  int64 total_cents = 2;
+  Status status = 3;
+  repeated string labels = 4;
+  google.protobuf.Timestamp placed_at = 5;
+}
+
+message GetOrderRequest { string id = 1; }
+message PlaceOrderRequest { int64 total_cents = 1; }
+message CountRequest {}
+message CountResponse { int32 count = 1; }
+message BadField { string field = 1; string reason = 2; }
+
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc CountOrders(CountRequest) returns (CountResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc PlaceOrder(PlaceOrderRequest) returns (Order);
+  rpc Explode(CountRequest) returns (CountResponse);
+  rpc Slow(CountRequest) returns (CountResponse);
+}
