@@ -483,11 +483,12 @@
   (freeze
     {:void.core/cli
      (extension-point :void.core/cli
-       :doc "CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys]}"
+       :doc "CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to \"does running this change anything?\" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it (ADR-0031), so silence means \"unknown\" and unknown is never offered"
        :schema {:name :keyword
                 :fn [:or :function :symbol]
                 :doc [:optional :string]
-                :needs [:optional [:vector :keyword]]}
+                :needs [:optional [:vector :keyword]]
+                :read-only? [:optional :boolean]}
        :validate (unique-names "CLI command")
        :reduce |(sorted-by |($ :name) $))
 
@@ -1051,6 +1052,39 @@
   (unless e
     (errorf "unknown extension point %q%s" name (suggest name (keys (b :extensions)))))
   (e :resolved))
+
+(defn- check-value [c]
+  (def [ok v] (protect ((c :fn))))
+  (if ok v {:status :down :reason (if (string? v) v (describe v))}))
+
+(defn health
+  ``The health of a composition as data: every running component's
+  `:health` folded together with every `:void.core/health`
+  contribution, plus the aggregate.
+
+      (plugin/health)        # most recent boot
+      (plugin/health boot)
+
+  `:down` anywhere is `:down` here; `:degraded` (what void/pressure
+  reports while it sheds) is not down — a process refusing some
+  requests on purpose is still the process a load balancer should
+  keep. A health function that throws counts as down with the throw as
+  its `:reason`: an endpoint that fails because a check failed fails
+  exactly when something is already wrong.
+
+  It lives here because it has two readers and neither owns it —
+  void/obs-http answers `GET /health` with it and void/mcp publishes
+  it as a resource. Both are projections; the fold is the core's.``
+  [&opt boot]
+  (def b (pick-boot boot))
+  (def sys (get b :system))
+  (def base (if sys (system/health sys) {:status :up :components {}}))
+  (def checks
+    (tabseq [c :in (get-in b [:extensions :void.core/health :resolved] [])]
+      (c :name) (check-value c)))
+  (def all (merge (base :components) checks))
+  {:status (if (some |(= :down (get $ :status)) (values all)) :down :up)
+   :components all})
 
 (defn inspect
   ``Who registered what (SPEC part II §1.6).

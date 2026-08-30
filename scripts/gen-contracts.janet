@@ -41,6 +41,7 @@
 (add-tree (string (os/cwd) "/mail"))
 (add-tree (string (os/cwd) "/bus"))
 (add-tree (string (os/cwd) "/ws"))
+(add-tree (string (os/cwd) "/mcp"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -71,6 +72,7 @@
 (require "void/auth/init")
 (require "void/auth/http")
 (require "void/auth/db")
+(require "void/auth/oauth")
 (require "void/authz/init")
 (require "void/authz/http")
 (require "void/security/init")
@@ -82,6 +84,9 @@
 (require "void/bus/jobs")
 (require "void/ws/init")
 (require "void/ws/htmx")
+(require "void/mcp/init")
+(require "void/mcp/http")
+(require "void/mcp/obs")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -94,11 +99,12 @@
                :void/jobs :void/jobs-db :void/jobs-redis
                :void/pressure :void/pressure-http
                :void/obs :void/obs-http :void/obs-otlp
-               :void/crypto :void/auth :void/auth-http :void/auth-db
+               :void/crypto :void/auth :void/auth-http :void/auth-db :void/auth-oauth
                :void/authz :void/authz-http :void/security
                :void/mail :void/mail-jobs :void/mail-auth
                :void/bus :void/bus-db :void/bus-jobs
                :void/ws :void/ws-htmx
+               :void/mcp :void/mcp-http :void/mcp-obs
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide

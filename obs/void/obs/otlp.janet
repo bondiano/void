@@ -761,6 +761,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :obs/otlp-check
+   :read-only? true
    :doc "Send an empty batch to the configured collector and report what it said: void obs otlp-check"
    :needs [:obs/otlp]
    :fn (fn cli-check [_ & args]

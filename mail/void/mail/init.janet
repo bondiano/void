@@ -405,6 +405,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :mail/status
+   :read-only? true
    :doc "Show the transport, the sender and where mail goes: void mail status"
    :fn (fn cli-status [& args]
          (unless (empty? args)
@@ -413,6 +414,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :mail/send
+   :read-only? false
    :doc "Send a test message through the configured transport: void mail send <address>"
    :fn (fn cli-send [& args]
          (unless (= 1 (length args))
@@ -430,6 +432,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :mail/outbox
+   :read-only? true
    :doc "Print what the :memory transport kept: void mail outbox"
    :fn (fn cli-outbox [& args]
          (unless (empty? args)

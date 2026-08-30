@@ -175,6 +175,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db-http/session-ddl
+   :read-only? true
    :doc "Print the SQL the database session store needs: void db-http session-ddl"
    :fn (fn cli-ddl [& args]
          (unless (empty? args)

@@ -648,6 +648,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :routes
+   :read-only? true
    :doc "Print the route table: void routes [--keys]"
    :fn (fn cli-routes [& args]
          (each a args

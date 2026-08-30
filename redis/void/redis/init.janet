@@ -340,6 +340,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :redis/info
+   :read-only? true
    :doc "Show what the redis client connected to: void redis info"
    :needs [:redis/client]
    # :needs instances come first, then the string arguments
@@ -360,6 +361,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :redis/ping
+   :read-only? true
    :doc "PING the configured server: void redis ping"
    :needs [:redis/client]
    :fn (fn cli-ping [client & args]

@@ -4,6 +4,7 @@
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
 ### void/crypto + void/auth + void/auth-http + void/auth-db +
 ### void/bus + void/bus-db + void/bus-jobs + void/ws + void/ws-htmx +
+### void/mcp (+ -http, -obs) +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
@@ -55,6 +56,7 @@
 (require "void/auth/init")
 (require "void/auth/http")
 (require "void/auth/db")
+(require "void/auth/oauth")
 (require "void/authz/init")
 (require "void/authz/http")
 (require "void/security/init")
@@ -66,6 +68,9 @@
 (require "void/bus/jobs")
 (require "void/ws/init")
 (require "void/ws/htmx")
+(require "void/mcp/init")
+(require "void/mcp/http")
+(require "void/mcp/obs")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -79,11 +84,12 @@
                              :void/jobs :void/jobs-db :void/jobs-redis
                              :void/pressure :void/pressure-http
                              :void/obs :void/obs-http :void/obs-otlp
-                             :void/crypto :void/auth :void/auth-http :void/auth-db
+                             :void/crypto :void/auth :void/auth-http :void/auth-db :void/auth-oauth
                              :void/authz :void/authz-http :void/security
                              :void/mail :void/mail-jobs :void/mail-auth
                              :void/bus :void/bus-db :void/bus-jobs
                              :void/ws :void/ws-htmx
+                             :void/mcp :void/mcp-http :void/mcp-obs
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide

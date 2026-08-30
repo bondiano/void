@@ -252,6 +252,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :authz/policies
+   :read-only? true
    :doc "List the policies in this composition: void authz policies"
    :needs [:authz/registry]
    :fn (fn cli-policies [_ & args]
@@ -262,6 +263,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :authz/explain
+   :read-only? true
    :doc "Why a policy allows or denies: void authz explain <policy> [subject] [role=... attr=...]"
    :needs [:authz/registry]
    :fn (fn cli-explain [_ & args]

@@ -285,6 +285,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :db/postgres-info
+   :read-only? true
    :doc "Show what the Postgres driver connected to: void db postgres-info"
    :needs [:db.postgres/driver]
    # :needs instances come first, then the string arguments

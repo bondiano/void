@@ -201,6 +201,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :authz/routes
+   :read-only? true
    :doc "Show which policy guards which route: void authz routes"
    :needs [:http/kernel]
    :fn (fn cli-routes [_ & args]

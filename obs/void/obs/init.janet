@@ -543,6 +543,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :obs/status
+   :read-only? true
    :doc "Show what obs is seeing: void obs status"
    :needs [:obs/registry :obs/tracer]
    :fn (fn cli-status [_ _ & args]
@@ -552,6 +553,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :obs/metrics
+   :read-only? true
    :doc "Print this process's Prometheus exposition: void obs metrics"
    :needs [:obs/registry]
    :fn (fn cli-metrics [_ & args]

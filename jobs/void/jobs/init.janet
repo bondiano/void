@@ -413,6 +413,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/stats
+   :read-only? true
    :doc "Show what the queue is holding: void jobs stats"
    :needs [:jobs/queue]
    :fn (fn cli-stats [q & args]
@@ -440,6 +441,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/list
+   :read-only? true
    :doc "List records: void jobs list [--queue Q] [--state S] [--job J] [--limit N]"
    :needs [:jobs/queue]
    :fn (fn cli-list [q & args]
@@ -457,6 +459,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/show
+   :read-only? true
    :doc "Everything about one record: void jobs show ID"
    :needs [:jobs/queue]
    :fn (fn cli-show [q & args]
@@ -474,6 +477,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/retry
+   :read-only? false
    :doc "Put a record back in the queue: void jobs retry ID | void jobs retry --state dead"
    :needs [:jobs/queue]
    :fn (fn cli-retry [q & args]
@@ -493,6 +497,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/remove
+   :read-only? false
    :doc "Drop one record: void jobs remove ID"
    :needs [:jobs/queue]
    :fn (fn cli-remove [q & args]
@@ -504,6 +509,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/clear
+   :read-only? false
    :doc "Drop records: void jobs clear [--queue Q] [--state S]"
    :needs [:jobs/queue]
    :fn (fn cli-clear [q & args]
@@ -515,6 +521,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/work
+   :read-only? false
    :doc "Run a worker in the foreground: void jobs work [--queues a,b] [--concurrency N]"
    :needs [:jobs/queue]
    :fn (fn cli-work [q & args]
@@ -530,6 +537,7 @@
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/schedules
+   :read-only? true
    :doc "Every declared schedule and when it fires next: void jobs schedules"
    :fn (fn cli-schedules [& args]
          (unless (empty? args)
