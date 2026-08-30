@@ -23,6 +23,11 @@ jpm --local deps    # pin this void in ./jpm_tree (the binary prefers it)
 void dev            # dev profile: file watcher + netrepl + the app
 void routes         # the route table, `void routes --keys` with metadata
 void repl           # repl into the running process
+
+void make resource Product name:string price:int notes:text?
+                    # entity + form + views + routes + migration + a suite
+void plugins lock   # writes void.lock; `void plugins check` fails CI on a drift
+jpm --local build   # -> build/guestbook: one file, no janet on the target
 ```
 
 Every line of that runs on a clean machine as a CI job, not as a
@@ -88,7 +93,9 @@ It is also where wave 4's admin is dogfooded, and the shape of that is the claim
 
 [`examples/shop`](examples/shop) is the one that puts the whole framework in one process, and the one to read if you want to know what an application built on void actually looks like: a storefront and a checkout that takes money (stock decremented by a conditional UPDATE, prices re-read from the catalog, and the order, the fact that it happened and the payment job all committing in one transaction), a payment gateway whose declines and timeouts are deliberately different kinds of answer, an admin desk that is one group and one role, a JSON API that is a second *view* rather than a second application (query and response schemas, bearer-only credentials, response caching, and `/openapi.json` as a projection of all of it), five application metrics next to void/obs' own, and an audit trail that is one deletable module. It is also the example that answers "where does this code go": `src/modules/<module>/` with a model, DTOs, a repository, a service, a controller and its adapters, and a README section spelling out what each layer may and may not do. It also ships a [`Dockerfile`](examples/shop/Dockerfile) and a [`docker-compose.yml`](examples/shop/docker-compose.yml): `docker compose up --build` brings up Postgres, redis, a mail server with a web inbox, a one-shot migration, a web tier and a worker — **the same image running the same code, differing by two environment variables** — and `--profile obs` adds Prometheus and a provisioned Grafana dashboard.
 
-Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): the scaffolding half of the CLI, `void/i18n`, and the heavy FFI of wave 5.
+The scaffolding half of the CLI landed in wave 4.5, and with it the deploy story: `void make resource` writes four files that are four projections of one declaration (so the generated suite checks that they still agree, without needing a database); `void plugins lock` writes the composition down — every extension point with its contributions *in resolution order* — so that "why is the middleware stack different in production" is a `void plugins check` diff rather than an investigation; and `jpm --local build` produces a single binary that is also the CLI, so `./myapp db migrate` works on a target with no janet and no source tree. The measured sizes, the four rules an application follows to be buildable, and what the binary deliberately does not contain are in [docs/DEPLOY.md](docs/DEPLOY.md).
+
+Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): `void/i18n` and the heavy FFI of wave 5.
 
 ## Development
 

@@ -44,6 +44,26 @@
 (def file-of "See driver/file-of — the file behind a connection, if any." sqlite/file-of)
 (def tx-modes "See driver/tx-modes — the :isolation values." sqlite/tx-modes)
 
+(defn use-module!
+  ``Hand the driver the janet-lang/sqlite3 module instead of letting it
+  `require` one. There is exactly one caller: a single binary
+  (docs/DEPLOY.md), which has the module linked into the executable and
+  no tree to require it from.
+
+      (def sqlite3-module (require "sqlite3"))   # at load time: this
+                                                 # is what links it in
+
+      (defn main [&]
+        (db-sqlite/use-module! sqlite3-module)   # at run time
+        ...)
+
+  The two halves are in that order for the reason the whole file is
+  written the way it is: `jpm build` evaluates the top level and
+  marshals the result, so a `require` inside `main` would run on a
+  machine that has nothing to require.``
+  [m]
+  (set sqlite/module m))
+
 # -- config --------------------------------------------------------------
 
 (def Config

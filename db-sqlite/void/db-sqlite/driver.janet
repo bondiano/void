@@ -48,20 +48,41 @@
 ### libpq's is (ADR-0011). Importing it here would instead break the
 ### *installation* of every application, sqlite or not.
 
-(var- binding nil)
+(var module
+  ``The janet-lang/sqlite3 module, or nil to resolve it on first use.
+
+  It is a `var` for exactly one caller: a single binary (docs/DEPLOY.md)
+  has no module tree to `require` from, and the module it needs is
+  already linked into the executable. Its entrypoint hands it over
+  before the pool starts:
+
+      (import sqlite3)                       # links it into the image
+      (def sqlite3-module (require "sqlite3"))
+
+      (defn main [&]
+        (set db-sqlite/module sqlite3-module)
+        ...)
+
+  Everywhere else it stays nil and the `require` below runs, which is
+  what keeps janet-lang/sqlite3 out of the bundle's dependencies
+  (ADR-0020).``
+  nil)
 
 (defn- lib
-  "The sqlite3 module, required once and memoised."
+  "The sqlite3 module: whatever the application supplied, else required
+  once and memoised."
   []
-  (unless binding
+  (unless module
     (def [ok result] (protect (require "sqlite3")))
     (unless ok
       (errorf (string "void/db-sqlite needs janet-lang/sqlite3, and cannot load it:\n"
                       "    %s\n"
-                      "  jpm install https://github.com/janet-lang/sqlite3.git")
+                      "  jpm install https://github.com/janet-lang/sqlite3.git\n"
+                      "  (in a single binary, hand it over with `(set db-sqlite/module ...)`"
+                      " — see docs/DEPLOY.md)")
               (if (bytes? result) result (describe result))))
-    (set binding result))
-  binding)
+    (set module result))
+  module)
 
 (defn- entry [name]
   (or (get-in (lib) [name :value])

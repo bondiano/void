@@ -85,9 +85,11 @@
    # The binary boots whatever the *application* lists in :plugins, so
    # the CLI itself needs only the kernel. The suite reaches further: it
    # runs `void new` and then boots the generated project, which is the
-   # full wave-1 plugin list.
+   # full wave-1 plugin list — and it runs `void make resource`, whose
+   # output declares an entity, so void/db loads there too.
    {:dir "cli" :deps [:void/core]
-    :test-deps [:void/http :void/html :void/htmx :void/dev] :jpm [:spork]}
+    :test-deps [:void/http :void/html :void/htmx :void/dev :void/db]
+    :jpm [:spork]}
 
    :void/db
    # void/http for the optional void/db-http plugin (:void.db/txn route
@@ -289,8 +291,13 @@
    # gate loads it off the repository root and it has no suite of its own.
 
    :example/guestbook
+   # void/cli because its entrypoint is the one `void new` writes, and
+   # that one calls cli/app-main: with no arguments it runs the app,
+   # with arguments it *is* the void binary — which is what makes a
+   # single-binary deploy able to run its own migrations (ROADMAP 4.5,
+   # docs/DEPLOY.md).
    {:dir "examples/guestbook"
-    :deps [:void/core :void/http :void/html :void/htmx :void/dev]
+    :deps [:void/core :void/http :void/html :void/htmx :void/dev :void/cli]
     :example true :jpm [:spork]}
 
    :example/shop

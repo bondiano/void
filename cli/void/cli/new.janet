@@ -1,17 +1,28 @@
 ### void/cli/new — `void new NAME`: the project skeleton (ROADMAP 1.6).
 ###
 ### The template is data — a tuple of {:path :render} entries, each
-### :render a pure (fn [name] string) — so a later `void make` can
-### merge project-local overrides over it (SPEC §5.17: templates as
-### data, overridable by the project). The generated project is the
-### run!/CLI convention in miniature: main.janet defines `app` (boot
-### options the CLI reads) and (main) as (void/run! app); app.janet is
-### the application plugin contributing routes.
+### :render a pure (fn [name] string) over the one hole this generator
+### has (SPEC §5.17: templates as data, overridable by the project;
+### ./make is where a project overrides one). The generated project is
+### the run!/CLI convention in miniature: main.janet defines `app` (the
+### boot options the CLI reads) and a `main` that runs it, and app.janet
+### is the application plugin contributing routes.
+###
+### The generated files also have to be *deployable*, and that is one
+### line each in two of them: `declare-executable` in project.janet, so
+### that `jpm build` produces the single binary of SPEC §9, and a `main`
+### that reads the profile at run time rather than in a value — because
+### `jpm build` marshals this project's values into the executable, and
+### a profile computed in `app` would be the profile of the machine
+### that built it (docs/DEPLOY.md).
 
-(defn- render-project [name]
-  (string
-    `(declare-project
-  :name "` name `"
+(import ./template)
+
+(def project-template
+  "project.janet: one dependency, and the executable target."
+  ```
+(declare-project
+  :name "{{name}}"
   :description "A void application."
   # One dependency: void installs as a single bundle (ADR-0020), and
   # everything it needs — spork, and the framework's own packages —
@@ -19,18 +30,25 @@
   # which the void binary uses in preference to the tree it was
   # installed into.
   :dependencies ["https://github.com/bondiano/void.git"])
-`))
 
-(defn- render-main [name]
-  (string
-    `### ` name ` — entrypoint. Run the app with `
-    "`void dev`"
-    ` (or
-### `
-    "`janet main.janet`"
-    `); the void CLI (void routes, void repl, ...)
+# "jpm --local build" writes build/{{name}} — one file, no janet on the
+# target and nothing to install (docs/DEPLOY.md). jpm marshals the
+# "main" of the entry below into the executable and links the native
+# modules it finds statically, which is why main.janet reads the
+# profile at run time rather than into a value.
+(declare-executable
+  :name "{{name}}"
+  :entry "main.janet"
+  :install false)
+```)
+
+(def main-template
+  "main.janet: the boot options, and the two ways to start them."
+  ```
+### {{name}} — entrypoint. Run the app with `void dev` (or
+### `janet main.janet`); the void CLI (void routes, void repl, ...)
 ### reads the app binding below.
-(import void)
+(import void/cli :as cli)
 (import void/http)
 (import void/html)
 (import void/htmx)
@@ -39,16 +57,36 @@
 
 (def app
   "Boot options — what (void/run! ...) starts and the void CLI reads."
-  {:plugins [:void/http :void/html :void/htmx :void/dev :` name `/app]
-   :profile (keyword (or (os/getenv "VOID_PROFILE") "dev"))})
+  {:plugins [:void/http :void/html :void/htmx :void/dev :{{name}}/app]})
+
+# void/dev is a dev-time plugin: it serves a repl and watches the tree,
+# and it builds that repl's environment with `require` — which a single
+# binary has no source tree to require from (docs/DEPLOY.md). So the
+# production composition is this one without it, and dropping a plugin
+# from a list is the whole of the change.
+(defn plugins
+  "The composition for a profile."
+  [profile]
+  (if (= :prod profile)
+    (filter |(not= :void/dev $) (app :plugins))
+    (app :plugins)))
 
 (defn main [& args]
-  (void/run! app))
-`))
+  # The profile is read here rather than in `app` above: `jpm build`
+  # marshals this file's values into the executable, so anything a
+  # value computes is computed once, on the machine that built it.
+  (def profile (keyword (or (os/getenv "VOID_PROFILE") "dev")))
+  # cli/app-main runs the app when there are no arguments and is the
+  # `void` binary when there are — so `./build/{{name}} db migrate`
+  # works on a target with no janet and no source tree, against exactly
+  # the composition inside this executable (docs/DEPLOY.md).
+  (cli/app-main {:plugins (plugins profile) :profile profile} ;(drop 1 args)))
+```)
 
-(defn- render-app [name]
-  (string
-    `### ` name `/app — the application plugin: schema, views, routes.
+(def app-template
+  "app.janet: the application plugin — schema, views, routes."
+  ```
+### {{name}}/app — the application plugin: schema, views, routes.
 ### Handlers are registered as symbols (late binding): redefine one in
 ### the repl — or save this file with the watcher running — and the
 ### running app picks it up; route and metadata edits rebuild the
@@ -76,7 +114,7 @@
   (html/html5
     [:head
      [:meta {:charset "utf-8"}]
-     [:title "` name `"]
+     [:title "{{name}}"]
      [:script {:src "https://unpkg.com/htmx.org@2.0.7"}]]
     [:body [:main content]]))
 
@@ -86,7 +124,7 @@
   schema errors back in and the same markup re-renders annotated."
   [&opt values errors]
   [:div {:id "guestbook"}
-   [:h1 "` name ` guestbook"]
+   [:h1 "{{name}} guestbook"]
    (form/form Entry
      {:action "/entries"
       :values values
@@ -123,32 +161,39 @@
 
 # defroutes writes the :void.http/route-source contribution: handler
 # symbols are quoted for you (late binding) and name their route.
-(router/defroutes :` name `/routes
+(router/defroutes :{{name}}/routes
   (GET "/" home)
   # :void.htmx/partial — an HX-Request gets the bare fragment; a plain
   # form POST still gets the full page
   (POST "/entries" create-entry
         {:name :entries/create :void.htmx/partial true}))
 
-(plugin/defplugin ` name `/app
-  :doc "` name ` application plugin."
+(plugin/defplugin {{name}}/app
+  :doc "{{name}} application plugin."
   :version "0.1.0"
   :requires {:void/http ">=0.0.1" :void/html ">=0.0.1" :void/htmx ">=0.0.1"})
-`))
+```)
 
-(defn- render-config [name]
-  (string
-    `# ` name ` :dev profile config layer (void/core/config: plugin
+(def config-template
+  "config/dev.janet: the file layer of the config chain."
+  ```
+# {{name}} :dev profile config layer (void/core/config: plugin
 # defaults <- config files <- VOID_* env vars <- CLI overrides).
 {:http {:port 8080}}
-`))
+```)
 
-(defn- render-gitignore [name]
-  ".void/\njpm_tree/\n")
+(def gitignore-template
+  "What never belongs in the repository."
+  ```
+.void/
+jpm_tree/
+build/
+```)
 
-(defn- render-readme [name]
-  (string
-    "# " name `
+(def readme-template
+  "README.md: the four things to run, in the order they are run."
+  ```
+# {{name}}
 
 A [void](https://github.com/bondiano/void) application — a
 server-rendered HTMX guestbook with schema-validated forms.
@@ -158,12 +203,37 @@ server-rendered HTMX guestbook with schema-validated forms.
     void routes         # print the route table
     void repl           # repl into the running process
 
-Edit app.janet while `
-    "`void dev`"
-    ` runs: handler changes are live
-(late binding), new routes and metadata edits rebuild the route
-table automatically.
-`))
+Scaffold a CRUD resource — entity, form, views, routes, migration and
+a suite, every one of them a projection of one declaration:
+
+    void make resource Product name:string price:int notes:text?
+
+Lock the composition, so that "why is the middleware stack different in
+production" is a diff rather than an investigation:
+
+    void plugins lock   # writes void.lock — commit it
+    void plugins check  # in CI
+
+Ship it as one file, with no janet and no source tree on the target
+(docs/DEPLOY.md in the void repository):
+
+    jpm --local build
+    VOID_PROFILE=prod VOID_HTTP__PORT=8080 ./build/{{name}}
+
+Edit app.janet while `void dev` runs: handler changes are live (late
+binding), and new routes or metadata edits rebuild the route table
+automatically.
+```)
+
+(defn- one [tmpl]
+  (fn [name] (template/render tmpl {:name name})))
+
+(def- render-project (one project-template))
+(def- render-main (one main-template))
+(def- render-app (one app-template))
+(def- render-config (one config-template))
+(def- render-readme (one readme-template))
+(def- render-gitignore (one gitignore-template))
 
 (def template
   "The project skeleton as data: {:path :render} entries."
