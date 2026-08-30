@@ -4,7 +4,7 @@
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
 ### void/crypto + void/auth + void/auth-http + void/auth-db +
 ### void/bus + void/bus-db + void/bus-jobs + void/ws + void/ws-htmx +
-### void/mcp (+ -http, -obs) +
+### void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
@@ -71,6 +71,9 @@
 (require "void/mcp/init")
 (require "void/mcp/http")
 (require "void/mcp/obs")
+(require "void/admin/init")
+(require "void/admin/jobs")
+(require "void/admin/mcp")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -90,6 +93,7 @@
                              :void/bus :void/bus-db :void/bus-jobs
                              :void/ws :void/ws-htmx
                              :void/mcp :void/mcp-http :void/mcp-obs
+                             :void/admin :void/admin-jobs :void/admin-mcp
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # two drivers now provide :void/db-driver, two stores provide

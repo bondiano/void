@@ -51,9 +51,10 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.mcp/tool
-  :doc "Tools that are not CLI commands: {:name :mcp/thing :doc ... :title ... :read-only? true|false :schema <void schema of the arguments> :needs [component-keys] :fn (fn [;instances arguments] string | {:text ... :error? bool})}. The gate is the same one commands pass: a tool that does not declare itself read-only is exposed only when [:mcp :tools] names it"
+  :doc "Tools that are not CLI commands: {:name :mcp/thing :doc ... :title ... :read-only? true|false :schema <void schema of the arguments> :needs [component-keys] :fn (fn [;instances arguments] string | {:text ... :error? bool})}. The gate is the same one commands pass: a tool that does not declare itself read-only is exposed only when [:mcp :tools] names it. A contribution may instead carry {:name ... :expand (fn [boot] [tool ...])} — one *projection* of something bootstrap resolved, for a plugin whose tools are derived from a registry the application fills long after its manifest froze (void/admin-mcp turns every declared admin resource into tools this way). An expansion yields ordinary tools and passes the same gate"
   :schema {:name :keyword
-           :fn [:or :function :symbol]
+           :fn [:optional [:or :function :symbol]]
+           :expand [:optional :function]
            :doc [:optional :string]
            :title [:optional :string]
            :read-only? [:optional :boolean]
@@ -62,16 +63,21 @@
   :validate (fn [contribs]
               (def seen @{})
               (each c contribs
+                (unless (or (c :fn) (c :expand))
+                  (errorf "MCP tool %q: needs a :fn, or an :expand that projects tools" (c :name)))
+                (when (and (c :fn) (c :expand))
+                  (errorf "MCP tool %q: :fn and :expand are two answers to one question" (c :name)))
                 (when (in seen (c :name))
                   (errorf "duplicate MCP tool %q" (c :name)))
                 (put seen (c :name) true)))
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.mcp/resource
-  :doc "Readable resources beyond the schemas and the health report: {:name :void.obs/metrics :uri \"void://metrics\" :doc ... :mime-type ... :needs [component-keys] :read (fn [;instances] string | {:text ... :mime-type ...})}. Resources are read-only by construction, so they need no allowlist — [:mcp :hide] withholds one by name"
+  :doc "Readable resources beyond the schemas and the health report: {:name :void.obs/metrics :uri \"void://metrics\" :doc ... :mime-type ... :needs [component-keys] :read (fn [;instances] string | {:text ... :mime-type ...})}. Resources are read-only by construction, so they need no allowlist — [:mcp :hide] withholds one by name. As with :void.mcp/tool, a contribution may instead carry {:name ... :expand (fn [boot] [resource ...])}: one projection of a registry the application fills after this manifest froze"
   :schema {:name :keyword
-           :uri :string
-           :read [:or :function :symbol]
+           :uri [:optional :string]
+           :read [:optional [:or :function :symbol]]
+           :expand [:optional :function]
            :doc [:optional :string]
            :title [:optional :string]
            :mime-type [:optional :string]
@@ -79,10 +85,14 @@
   :validate (fn [contribs]
               (def seen @{})
               (each c contribs
-                (when (in seen (c :uri))
-                  (errorf "two MCP resources claim the URI %q" (c :uri)))
-                (put seen (c :uri) true)))
-  :reduce |(sorted-by |($ :uri) $))
+                (unless (or (c :expand) (and (c :uri) (c :read)))
+                  (errorf "MCP resource %q: needs a :uri and a :read, or an :expand that projects resources"
+                          (c :name)))
+                (when-let [uri (c :uri)]
+                  (when (in seen uri)
+                    (errorf "two MCP resources claim the URI %q" uri))
+                  (put seen uri true))))
+  :reduce |(sorted-by |(string (get $ :uri (get $ :name))) $))
 
 # -- config --------------------------------------------------------------
 

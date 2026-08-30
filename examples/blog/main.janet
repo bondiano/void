@@ -41,7 +41,11 @@
 (import void/bus/db)
 (import void/bus/jobs)
 (import void/dev)
+(import void/mcp)
+(import void/admin)
+(import void/admin/mcp)
 (import ./app)
+(import ./admin)
 
 (def databases
   ``The :void/db-driver plugin per database. The driver module is
@@ -82,8 +86,17 @@
    # (ADR-0012). void/bus-jobs puts the queue's own lifecycle on the
    # bus, and the trail gets it for nothing
    :void/bus :void/bus-db :void/bus-jobs
+   # 4.4: the back office is a projection of the entities this
+   # application already declared — ./admin.janet is declarations and
+   # nothing else, and the audit trail above picks its changes up
+   # through the bus without either side knowing the other (ADR-0029)
+   # ...and the *same* declarations reach an agent through MCP, with
+   # the same gate and the same per-action policies: void/admin-mcp is
+   # a projection of the registry ./admin.janet fills, and neither it
+   # nor ./admin.janet says a word about the other (ADR-0031, ADR-0029)
+   :void/admin :void/mcp :void/admin-mcp
    :void/dev
-   :blog/app])
+   :blog/app :blog/admin])
 
 (def database
   ``Which database this process boots on: :sqlite (the default — a

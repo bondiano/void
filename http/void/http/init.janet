@@ -106,9 +106,9 @@
             out))
 
 (plugin/defextension-point :void.http/route-source
-  :doc "Route sources: {:name :routes <router/routes value> :env <(router/env-ref (curenv)) for bare handler symbols>?}; every active source lands in the one route table"
+  :doc "Route sources: {:name :routes <router/routes value, or (fn [boot] routes-value)> :env <(router/env-ref (curenv)) for bare handler symbols>?}; every active source lands in the one route table. The function form exists for a source that is a *projection* of something resolved during bootstrap — void/admin turns its resource registry and the pages contributed to :void.admin/page into real routes, and neither is knowable when the manifest freezes. It is called once per table build, so a rebuild after a reload re-projects."
   :schema {:name :keyword
-           :routes :dictionary
+           :routes [:or :dictionary :function]
            # a raw env table cannot live in a frozen manifest — wrap it
            # with router/env-ref
            :env [:optional :function]}
@@ -375,6 +375,21 @@
     (set h (((in edge i) :wrap) h)))
   h)
 
+(defn- projected-routes
+  ``The :routes of a source, with the function form applied to the boot
+  value: a source that projects something bootstrap resolved (void/admin
+  turns its resource registry into routes) cannot carry the value in a
+  frozen manifest, so it carries the projection instead.``
+  [name routes boot]
+  (if (callable? routes)
+    (let [[ok v] (protect (routes boot))]
+      (unless ok
+        (errorf "route source %q: projecting its routes failed: %s" name v))
+      (unless (and (dictionary? v) (get v :routes))
+        (errorf "route source %q: its projection returned %q, not a router/routes value" name v))
+      v)
+    routes))
+
 (defn build-context
   "Assemble the http context from a boot value: resolve the extension
   points, build and validate the route table (fail fast, batched),
@@ -391,7 +406,8 @@
   (def sources
     (seq [c :in (get-in boot [:extensions :void.http/route-source :contributions] [])]
       {:name (get-in c [:value :name] (c :plugin))
-       :routes (get-in c [:value :routes])
+       :routes (projected-routes (get-in c [:value :name] (c :plugin))
+                                 (get-in c [:value :routes]) boot)
        :env (get-in c [:value :env])}))
   (def global-hooks (resolve-global-hooks (resolved :void.http/hook)))
   (def ctx
@@ -671,7 +687,7 @@
                (get-in boot [:manifests pname])))
     (each c (get-in m [:contributes :void.http/route-source] [])
       (array/push live {:name (get c :name pname)
-                        :routes (c :routes)
+                        :routes (projected-routes (get c :name pname) (c :routes) boot)
                         :env (c :env)})))
   (def by-name (tabseq [s :in live] (s :name) s))
   (def out @[])

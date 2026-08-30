@@ -197,6 +197,38 @@
                          :error? (true? (get value :error?))}
     {:text (rendered out value) :error? false}))
 
+# -- contributions, with projections flattened ---------------------------
+#
+# A contribution either *is* a tool (or a resource) or *projects* a list
+# of them from the boot value. The second form exists because a plugin
+# whose tools come from a registry the application fills — void/admin-mcp
+# and its resource declarations — has nothing to put in its manifest at
+# the moment the manifest freezes. It is the same shape, and the same
+# reason, as :void.http/route-source taking a function.
+
+(defn- expanded
+  "The contributions of one point, with every :expand applied."
+  [boot point what]
+  (def out @[])
+  (each c (get-in boot [:extensions point :resolved] [])
+    (if-let [f (get c :expand)]
+      (let [[ok v] (protect (f boot))]
+        (unless ok
+          (errorf "%s %q: projecting its %ss failed: %s" what (c :name) what v))
+        (each e v (array/push out e)))
+      (array/push out c)))
+  out)
+
+(defn contributed-tools
+  "Every :void.mcp/tool this composition has, projections included."
+  [boot]
+  (expanded boot :void.mcp/tool "MCP tool"))
+
+(defn contributed-resources
+  "Every :void.mcp/resource this composition has, projections included."
+  [boot]
+  (expanded boot :void.mcp/resource "MCP resource"))
+
 # -- what is exposed -----------------------------------------------------
 
 (defn- hidden? [settings name]
@@ -227,7 +259,7 @@
 (defn contributed-tool-names
   "Every :void.mcp/tool in this composition."
   [boot]
-  (map |($ :name) (get-in boot [:extensions :void.mcp/tool :resolved] [])))
+  (map |($ :name) (contributed-tools boot)))
 
 (def- command-input-schema
   ``The input schema of every command tool: argv, and nothing
@@ -291,7 +323,7 @@
   (each cmd (get-in boot [:extensions :void.core/cli :resolved] [])
     (when (exposed? settings cmd)
       (array/push out (command-tool boot cmd opts))))
-  (each t (get-in boot [:extensions :void.mcp/tool :resolved] [])
+  (each t (contributed-tools boot)
     (when (exposed? settings t)
       (array/push out (contributed-tool boot t opts))))
   (sorted-by |($ :name) out))
@@ -367,7 +399,7 @@
   (when (get settings :health true)
     (array/push out (health-resource boot)))
   (array/concat out (schema-resources settings))
-  (each res (get-in boot [:extensions :void.mcp/resource :resolved] [])
+  (each res (contributed-resources boot)
     (unless (hidden? settings (res :name))
       (array/push out (contributed-resource boot res opts))))
   (sorted-by |($ :uri) out))
@@ -397,7 +429,7 @@
   [boot settings]
   (def known (array ;(command-names boot) ;(contributed-tool-names boot)))
   (def resources-known
-    (map |($ :name) (get-in boot [:extensions :void.mcp/resource :resolved] [])))
+    (map |($ :name) (contributed-resources boot)))
   (def errs @[])
   (each name (get settings :tools [])
     (unless (index-of name known)

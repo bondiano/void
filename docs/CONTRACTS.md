@@ -10,8 +10,8 @@
 > void/crypto void/auth void/auth-http void/auth-db void/auth-oauth
 > void/authz void/authz-http void/security void/mail void/mail-jobs
 > void/mail-auth void/bus void/bus-db void/bus-jobs void/ws
-> void/ws-htmx void/mcp void/mcp-http void/mcp-obs void/dev
-> void/bench)
+> void/ws-htmx void/mcp void/mcp-http void/mcp-obs void/admin
+> void/admin-jobs void/admin-mcp void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -25,6 +25,66 @@ gain `:optional` fields; a rename or tightening is a **new** point or
 key plus a deprecation alias for the old name, never a mutation.
 
 ## Extension points
+
+### `:void.admin/bulk-runner`
+
+- **owner:** `:void/admin` · **cardinality:** `:single`
+- How a bulk too big to run inline is run: {:name :enqueue (fn [{:resource :action :selection :request}] job-id) :progress (fn [job-id action] {:state :percent? :label?})}. void/admin-jobs contributes one; without it, an action that declares :job — or a selection over [:admin :bulk :inline-limit] — is a start-time error naming the plugin rather than a surprise at the moment somebody presses the button
+- **contribution schema:**
+
+  ```janet
+  {:enqueue :function :name :keyword :progress :function}
+  ```
+
+### `:void.admin/dashboard-widget`
+
+- **owner:** `:void/admin` · **cardinality:** `:many`
+- Tiles on the admin index: {:name :orders/today :label "Orders today" :render (fn [request] hiccup)}
+- **contribution schema:**
+
+  ```janet
+  {:label [:optional :string] :name :keyword :render :function}
+  ```
+
+### `:void.admin/history`
+
+- **owner:** `:void/admin` · **cardinality:** `:single`
+- Where the history tab of a row comes from: {:name :fn (fn [{:resource :id :request}] [{:at :actor :detail} ...])}. Nobody contributes one by default, so there is no history tab by default — the admin announces changes (:void.admin/changed) and does not keep them (ADR-0029 §8)
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
+### `:void.admin/menu`
+
+- **owner:** `:void/admin` · **cardinality:** `:many`
+- Extra items in the admin navigation: {:name :docs :label "Docs" :href "/admin/reports"}
+- **contribution schema:**
+
+  ```janet
+  {:href :string :label :string :name :keyword}
+  ```
+
+### `:void.admin/page`
+
+- **owner:** `:void/admin` · **cardinality:** `:many`
+- Arbitrary admin pages: {:name :reports :label "Reports" :path "/reports" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry
+- **contribution schema:**
+
+  ```janet
+  {:handler :function :label [:optional :string] :meta [:optional :dictionary] :method [:optional :keyword] :name :keyword :path :string :policies [:optional [:vector :keyword]]}
+  ```
+
+### `:void.admin/widget`
+
+- **owner:** `:void/admin` · **cardinality:** `:many`
+- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
+- **contribution schema:**
+
+  ```janet
+  {:assets [:optional :dictionary] :display [:optional :function] :doc [:optional :string] :filter [:optional :function] :match [:optional :function] :name :keyword :parse [:optional :function] :priority [:optional :int] :render :function :routes [:optional :function] :types [:optional [:vector :keyword]]}
+  ```
 
 ### `:void.auth/deliver`
 
@@ -279,11 +339,11 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.http/route-source`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
-- Route sources: {:name :routes <router/routes value> :env <(router/env-ref (curenv)) for bare handler symbols>?}; every active source lands in the one route table
+- Route sources: {:name :routes <router/routes value, or (fn [boot] routes-value)> :env <(router/env-ref (curenv)) for bare handler symbols>?}; every active source lands in the one route table. The function form exists for a source that is a *projection* of something resolved during bootstrap — void/admin turns its resource registry and the pages contributed to :void.admin/page into real routes, and neither is knowable when the manifest freezes. It is called once per table build, so a rebuild after a reload re-projects.
 - **contribution schema:**
 
   ```janet
-  {:env [:optional :function] :name :keyword :routes :dictionary}
+  {:env [:optional :function] :name :keyword :routes [:or :dictionary :function]}
   ```
 
 ### `:void.http/session-store`
@@ -309,21 +369,21 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.mcp/resource`
 
 - **owner:** `:void/mcp` · **cardinality:** `:many`
-- Readable resources beyond the schemas and the health report: {:name :void.obs/metrics :uri "void://metrics" :doc ... :mime-type ... :needs [component-keys] :read (fn [;instances] string | {:text ... :mime-type ...})}. Resources are read-only by construction, so they need no allowlist — [:mcp :hide] withholds one by name
+- Readable resources beyond the schemas and the health report: {:name :void.obs/metrics :uri "void://metrics" :doc ... :mime-type ... :needs [component-keys] :read (fn [;instances] string | {:text ... :mime-type ...})}. Resources are read-only by construction, so they need no allowlist — [:mcp :hide] withholds one by name. As with :void.mcp/tool, a contribution may instead carry {:name ... :expand (fn [boot] [resource ...])}: one projection of a registry the application fills after this manifest froze
 - **contribution schema:**
 
   ```janet
-  {:doc [:optional :string] :mime-type [:optional :string] :name :keyword :needs [:optional [:vector :keyword]] :read [:or :function :symbol] :title [:optional :string] :uri :string}
+  {:doc [:optional :string] :expand [:optional :function] :mime-type [:optional :string] :name :keyword :needs [:optional [:vector :keyword]] :read [:optional [:or :function :symbol]] :title [:optional :string] :uri [:optional :string]}
   ```
 
 ### `:void.mcp/tool`
 
 - **owner:** `:void/mcp` · **cardinality:** `:many`
-- Tools that are not CLI commands: {:name :mcp/thing :doc ... :title ... :read-only? true|false :schema <void schema of the arguments> :needs [component-keys] :fn (fn [;instances arguments] string | {:text ... :error? bool})}. The gate is the same one commands pass: a tool that does not declare itself read-only is exposed only when [:mcp :tools] names it
+- Tools that are not CLI commands: {:name :mcp/thing :doc ... :title ... :read-only? true|false :schema <void schema of the arguments> :needs [component-keys] :fn (fn [;instances arguments] string | {:text ... :error? bool})}. The gate is the same one commands pass: a tool that does not declare itself read-only is exposed only when [:mcp :tools] names it. A contribution may instead carry {:name ... :expand (fn [boot] [tool ...])} — one *projection* of something bootstrap resolved, for a plugin whose tools are derived from a registry the application fills long after its manifest froze (void/admin-mcp turns every declared admin resource into tools this way). An expansion yields ordinary tools and passes the same gate
 - **contribution schema:**
 
   ```janet
-  {:doc [:optional :string] :fn [:or :function :symbol] :name :keyword :needs [:optional [:vector :keyword]] :read-only? [:optional :boolean] :schema [:optional :any] :title [:optional :string]}
+  {:doc [:optional :string] :expand [:optional :function] :fn [:optional [:or :function :symbol]] :name :keyword :needs [:optional [:vector :keyword]] :read-only? [:optional :boolean] :schema [:optional :any] :title [:optional :string]}
   ```
 
 ### `:void.obs/exporter`
@@ -365,12 +425,6 @@ key plus a deprecation alias for the old name, never a mutation.
   ```janet
   {:decode :function :encode :function :name :keyword}
   ```
-
-### Reserved point names (owners land in waves 2+)
-
-| Point | Owner-to-be | What it will register |
-|---|---|---|
-| `:void.admin/widget` `/page` `/dashboard-widget` `/menu` | `void/admin` | admin surfaces (wave 4) |
 
 ## Request-lifecycle stages (ADR-0016)
 

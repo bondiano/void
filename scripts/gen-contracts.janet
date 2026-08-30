@@ -42,6 +42,7 @@
 (add-tree (string (os/cwd) "/bus"))
 (add-tree (string (os/cwd) "/ws"))
 (add-tree (string (os/cwd) "/mcp"))
+(add-tree (string (os/cwd) "/admin"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -87,6 +88,9 @@
 (require "void/mcp/init")
 (require "void/mcp/http")
 (require "void/mcp/obs")
+(require "void/admin/init")
+(require "void/admin/jobs")
+(require "void/admin/mcp")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -105,6 +109,7 @@
                :void/bus :void/bus-db :void/bus-jobs
                :void/ws :void/ws-htmx
                :void/mcp :void/mcp-http :void/mcp-obs
+               :void/admin :void/admin-jobs :void/admin-mcp
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide
@@ -164,7 +169,11 @@
   # void/bus owns them, so they are generated above — along with
   # :void.bus/middleware, which the point-per-layer shape of the router
   # asked for and which SPEC part II did not name.
-  [["`:void.admin/widget` `/page` `/dashboard-widget` `/menu`" "void/admin" "admin surfaces (wave 4)"]])
+  # :void.admin/widget, /page, /dashboard-widget and /menu left it in
+  # 4.4: void/admin owns them, so they are generated above — along with
+  # :void.admin/history and :void.admin/bulk-runner, which ADR-0029 §8
+  # and §7 asked for and which SPEC part II did not name.
+  [])
 
 # -- assemble ------------------------------------------------------------
 
@@ -223,13 +232,18 @@
     (p "- **contribution schema:** none (any value)"))
   (p ""))
 
-(p "### Reserved point names (owners land in waves 2+)")
-(p "")
-(p "| Point | Owner-to-be | What it will register |")
-(p "|---|---|---|")
-(each [n o d] reserved-points
-  (p "| %s | `%s` | %s |" n o d))
-(p "")
+# The table is empty from 4.4 on: every point SPEC part I §1.4 reserved
+# now has a plugin that owns it and is generated above. It is kept
+# rather than deleted, because the next wave that reserves a name puts
+# it back here, and its absence would then read as an oversight.
+(unless (empty? reserved-points)
+  (p "### Reserved point names (owners land in later waves)")
+  (p "")
+  (p "| Point | Owner-to-be | What it will register |")
+  (p "|---|---|---|")
+  (each [n o d] reserved-points
+    (p "| %s | `%s` | %s |" n o d))
+  (p ""))
 
 (p "## Request-lifecycle stages (ADR-0016)")
 (p "")
