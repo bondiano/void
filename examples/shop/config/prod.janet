@@ -7,14 +7,24 @@
 ### variables, which is the layer above this file (ADR-0007), so one
 ### image runs against any database without a rebuild.
 
-{:http {# a container answers on the interface the network gave it, not
+{# What this is deployed as, said out loud (ADR-0030). :fleet is
+ # already the :prod default — it is written here because everything
+ # below is the answer to it, and because `void deploy check` prints
+ # the reason it gives, and "the compose file runs web and worker, and
+ # web scales" is a better reason than "the profile said so". Every
+ # store this composition holds is named below with a shared
+ # implementation; the process refuses to start if one is missed.
+ :deploy {:shape :fleet}
+
+ :http {# a container answers on the interface the network gave it, not
         # on loopback
         :host "0.0.0.0"
         :port 8080
         # sessions in redis, which is what lets the web tier be more
-        # than one process (ADR-0010): an in-memory store plus prefork
-        # workers is a login that works every other request, and
-        # void/http refuses that combination at :start
+        # than one process: an in-memory store is one process's heap,
+        # so a login lands on whichever replica accept() gave it and
+        # works every other request. :db (void/db-http) is the other
+        # answer, for a deployment that would rather not run a redis
         :session {:store :redis :ttl 86400}}
 
  # the CSRF token, the session cookie and every signature in

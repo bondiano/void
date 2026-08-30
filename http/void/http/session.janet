@@ -4,10 +4,13 @@
 ### The store contract behind the :void.http/session-store extension
 ### point: {:load (fn [sid] data|nil) :save (fn [sid data ttl])
 ### :delete (fn [sid]) :sweep (fn [])}. The memory store lives here;
-### redis/db stores come from their plugins. ADR-0010 honesty: with
-### :workers > 1 an in-memory store is per-process — sessions demand an
-### external store in prefork setups, and the http plugin refuses the
-### combination at start.
+### redis/db stores come from their plugins. The contribution also
+### says whether the store is `:shared?`, and that is the honest form
+### of what used to be a `:workers > 1` check: an in-memory store is
+### one process's heap, so a prefork family *and* a second machine
+### both lose sessions on it. `[:deploy :shape] :fleet` refuses it at
+### start, with prefork as one of the ways to be a fleet (ADR-0030,
+### ADR-0010).
 ###
 ### The middleware (phase 3000) puts a mutable table at (req :session);
 ### a handler mutates it, or replaces it via (resp :session), or

@@ -8,6 +8,7 @@
 ### criterion 2).
 
 (import void/core/plugin :as plugin)
+(import void/core/deploy :as deploy)
 (import ./netrepl :as netrepl)
 (import ./watch :as watch)
 (import ./generate :as generate)
@@ -21,6 +22,32 @@
    :watch [:optional {:enabled [:optional :boolean]
                       :paths [:optional [:vector :string]]
                       :interval [:optional [:number {:min 0.01}]]}]})
+
+# -- the banner ----------------------------------------------------------
+#
+# The one thing a dev process prints on its own. It exists for a single
+# sentence — the shape this composition is deployed in and which of its
+# stores would not survive a second replica — because that is the
+# question `[:deploy :shape]` answers at start in :prod and nobody
+# thinks to ask in :dev, where the default is :single and the check is
+# inert (ADR-0030). Reading it here is cheaper than reading it from a
+# failed deploy.
+
+(plugin/contribute! :void.core/hooks
+  {:hook :after-start
+   # after everything, including the plugins that resolve a store in an
+   # :after-start hook of their own
+   :phase 9000
+   :name :dev/banner
+   :doc "Print the profile, the deployment shape and the composition's stores"
+   :fn (fn banner [boot]
+         (print)
+         (printf "void %q — %d plugins, %d components"
+                 (boot :profile)
+                 (length (boot :active))
+                 (length (get-in boot [:system :order] [])))
+         (each l (deploy/report boot) (print l))
+         (print))})
 
 (plugin/defplugin void/dev
   :doc "Dev experience: in-process netrepl, file watcher with component auto-restart, schema generator."

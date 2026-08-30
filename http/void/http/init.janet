@@ -125,8 +125,11 @@
             (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
 
 (plugin/defextension-point :void.http/session-store
-  :doc "Session store factories: {:name :make (fn [session-config] store)}; config [:http :session :store] picks one by name"
-  :schema {:name :keyword :make :function}
+  :doc "Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to \"would a second replica see this session\" (ADR-0030) — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is"
+  :schema {:name :keyword
+           :make :function
+           :shared? [:optional :boolean]
+           :replacement [:optional :string]}
   :validate (unique-by "session store" |($ :name))
   :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
 
@@ -253,7 +256,20 @@
 
 (plugin/contribute! :void.http/session-store
   {:name :memory
-   :make (fn [_] (session/memory-store))})
+   :make (fn [_] (session/memory-store))
+   :shared? false
+   :replacement "sessions in a store every replica reads: compose void/redis-http and set [:http :session :store] :redis, or void/db-http and :db"})
+
+(plugin/contribute! :void.core/store
+  {:name :void.http/session
+   :what "sessions"
+   :doc "The session store this composition resolved — the one a user's next request lands on, whichever replica accept() gave it"
+   :ask (fn ask-session [_boot]
+          (when-let [s (get (context) :session)]
+            {:store (get s :store-name :anonymous)
+             :shared? (s :shared?)
+             :replacement (get s :replacement
+                               "a session store several replicas share")}))})
 
 # -- the error path, without the throw -----------------------------------
 
@@ -282,7 +298,7 @@
 
 # -- context build (:before-start hook) ----------------------------------
 
-(defn- build-session [cfg stores workers]
+(defn- build-session [cfg stores]
   (def scfg (get cfg :session))
   (when (and scfg (not= false (scfg :enabled)))
     (def store-name (get scfg :store :memory))
@@ -291,9 +307,15 @@
           (errorf "unknown session store %q (contributed: %s)"
                   store-name
                   (string/join (map |(string/format "%q" $) (sorted (keys stores))) " "))))
-    (when (and (= :memory store-name) (> workers 1))
-      (error "memory sessions cannot back :workers > 1 — each prefork worker has its own heap (ADR-0010); use an external session store"))
+    # nothing here refuses the memory store any more: "sessions in a
+    # heap" is one instance of a class the deployment shape answers for
+    # everybody at once, and it is `[:deploy :shape] :fleet` that says
+    # no — with prefork workers as one of the ways to be a fleet
+    # (ADR-0030, ADR-0010). The declaration below is what it asks.
     {:store ((contrib :make) scfg)
+     :store-name store-name
+     :shared? (truthy? (get contrib :shared?))
+     :replacement (get contrib :replacement)
      :ttl (get scfg :ttl 86400)
      :cookie (get scfg :cookie "void-session")}))
 
@@ -383,7 +405,7 @@
       :on-error-global (tuple ;(get global-hooks :on-error []))
       :on-timeout-global (tuple ;(get global-hooks :on-timeout []))
       :on-response-global (tuple ;(get global-hooks :on-response []))
-      :session (build-session cfg (or (resolved :void.http/session-store) @{}) workers)})
+      :session (build-session cfg (or (resolved :void.http/session-store) @{}))})
   # the built-in middleware closures ((context)) must see this context
   # already while the table build evaluates their :when predicates
   (set current-context ctx)

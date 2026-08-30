@@ -12,10 +12,12 @@
 
  # A cart belongs to a browser before it belongs to an account, and the
  # session is where the browser keeps its handle on one. In-process is
- # right for one process and wrong for prefork workers (ADR-0010) —
- # void/http refuses that combination at :start rather than losing
- # every other session, and the fix is :redis (see config/prod.janet).
- # The [:http] slice itself is below, next to the static files.
+ # right for one process and wrong for anything past it — a second
+ # prefork worker and a second machine break it identically, which is
+ # why the check is on the deployment shape rather than on [:http
+ # :workers] (ADR-0030). config/prod.janet is where this deployment
+ # says it is a fleet and names the shared store for every one of
+ # these. The [:http] slice itself is below, next to the static files.
 
  :db {:migrations {:dir "db/migrations"}}
 

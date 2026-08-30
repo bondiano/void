@@ -1,6 +1,7 @@
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
+(import void/core/deploy :as deploy)
 (import void/cli :as cli)
 
 # -- command words / resolution ------------------------------------------
@@ -86,5 +87,45 @@
   (protect (cli/run-command boot2 {:name :sym :fn 'some-fn} [])))
 (assert (not ok) "symbol :fn throws")
 (assert (string/find "symbol" err) "the error explains the limitation")
+
+# -- void deploy check ---------------------------------------------------
+#
+# The survey printed before the deploy rather than during it: it starts
+# the components the store declarations name and nothing else, so it is
+# safe on a machine that is already serving (ADR-0030).
+
+(array/clear log)
+
+(def surveyed
+  (plugin/manifest 'test/stores
+    :components
+    [(system/component :store/thing
+       :start (fn [d c] (array/push log :start-thing) @{:shared? false})
+       :stop (fn [i] (array/push log :stop-thing)))
+     (system/component :store/listener
+       :start (fn [d c] (array/push log :start-listener) @{})
+       :stop (fn [i] (array/push log :stop-listener)))]
+    :contributes
+    {:void.core/store
+     [{:name :test/thing
+       :what "a thing"
+       :needs [:store/thing]
+       :ask (fn [boot]
+              (when (get-in boot [:system :instances :store/thing])
+                {:store :memory :shared? false
+                 :replacement "compose the shared thing"}))}
+      {:name :test/room
+       :what "rooms"
+       :ask (fn [_] {:store :process :shared? :by-design
+                     :why "a connection lives where its socket does"})}]}))
+
+(def boot3 (cli/bootstrap-app {:plugins [surveyed] :profile :test}))
+(def entries (cli/deploy-check boot3))
+
+(assert (deep= log @[:start-thing :stop-thing])
+        "only what a store declaration needs starts — never the listener")
+(assert (= 2 (length entries)))
+(assert (= 1 (length (deploy/per-process entries)))
+        "a per-process store is a finding; one that is per-process by design is not")
 
 (print "cli-test ok")

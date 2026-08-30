@@ -377,7 +377,7 @@ Janet — bytecode-интерпретатор **без JIT**. По CPU-скор�
 - Наш профиль — **I/O-bound**: ev loop + неблокирующие драйверы. Конкурентность и tail latency решаются архитектурой, throughput на CPU-тяжёлых путях — нет.
 - **Hot paths уходят в C**: HTTP-парсер, JSON (spork/json — native C), protobuf varint-ядро, PEG (C-движок) — интерпретатор должен исполнять только «склейку». Правило: на happy path запроса < ~50 janet-функций между accept и write.
 - **GC stop-the-world**, простой mark-and-sweep. Аллокации на запрос — главный враг p99: переиспользуем буферы, `buffer/clear` вместо новых, `keep-syntax` для compile-time構造. `gcsetinterval` — ручка trade-off throughput/pause.
-- **Multi-core = prefork**: N процессов × SO_REUSEPORT (Linux раздаёт accept сам), никакого shared state между воркерами кроме БД/Redis. Это же — изоляция GC-пауз: пауза одного воркера не трогает остальных. `void/http` должен уметь `:workers :auto` из коробки.
+- **Multi-core = prefork**: N процессов × SO_REUSEPORT (Linux раздаёт accept сам), никакого shared state между воркерами кроме БД/Redis. Это же — изоляция GC-пауз: пауза одного воркера не трогает остальных. `void/http` должен уметь `:workers :auto` из коробки. «Никакого shared state» — это утверждение и про вторую машину тоже, поэтому проверяется оно не по `[:http :workers]`, а по `[:deploy :shape]` (`:single` | `:fleet`, умолчание `:fleet` в `:prod`): под `:fleet` композиция с хранилищем в куче одного процесса не стартует и называет все нарушения сразу — ADR-0030.
 - **Не наш кейс**: 30k+ RPS в одном процессе. Реалистичная цель — тысячи RPS на воркер на I/O-путях, десятки тысяч на машину префорком; выше — ставь Go/Rust или CDN/proxy перед нами (static и так должен уходить в nginx/Cloudflare).
 
 ### 8.2 Бюджеты (SLO фреймворка)
@@ -587,6 +587,7 @@ Hook запросной стадии — `(fn [request])`: nil — продол�
 | `:void.core/hooks` | many | lifecycle hooks с фазой |
 | `:void.core/log-sink` | many | приёмники логов (pretty stderr, JSON-lines, OTLP из obs) — ADR-0018 |
 | `:void.core/log-serializer` | many | сериализаторы записей по ключу (`:err`, `:req`) — ADR-0018 |
+| `:void.core/store` | many | хранилища, которые вторая реплика должна видеть: `:what`, `:needs` и `:ask`, отвечающий `:shared?` (`true` / `false` / `:by-design`) — ADR-0030 |
 
 void/http добавляет `:void.http/middleware`, `:void.http/hook` (lifecycle-стадии, ADR-0016), `:void.http/session-store`, `:void.http/body-codec`, `:void.http/error-renderer`, `:void.http/route-source` (модули приложения отдают routes тоже через точку!). void/obs — `:void.obs/instrument`, `:void.obs/exporter`. void/pressure — `:void.pressure/check` (ADR-0019). И т.д.
 

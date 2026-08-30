@@ -39,6 +39,13 @@
 ### plus two declarations:
 ###
 ###   :name    keyword, for logs and health
+###   :shared? boolean (default false) — do several processes see the
+###            same entries? A store that does not say lives in one
+###            heap, which is what a store written without the question
+###            in mind is; `[:deploy :shape] :fleet` refuses one at
+###            start, because `cache/forget` on a per-process store
+###            clears one replica out of N and the stale answer stays
+###            on the others (ADR-0030)
 ###   :values  :janet (default) — the store gives back what it was
 ###            given, keywords and tables and all — or :bytes, when it
 ###            round-trips through an encoding that does not preserve
@@ -98,6 +105,7 @@
     (merge
       @{:name name
         :values values
+        :shared? false
         :get-many (fn get-many [ks] (map get- ks))
         :put-many (fn put-many [pairs ttl]
                     (each [k v] pairs (put- k v ttl))
@@ -120,6 +128,13 @@
         :close (fn close [] nil)}
       st
       {:atomic-incr own-incr})))
+
+(defn shared?
+  "True when several processes see the same entries — the question
+  `[:deploy :shape] :fleet` asks of every store it can reach
+  (ADR-0030)."
+  [st]
+  (truthy? (get st :shared?)))
 
 (defn atomic-incr?
   "True when the store implements :incr itself — that is, when the

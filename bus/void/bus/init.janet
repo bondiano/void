@@ -415,6 +415,18 @@
 (plugin/contribute! :void.bus/backend
   (memory/factory (fn remember-state [m] (set memory-state m))))
 
+(plugin/contribute! :void.core/store
+  {:name :void.bus/backend
+   :what "the message bus"
+   :needs [:bus/broker]
+   :doc "Whether a message published on one process reaches a subscriber on another — the backend already declares it under :guarantees {:shared}"
+   :ask (fn ask-bus [boot]
+          (when-let [br (get-in boot [:system :instances :bus/broker])]
+            (def b (br :backend))
+            {:store (get b :name :anonymous)
+             :shared? (backend/shared? b)
+             :replacement "compose void/bus-db and set [:bus :backend] :db — with the in-process backend a publisher on one replica and a subscriber on another never meet, and neither of them can tell"}))})
+
 # -- CLI -----------------------------------------------------------------
 
 (defn- with-broker [br f]

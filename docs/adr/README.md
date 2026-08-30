@@ -36,3 +36,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0026](0026-mail-soobshenie-kak-dannye-dostavka-kak-kompoziciya.md) | `void/mail` — сообщение как данные, доставка как решение композиции | accepted |
 | [0027](0027-otlp-eksport-json-i-http-klient.md) | OTLP-экспорт — JSON до `void/proto`, HTTP-клиент как часть ядра | accepted |
 | [0028](0028-websocket-kak-marshrut-perehvat-soedineniya.md) | WebSocket — это маршрут; ядро отдаёт соединение, комнаты остаются в процессе | accepted |
+| [0030](0030-forma-razvertyvaniya-i-razdelyaemye-hranilisha.md) | Форма развёртывания как ключ конфигурации; ни одного in-memory хранилища за пределами одного процесса | accepted |

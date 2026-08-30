@@ -11,13 +11,13 @@
 ###     {:http {:session {:store :redis :ttl 86400}}
 ###      :redis {:url "redis://cache.internal/0"}}
 ###
-### This is what makes `:workers :auto` and sessions coexist. An
-### in-memory store lives in one process's heap, so with prefork every
-### worker has a different set of sessions and a user's requests land
-### in whichever worker accept() gave them — void/http refuses that
-### combination at start rather than let it be discovered in
-### production (ADR-0010). A shared store is the answer, and this is
-### one.
+### This is what makes a fleet and sessions coexist. An in-memory
+### store lives in one process's heap, so every prefork worker — and
+### every machine behind the balancer — has a different set of
+### sessions, and a user's requests land in whichever one accept() gave
+### them. `[:deploy :shape] :fleet` refuses that combination at start
+### rather than let it be discovered in production (ADR-0030,
+### ADR-0010). A shared store is the answer, and this is one.
 ###
 ### Two decisions worth stating:
 ###
@@ -82,7 +82,8 @@
    # nothing is read from the http session slice here: the ttl arrives
    # with each save, and the key prefix belongs to [:redis :session],
    # where the rest of this plugin's configuration lives
-   :make (fn make-store [_session-config] (store))})
+   :make (fn make-store [_session-config] (store))
+   :shared? true})
 
 (plugin/defplugin void/redis-http
   :doc "Sessions in redis: the :redis session store for void/http, which is what lets sessions and prefork workers coexist (ADR-0010)."

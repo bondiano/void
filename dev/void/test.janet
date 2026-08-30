@@ -13,6 +13,7 @@
 (import void/core/system :as system)
 (import void/core/plugin :as plugin)
 (import void/core/hooks :as hooks)
+(import void/core/deploy :as deploy)
 (import ./dev/generate :as gen)
 
 (def- allowed-opts
@@ -74,6 +75,12 @@
   (system/start sub)
   (put boot :phase :ready)
   (hooks/run! (boot :hooks) :after-start boot)
+  # and the store survey, for the same reason as everything above it:
+  # a composition that would not start in production must not start
+  # here either (ADR-0017, ADR-0030). Under the :test profile the
+  # shape is :single and this is inert — a test that wants the gate
+  # asks for it with [:deploy :shape] :fleet.
+  (put boot :stores (deploy/check! boot))
   boot)
 
 (defn stop!

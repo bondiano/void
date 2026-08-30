@@ -214,6 +214,9 @@
        :used (row :used)}))
   {:name :db
    :table table
+   # rows in the application's database: every replica reads the same
+   # tokens, which is the whole reason this plugin exists (ADR-0030)
+   :shared? true
    :find (fn db-token-find [id]
            (row->record (db/one-row {:select [:*] :from table :where {:id id} :limit 1})))
    :put (fn db-token-put [record]
@@ -248,6 +251,8 @@
   (def table (keyword (cfg :table)))
   {:name :db
    :table table
+   # a magic link issued by one replica is redeemable at any of them
+   :shared? true
    :put (fn db-challenge-put [handle record ttl]
           (def now (os/time))
           (db/with-tx

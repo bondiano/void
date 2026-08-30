@@ -194,6 +194,17 @@
            (merge {:status (if (s :under-pressure) :degraded :up)} s)
            {:status :down :reason "void/pressure is not started"}))})
 
+(plugin/contribute! :void.core/store
+  {:name :void.pressure/sampler
+   :what "the load sampler"
+   :needs [:pressure/sampler]
+   :doc "RSS and loop lag are facts about this process, so the sampler is per process on purpose"
+   :ask (fn ask-sampler [boot]
+          (when (get-in boot [:system :instances :pressure/sampler])
+            {:store :process
+             :shared? :by-design
+             :why "RSS and event-loop lag are properties of one process; a shared number would be an average of things that shed load independently"}))})
+
 # -- CLI -----------------------------------------------------------------
 
 (defn- fmt-bytes [n]

@@ -305,6 +305,17 @@
 
 # -- manifest ------------------------------------------------------------
 
+(plugin/contribute! :void.core/store
+  {:name :void.ws/rooms
+   :what "websocket rooms"
+   :needs [:ws/registry]
+   :doc "The room registry is per process, and that is the design (ADR-0028) — not something a fleet check should ask anyone to fix"
+   :ask (fn ask-rooms [boot]
+          (when (get-in boot [:system :instances :ws/registry])
+            {:store :process
+             :shared? :by-design
+             :why "a connection lives in the process holding its socket, so a registry that spanned processes could not reach it anyway; fan-out across replicas is a void/bus subscriber that broadcasts locally (ADR-0028)"}))})
+
 (plugin/defplugin void/ws
   :doc "WebSocket (RFC 6455) over the void/http kernel: the handshake answered from an ordinary route handler, framing, ping/pong and the close handshake, a fiber per connection with a bounded outbound queue, plus rooms and broadcast."
   :version "0.0.1"

@@ -197,6 +197,21 @@
     (fn health [c]
       (merge {:status :up} (with-dyns [state/cache-dyn c] (state/stats))))))
 
+(plugin/contribute! :void.core/store
+  {:name :void/cache-store
+   :what "the cache"
+   :needs [:cache/store]
+   :doc "The cache backend this composition resolved — and therefore what `cache/forget` reaches"
+   :ask (fn ask-cache [boot]
+          (when-let [c (get-in boot [:system :instances :cache/store])]
+            (def st (c :store))
+            {:store (get st :name :anonymous)
+             :shared? (store/shared? st)
+             # the sharpest form of the bug this answers: an
+             # invalidation that clears one replica and leaves the
+             # stale answer on the others
+             :replacement "compose void/cache-redis and set {:void/cache-store {:impl :cache/redis}} — otherwise cache/forget clears one replica's entries and the rest keep serving the stale value"}))})
+
 # -- CLI -----------------------------------------------------------------
 
 (defn- with-cache [c f]
