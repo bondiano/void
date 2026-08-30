@@ -92,18 +92,30 @@
     (array/push roots key)
     (ffi/write :string key buf off)
     (case kind
+      # A buffer and :ptr, never :string. An OSSL_PARAM carries a
+      # pointer *and* a length, so what it points at is allowed to
+      # contain zero bytes — and `ffi/write :string` is not: it
+      # refuses embedded zeroes, because a C string ends at the first
+      # one. A random 16-byte salt contains a zero roughly once in
+      # sixteen, which is what made hashing fail for one password in
+      # sixteen and nothing else. The capacity is at least one byte so
+      # that an empty value still has an address to point at.
       :octets
-      (let [v (string value)]
-        (array/push roots v)
+      (let [v (string value)
+            cell (buffer/new (max 1 (length v)))]
+        (buffer/push cell v)
+        (array/push roots cell)
         (ffi/write :uint32 param-octet-string buf (+ off 8))
-        (ffi/write :string v buf (+ off 16))
+        (ffi/write :ptr cell buf (+ off 16))
         (ffi/write :uint64 (length v) buf (+ off 24)))
 
       :utf8
-      (let [v (string value)]
-        (array/push roots v)
+      (let [v (string value)
+            cell (buffer/new (max 1 (length v)))]
+        (buffer/push cell v)
+        (array/push roots cell)
         (ffi/write :uint32 param-utf8-string buf (+ off 8))
-        (ffi/write :string v buf (+ off 16))
+        (ffi/write :ptr cell buf (+ off 16))
         (ffi/write :uint64 (length v) buf (+ off 24)))
 
       :uint
