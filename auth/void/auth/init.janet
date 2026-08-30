@@ -306,13 +306,38 @@
 (def memory-challenges-component
   (system/component :auth/memory-challenges
     :doc "The in-process store for magic links and one-time codes.
-    Per-process: with prefork workers (ADR-0010) a code issued by one
-    worker cannot be redeemed at another, so anything past one process
-    wants void/auth-db."
+    Per-process: with prefork workers (ADR-0010) or a second replica a
+    code issued by one process cannot be redeemed at another, so
+    anything past one process wants void/auth-db — and under
+    [:deploy :shape] :fleet this store stops the boot (ADR-0030)."
     :provides [:void/auth-challenge-store]
     :start
     (fn start [_ _]
       (store/normalize-challenge-store (store/memory-challenge-store)))))
+
+(plugin/contribute! :void.core/store
+  {:name :void.auth/tokens
+   :what "API tokens"
+   :needs [:auth/registry]
+   :doc "Where this composition keeps API-token digests"
+   :ask (fn ask-tokens [boot]
+          (when-let [a (get-in boot [:system :instances :auth/registry])]
+            (def st (a :tokens))
+            {:store (get st :name :anonymous)
+             :shared? (store/shared? st)
+             :replacement "compose void/auth-db and set {:void/auth-token-store {:impl :auth.db/tokens}} — a token minted on one replica authenticates on that replica only"}))})
+
+(plugin/contribute! :void.core/store
+  {:name :void.auth/challenges
+   :what "magic links and one-time codes"
+   :needs [:auth/registry]
+   :doc "Where this composition keeps single-use challenges"
+   :ask (fn ask-challenges [boot]
+          (when-let [a (get-in boot [:system :instances :auth/registry])]
+            (def st (a :challenges))
+            {:store (get st :name :anonymous)
+             :shared? (store/shared? st)
+             :replacement "compose void/auth-db and set {:void/auth-challenge-store {:impl :auth.db/challenges}} — a magic link issued by one replica and clicked on another is a login that fails for no visible reason"}))})
 
 # -- the registry component ----------------------------------------------
 

@@ -368,6 +368,21 @@
         {:status :up :scheduler :disabled}
         {:status :up :schedules (length schedule/registry) :fired (sc :fired)}))))
 
+(plugin/contribute! :void.core/store
+  {:name :void.jobs/backend
+   :what "the job queue"
+   :needs [:jobs/queue]
+   :doc "Where enqueued jobs live — the vocabulary was already there (backend/capabilities :shared), only the caller was missing"
+   :ask (fn ask-jobs [boot]
+          (when-let [q (get-in boot [:system :instances :jobs/queue])]
+            (def b (q :backend))
+            {:store (get b :name :anonymous)
+             :shared? (truthy? (get b :shared?))
+             # two failures, and the second is the quiet one: a
+             # schedule is a lock, and a per-process backend has no
+             # lock to take
+             :replacement "compose void/jobs-db ({:void/jobs-backend {:impl :jobs/db}}) or void/jobs-redis — otherwise a job enqueued on one replica never reaches another replica's worker, and every defschedule fires once per replica"}))})
+
 # -- CLI -----------------------------------------------------------------
 
 (defn- with-queue [q f]

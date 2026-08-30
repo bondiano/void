@@ -35,6 +35,17 @@
 ### one-time code that can be read twice is not one-time, so the
 ### contract is "hand it over and forget it", and an implementation
 ### that cannot do that atomically has to say so rather than pretend.
+###
+### Two of the three contracts also carry `:shared?` — "would a second
+### replica see this row" (ADR-0030). It matters for tokens and for
+### challenges, and `[:deploy :shape] :fleet` refuses a per-process one
+### at start: a magic link issued by replica A and clicked on replica B
+### is a login that fails for no reason the user can see, and an API
+### token minted on one replica authenticates on one replica. It does
+### **not** matter for the user store, and that is not an oversight: the
+### in-process user store is seeded from `[:auth :users]`, so every
+### replica reads the same configuration and holds the same users. A
+### store built out of config is shared by construction.
 
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
@@ -117,6 +128,10 @@
   (freeze
     (merge
       @{:name name
+        # a store several replicas read; false means "this heap only",
+        # which makes a token valid on the process that minted it and
+        # nowhere else (ADR-0030)
+        :shared? false
         # "when was this token last used" is an audit nicety, not a
         # contract: a store that will not write on every request says so
         # by leaving :touch out
@@ -159,13 +174,14 @@
     (errorf "challenge store must be a dictionary, got %q" st))
   (def name (get st :name :anonymous))
   (require-fns "challenge store" st name [:put :take])
-  (freeze (merge @{:name name :sweep (fn [] nil)} st)))
+  (freeze (merge @{:name name :shared? false :sweep (fn [] nil)} st)))
 
 (defn memory-challenge-store
   "An in-process challenge store. Single-use by construction, and
   per-process — with prefork workers (ADR-0010) or a fleet, a code
   issued by one process cannot be redeemed at another, which is what
-  void/auth-db is for."
+  void/auth-db is for and what `[:deploy :shape] :fleet` refuses to
+  start without (ADR-0030)."
   []
   (def rows @{})
   (defn now [] (os/time))
@@ -185,3 +201,10 @@
             (each k (seq [[k v] :pairs rows :when (<= (v :expires) t)] k)
               (put rows k nil))
             nil)})
+
+(defn shared?
+  "True when several processes see the same rows — the question
+  `[:deploy :shape] :fleet` asks of every store it can reach
+  (ADR-0030)."
+  [st]
+  (truthy? (get st :shared?)))

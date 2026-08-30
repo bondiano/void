@@ -195,6 +195,16 @@ key plus a deprecation alias for the old name, never a mutation.
   {:name :keyword :spec :dictionary}
   ```
 
+### `:void.core/store`
+
+- **owner:** `:void/core` · **cardinality:** `:many`
+- Stores a second replica would have to see (ADR-0030): {:name :void.http/session :what "sessions" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port
+- **contribution schema:**
+
+  ```janet
+  {:ask :function :doc [:optional :string] :name :keyword :needs [:optional [:vector :keyword]] :what :string}
+  ```
+
 ### `:void.html/engine`
 
 - **owner:** `:void/html` · **cardinality:** `:many`
@@ -278,11 +288,11 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.http/session-store`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
-- Session store factories: {:name :make (fn [session-config] store)}; config [:http :session :store] picks one by name
+- Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to "would a second replica see this session" (ADR-0030) — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is
 - **contribution schema:**
 
   ```janet
-  {:make :function :name :keyword}
+  {:make :function :name :keyword :replacement [:optional :string] :shared? [:optional :boolean]}
   ```
 
 ### `:void.mail/transport`

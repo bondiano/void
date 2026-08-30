@@ -19,6 +19,7 @@
 (import ./schema :as schema)
 (import ./hooks :as hooks)
 (import ./log :as log)
+(import ./deploy :as deploy)
 
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
@@ -497,6 +498,17 @@
        :validate (unique-names "health check")
        :reduce |(sorted-by |($ :name) $))
 
+     :void.core/store
+     (extension-point :void.core/store
+       :doc "Stores a second replica would have to see (ADR-0030): {:name :void.http/session :what \"sessions\" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port"
+       :schema {:name :keyword
+                :what :string
+                :ask :function
+                :needs [:optional [:vector :keyword]]
+                :doc [:optional :string]}
+       :validate (unique-names "store declaration")
+       :reduce |(sorted-by |($ :name) $))
+
      :void.core/log-sink
      (extension-point :void.core/log-sink
        :doc "Log record sinks (ADR-0018): {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink"
@@ -881,6 +893,11 @@
   (checked :load errors sources)
 
   (def cfg (load-boot-config ms opts errors))
+  # the deployment is resolved with the config and travels on the boot:
+  # `dry-run` and `void deploy check` need the shape without starting
+  # anything, and a bad [:deploy :shape] is a config error like any
+  # other (ADR-0030)
+  (def dep (deploy/resolve! (if cfg (cfg :values) {}) profile errors))
   (checked :config errors sources)
 
   (def [active inactive] (split-active ms cfg errors))
@@ -895,6 +912,7 @@
   (def boot
     @{:phase :validated
       :profile profile
+      :deploy dep
       :plugins (tuple ;(map |($ :name) ms))
       :manifests (tabseq [m :in ms] (m :name) m)
       :active (tuple ;(map |($ :name) active))
@@ -920,8 +938,9 @@
               ...); :defaults is reserved for manifest
               :config-defaults
 
-  The boot value is plain data: :phase :profile :plugins :manifests
-  :active :inactive :config :extensions :hooks :system. With a truthy
+  The boot value is plain data: :phase :profile :deploy :plugins
+  :manifests :active :inactive :config :extensions :hooks :system.
+  With a truthy
   `untracked` the boot is not recorded as the REPL tools' default
   subject (test bootstraps).``
   [opts &opt untracked]
@@ -930,11 +949,15 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn start!
-  "Phases 6-7: run the :config-loaded and :before-start hooks, start
+  ``Phases 6-7: run the :config-loaded and :before-start hooks, start
   the component graph in dependency order, mark the boot :ready, run
   the :after-start hooks (see hooks/lifecycle-hooks; every handler
-  receives the boot value). Accepts a boot value from `bootstrap` or
-  bootstrap options. Returns the boot value."
+  receives the boot value), then survey the composition's stores
+  against `[:deploy :shape]` — under `:fleet` a store living in one
+  process's heap stops the boot with every violation in one error
+  (ADR-0030), and the survey is left on the boot as :stores. Accepts a
+  boot value from `bootstrap` or bootstrap options. Returns the boot
+  value.``
   [boot-or-opts]
   (def boot (if (get boot-or-opts :system)
               boot-or-opts
@@ -959,6 +982,12 @@
   (system/start (boot :system))
   (put boot :phase :ready)
   (hooks/run! (boot :hooks) :after-start boot)
+  # last, because it asks the stores that are now resolved — including
+  # the ones a plugin resolves in an :after-start hook of its own
+  # (void/security's limiter). Under [:deploy :shape] :fleet a store
+  # living in one process's heap stops the boot here, with every
+  # violation in one error (ADR-0030)
+  (put boot :stores (deploy/check! boot))
   boot)
 
 (defn shutdown!
@@ -990,6 +1019,7 @@
   (def boot (bootstrap* opts false))
   {:ok true
    :profile (boot :profile)
+   :deploy (boot :deploy)
    :plugins (boot :plugins)
    :active (boot :active)
    :inactive (boot :inactive)

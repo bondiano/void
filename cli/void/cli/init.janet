@@ -20,6 +20,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/hooks :as hooks)
+(import void/core/deploy :as deploy)
 (import ./new :as new)
 (import ./repl :as repl)
 
@@ -115,12 +116,44 @@
   (defer (system/stop sys)
     (f ;(map |(get-in sys [:instances $]) needs) ;args)))
 
+# -- deploy check --------------------------------------------------------
+
+(defn deploy-check
+  ``The body of `void deploy check` — is this composition fit for the
+  shape it is about to be deployed in? Prints the shape, why it is
+  that, and one row per store: shared, per-process (with what to
+  compose instead) or per-process by design (with why that is right).
+
+  It starts only the components the store declarations name — a check
+  you can run on a machine that is already serving must not open the
+  listening socket — and stops them again. Exits 1 when a `:fleet`
+  composition holds a store that lives in one process's heap, which is
+  the verdict `plugin/start!` would reach anyway, printed before the
+  deploy rather than during it (ADR-0030).``
+  [boot]
+  (def sys (boot :system))
+  (def wanted (deploy/needs boot))
+  (unless (empty? wanted)
+    (system/start sys wanted))
+  (defer (system/stop sys)
+    (def entries (deploy/survey boot))
+    (each l (deploy/report boot entries) (print l))
+    (when (and (deploy/fleet?) (not (empty? (deploy/per-process entries))))
+      # the verdict goes to stderr, the report to stdout; flush first so
+      # the two arrive in the order they were written
+      (flush)
+      (eprint)
+      (eprint (deploy/message entries (get (deploy/deployment) :reason "resolved")))
+      (os/exit 1))
+    entries))
+
 # -- help ----------------------------------------------------------------
 
 (def builtin-help
   [["new NAME" "create a project skeleton in ./NAME"]
    ["dev" "run the app in the :dev profile (watcher + netrepl by default)"]
    ["repl" "connect to the running app's netrepl (see void repl --help)"]
+   ["deploy check" "is this composition fit for [:deploy :shape]?"]
    ["version" "print the void/core version"]
    ["help" "this message"]])
 
@@ -187,6 +220,13 @@
                       (string/join (drop 1 words) " ")))
             (void/run! (merge (load-app (gopts :app))
                               {:profile (or profile :dev)})))
+    # a built-in rather than a contribution, because void/core owns
+    # [:deploy :shape] and void/core is not a plugin (ADR-0030)
+    "deploy" (do
+               (unless (= ["check"] (tuple ;(drop 1 words)))
+                 (errorf "unknown command %q — the only one is `void deploy check`"
+                         (string/join words " ")))
+               (deploy-check (bootstrap-app (load-app (gopts :app)) profile)))
     "repl" (repl/connect
              (tuple ;(drop 1 words))
              (fn netrepl-config []

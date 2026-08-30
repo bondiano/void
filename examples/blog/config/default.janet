@@ -8,17 +8,36 @@
  # the database, next to the data it is bookkeeping for.
  :void/jobs-backend {:impl :jobs/db}
 
+ # -- what this application is deployed as --------------------------------
+ #
+ # One process. Saying so is what makes the rest of this file legal:
+ # the session store, the cache and the rate limiter below all live in
+ # this process's heap, and under `:fleet` — which is what the :prod
+ # profile defaults to — void refuses to start with any of them
+ # (ADR-0030). `void deploy check` prints the list.
+ #
+ # Turning this into a fleet is four lines, and they are all in this
+ # file: {:http {:session {:store :db}}} with void/db-http composed,
+ # {:void/cache-store {:impl :cache/redis}} with void/cache-redis,
+ # {:security {:rate {:store :cache}}}, and the bus and queue are in
+ # the database already. examples/shop is that application.
+ :deploy {:shape :single}
+
  # Wave 3 signs people in, and a sign-in rides on a session. The store
- # is in-process, which is right for one process and wrong for prefork
- # workers (ADR-0010) — void/http refuses that combination at :start
- # rather than losing every other login, and the fix is :redis.
+ # is in-process, which is exactly as wrong for a second machine as it
+ # is for a second prefork worker — one deployment shape, one check.
  :http {:session {:enabled true}}
 
  :db {:migrations {:dir "db/migrations"}}
 
- # the article list is cached for a minute and dropped on every write —
+ # The article list is cached for a minute and dropped on every write —
  # the recount job invalidates it too, because it is what makes the
- # counter change
+ # counter change. `cache/forget` clears **the store the composition
+ # resolved**, and this one is in this process's heap: with a second
+ # replica the invalidation would clear one cache out of N and the
+ # other replicas would keep serving the stale index until the TTL ran
+ # out. That is why [:deploy :shape] above says :single, and why
+ # {:void/cache-store {:impl :cache/redis}} is the line that changes it.
  :cache {:prefix "blog:" :ttl 60}
 
  # -- wave 3 -------------------------------------------------------------

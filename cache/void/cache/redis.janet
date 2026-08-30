@@ -106,6 +106,9 @@
   (defn encode [v] (rcodec/encode codec v))
   (defn decode [v] (rcodec/decode codec v))
   {:name :redis
+   # the point of this backend: one set of entries for every worker
+   # and every machine, so `cache/forget` means what it says
+   :shared? true
    # a codec that does not round-trip Janet values says so, and
    # ./state refuses to store a sentinel through it
    :values (if (= :raw (codec :name)) :bytes :janet)

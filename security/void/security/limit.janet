@@ -45,10 +45,11 @@
 
 (defn memory-store
   ``An in-process store with the `:void/cache-store` shape — enough of
-  it for a counter. Per process: with prefork workers (ADR-0010) the
-  effective limit is multiplied by the number of workers, which is why
-  the plugin warns when it sees that combination rather than letting
-  it be discovered from a graph.``
+  it for a counter. Per process, and that is the whole of its
+  arithmetic: N processes counting separately let N times the
+  configured limit through, so a fleet's "60 per minute" is 180 across
+  three replicas. `[:deploy :shape] :fleet` refuses it at start
+  (ADR-0030) rather than let the number be discovered from a graph.``
   [&opt opts]
   (default opts {})
   (def entries @{})
@@ -60,6 +61,7 @@
     nil)
   (var writes 0)
   @{:name :memory
+    :shared? false
     :entries entries
     :get (fn store-get [key]
            (when-let [e (get entries key)]

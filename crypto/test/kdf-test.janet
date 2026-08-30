@@ -45,7 +45,22 @@
     (assert (not= (kdf/argon2id "pw" "saltsaltsaltsalt" {:t 1 :m 32 :length 32})
                   (kdf/argon2id "pw" "saltsaltsaltsalt"
                                 {:t 1 :m 32 :length 32 :secret "pepper"}))
-            "and a pepper changes the answer — which is its whole job"))
+            "and a pepper changes the answer — which is its whole job")
+
+    # A salt is random bytes, and about one random salt in sixteen
+    # contains a zero. An OSSL_PARAM carries a pointer and a length, so
+    # zeroes are none of its business — but a parameter written as a C
+    # string ends at the first one, and this used to fail for one
+    # password in sixteen and no other reason (see kdf/ossl-params).
+    (each [name salt]
+      [["a zero inside" "salt\0with\0zeroes"]
+       ["a leading zero" "\0saltsaltsaltsal"]
+       ["a trailing zero" "saltsaltsaltsal\0"]]
+      (def out (kdf/argon2id "pw" salt {:t 1 :m 32 :length 32}))
+      (assert (= 32 (length out)) (string "a salt with " name " derives a key"))
+      (assert (not= out (kdf/argon2id "pw" (string/replace-all "\0" "x" salt)
+                                      {:t 1 :m 32 :length 32}))
+              (string "and the zeroes are part of it: " name " is not truncated"))))
   (do
     (def [ok err] (protect (kdf/argon2id "pw" "saltsaltsaltsalt")))
     (assert (not ok) "without OpenSSL 3.2 argon2id is an error, never a silent fallback")

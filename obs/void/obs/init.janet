@@ -491,6 +491,17 @@
                 :dropped (log/dropped)}
           :instrumented (map |($ :name) installed)}))
 
+(plugin/contribute! :void.core/store
+  {:name :void.obs/metrics
+   :what "the metric registry"
+   :needs [:obs/registry]
+   :doc "Counters and histograms are per process by construction — aggregation belongs to whatever scrapes them"
+   :ask (fn ask-metrics [boot]
+          (when (get-in boot [:system :instances :obs/registry])
+            {:store :process
+             :shared? :by-design
+             :why "each replica exposes its own series and Prometheus (or the OTLP collector) sums them; a registry shared between processes would double-count"}))})
+
 # -- CLI -----------------------------------------------------------------
 
 (defn- fmt-ms [x]

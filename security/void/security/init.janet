@@ -199,31 +199,51 @@
   (def [ok inst] (protect (system/instance (boot :system) :void/cache-store)))
   (when ok inst))
 
+(defn- resolve-limiter-store
+  "The store [:security :rate :store] names, resolved against a
+  running system. Called at :after-start for the wrappers, and again
+  by the deployment survey — `void deploy check` starts the components
+  a store declaration needs without running the start hooks."
+  [boot cfg]
+  (case (get cfg :store :memory)
+    :cache (or (cache-store boot)
+               (error (string "[:security :rate :store] is :cache, but this "
+                              "composition has no :void/cache-store — add "
+                              ":void/cache (and :void/cache-redis for a counter "
+                              "several replicas share)")))
+    :memory (limit/memory-store)
+    (errorf "[:security :rate :store] must be :memory or :cache, got %q"
+            (get cfg :store))))
+
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
    :phase 200
    :name :security/limiter-store
    :doc "Resolve the rate limiter's store once the components are up"
+   # nothing here looks at [:http :workers] any more: "the effective
+   # limit is the configured one times the number of counters" is true
+   # of a second machine exactly as it is of a second worker, and the
+   # deployment shape asks that once, for everybody, through the
+   # :void.core/store declaration below (ADR-0030)
    :fn (fn limiter [boot]
          (def cfg (settings :rate))
          (when (get cfg :enabled)
-           (set limiter-store
-                (case (get cfg :store :memory)
-                  :cache (or (cache-store boot)
-                             (error (string "[:security :rate :store] is :cache, but this "
-                                            "composition has no :void/cache-store — add "
-                                            ":void/cache (and :void/cache-redis for a counter "
-                                            "shared across workers)")))
-                  :memory (limit/memory-store)
-                  (errorf "[:security :rate :store] must be :memory or :cache, got %q"
-                          (get cfg :store))))
-           (def workers (get-in boot [:config :values :http :workers] 1))
-           (when (and (> workers 1) (= :memory (get cfg :store :memory)))
-             (log/warn (string "the rate limiter counts in memory and this process forks "
-                               "into workers — the effective limit is the configured one "
-                               "times the number of workers. [:security :rate :store] :cache "
-                               "with void/cache-redis makes it one counter")
-                       :ns log-ns :workers workers :limit (get cfg :limit)))))})
+           (set limiter-store (resolve-limiter-store boot cfg))))})
+
+(plugin/contribute! :void.core/store
+  {:name :void.security/rate
+   :what "the rate limiter's counters"
+   :doc "Where the rate limiter counts — one counter for the deployment, or one per process"
+   :ask (fn ask-limiter [boot]
+          (def cfg (settings :rate))
+          (when (get cfg :enabled)
+            (def st (or limiter-store (resolve-limiter-store boot cfg)))
+            {:store (get st :name :anonymous)
+             :shared? (truthy? (get st :shared?))
+             # the arithmetic, not the mechanism: an operator reading
+             # this has to be told that the number in their config is
+             # not the number they get
+             :replacement "set [:security :rate :store] :cache and compose void/cache-redis — with a counter per process the effective limit is the configured one times the number of replicas"}))})
 
 # -- route metadata ------------------------------------------------------
 
