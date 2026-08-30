@@ -45,8 +45,9 @@
   *decision*, every decision goes through the hook the audit module
   subscribes to, and a nav item that asked would put a refusal on the
   audit trail for every page view by every visitor. Drawing a link is
-  not an authorization decision — the route is where that is made
-  (modules/admin/admin.controller.janet), and it is made once.``
+  not an authorization decision — the route is where that is made, and
+  every route void/admin projects carries the gate that makes it
+  (`[:admin :access] :staff`, config/default.janet).``
   []
   (authz/has-role? (authz/make-context) :staff))
 
@@ -82,7 +83,7 @@
        [:nav
         [:a {:href "/"} "Catalog"]
         (when (auth/current-user) [:a {:href "/orders"} "Orders"])
-        (when (staff?) [:a {:href "/admin/orders"} "Desk"])
+        (when (staff?) [:a {:href "/admin"} "Desk"])
         (nav-cart (if req (cart-session/item-count req) 0))
         (who-bar)]]]
      [:main content]

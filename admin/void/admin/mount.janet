@@ -166,7 +166,17 @@
 (defn routes
   ``The route source: the whole registry plus the admin's own pages,
   under `[:admin :prefix]`. Called once per route-table build, so a
-  resource added in a REPL and a `http/rebuild!` are enough to see it.``
+  resource added in a REPL and a `http/rebuild!` are enough to see it.
+
+  The group carries `[:admin :route-meta]`, which is how an
+  application says something about *its* admin's routes that this
+  package cannot know. `examples/shop` is the case that asked for it:
+  it serves an OpenAPI document, that document is a projection of the
+  route table, and the back office is not part of the shop's public
+  API — `{:admin {:route-meta {:void.openapi/hidden true}}}` is the
+  whole of saying so. Group metadata, so a key the projection sets
+  itself still wins (CONTRACTS v1 merge rules), and a key nobody
+  declared is a boot error rather than a header nobody reads.``
   []
   (def prefix (ctx/prefix))
   (def resolved (ctx/setting :resolved {}))
@@ -183,4 +193,4 @@
   (log/debug "admin routes projected" :ns "void.admin"
              :resources (length (res/mounted)) :routes (length children))
   (router/routes {}
-    (router/group prefix {} ;children)))
+    (router/group prefix (ctx/setting :route-meta {}) ;children)))

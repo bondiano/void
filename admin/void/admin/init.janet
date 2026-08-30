@@ -78,6 +78,20 @@
                 (put seen (c :name) true)))
   :reduce |(sorted-by |(- (get $ :priority 100)) $))
 
+# The one route-metadata key this package declares. A widget may ask
+# for routes of its own (`:void.admin/widget :routes`) — FK
+# autocompletion is the first user of that seam — and they are marked
+# so that `void routes` shows what a line under the admin prefix
+# actually is: a widget's helper, not an action of a resource. It is
+# declared here because a key nobody declared is a boot error, which is
+# the rule that keeps route metadata a contract rather than a bag
+# (CONTRACTS v1).
+(plugin/contribute! :void.http/route-meta-key
+  {:key :void.admin/widget-route
+   :schema :boolean
+   :doc "This route belongs to a widget (:void.admin/widget :routes), not to an action of a resource"
+   :merge :replace})
+
 (plugin/defextension-point :void.admin/page
   :doc "Arbitrary admin pages: {:name :reports :label \"Reports\" :path \"/reports\" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry"
   :schema {:name :keyword
@@ -140,6 +154,7 @@
    :access [:optional :keyword]
    :per-page [:optional [:int {:min 1 :max 1000}]]
    :select-limit [:optional [:int {:min 0}]]
+   :route-meta [:optional :dictionary]
    :stylesheet [:optional :string]
    :layout [:optional :function]
    :htmx-src [:optional :string]
@@ -219,6 +234,7 @@
          :access (cfg :access)
          :per-page (cfg :per-page)
          :select-limit (cfg :select-limit)
+         :route-meta (get cfg :route-meta {})
          :inline-limit (get-in cfg [:bulk :inline-limit] 500)
          :stylesheet (cfg :stylesheet)
          :layout (cfg :layout)

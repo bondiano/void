@@ -14,6 +14,13 @@
 ###
 ### Command naming: a plain keyword :routes is `void routes`; a
 ### namespaced :openapi/export is `void openapi export`.
+###
+### Four commands are built in rather than contributed, and for one
+### reason each: `new` and `make` run *before* there is a composition
+### to ask (./new, ./make), `repl` has to reach a process this one is
+### not (./repl), and `deploy check` and `plugins lock` read what
+### void/core owns — the deployment shape and the manifests — and
+### void/core is not a plugin (ADR-0030, ADR-0003).
 
 (import void)
 (import void/core/init :as core)
@@ -23,6 +30,8 @@
 (import void/core/deploy :as deploy)
 (import ./new :as new)
 (import ./repl :as repl)
+(import ./make :as make)
+(import ./lock :as lock)
 
 (def default-app-module
   "Module the CLI loads to find the application: `main` — the file
@@ -151,9 +160,13 @@
 
 (def builtin-help
   [["new NAME" "create a project skeleton in ./NAME"]
+   ["make resource NAME" "scaffold entity + routes + views + migration + tests"]
    ["dev" "run the app in the :dev profile (watcher + netrepl by default)"]
    ["repl" "connect to the running app's netrepl (see void repl --help)"]
    ["deploy check" "is this composition fit for [:deploy :shape]?"]
+   ["plugins" "print the composition: plugins, points, contribution chains"]
+   ["plugins lock" "write void.lock — the composition, as a value"]
+   ["plugins check" "does the composition still match void.lock? (CI)"]
    ["version" "print the void/core version"]
    ["help" "this message"]])
 
@@ -202,23 +215,34 @@
 (defn dispatch
   ``Run one CLI invocation (argv without the program name). Returns the
   command's return value; throws on any failure — `main` turns that
-  into exit code 1.``
-  [argv]
+  into exit code 1.
+
+  `app` is the application's boot options when the caller already has
+  them — a single binary does (`app-main` below), because `jpm build`
+  marshalled them into the executable and there is no module left to
+  require. Left out, they are loaded from the project's `main` module
+  as ever.``
+  [argv &opt app-value]
   (def [gopts words] (parse-global argv))
   (def profile (when-let [p (gopts :profile)] (keyword p)))
+  (defn the-app [] (or app-value (load-app (gopts :app))))
   (case (first words)
     nil (print-help nil)
-    "help" (let [[ok boot] (protect (bootstrap-app (load-app (gopts :app)) profile))]
+    "help" (let [[ok boot] (protect (bootstrap-app (the-app) profile))]
              (print-help (when ok (plugin/extension boot :void.core/cli))))
     "version" (printf "void %s" core/version)
     "new" (new/create ;(drop 1 words))
+    # a built-in because it runs *before* there is a composition to
+    # ask: `void make` works in a project whose bootstrap is currently
+    # broken, which is often exactly when a file is being added
+    "make" (make/create ;(drop 1 words))
     # the one long-running built-in: the full run!/signals lifecycle in
     # the :dev profile (--profile still wins) — `void new && void dev`
     "dev" (do
             (unless (empty? (drop 1 words))
               (errorf "void dev takes no arguments (got %q) — profile via --profile"
                       (string/join (drop 1 words) " ")))
-            (void/run! (merge (load-app (gopts :app))
+            (void/run! (merge (the-app)
                               {:profile (or profile :dev)})))
     # a built-in rather than a contribution, because void/core owns
     # [:deploy :shape] and void/core is not a plugin (ADR-0030)
@@ -226,15 +250,23 @@
                (unless (= ["check"] (tuple ;(drop 1 words)))
                  (errorf "unknown command %q — the only one is `void deploy check`"
                          (string/join words " ")))
-               (deploy-check (bootstrap-app (load-app (gopts :app)) profile)))
+               (deploy-check (bootstrap-app (the-app) profile)))
+    # likewise a built-in: the manifests are void/core's, and a lock
+    # file that only some compositions could write would be a lock
+    # file nobody trusts (ADR-0003)
+    "plugins" (let [boot (bootstrap-app (the-app) profile)
+                    r (lock/dispatch boot (tuple ;(drop 1 words)))]
+                # `plugins check` answers false; CI reads exit codes
+                (when (false? r) (flush) (os/exit 1))
+                r)
     "repl" (repl/connect
              (tuple ;(drop 1 words))
              (fn netrepl-config []
                (get-in (plugin/bootstrap
-                         (boot-opts (load-app (gopts :app)) profile) true)
+                         (boot-opts (the-app) profile) true)
                        [:config :values :dev :netrepl] {})))
     (do
-      (def app (load-app (gopts :app)))
+      (def app (the-app))
       (def boot (bootstrap-app app profile))
       (def commands (or (plugin/extension boot :void.core/cli) []))
       (def found (find-command commands words))
@@ -244,12 +276,38 @@
       (def [command args] found)
       (run-command boot command args))))
 
+(defn- fail [err]
+  (eprintf "void: %s" (if (string? err) err (describe err)))
+  (os/exit 1))
+
 (defn main
   "Binscript entrypoint: `args` as janet passes them (program name
   first). Errors print to stderr and exit 1."
   [& args]
   (add-project-paths! (os/cwd))
   (def [ok err] (protect (dispatch (tuple ;(drop 1 args)))))
-  (unless ok
-    (eprintf "void: %s" (if (string? err) err (describe err)))
-    (os/exit 1)))
+  (unless ok (fail err)))
+
+(defn app-main
+  ``Entrypoint for an application that carries its own CLI — what the
+  `main` of a single binary calls (docs/DEPLOY.md).
+
+  With no arguments it runs the application, exactly as `void/run!`
+  would. With arguments it *is* the `void` binary — `db migrate`,
+  `routes`, `plugins check`, `jobs work` — against the composition
+  that is in this executable and no other. `jpm build` marshals the
+  application into the file, so there is no `main.janet` on the target
+  for `load-app` to require; the value it would have produced is the
+  one being passed in, which is the whole difference.
+
+  `new` and `make` are still reachable and still work: they write
+  files and never needed a composition. `repl` connects outward.``
+  [app & args]
+  (def argv (tuple ;args))
+  (if (empty? argv)
+    (void/run! app)
+    (do
+      (add-project-paths! (os/cwd))
+      (def [ok result] (protect (dispatch argv app)))
+      (unless ok (fail result))
+      result)))

@@ -39,9 +39,49 @@
 
 (defn forget-listing!
   ``Drop the cached listing. Called by whoever moved stock behind the
-  storefront's back — the restock in orders/service, and nothing else.``
+  storefront's back: the restock in orders/service, and `archive!`
+  below.``
   []
   (cache/forget listing-key))
+
+(defn archive!
+  ``Take a product off the storefront, and say whether it happened.
+
+  Two things have to travel together and neither is SQL, which is why
+  this is a service and not a repository call: the status changes, and
+  the cached listing has to be dropped — a page served out of the cache
+  is a page that keeps selling what the desk has just withdrawn.
+
+  In production that cache is redis (config/prod.janet), which matters
+  here more than anywhere else: this runs in a **worker** when the desk
+  archives a selection through `void/admin-jobs`, and a per-process
+  cache forgotten in the worker is a listing still cached in the web
+  tier (ADR-0030).``
+  [product]
+  (when (= "active" (product :status))
+    (repo/archive! (product :id))
+    (forget-listing!)
+    true))
+
+(def low-stock-threshold
+  ``What "running out" means when nobody says. A number, in one place,
+  because it is a decision and not a query — which is why `void shop
+  stock` takes an argument and defaults to this rather than carrying a
+  literal of its own.``
+  5)
+
+(defn low-stock
+  "The products on sale at or below `threshold` units — what `void shop
+  stock` prints and, because that command is read-only, what an agent
+  gets when it asks the same question."
+  [&opt threshold]
+  (repo/below-stock (or threshold low-stock-threshold)))
+
+(defn out-of-stock-count
+  "How many products are on sale with nothing left to sell — the number
+  on the desk's front page."
+  []
+  (repo/count-out-of-stock))
 
 (defn by-id
   "One product, whatever its status — the row behind a product page."

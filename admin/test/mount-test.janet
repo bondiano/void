@@ -155,4 +155,46 @@
         "a policy the application defined is not replaced by the generated one")
 (test/stop! b3)
 
+# -- what the application says about its own admin's routes --------------
+#
+# `[:admin :route-meta]` rides on the group, so it reaches every
+# projected route and a key the projection sets itself still wins. The
+# case it exists for is an application that publishes an OpenAPI
+# document: that document is a projection of the route table, and a
+# back office is not part of a public API — `{:void.openapi/hidden
+# true}` there is the whole of saying so (examples/shop).
+(def b4 (boot {:admin {:access :staff :route-meta {:void.http/timeout 5}}}))
+(def table4 (http/routes-table))
+(each name [:admin/dashboard :admin.notes/index :admin.notes/destroy]
+  (assert (= 5 (get-in table4 [:by-name name :meta :void.http/timeout]))
+          (string name " must carry [:admin :route-meta]")))
+(assert (deep= [:void.admin/access :admin.notes/destroy]
+               (tuple ;(get-in table4 [:by-name :admin.notes/destroy
+                                       :meta :void.authz/policy])))
+        "and it adds to the metadata rather than replacing what the projection set")
+(test/stop! b4)
+
+# -- the routes a widget asks for ----------------------------------------
+#
+# A belongs-to whose target declares a `:search` is drawn by the link
+# widget as an autocomplete, and an autocomplete needs a route to
+# complete against (ADR-0029 §4). It is mounted under the resource's
+# own `-/w/` namespace with the same gate — and it carries the one
+# metadata key this package declares, which is what makes it
+# distinguishable in `void routes` from an action of a resource.
+(admin/defresource-admin note-tags Tag
+  :list [:id :note-id :label]
+  :form [:note-id :label])
+
+(def b5 (boot {:admin {:access :staff}}))
+(def wroute (get-in (http/routes-table) [:by-name :admin.note-tags/w-note-id-1]))
+(assert wroute "the link widget's completion route must be on the table")
+(assert (= "/admin/note-tags/-/w/note-id/complete" (wroute :pattern))
+        (string "widget route pattern: " (wroute :pattern)))
+(assert (true? (get-in wroute [:meta :void.admin/widget-route]))
+        "and it must be marked as a widget's route, with a key void/admin declared")
+(assert (index-of :void.admin/access (get-in wroute [:meta :void.authz/policy]))
+        "the gate is on it like on everything else under the prefix")
+(test/stop! b5)
+
 (print "admin mount-test ok")

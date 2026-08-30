@@ -38,6 +38,12 @@
   []
   (db/count model/Order {:where [:= :status "placed"]}))
 
+(defn count-by-status
+  "How many orders are in one state — what the desk's front page
+  counts, one tile per number."
+  [status]
+  (db/count model/Order {:where [:= :status status]}))
+
 (defn create!
   "Write the order itself."
   [{:number number :customer-id customer-id :email email

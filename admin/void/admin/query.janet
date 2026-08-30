@@ -43,8 +43,15 @@
     :int (let [n (scan-number s)] (when (and n (= n (math/trunc n))) (math/trunc n)))
     :number (scan-number s)
     :boolean (cond (= s "true") true (= s "false") false nil)
-    :enum (let [k (keyword s)]
-            (when (index-of k (get-in field [:node :props :values] [])) k))
+    # an enum's members are whatever the schema was written with —
+    # `[:enum :draft :live]` holds keywords, `[:enum "active"
+    # "archived"]` holds strings, and both are ordinary declarations
+    # (examples/blog and examples/shop are one of each). A query string
+    # carries neither: it carries "active", so the match is on how the
+    # member is *spelled* and the value handed back is the member
+    # itself, which is what the column holds
+    :enum (first (filter |(= s (string $))
+                         (get-in field [:node :props :values] [])))
     :uuid s
     s))
 

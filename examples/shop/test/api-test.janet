@@ -223,11 +223,15 @@
           "including the ones those schemas reference")
   # the document is a projection of the whole route table, so the
   # storefront's HTML routes are in it too, described as far as their
-  # metadata allows — and the admin desk is not, because its group
-  # carries :void.openapi/hidden
+  # metadata allows — and the back office is not. Twenty-four admin
+  # routes are kept out of the shop's public API by one config key
+  # ([:admin :route-meta], config/default.janet), because void/admin
+  # projects routes this application never wrote and route metadata can
+  # only be set by whoever declares a route
   (assert (get-in spec [:paths (keyword "/cart")]))
-  (assert (nil? (get-in spec [:paths (keyword "/admin/orders")]))
-          ":void.openapi/hidden on the group takes the desk out of the document")
+  (each path (keys (spec :paths))
+    (assert (not (string/has-prefix? "/admin" (string path)))
+            (string "the desk must not be in the document: " path)))
   (print "  api: openapi ok"))
 
 (log/set-sinks! nil)

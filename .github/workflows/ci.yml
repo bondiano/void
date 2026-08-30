@@ -178,6 +178,62 @@ jobs:
           cp -r "$HOME/void-tree/lib" jpm_tree/lib
           void routes | grep -q ':entries/create'
 
+      - name: void make resource, and the suite it generates
+        # the four generated files are four projections of one
+        # declaration (ROADMAP 4.5); the generated suite is what asserts
+        # they still agree, and it needs no database to do it
+        run: |
+          cd "$(mktemp -d)"
+          void new scaffold
+          cd scaffold
+          void make resource Product name:string price:int notes:text? < /dev/null
+          test -f resources/products.janet
+          test -f test/products-test.janet
+          ls db/migrations/*_create_products.janet
+          janet test/products-test.janet | grep -q 'products-test ok'
+
+      - name: void plugins lock, and the drift it catches
+        run: |
+          cd "$(mktemp -d)"
+          void new locked
+          cd locked
+          void plugins lock
+          grep -q ':lock-version 1' void.lock
+          void plugins check
+          # a plugin added to the composition is a failed check, and the
+          # report names the point whose chain moved
+          sed -i 's/:void\/dev :locked\/app/:void\/dev :void\/pressure :locked\/app/' main.janet
+          sed -i 's|(import void/dev)|(import void/dev)\n(import void/pressure)|' main.janet
+          if void plugins check > /tmp/check.txt 2>&1; then
+            echo "expected a drifted composition to fail the check"; cat /tmp/check.txt; exit 1
+          fi
+          grep -q ':void/pressure is new' /tmp/check.txt
+
+      - name: jpm build, and the single binary that comes out
+        # SPEC §9 and docs/DEPLOY.md: no janet, no jpm, no module tree on
+        # the target, and the binary is also the CLI (cli/app-main)
+        run: |
+          cd "$(mktemp -d)"
+          void new shipped
+          cd shipped
+          mkdir -p jpm_tree
+          cp -r "$HOME/void-tree/lib" jpm_tree/lib
+          jpm --local build
+          ls -l build/shipped
+          # run it from a directory with nothing else in it
+          BIN="$(pwd)/build/shipped"
+          cd "$(mktemp -d)"
+          VOID_PROFILE=prod "$BIN" routes | grep -q ':entries/create'
+          VOID_PROFILE=prod "$BIN" deploy check
+          VOID_PROFILE=prod VOID_HTTP__PORT=8123 "$BIN" &
+          server=$!
+          for _ in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8123/ > /tmp/page.html; then break; fi
+            sleep 0.25
+          done
+          kill "$server"
+          grep -q 'shipped guestbook' /tmp/page.html
+
   # void/crypto is ffi to a library the machine provides, so what it can
   # do is a property of the machine (ADR-0022): the argon2id KDF needs
   # OpenSSL 3.2, and the candidate list is platform-specific because on
