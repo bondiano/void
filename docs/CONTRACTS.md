@@ -10,8 +10,8 @@
 > void/crypto void/auth void/auth-http void/auth-db void/auth-oauth
 > void/authz void/authz-http void/security void/mail void/mail-jobs
 > void/mail-auth void/bus void/bus-db void/bus-jobs void/ws
-> void/ws-htmx void/mcp void/mcp-http void/mcp-obs void/admin
-> void/admin-jobs void/admin-mcp void/dev void/bench)
+> void/ws-htmx void/proto void/mcp void/mcp-http void/mcp-obs
+> void/admin void/admin-jobs void/admin-mcp void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -414,6 +414,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
+### `:void.proto/file`
+
+- **owner:** `:void/proto` · **cardinality:** `:many`
+- `.proto` files a plugin ships: {:name :orders/api :path "protos/orders.proto" :paths ["vendor/protos"]?}. Loaded and registered at :before-start, before any route table is built, so void/grpc can project a service declared in a file the application never imported. A plugin that would rather have its descriptors baked into its module uses `proto/defproto` and contributes nothing
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :name :keyword :path :string :paths [:optional [:vector :string]]}
   ```
 
 ### `:void.redis/codec`

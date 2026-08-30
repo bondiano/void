@@ -220,6 +220,15 @@
    {:dir "ws" :deps [:void/core :void/http :void/html :void/htmx]
     :test-deps [:void/dev] :jpm [:spork]}
 
+   :void/proto
+   # protobuf, and no transport (ADR-0013): the codec, the `.proto`
+   # parser and the JSON mapping are pure Janet over void/core's schema
+   # layer, which is the one edge — void/proto/schema registers two
+   # custom types and the :proto projection SPEC §3.3 reserved for it.
+   # void/grpc is where a socket appears. The suite reaches void/dev for
+   # nothing at all and says so by not listing it.
+   {:dir "proto" :deps [:void/core] :jpm [:spork]}
+
    :void/mcp
    # The application as an MCP server (ADR-0031). void/openapi is a
    # *module* edge and not a plugin one: ./registry projects a
