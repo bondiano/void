@@ -3,3 +3,10 @@ db/*.sqlite3
 db/*.sqlite3-*
 # the :file mail transport, in dev
 tmp/
+
+# `void plugins lock` writes this, and a deployment commits it (see the
+# README): the composition of *this* example is a function of two
+# environment variables, so a lock taken on a laptop describes a
+# different process from the one the compose file runs — which is why
+# the repository carries none and the deployment takes its own.
+void.lock

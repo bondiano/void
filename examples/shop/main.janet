@@ -1,15 +1,16 @@
 ### shop — entrypoint. Run with `void dev` (or `janet main.janet`);
 ### the void CLI (void routes, void db migrate, void jobs work, void
-### shop seed, void mcp serve, ...) reads the app binding below.
+### admin resources, void deploy check, void shop seed, void mcp
+### serve, ...) reads the app binding below — and so does this file's
+### own `main`, which *is* that CLI when it is given arguments.
 ###
-### The composition is the whole point of this example. Thirty-two
-### void plugins plus this application's own (thirty-five with redis),
-### and
-### the application code that knows about any of them is the route
-### metadata in each module's controller: the transactions, the
-### identity, the policies, the CSRF token, the rate limits, the
-### caching, the metrics, the tracing and the load shedding are all
-### *composed* here rather than called there.
+### The composition is the whole point of this example. Thirty-five
+### void plugins plus this application's own (thirty-eight with
+### redis), and the application code that knows about any of them is
+### the route metadata in each module's controller: the transactions,
+### the identity, the policies, the CSRF token, the rate limits, the
+### caching, the metrics, the tracing, the load shedding and the whole
+### back office are all *composed* here rather than called there.
 ###
 ### Two things are chosen by environment, and both are one line:
 ###
@@ -20,7 +21,12 @@
 ### in ./docker-compose.yml — which is the claim this example makes,
 ### and the reason test/shop-test.janet runs the same suite on both
 ### engines.
-(import void)
+# void/cli rather than void: the entrypoint below hands its boot
+# options to `cli/app-main`, which runs them when there are no
+# arguments and dispatches the CLI when there are — so this file never
+# calls `void/run!` itself (examples/guestbook is the same shape, and
+# examples/blog is the plain one)
+(import void/cli)
 (import void/http)
 (import void/html)
 (import void/htmx)
@@ -51,6 +57,9 @@
 (import void/bus/jobs)
 (import void/mcp)
 (import void/mcp/obs)
+(import void/admin)
+(import void/admin/jobs)
+(import void/admin/mcp)
 (import void/dev)
 (import ./src/app)
 
@@ -131,31 +140,83 @@
    # tool endpoint by default
    :void/mcp :void/mcp-obs
 
+   # the back office, which is not a module of this application: every
+   # `src/modules/*/*.admin.janet` is declarations over the entities
+   # that module already had, and these three plugins are the three
+   # readers of them — void/admin mounts every action as an ordinary
+   # named route, void/admin-jobs runs the bulk that is too big for a
+   # request (and is refused at start if the queue is per-process),
+   # and void/admin-mcp projects the *same* declarations into tools,
+   # so the desk and the agent cannot drift apart (ADR-0029,
+   # ADR-0031). The gate is `[:admin :access] :staff` in
+   # config/default.janet — one line, naming the policy the shop
+   # already had
+   :void/admin :void/admin-jobs :void/admin-mcp
+
    ;(if (get opts :redis) (redis-plugins) [])
 
+   # void/dev stays in the :prod composition of *this* application, and
+   # that is a decision rather than an oversight. The compose file
+   # deploys from source, where the netrepl costs a unix socket inside
+   # the container and buys `docker compose exec web void repl` — a
+   # REPL in the running web process, which is a thing void is for
+   # (SPEC §4); the watcher half is off in config/prod.janet, because
+   # nothing in a container changes on disk. A **single binary** is the
+   # case where it has to go: void/dev builds that repl's environment
+   # with `require`, and a marshalled image has no module tree to
+   # require from — so a `jpm build` of this application drops it from
+   # the list, which is one line and what examples/guestbook shows
+   # (docs/DEPLOY.md rule 2)
    :void/dev
    :shop/app])
 
-(def database
+(defn database
   ``Which database this process boots on: :sqlite (the default — a
   file, nothing to install) or :postgres. `VOID_SHOP_DB=postgres void
   dev` is the whole of the change; the connection itself is
   config/<profile>.janet, or libpq's own PG* environment.``
+  []
   (keyword (or (os/getenv "VOID_SHOP_DB") "sqlite")))
 
-(def redis?
+(defn redis?
   ``Whether this process keeps its sessions and its cache in redis.
   Off on a laptop (one process, nothing to install), on in the compose
   file, where the web tier is more than one process and an in-memory
   session store would be a login that works every other request
   (ADR-0010).``
+  []
   (truthy? (let [v (os/getenv "VOID_SHOP_REDIS")]
              (and v (not (index-of v ["" "0" "false" "no"]))))))
 
+(defn profile
+  "The profile this process runs under."
+  []
+  (keyword (or (os/getenv "VOID_PROFILE") "dev")))
+
 (def app
-  "Boot options — what (void/run! ...) starts and the void CLI reads."
-  {:plugins (plugins database {:redis redis?})
-   :profile (keyword (or (os/getenv "VOID_PROFILE") "dev"))})
+  ``Boot options — what the `void` CLI reads when it loads this module
+  out of a source checkout (`void routes`, `void db migrate`, `void
+  admin resources`).
+
+  `main` builds its own rather than using this one, and the difference
+  is the single binary: `jpm build` marshals every *value* on the
+  machine that built it, so an `os/getenv` in a `def` is the
+  environment of the CI runner frozen into the executable
+  (docs/DEPLOY.md rule 1). Here that is harmless — the CLI loads this
+  file on the machine it runs on — and there it would be a lie.``
+  {:plugins (plugins (database) {:redis (redis?)})
+   :profile (profile)})
 
 (defn main [& args]
-  (void/run! app))
+  # every one of these is read *now*, in the process that is starting,
+  # rather than in a value that a build would have frozen
+  (def prof (profile))
+  # cli/app-main runs the application when it is given no arguments and
+  # *is* the void binary when it is given some — `./shop db migrate`,
+  # `./shop deploy check`, `./shop plugins check`, `./shop jobs work`
+  # against the composition inside this file and no other. A deployment
+  # that cannot run its own migrations is not a deployment
+  # (docs/DEPLOY.md)
+  (cli/app-main {:plugins (plugins (database) {:redis (redis?)})
+                 :profile prof}
+                ;(drop 1 args)))

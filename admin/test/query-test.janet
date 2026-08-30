@@ -66,6 +66,23 @@
 (assert (nil? (get-in ignored [:filters :state]))
         "a value outside the enum is no filter — not an error, and not a guess")
 
+# an enum whose members are strings, which is an ordinary declaration
+# (examples/shop's statuses are text on purpose — the two drivers
+# disagree about what a boolean column reads back as). A query string
+# carries neither keywords nor strings, so the match is on how the
+# member is spelled and what comes back is the member itself
+(db/defentity Ticket
+  {:id [:int {:db/pk true}]
+   :status [:enum "open" "closed"]}
+  :db/table "tickets")
+
+(def tickets (res/resource :tickets Ticket :list [:id :status] :filters [:status]))
+(assert (= "closed" (get-in (q/state tickets (req {"status" "closed"}))
+                            [:filters :status :eq]))
+        "a string enum filters, and the value is the one the column holds")
+(assert (nil? (get-in (q/state tickets (req {"status" "nonsense"})) [:filters :status]))
+        "and a member that does not exist is still no filter")
+
 (def ranged (q/state desc (req {"views-from" "10" "views-to" "20"})))
 (assert (= 10 (get-in ranged [:filters :views :from])))
 (assert (= 20 (get-in ranged [:filters :views :to])))

@@ -50,6 +50,27 @@
   [spec]
   (db/insert! model/Product (merge spec {:status "active"})))
 
+(defn archive!
+  "Take one product off the shelf. The row stays — an order's lines
+  point at it, and a shop that deleted a product would be a shop whose
+  old invoices lost their links."
+  [product-id]
+  (db/update! model/Product product-id {:status "archived"}))
+
+(defn below-stock
+  "Products on sale with `threshold` units or fewer — what `void shop
+  stock` prints, and what an agent asks for through the same command."
+  [threshold]
+  (db/query model/Product {:where [:and [:= :status "active"]
+                                        [:<= :stock threshold]]
+                           :order-by [[:stock :asc] [:sku :asc]]}))
+
+(defn count-out-of-stock
+  "Products on sale with nothing left to sell — the number the desk's
+  front page shows."
+  []
+  (db/count model/Product {:where [:and [:= :status "active"] [:= :stock 0]]}))
+
 (defn reserve-stock!
   ``Take `quantity` off the shelf, or answer false.
 

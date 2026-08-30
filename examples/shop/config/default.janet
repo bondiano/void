@@ -145,6 +145,24 @@
                            :object-src [:none]
                            :img-src [:self "data:"]}}}
 
+ # -- the desk -----------------------------------------------------------
+ #
+ # The admin is shut by default and this key is what opens it: it names
+ # the policy that decides who is an operator, and the shop already had
+ # one — `:staff`, over the `role` column on customers
+ # (modules/customers/customers.policy). No second authentication, no
+ # separate session, no admin user table: a member of staff is a
+ # customer with a role, and this line is the whole of saying so
+ # (ADR-0029 §3).
+ :admin {:access :staff
+         :title "void shop — the desk"
+         # every route void/admin projects carries these. The document
+         # void/openapi builds is a projection of the *route table*,
+         # and the back office is not part of the shop's public API —
+         # so one key here keeps thirty admin routes out of it, and
+         # `test/api-test.janet` checks that it does
+         :route-meta {:void.openapi/hidden true}}
+
  # -- the API document ---------------------------------------------------
  :openapi {:info {:title "void shop"
                   :version "1.0.0"

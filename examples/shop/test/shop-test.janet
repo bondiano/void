@@ -352,9 +352,16 @@
     (note "row-level authorization ok")
 
     # -- the desk --------------------------------------------------------
+    #
+    # Not a line of it was written for this application: the pages are
+    # a projection of the declarations in src/modules/*/*.admin.janet,
+    # and what this suite checks is that the projection is wired into
+    # the same composition as everything above — the same session, the
+    # same policy, the same transaction, the same trail
+    # (test/admin-test.janet takes the desk itself apart).
 
     (assert (= 403 ((test/inject c {:uri "/admin/orders"}) :status))
-            "a customer is not staff")
+            "a customer is not staff, and the gate is a policy the shop already had")
 
     (def desk (test/client (c :boot)))
     (assert (= 302 ((test/inject desk {:uri "/sign-in"
@@ -367,21 +374,27 @@
     (assert (= 200 (desk-page :status)) "and the desk is open to it — one role, one policy")
     (assert (string/find (order :number) (text desk-page)))
 
+    # the one write the desk does, through the action the orders module
+    # declared — which calls the same `ship!` the shop has had since
+    # wave 2, inside the transaction the bulk route declares
     (def shipped
-      (test/inject desk {:uri (string "/admin/orders/" (order :number) "/ship")
+      (test/inject desk {:method :post
+                         :uri "/admin/orders/-/bulk/ship"
                          :headers {"x-csrf-token" (token-of desk)}
-                         :form {}}))
-    (assert (= 200 (shipped :status)) (text shipped))
+                         :form {:ids (string (order :id))}}))
+    (assert (< (shipped :status) 400) (string (shipped :status) " " (text shipped)))
     (assert (= "shipped" ((db/find orders/Order (order :id)) :status)))
     (settle)
     (jobs/drain!)
     (assert (find |(string/find "on its way" (get-in $ [:message :subject] ""))
                   (mail/outbox))
-            "and the dispatch notice went out — again from a consumer, not from the handler")
+            "and the dispatch notice went out — from a consumer, not from a handler, and not from the admin")
 
-    (def trail-page (test/inject desk {:uri "/admin/audit"}))
+    (def trail-page (test/inject desk {:uri "/admin/audit-events"}))
     (assert (string/find "order/placed" (text trail-page))
-            "the desk can read the trail")
+            "the trail is a resource of the desk, read-only")
+    (assert (string/find "admin/ship" (text trail-page))
+            "and the desk's own change is on it, announced rather than written (ADR-0029 §8)")
     (note "admin desk ok")
 
     # -- the queue's own life is on the trail too ------------------------

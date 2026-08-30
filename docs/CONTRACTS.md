@@ -487,6 +487,7 @@ layer.
 
 | Key | Declared by | Merge | Schema | Doc |
 |---|---|---|---|---|
+| `:void.admin/widget-route` | `:void/admin` | `:replace` | `:boolean` | This route belongs to a widget (:void.admin/widget :routes), not to an action of a resource |
 | `:void.auth/access` | `:void/auth-http` | `:restrict` + `:allow?` | `[:enum :public :required]` | Whether this route needs an authenticated identity (SPEC part II §2.5). :restrict — a group that requires authentication cannot be loosened by a route inside it |
 | `:void.auth/scopes` | `:void/auth-oauth` | `:concat` | `[:vector :string]` | OAuth scopes an access token must carry for this route (RFC 6750): a request without them is a 403 with insufficient_scope, not a 401 — the credential was fine, the grant was not |
 | `:void.auth/strategies` | `:void/auth-http` | `:replace` | `[:vector :keyword]` | Which authentication strategies may answer for this route, in order — a login form that must not accept an API token, an API that must not accept a session cookie |

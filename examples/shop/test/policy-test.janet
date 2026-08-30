@@ -16,8 +16,11 @@
 (import void/core/log :as log)
 (import void/authz :as authz)
 # loaded for their effect: a policy is declared by the module it is
-# about, and these two are the whole of this application's
+# about, and these three files are the whole of this application's —
+# including the one that narrows an admin action, which is a policy
+# like any other and is tested like any other (ADR-0029 §3)
 (import ../src/modules/customers/customers.policy)
+(import ../src/modules/customers/customers.admin)
 (import ../src/modules/orders/orders.policy)
 
 # every denial below is deliberate, and a decision is logged
@@ -69,6 +72,24 @@
 (assert (authz/can? :staff {:subject desk}))
 (assert (not (authz/can? :staff {:subject ada})))
 (assert (not (authz/can? :staff {:subject nil})))
+
+# -- :admin.customers/edit and /update -----------------------------------
+#
+# The policy that narrows what the desk may do (customers.admin), and
+# the point of it being here is that it is a policy like any other: the
+# back office contributed no rule of its own and no `if` in a handler,
+# it named a route, and the application answered with a function.
+
+(defn- account [id] {:id id :name "Somebody" :role "staff"})
+
+(each name [:admin.customers/edit :admin.customers/update]
+  (assert (authz/can? name {:subject desk :resource (account 4)})
+          (string name " — another account is the desk's to edit"))
+  (def own (authz/decide name {:subject desk :resource (account 3)}))
+  (assert (not (own :allow))
+          (string name " — the account it is signed in as is not"))
+  (assert (string/find "own account" (own :reason))
+          "and the refusal says which account it meant"))
 
 # -- what a decision looked at -------------------------------------------
 #

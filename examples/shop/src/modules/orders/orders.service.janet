@@ -177,6 +177,17 @@
                       :reason reason
                       :at (values/now)})))
 
+(defn awaiting-shipment
+  "How many paid orders are waiting for the courier — one number on the
+  desk's front page, and the queue the desk works through."
+  []
+  (repo/count-by-status "paid"))
+
+(defn unsettled
+  "How many orders have been placed and not yet paid or cancelled."
+  []
+  (repo/count-placed))
+
 (defn ship!
   ``Mark a paid order shipped, and say whether it happened.
 

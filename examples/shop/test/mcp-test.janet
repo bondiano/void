@@ -38,9 +38,36 @@
 
 (each name ["routes" "db_status" "db_erd" "jobs_stats" "jobs_list"
             "bus_stats" "bus_tail" "cache_stats" "obs_status" "obs_metrics"
-            "authz_policies" "mail_status" "mcp_tools"]
+            "authz_policies" "mail_status" "mcp_tools"
+            # this application's own, and the only thing that put it
+            # here is `:read-only? true` where it is declared
+            # (src/app.janet)
+            "shop_stock"]
   (assert (index-of name tools)
           (string "the shop exposes " name " — a read-only command of the composition")))
+
+# -- and the desk, which nobody described twice --------------------------
+#
+# void/admin-mcp projects the same `defresource-admin` declarations the
+# pages are projected from (src/modules/*/*.admin.janet), so a column
+# added to an entity reaches the list, the form and the tool in one
+# edit. Reading is offered; writing waits to be named.
+
+(each name ["admin-products-list" "admin-products-get"
+            "admin-orders-list" "admin-customers-list"
+            "admin-audit-events-list"
+            # `:mount false` is a declaration without a section, and it
+            # is still a resource here: the lines and the payments of an
+            # order have no page and are readable by whoever asks
+            "admin-order-items-list" "admin-payments-list"]
+  (assert (index-of name tools)
+          (string "the shop exposes " name " — a read-only projection of a declaration")))
+
+(each name ["admin-products-create" "admin-products-update"
+            "admin-products-delete" "admin-products-archive"
+            "admin-orders-ship" "admin-customers-update"]
+  (assert (not (index-of name tools))
+          (string "the shop withholds " name " — it changes something (ADR-0031)")))
 
 # -- what it does not get ------------------------------------------------
 #
@@ -65,6 +92,12 @@
 (each name ["Money" "ProductView" "OrderView"]
   (assert (index-of (string "void://schema/" name) resources)
           (string "the " name " DTO is a resource, because it is a registered schema")))
+
+# the declaration itself is readable, which is how an agent learns what
+# it may filter on, sort by and write without being told twice
+(each name ["products" "orders" "payments"]
+  (assert (index-of (string "void://admin/" name) resources)
+          (string "the admin declaration of " name " is a resource")))
 
 # -- and it is the same list `void mcp tools` prints ---------------------
 
