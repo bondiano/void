@@ -1,0 +1,68 @@
+name: Docs site
+
+# The docs site is a projection of the repository (scripts/gen-site.janet):
+# the Markdown documents rendered as pages, and the config/CLI reference
+# generated straight from the bootstrapped composition. It is rebuilt on
+# every push to main and published to GitHub Pages — nothing under site/
+# is ever committed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+
+      - name: Install Janet
+        run: |
+          git clone --depth 1 --branch v1.41.2 https://github.com/janet-lang/janet /tmp/janet
+          make -C /tmp/janet -j"$(nproc)"
+          sudo make -C /tmp/janet install
+
+      - name: Install jpm
+        run: |
+          git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm
+          cd /tmp/jpm && sudo janet bootstrap.janet
+
+      - name: Install dependencies
+        # the generator bootstraps the full composition (phases 1-5), so
+        # it needs what the dry-run gate needs: the graph's dev-deps and
+        # the built native module
+        run: |
+          for url in $(janet scripts/packages.janet dev-deps); do
+            sudo jpm install "$url"
+          done
+
+      - name: Build void/fdwait
+        run: cd fdwait && jpm build
+
+      - name: Generate the site
+        run: janet scripts/gen-site.janet
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

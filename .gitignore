@@ -15,6 +15,11 @@ jpm_tree/
 *.sqlite3-wal
 *.sqlite3-shm
 
+# the generated docs site (scripts/gen-site.janet); published to
+# GitHub Pages by .github/workflows/site.yml, never committed.
+# Anchored: scripts/site/ is the generator's own source
+/site/
+
 # OMC session state
 .omc/
 

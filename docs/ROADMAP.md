@@ -533,7 +533,7 @@
 | Работа | Когда |
 |---|---|
 | CI: `jpm test` всех пакетов + `plugin/dry-run` + bench-пороги | с волны 0, наращивается |
-| Docs-сайт: генерация из деклараций (metadata-ключи, extension points, схемы) | каркас есть: `scripts/gen-contracts.janet` → [CONTRACTS.md](CONTRACTS.md) (+drift-check в CI); сайт — к v0.4 |
+| Docs-сайт: генерация из деклараций (metadata-ключи, extension points, схемы) | ✅ `scripts/gen-site.janet` → GitHub Pages (`site.yml`): документы (README, SPEC, ROADMAP, CONTRACTS, DEPLOY, BENCH, все ADR) рендерятся из Markdown своим PEG-парсером в hiccup `void/html` (сайт собран тем, что документирует), а config- и CLI-справочники проецируются из bootstrap'нутой композиции (фазы 1–5) — руками не написана ни одна страница; CONTRACTS.md остаётся drift-гейтом, так что контрактная часть сайта — проекция проекции |
 | Sampling-профайлер в void/dev (`debug/stack` по таймеру) + `bench/trace-request` | волна 2 (понадобится для B2/B3) |
 | CONTRIBUTING: performance-правила §8.5, deprecation-процедура контрактов | ✅ сделано к v0.1 ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 | Примеры-приложения (`examples/`) — по одному на волну, они же smoke-тесты | идёт: `demo` (волна 0), `guestbook` (волна 1, в CI) |
