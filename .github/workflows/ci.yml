@@ -9,11 +9,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # void/db-postgres and void/redis are clients of a real server or
-    # they are nothing, and void/cache's and void/jobs's redis backends
-    # are too: their integration suites run when VOID_TEST_PG /
-    # VOID_TEST_REDIS name a server, and skip (loudly) when they do not —
-    # so CI is where they are a gate.
+    # void/db-postgres, void/db-mysql and void/redis are clients of a
+    # real server or they are nothing, and void/cache's and void/jobs's
+    # redis backends are too: their integration suites run when
+    # VOID_TEST_PG / VOID_TEST_MYSQL / VOID_TEST_REDIS name a server, and
+    # skip (loudly) when they do not — so CI is where they are a gate.
     services:
       redis:
         image: redis:7
@@ -39,8 +39,24 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_USER: void
+          MYSQL_PASSWORD: void
+          MYSQL_DATABASE: void_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -uroot -proot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     env:
       VOID_TEST_PG: host=127.0.0.1 port=5432 user=void password=void dbname=void_test
+      VOID_TEST_MYSQL: mysql://void:void@127.0.0.1:3306/void_test
       # database 9, and every suite works under a prefix of its own
       VOID_TEST_REDIS: redis://127.0.0.1:6379/9
 
@@ -67,9 +83,12 @@ jobs:
           for url in $(janet scripts/packages.janet dev-deps); do
             sudo jpm install "$url"
           done
-          # libpq itself is opened at runtime through ffi/, so the
-          # client library is all void/db-postgres needs — no headers
-          sudo apt-get update && sudo apt-get install -y libpq5
+          # libpq and libmysqlclient are both opened at runtime through
+          # ffi/, so the client libraries are all void/db-postgres and
+          # void/db-mysql need — no headers. libmariadb3 is MariaDB
+          # Connector/C: it exports the same mysql_* API, and it is what
+          # a Debian-family image actually has (ADR-0033)
+          sudo apt-get update && sudo apt-get install -y libpq5 libmariadb3
           # void/redis needs no client library at all (a connection is a
           # net/ stream)
 

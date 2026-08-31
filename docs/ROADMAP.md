@@ -518,7 +518,7 @@
 Вне критического пути; порядок по потребности.
 
 - [ ] `void/kafka` *(L)* — ffi librdkafka (callbacks → ev channels), producer/consumer, point `:void.kafka/handlers`; kafka-backend для bus
-- [ ] `void/db-mysql` *(M)* — ffi libmysqlclient, блокирующие вызовы → `ev/thread` pool
+- [x] `void/db-mysql` *(M)* — ffi libmysqlclient, блокирующие вызовы → `ev/thread` pool. Поток на соединение ([ADR-0033](adr/0033-mysql-potok-na-soedinenie-i-tekstovyj-protokol.md)): `MYSQL*` рождается и умирает в своей VM, ev loop говорит с ним через threaded channels, фибра паркуется на `ev/take` — во время `SELECT SLEEP(0.4)` тикер отрабатывает больше двадцати раз, а два таких запроса на двух соединениях занимают 0.4 с, а не 0.8 с (`test/driver-test.janet`). Диалект `:mysql` — в `void/db/builder`, так что миграция объявляет тип, а не написание; `RETURNING` нет, поэтому `:returning false` и `:insert-id`, и entity-слой ходит своей второй дорогой (`test/entity-test.janet`). Prepared statements сознательно нет: `MYSQL_BIND` — структура, хвостом которой MySQL и MariaDB разошлись, а параметры вместо этого рендерятся через `mysql_real_escape_string` самого соединения, со сканером плейсхолдеров и проверкой их числа (`test/types-test.janet`, без сервера). Цена названа вслух: пул размера N — это N OS-потоков.
 - [ ] `void/oauth` *(M)* — OAuth2/OIDC **client** (authorization code + PKCE, обмен кода, хранение refresh): вторая половина, потому что первая — resource server — сделана в 4.3 ([ADR-0032](adr/0032-resource-server-a-ne-oauth-klient.md)) и уже читает метаданные издателя, которые понадобятся клиенту
 - [ ] `void/i18n` *(S)* — словари-данные, locale в dyn, интеграция со schema-ошибками и шаблонами
 - [ ] `void/datastar` *(эксперимент)* — SSE + full-page morph (идиома Biff)

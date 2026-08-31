@@ -109,7 +109,8 @@ is not a detail:
   `found native ...` for each; if a module you expect is not on that
   list, it is not in the file.
 - **`ffi/`-opened libraries** (`libcrypto` for `void/crypto`,
-  `libpq` for `void/db-postgres`) are opened at `:start` from a
+  `libpq` for `void/db-postgres`, `libmysqlclient` for `void/db-mysql`)
+  are opened at `:start` from a
   configured path (ADR-0011, ADR-0022). They are *not* in the binary and
   never will be: the target must have them, exactly as it must for a
   source deploy.
@@ -142,7 +143,9 @@ bundle:
 `jpm build` then prints `found native .../sqlite3.so` and the binary
 carries its own database engine.
 
-Postgres needs none of this: `void/db-postgres` opens `libpq` through
+Postgres and MySQL need none of this: `void/db-postgres` opens `libpq`
+— and `void/db-mysql` opens `libmysqlclient`, inside each of its worker
+threads (ADR-0033) — through
 `ffi/`, so the binary is unchanged and the target provides the library.
 
 ## The binary is also the CLI

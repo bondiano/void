@@ -1,6 +1,6 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
-### void/db-sqlite + void/db-postgres + void/db-http + void/redis +
+### void/db-sqlite + void/db-postgres + void/db-mysql + void/db-http + void/redis +
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
 ### void/crypto + void/auth + void/auth-http + void/auth-db +
 ### void/bus + void/bus-db + void/bus-jobs + void/ws + void/ws-htmx +
@@ -39,6 +39,7 @@
 (require "void/db/init")
 (require "void/db-sqlite/init")
 (require "void/db-postgres/init")
+(require "void/db-mysql/init")
 (require "void/db/http")
 (require "void/redis/init")
 (require "void/redis/http")
@@ -84,7 +85,7 @@
 
 (def report
   (plugin/dry-run {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
-                             :void/db :void/db-sqlite :void/db-postgres :void/db-http
+                             :void/db :void/db-sqlite :void/db-postgres :void/db-mysql :void/db-http
                              :void/redis :void/redis-http
                              :void/cache :void/cache-redis :void/cache-http
                              :void/jobs :void/jobs-db :void/jobs-redis
@@ -100,7 +101,7 @@
                              :void/admin :void/admin-jobs :void/admin-mcp
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
-   # two drivers now provide :void/db-driver, two stores provide
+   # three drivers now provide :void/db-driver, two stores provide
    # :void/cache-store, and three backends provide :void/jobs-backend —
    # exactly the ambiguity the kernel refuses to resolve on its own. The
    # gate says which, the way an application's config would (see

@@ -47,6 +47,14 @@
 (defn- quote-ansi [s]
   (string `"` (string/replace-all `"` `""` s) `"`))
 
+(defn- quote-backtick [s]
+  # MySQL's own quoting. `"` is an identifier quote there only under
+  # the ANSI_QUOTES sql_mode and a string literal otherwise, so a
+  # driver that quoted the ANSI way would compile differently
+  # depending on a server setting; a backtick is one thing in both
+  # modes.
+  (string "`" (string/replace-all "`" "``" s) "`"))
+
 (def- dialect-registry @{})
 
 (def ansi-types
@@ -83,7 +91,10 @@
        {:name name
         :placeholder ph
         :quote (get spec :quote quote-ansi)
-        :types (merge ansi-types (get spec :types {}))})
+        :types (merge ansi-types (get spec :types {}))
+        # the one clause an engine can genuinely not express: see
+        # `limit-str`
+        :offset-needs-limit (get spec :offset-needs-limit)})
   name)
 
 (defn dialect
@@ -112,6 +123,44 @@
    :types {:serial "serial" :bigserial "bigserial"
            :string "text" :jsonb "jsonb"
            :blob "bytea" :bytes "bytea"}})
+
+# MySQL and MariaDB. The type table is where this engine disagrees with
+# everyone else, and each entry below is a disagreement worth naming:
+#
+#   :string    varchar(255), not text — MySQL indexes a TEXT column
+#              only with a prefix length, so `{:unique true}` on a
+#              :string has to compile to something indexable. :text
+#              stays TEXT and is the document you do not index; that
+#              split is what having both names is for.
+#   :varchar   also given a length: a bare `varchar` is a syntax error
+#              here, and picking 255 beats failing at migrate time.
+#   :serial    `int auto_increment`, deliberately NOT MySQL's own
+#              SERIAL — that alias expands to BIGINT UNSIGNED NOT NULL
+#              AUTO_INCREMENT UNIQUE, and the UNIQUE it hides would
+#              collide with the PRIMARY KEY every declaration puts
+#              next to it.
+#   :timestamp datetime, :timestamptz timestamp. Inverted-looking and
+#              correct: MySQL's TIMESTAMP is the one that normalizes
+#              to UTC and converts back per session, which is what
+#              timestamptz means; DATETIME is the wall clock, which is
+#              what timestamp means.
+#   :uuid      char(36). MySQL has no uuid type and MariaDB's is
+#              10.7+, so the portable spelling is the text one.
+#   :bool      MySQL's BOOLEAN is an alias for TINYINT(1) and the
+#              server forgets which word you typed — see
+#              void/db-mysql/types for the reading half of that.
+(register-dialect! :mysql
+  {:placeholder (fn [_] "?")
+   :quote quote-backtick
+   # `OFFSET 10` with no LIMIT is a syntax error, and MySQL's own
+   # documented workaround is a LIMIT of the largest BIGINT UNSIGNED
+   :offset-needs-limit "18446744073709551615"
+   :types {:serial "int auto_increment" :bigserial "bigint auto_increment"
+           :string "varchar(255)" :varchar "varchar(255)"
+           :double "double" :real "float"
+           :timestamp "datetime" :timestamptz "timestamp"
+           :json "json" :jsonb "json"
+           :uuid "char(36)" :bytes "blob"}})
 
 # -- compilation context -------------------------------------------------
 
@@ -284,14 +333,22 @@
 
 (defn- limit-str [ctx stmt]
   (def out @[])
-  (when-let [n (get stmt :limit)]
-    (unless (and (number? n) (= n (math/trunc n)) (>= n 0))
-      (errorf "sql :limit must be a non-negative integer, got %q" n))
-    (array/push out (string "LIMIT " (param! ctx n))))
-  (when-let [n (get stmt :offset)]
-    (unless (and (number? n) (= n (math/trunc n)) (>= n 0))
-      (errorf "sql :offset must be a non-negative integer, got %q" n))
-    (array/push out (string "OFFSET " (param! ctx n))))
+  (defn count! [k]
+    (when-let [n (get stmt k)]
+      (unless (and (number? n) (= n (math/trunc n)) (>= n 0))
+        (errorf "sql %q must be a non-negative integer, got %q" k n))
+      n))
+  (def limit (count! :limit))
+  (def offset (count! :offset))
+  (cond
+    limit (array/push out (string "LIMIT " (param! ctx limit)))
+    # an OFFSET with no LIMIT is a syntax error on MySQL, and the
+    # dialect carries the largest-BIGINT LIMIT its manual prescribes.
+    # A literal, not a parameter: it is the dialect's own SQL, not the
+    # caller's data
+    (and offset (get (ctx :d) :offset-needs-limit))
+    (array/push out (string "LIMIT " ((ctx :d) :offset-needs-limit))))
+  (when offset (array/push out (string "OFFSET " (param! ctx offset))))
   out)
 
 # -- statements ----------------------------------------------------------
@@ -478,7 +535,10 @@
   (when (get opts :primary-key) (array/push parts "PRIMARY KEY"))
   (when (= false (get opts :null)) (array/push parts "NOT NULL"))
   (when (get opts :unique) (array/push parts "UNIQUE"))
-  (when (in opts :default)
+  # `has-key?`, not `(in opts :default)`: the value is what `in` returns
+  # and `{:default false}` is exactly the declaration whose default
+  # would then be dropped — silently, into a nullable column
+  (when (has-key? opts :default)
     (array/push parts (string "DEFAULT " (literal (get opts :default)))))
   (when-let [r (references-str d opts)] (array/push parts r))
   (string/join parts " "))

@@ -255,7 +255,7 @@ Repository API (Data Mapper, всегда доступен, работает с 
 |---|---|---|
 | `void/db-sqlite` | обернуть janet sqlite3 | S |
 | `void/db-postgres` | усыновить/форкнуть libpq bindings; async-режим libpq для ev-совместимости (не блокировать loop!) — важная работа | M |
-| `void/db-mysql` | ffi/ к libmysqlclient; блокирующие вызовы → `ev/thread` pool | M |
+| `void/db-mysql` | ffi/ к libmysqlclient; блокирующие вызовы → поток на соединение, ev loop общается с ним через threaded channels ([ADR-0033](adr/0033-mysql-potok-na-soedinenie-i-tekstovyj-protokol.md)); текстовый протокол, параметры через `mysql_real_escape_string` | M |
 | `void/redis` | RESP2/3 на чистом Janet (PEG), pipelining, pub/sub (fiber), `:provides :void/cache :void/session-store :void/queue-backend` | M |
 | `void/kafka` | ffi/ к librdkafka (callbacks → ev channels), producer/consumer компоненты, consumer = extension point `:void.kafka/handlers` | L |
 
