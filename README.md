@@ -69,6 +69,7 @@ are projections of it.
 | `db-sqlite/` | `void/db-sqlite` — the reference driver: janet-lang/sqlite3 behind the contract, per-connection pragmas, RETURNING when the library has it, and the binding's sharp edges (no URI filenames, so `:memory:` is one connection) turned into boot errors rather than surprises | 2 |
 | `fdwait/` | `void/fdwait` — the monorepo's one native module (~60 lines of C, ADR-0011): park a fiber until a descriptor owned by a C library is readable or writable, without touching it. What `ev/` cannot express, and the reason an FFI database driver needs no thread pool | 2 |
 | `db-postgres/` | `void/db-postgres` — Postgres over libpq's non-blocking API, driven from the ev loop through `void/fdwait`: prepared statements, real isolation levels and savepoints, single-row streaming, pipeline mode, LISTEN/NOTIFY on its own connection, cancellation, and TLS because libpq does it | 2 |
+| `db-mysql/` | `void/db-mysql` — MySQL and MariaDB over libmysqlclient, which is blocking all the way down: there is no non-blocking API to park on, so a connection lives on a **worker thread of its own** and the ev loop talks to it over a channel (ADR-0033) — a query parks the calling fiber and stops nobody else, and the suite says so with a ticker running through a `SELECT SLEEP`. Real isolation levels, savepoints, and insert ids in place of a `RETURNING` MySQL does not have. Prepared statements are deliberately absent: reaching `mysql_stmt_*` means hardcoding the layout of `MYSQL_BIND`, whose tail MySQL and MariaDB have diverged on, and a wrong struct layout is a segfault rather than an error — so parameters are rendered into the statement through the connection's own `mysql_real_escape_string`, behind a placeholder scanner that knows a `?` inside a literal, an identifier or any of MySQL's three comment forms is data. The one struct it does read is checked at connect with a probe, so an unfamiliar client library is a boot error naming itself. The price is named out loud: a pool of N is N OS threads | 5 |
 | `redis/` | `void/redis` — RESP2/RESP3 in pure Janet on the ev loop (no native code, no client library): the wire format as a length-driven scanner plus a PEG, a fiber-aware pool, pipelining, value codecs behind `:void.redis/codec`, Lua scripts, and pub/sub on a connection of its own. `void/redis-http` (same package) contributes the `:redis` session store, which is what lets sessions and a fleet coexist | 2 |
 | `cache/` | `void/cache` — the cache: the `:void/cache-store` contract and the `:void/cache` interface over it, an in-process store with TTLs and an exact LRU, read-through (`remember`) and memoization (`wrap`) with single-flight, and a store failure that degrades to a miss rather than to a 500. `void/cache-redis` (same package) puts it in redis; `void/cache-http` caches responses of routes marked `:void.cache/response` | 2 |
 | `jobs/` | `void/jobs` — background jobs: the `:void/jobs-backend` contract (eight functions over records, exactly one of which has to be atomic) and the `:void/jobs` interface over it, an in-process backend, `defjob` with retries, backoff+jitter, priorities, delays, uniqueness and a dead letter queue, parent-child flows, per-queue rate limiting and concurrency with group keys for fair scheduling, and `defschedule` cron that fires once across a fleet. `void/jobs-db` (same package) keeps the queue in the database, claiming with `FOR UPDATE SKIP LOCKED` where there is one; `void/jobs-redis` keeps it in redis, claiming with a Lua script that promotes, skips capped groups and marks the job running in one round trip | 2 |
@@ -125,9 +126,22 @@ cd db-postgres && jpm test    # config/types run everywhere; the rest
 VOID_TEST_PG="postgres://void:void@127.0.0.1:5432/void_test" jpm test
 ```
 
+`void/db-mysql` asks the same way:
+
+```sh
+cd db-mysql && jpm test       # config/types run everywhere; the rest
+                              # skips without a server
+
+VOID_TEST_MYSQL="mysql://void:void@127.0.0.1:3306/void_test" jpm test
+```
+
 libpq itself is opened at runtime through `ffi/` (`brew install libpq`,
 `apt install libpq5`) — nothing links against it, and a machine without
-it is told so at boot rather than at install time. `janet-lang/sqlite3`
+it is told so at boot rather than at install time. libmysqlclient is
+opened the same way (`brew install mysql-client` or
+`mariadb-connector-c`, `apt install libmysqlclient21` or `libmariadb3`);
+MariaDB Connector/C exports the same API and is a first-class answer
+rather than a fallback. `janet-lang/sqlite3`
 is the same deal for `void/db-sqlite`: the bundle leaves the binding out
 on purpose, and the driver resolves it on first use, so an application
 that never lists `:void/db-sqlite` in its `:plugins` never needs it.

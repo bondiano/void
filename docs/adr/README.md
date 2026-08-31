@@ -40,3 +40,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0030](0030-forma-razvertyvaniya-i-razdelyaemye-hranilisha.md) | Форма развёртывания как ключ конфигурации; ни одного in-memory хранилища за пределами одного процесса | accepted |
 | [0031](0031-mcp-kak-proekciya-i-vorota-po-umolchaniyu.md) | `void/mcp` — проекция того, что композиция уже объявила; read-only как структурное умолчание | accepted |
 | [0032](0032-resource-server-a-ne-oauth-klient.md) | OAuth — сначала resource server, а не клиент; аудитория токена обязательна | accepted |
+| [0033](0033-mysql-potok-na-soedinenie-i-tekstovyj-protokol.md) | MySQL — поток на соединение вместо ev loop; текстовый протокол вместо `mysql_stmt_*` | accepted |

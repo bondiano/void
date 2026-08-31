@@ -109,6 +109,14 @@
    # dependency; void/fdwait is, and it has to be built (ADR-0011).
    {:dir "db-postgres" :deps [:void/core :void/db :void/fdwait]}
 
+   :void/db-mysql
+   # libmysqlclient is opened at runtime through ffi/, so it is not a
+   # jpm dependency — and unlike void/db-postgres there is no native
+   # module either: this driver parks on a channel to a worker thread
+   # rather than on a descriptor, so void/fdwait is not an edge
+   # (ADR-0033).
+   {:dir "db-mysql" :deps [:void/core :void/db]}
+
    :void/redis
    # A connection is a net/ stream — no client library. void/http only
    # for void/redis-http, which contributes the session store.
