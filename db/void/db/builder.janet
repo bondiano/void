@@ -478,7 +478,10 @@
   (when (get opts :primary-key) (array/push parts "PRIMARY KEY"))
   (when (= false (get opts :null)) (array/push parts "NOT NULL"))
   (when (get opts :unique) (array/push parts "UNIQUE"))
-  (when (in opts :default)
+  # `has-key?`, not `(in opts :default)`: the value is what `in` returns
+  # and `{:default false}` is exactly the declaration whose default
+  # would then be dropped — silently, into a nullable column
+  (when (has-key? opts :default)
     (array/push parts (string "DEFAULT " (literal (get opts :default)))))
   (when-let [r (references-str d opts)] (array/push parts r))
   (string/join parts " "))
