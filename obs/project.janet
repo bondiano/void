@@ -1,6 +1,6 @@
 (declare-project
   :name "void-obs"
-  :description "void/obs — observability: a metric registry with a cardinality cap, spans in a dyn with W3C trace context, an event-loop lag histogram, log sampling and file sinks, auto-instrumentation of the data plugins, /metrics /health /ready for void/http, and OTLP/JSON export of spans and metrics to a collector (SPEC §5.13 and §8.4, ROADMAP 3.1 and 4.1)."
+  :description "void/obs — observability: a metric registry with a cardinality cap, spans in a dyn with W3C trace context, an event-loop lag histogram, log sampling and file sinks, auto-instrumentation of the data plugins, /metrics /health /ready for void/http, and OTLP export of spans and metrics to a collector — JSON by default, protobuf via [:obs-otlp :encoding] (SPEC §5.13 and §8.4, ROADMAP 3.1 and 4.1)."
   :version "0.0.1")
 
 # void/obs itself is core-only plus one import: void/pressure's loop-lag

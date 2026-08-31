@@ -84,7 +84,13 @@
                             (* "." (some (range "09"))))))
                   ,scan-number)
                :ws)
-    :int (* (/ (<- (* (? (set "-+")) (some (range "09")))) ,scan-number) :ws)
+    # hex too: a real file writes an enum's bit masks as 0x000000FF
+    # (opentelemetry's SpanFlags does), and scan-number reads the 0x form
+    :int (* (/ (<- (* (? (set "-+"))
+                      (+ (* "0" (set "xX") (some (range "09" "af" "AF")))
+                         (some (range "09")))))
+               ,scan-number)
+            :ws)
     :string-lit (* (/ (+ (* `"` (<- (any (+ (* "\\" 1) (if-not `"` 1)))) `"`)
                          (* "'" (<- (any (+ (* "\\" 1) (if-not "'" 1)))) "'"))
                       ,unescape)

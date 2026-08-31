@@ -8,14 +8,13 @@
 ### scrapes `/metrics` and reads spans out of the log never starts a
 ### fiber of it.
 ###
-### **JSON, not protobuf, and that is a decision rather than a
-### shortcut** (ADR-0027). OTLP/HTTP defines two encodings and the
-### collector accepts both; protobuf needs `void/proto`, which is the
-### item above this one in ROADMAP 4.1 and is a package, not a
-### function. The encoding is one seam here — `[:obs-otlp :encoding]`
-### with one legal value today — so the binary encoder lands as a
-### second projection of the same payload data, and nothing else in
-### this file changes when it does.
+### **JSON by default, protobuf by configuration** (ADR-0027). The
+### exporter shipped on OTLP/JSON before `void/proto` existed, because
+### the collector accepts that encoding out of the box — and the seam
+### it left, `[:obs-otlp :encoding]`, now has its second legal value.
+### The promise held: the binary encoder is a second projection of the
+### same payload data (./otlp-proto, loaded only when configured), and
+### `encode` is the one function in this file that knows there are two.
 ###
 ### **The exporter is a contribution, not a change to the tracer.**
 ### `:void.obs/exporter` has existed since wave 3 for exactly this,
@@ -90,9 +89,48 @@
   it."
   {"name" "void/obs" "version" "0.0.1"})
 
-(def content-type
-  "What an OTLP/JSON request says it is."
-  "application/json")
+(def content-types
+  "What an OTLP/HTTP request says it is, by encoding."
+  {:json "application/json"
+   :protobuf "application/x-protobuf"})
+
+# -- the protobuf encoder, loaded when asked -----------------------------
+#
+# ./otlp-proto parses the vendored OTLP .proto files when it loads, so
+# it is required on first use rather than imported: an application on
+# the JSON default never pays for descriptors it will not encode with.
+
+(var- proto-module
+  # the void/obs/otlp-proto module environment, once something asked
+  # for :protobuf
+  nil)
+
+(defn use-module!
+  ``Hand the exporter the `void/obs/otlp-proto` module instead of
+  letting it `require` one. There is exactly one caller: a single
+  binary (docs/DEPLOY.md) composing `[:obs-otlp :encoding] :protobuf`,
+  which has the module marshaled into the executable and no tree to
+  require it from — the same seam, for the same reason, as
+  db-sqlite's `use-module!`.``
+  [m]
+  (set proto-module m))
+
+(defn- proto-encoder
+  "The encode-payload function of ./otlp-proto, requiring the module
+  on first use. Called from start! too, so a composition that chose
+  :protobuf fails at boot rather than at the first flush."
+  []
+  (unless proto-module
+    (def [ok env] (protect (require "void/obs/otlp-proto")))
+    (unless ok
+      (errorf (string "obs otlp: [:obs-otlp :encoding] :protobuf needs the "
+                      "void/obs/otlp-proto module and requiring it failed: %s\n"
+                      "In a single binary, require it at the top level of main and hand "
+                      "it over with (otlp/use-module! ...) — docs/DEPLOY.md.")
+              (if (string? env) env (describe env))))
+    (set proto-module env))
+  (or (get-in proto-module ['encode-payload :value])
+      (errorf "obs otlp: the module handed to use-module! has no encode-payload — it should be void/obs/otlp-proto")))
 
 # -- timestamps ----------------------------------------------------------
 
@@ -278,12 +316,14 @@
                                         (map |(metric->otlp $ start-ns now-ns) snapshot))}]}]})
 
 (defn encode
-  "A request payload as bytes. The one place the encoding is chosen —
-  see the module docstring on why there is only one of them today."
+  "A request payload as bytes — the one place the encoding is chosen.
+  Both branches read the same payload data: protobuf is a second
+  projection of it (./otlp-proto), not a second payload builder."
   [payload &opt encoding]
   (case (or encoding :json)
     :json (json/encode payload)
-    (errorf "obs otlp: unknown encoding %q (only :json until void/proto)" encoding)))
+    :protobuf ((proto-encoder) payload)
+    (errorf "obs otlp: unknown encoding %q (:json or :protobuf)" encoding)))
 
 (defn data-points
   "How many data points a metrics payload carries — what the exporter
@@ -342,7 +382,7 @@
   "Schema of the [:obs-otlp] config slice."
   {:enabled [:optional :boolean]
    :endpoint [:optional :string]
-   :encoding [:optional [:enum :json]]
+   :encoding [:optional [:enum :json :protobuf]]
    :headers [:optional [:map-of :string :string]]
    :timeout [:optional [:number {:min 0.001}]]
    :retries [:optional [:int {:min 0}]]
@@ -489,7 +529,8 @@
     (def [ok res]
       (protect (client/send! (state :client)
                              {:method :post :target path
-                              :headers {"content-type" content-type}
+                              :headers {"content-type"
+                                        (get content-types (get cfg :encoding :json))}
                               :body bytes})))
     (metrics/observe! export-duration [signal] (- (os/clock :monotonic) started))
     (def status (when ok (res :status)))
@@ -663,6 +704,9 @@
   [cfg0 &opt app-name]
   (def cfg (slice cfg0))
   (check-endpoint! cfg)
+  # a :protobuf composition loads its encoder here: a module that
+  # cannot be required should fail the boot, not the first flush
+  (when (= :protobuf (cfg :encoding)) (proto-encoder))
   (def traces (cfg :traces))
   (def mcfg (cfg :metrics))
   (put state :cfg cfg)
@@ -786,7 +830,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/obs-otlp
-  :doc "OTLP/HTTP export of what void/obs holds: finished sampled spans through a bounded batching queue and the metric registry on its own period, JSON-encoded, to a collector next to the process."
+  :doc "OTLP/HTTP export of what void/obs holds: finished sampled spans through a bounded batching queue and the metric registry on its own period, JSON by default or protobuf via [:obs-otlp :encoding], to a collector next to the process."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/obs ">=0.0.1"}
   :config-key :obs-otlp
