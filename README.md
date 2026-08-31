@@ -8,9 +8,9 @@ A batteries-included web framework for [Janet](https://janet-lang.org/): Laravel
 
 ## Status
 
-**v0.1 — the wave-1 vertical slice.** You can build server-rendered HTMX applications: `void new myapp && cd myapp && void dev` gives you a schema-validated form app with hot reload (live handler redefinition *and* automatic route-table rebuilds) and a netrepl into the running process. The Plugin API and Route Metadata contracts are **frozen** — the registry is [docs/CONTRACTS.md](docs/CONTRACTS.md) (generated from the declarations, drift-checked in CI), the deprecation procedure is in [CONTRIBUTING.md](CONTRIBUTING.md).
+**v0.4 — waves 0–4 closed; the public-announcement candidate.** The wave-1 vertical (`void new myapp && cd myapp && void dev` — a schema-validated HTMX app with hot reload, live handler redefinition, automatic route-table rebuilds and a netrepl into the running process) has since grown a data layer (v0.2: db / sqlite / postgres / redis / cache / jobs / load shedding), an enterprise layer (v0.3: observability / auth / authz / security / mail / a message bus with a transactional outbox), and wave 4 — the protocols and the killer features: protobuf as data and Connect-RPC where a method is a route, WebSocket as a route, the application as an MCP server, the back office as a projection of the schema layer, `[:deploy :shape]` (a composition that says `:fleet` refuses to boot on any in-process store), and a single-binary deploy that is also the CLI. The Plugin API and Route Metadata contracts have been **frozen** since v0.1 — the registry is [docs/CONTRACTS.md](docs/CONTRACTS.md) (generated from the declarations, drift-checked in CI), the deprecation procedure is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The full specification lives in [docs/SPEC.md](docs/SPEC.md), the wave plan in [docs/ROADMAP.md](docs/ROADMAP.md), performance budgets and the recorded baseline in [docs/BENCH-v0.1.md](docs/BENCH-v0.1.md). The async-libpq feasibility risk has been retired by a working prototype (SPEC, Appendix A).
+The full specification lives in [docs/SPEC.md](docs/SPEC.md), the wave plan and per-wave status in [docs/ROADMAP.md](docs/ROADMAP.md), performance budgets and the recorded baseline in [docs/BENCH-v0.1.md](docs/BENCH-v0.1.md), the deploy story in [docs/DEPLOY.md](docs/DEPLOY.md). One tail is open and named out loud: the absolute budgets of B2/B3 and the default pressure thresholds still await calibration on a reference environment — the relative 5% regression gates run in CI regardless.
 
 ## Quick start
 
@@ -39,9 +39,11 @@ The generated app — the same one as [`examples/guestbook`](examples/guestbook)
 
 ## Where void fits
 
-Single binary < 5 MB, RSS < 50 MB, a live REPL into the production process, and batteries included (db / jobs / auth / observability / MCP). The sweet spot: server-rendered HTMX applications of small-to-medium complexity where cost of deployment and ownership matters more than peak throughput — internal tools and admin panels, solo/indie SaaS on a VPS, webhook and bot hubs, embedded web UIs.
+The combination is the niche: a single binary < 5 MB, RSS < 50 MB, a live REPL into the production process, and batteries included (db / jobs / auth / observability / admin / MCP). Spring is a gigabyte of JVM; Rails and Laravel are an interpreter plus a dependency tree; Go is fast but ships neither batteries nor a REPL; redbean is close in spirit and has no ecosystem. The sweet spot: server-rendered HTMX applications of small-to-medium complexity where the cost of deployment and ownership matters more than peak throughput — internal tools and admin panels, solo/indie SaaS on a VPS, webhook and bot hubs, embedded web UIs (Janet embeds in C hosts), edge and cheap hardware.
 
-**Honest anti-cases:** teams of 5+ developers, >10k RPS per process, CPU-heavy workloads, domains that require thick vendor SDKs.
+**Honest anti-cases:** teams of 5+ developers (hiring), >10k RPS per process (SPEC §8: prefork, or another language), CPU-heavy workloads, domains that require thick vendor SDKs.
+
+What counts as success is deliberately not adoption: (1) the time from idea to a working deploy for one developer, (2) how much of the vertical fits without leaving the stack, (3) the stability of the two frozen contracts.
 
 ## Repository layout
 
@@ -96,7 +98,7 @@ It is also where wave 4's admin is dogfooded, and the shape of that is the claim
 
 The scaffolding half of the CLI landed in wave 4.5, and with it the deploy story: `void make resource` writes four files that are four projections of one declaration (so the generated suite checks that they still agree, without needing a database); `void plugins lock` writes the composition down — every extension point with its contributions *in resolution order* — so that "why is the middleware stack different in production" is a `void plugins check` diff rather than an investigation; and `jpm --local build` produces a single binary that is also the CLI, so `./myapp db migrate` works on a target with no janet and no source tree. The measured sizes, the four rules an application follows to be buildable, and what the binary deliberately does not contain are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
-Upcoming waves (see [docs/SPEC.md](docs/SPEC.md) §6): `void/i18n` and the heavy FFI of wave 5.
+What remains is wave 5, off the critical path (see [docs/ROADMAP.md](docs/ROADMAP.md)): `void/oauth` — the OAuth2/OIDC **client** half, now that the resource-server half shipped in wave 4 (ADR-0032) — `void/kafka`, `void/i18n`, and a TLS story that ADR-0010 keeps at the reverse proxy until then. `void/db-mysql` from that wave has already landed (ADR-0033).
 
 ## Development
 
