@@ -8,9 +8,9 @@
 > void/jobs void/jobs-db void/jobs-redis void/pressure
 > void/pressure-http void/obs void/obs-http void/obs-otlp
 > void/crypto void/auth void/auth-http void/auth-db void/auth-oauth
-> void/authz void/authz-http void/security void/mail void/mail-jobs
-> void/mail-auth void/bus void/bus-db void/bus-jobs void/ws
-> void/ws-htmx void/proto void/grpc void/mcp void/mcp-http
+> void/oauth void/authz void/authz-http void/security void/mail
+> void/mail-jobs void/mail-auth void/bus void/bus-db void/bus-jobs
+> void/ws void/ws-htmx void/proto void/grpc void/mcp void/mcp-http
 > void/mcp-obs void/admin void/admin-jobs void/admin-mcp void/dev
 > void/bench)
 > Do not edit the generated tables by hand — change the declaration
@@ -395,6 +395,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:doc [:optional :string] :expand [:optional :function] :fn [:optional [:or :function :symbol]] :name :keyword :needs [:optional [:vector :keyword]] :read-only? [:optional :boolean] :schema [:optional :any] :title [:optional :string]}
+  ```
+
+### `:void.oauth/sign-in`
+
+- **owner:** `:void/oauth` · **cardinality:** `:single`
+- The application's half of the flow (ADR-0034): {:name :fn}, where :fn is (fn [{:provider :claims :tokens :req}] ...) — return an identity to sign it in (login! with session-id rotation, then a redirect), a response table to answer yourself (onboarding, account linking), or nil to refuse (403). One per composition; it receives the provider name first. Mind the user store: under the default [:auth-http :session :load] :store the subject is re-read from it on every request, so either upsert the user in this hook or set :load :session
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
   ```
 
 ### `:void.obs/exporter`

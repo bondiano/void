@@ -167,6 +167,18 @@
    {:dir "auth" :deps [:void/core :void/crypto :void/http :void/db]
     :test-deps [:void/dev :void/db-sqlite] :jpm [:spork]}
 
+   :void/oauth
+   # The OAuth client half (ADR-0034), now that ADR-0032 built the
+   # resource server: void/auth for the jwk/jwt modules (the id_token
+   # is verified by the same code that verifies an access token) and
+   # for auth-http/login!, void/http for the two routes and the
+   # back-channel client, void/crypto for PKCE and state. The suite
+   # reaches void/dev for inject (ADR-0017) — the fake authorization
+   # server stands on a socket of its own, the way the auth suite's
+   # does.
+   {:dir "oauth" :deps [:void/core :void/crypto :void/http :void/auth]
+    :test-deps [:void/dev] :jpm [:spork]}
+
    :void/authz
    # No edge to void/auth, and that is the design (ADR-0024): the
    # identity is read from the dyn key void/auth publishes, so an
@@ -220,6 +232,16 @@
    {:dir "bus" :deps [:void/core :void/db :void/jobs]
     :test-deps [:void/db-sqlite :void/db-postgres :void/obs :void/dev]
     :jpm [:spork]}
+
+   :void/kafka
+   # librdkafka is opened at runtime through ffi/, so it is not a jpm
+   # dependency; void/fdwait IS an edge — the integration is a fiber
+   # parked on the fd the library rings (ADR-0035). void/bus is
+   # void/kafka-bus's, a separate plugin in this package (the
+   # void/cache — void/cache-redis split): the :kafka backend factory
+   # and the envelope spelling live there. The suite runs its
+   # integration half only when VOID_TEST_KAFKA names a cluster.
+   {:dir "kafka" :deps [:void/core :void/fdwait :void/bus]}
 
    :void/ws
    # WebSocket over the HTTP kernel (ADR-0028): the handshake is

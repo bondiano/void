@@ -87,12 +87,18 @@
     :contributes {:void.http/route-source [{:name :test/loosen
                                             :routes loosened
                                             :env (router/env-ref (curenv))}]}))
-(def [ok] (protect (plugin/start! {:plugins ["void/http/init" "void/crypto/init" "void/auth/init"
-                                             "void/auth/http" loosen-app]
-                                   :profile :test :config (config {})
-                                   :only [:http/kernel]})))
+# test/start!, not plugin/start!: the latter has no :only, and with it
+# this boot used to fail on the unknown option — which made the assert
+# pass for the wrong reason. The second assert pins the actual reason.
+(def [ok err] (protect (test/start! {:plugins ["void/http/init" "void/crypto/init" "void/auth/init"
+                                               "void/auth/http" loosen-app]
+                                     :profile :test :config (config {})
+                                     :only [:http/kernel]})))
 (assert (not ok)
         "a route inside a :required group cannot declare itself :public — :restrict is what makes that a boot error rather than a hole")
+(assert (string/find "may only tighten" (describe err))
+        (string "and it fails for the :restrict violation, not for anything else: "
+                (describe err)))
 
 # `with-http` starts the kernel and what it depends on (ADR-0017); the
 # auth registry is not one of the kernel's dependencies — it is a

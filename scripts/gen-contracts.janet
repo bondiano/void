@@ -36,6 +36,7 @@
 (add-tree (string (os/cwd) "/obs"))
 (add-tree (string (os/cwd) "/crypto"))
 (add-tree (string (os/cwd) "/auth"))
+(add-tree (string (os/cwd) "/oauth"))
 (add-tree (string (os/cwd) "/authz"))
 (add-tree (string (os/cwd) "/security"))
 (add-tree (string (os/cwd) "/mail"))
@@ -76,6 +77,7 @@
 (require "void/auth/http")
 (require "void/auth/db")
 (require "void/auth/oauth")
+(require "void/oauth/init")
 (require "void/authz/init")
 (require "void/authz/http")
 (require "void/security/init")
@@ -108,6 +110,7 @@
                :void/pressure :void/pressure-http
                :void/obs :void/obs-http :void/obs-otlp
                :void/crypto :void/auth :void/auth-http :void/auth-db :void/auth-oauth
+               :void/oauth
                :void/authz :void/authz-http :void/security
                :void/mail :void/mail-jobs :void/mail-auth
                :void/bus :void/bus-db :void/bus-jobs

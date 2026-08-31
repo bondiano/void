@@ -2,8 +2,9 @@
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
 ### void/db-sqlite + void/db-postgres + void/db-mysql + void/db-http + void/redis +
 ### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
-### void/crypto + void/auth + void/auth-http + void/auth-db +
-### void/bus + void/bus-db + void/bus-jobs + void/ws + void/ws-htmx +
+### void/crypto + void/auth + void/auth-http + void/auth-db + void/oauth +
+### void/bus + void/bus-db + void/bus-jobs + void/kafka + void/kafka-bus +
+### void/ws + void/ws-htmx +
 ### void/proto + void/grpc +
 ### void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
@@ -59,6 +60,7 @@
 (require "void/auth/http")
 (require "void/auth/db")
 (require "void/auth/oauth")
+(require "void/oauth/init")
 (require "void/authz/init")
 (require "void/authz/http")
 (require "void/security/init")
@@ -68,6 +70,8 @@
 (require "void/bus/init")
 (require "void/bus/db")
 (require "void/bus/jobs")
+(require "void/kafka/init")
+(require "void/kafka/bus")
 (require "void/ws/init")
 (require "void/ws/htmx")
 (require "void/proto/init")
@@ -92,9 +96,11 @@
                              :void/pressure :void/pressure-http
                              :void/obs :void/obs-http :void/obs-otlp
                              :void/crypto :void/auth :void/auth-http :void/auth-db :void/auth-oauth
+                             :void/oauth
                              :void/authz :void/authz-http :void/security
                              :void/mail :void/mail-jobs :void/mail-auth
                              :void/bus :void/bus-db :void/bus-jobs
+                             :void/kafka :void/kafka-bus
                              :void/ws :void/ws-htmx
                              :void/proto :void/grpc
                              :void/mcp :void/mcp-http :void/mcp-obs

@@ -9,11 +9,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # void/db-postgres, void/db-mysql and void/redis are clients of a
-    # real server or they are nothing, and void/cache's and void/jobs's
-    # redis backends are too: their integration suites run when
-    # VOID_TEST_PG / VOID_TEST_MYSQL / VOID_TEST_REDIS name a server, and
-    # skip (loudly) when they do not — so CI is where they are a gate.
+    # void/db-postgres, void/db-mysql, void/redis and void/kafka are
+    # clients of a real server or they are nothing, and void/cache's and
+    # void/jobs's redis backends are too: their integration suites run
+    # when VOID_TEST_PG / VOID_TEST_MYSQL / VOID_TEST_REDIS /
+    # VOID_TEST_KAFKA name a server, and skip (loudly) when they do not
+    # — so CI is where they are a gate.
     services:
       redis:
         image: redis:7
@@ -54,11 +55,29 @@ jobs:
           --health-timeout 5s
           --health-retries 20
 
+      kafka:
+        # a single KRaft broker; the image's default configuration
+        # advertises localhost:9092, which is exactly what a mapped port
+        # on the runner needs. A GitHub service cannot override the
+        # container command, which is why this is apache/kafka and not
+        # an image whose entrypoint wants arguments
+        image: apache/kafka:3.9.0
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 20
+
     env:
       VOID_TEST_PG: host=127.0.0.1 port=5432 user=void password=void dbname=void_test
       VOID_TEST_MYSQL: mysql://void:void@127.0.0.1:3306/void_test
       # database 9, and every suite works under a prefix of its own
       VOID_TEST_REDIS: redis://127.0.0.1:6379/9
+      # every kafka suite works under a topic prefix of its own too —
+      # the broker keeps the log, which is the point and the hazard
+      VOID_TEST_KAFKA: 127.0.0.1:9092
 
     steps:
       - uses: actions/checkout@v4
@@ -88,16 +107,17 @@ jobs:
           # void/db-mysql need — no headers. libmariadb3 is MariaDB
           # Connector/C: it exports the same mysql_* API, and it is what
           # a Debian-family image actually has (ADR-0033)
-          sudo apt-get update && sudo apt-get install -y libpq5 libmariadb3
+          # librdkafka1 is void/kafka's, for the same reason (ADR-0035)
+          sudo apt-get update && sudo apt-get install -y libpq5 libmariadb3 librdkafka1
           # void/redis needs no client library at all (a connection is a
           # net/ stream)
 
       - name: Build void/fdwait
         # the monorepo's one native module (ADR-0011). void/db-postgres
-        # imports it, so the dry-run and contract gates need it built
-        # before they can load the plugin at all — and so does
-        # void/jobs's SKIP LOCKED suite, which reaches Postgres through
-        # the same driver.
+        # and void/kafka import it, so the dry-run and contract gates
+        # need it built before they can load either plugin at all — and
+        # so does void/jobs's SKIP LOCKED suite, which reaches Postgres
+        # through the same driver.
         run: cd fdwait && jpm build
 
       - name: The package graph agrees with the tree on disk
@@ -168,7 +188,7 @@ jobs:
                     (import void/db-sqlite) (import void/redis) (import void/cache)
                     (import void/jobs) (import void/pressure) (import void/obs)
                     (import void/crypto) (import void/auth) (import void/authz) (import void/security)
-                    (import void/mail) (import void/bus)
+                    (import void/mail) (import void/bus) (import void/kafka)
                     (import void/ws)
                     (import void/dev)
                     (import void/fdwait)
