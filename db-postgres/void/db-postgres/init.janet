@@ -298,7 +298,9 @@
          (printf "backend pid %d" (info :backend-pid))
          (printf "pipeline    %s" (if (caps :pipeline) "yes" "no (libpq 14+)"))
          (printf "cancel      %s" (if (caps :cancel) "non-blocking" "blocking (libpq 17+)"))
-         (eachp [k v] (sorted-by first (pairs (drv :describe)))
+         # `each`, not `eachp`: `pairs` already yields [key value], and
+         # `eachp` over that array would bind the index instead of the key
+         (each [k v] (sorted-by first (pairs (drv :describe)))
            (printf "%-11s %s" (string k) v)))})
 
 # -- manifest ------------------------------------------------------------
