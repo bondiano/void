@@ -148,6 +148,29 @@ Postgres and MySQL need none of this: `void/db-postgres` opens `libpq`
 threads (ADR-0033) — through
 `ffi/`, so the binary is unchanged and the target provides the library.
 
+## OTLP protobuf in a single binary
+
+The same seam, for the same reason: `void/obs-otlp` requires
+`void/obs/otlp-proto` — the module that bakes the vendored OTLP
+`.proto` files into descriptors — on first use, so a composition on the
+JSON default never parses them. A binary composing
+`[:obs-otlp :encoding] :protobuf` hands the module over instead:
+
+```janet
+(import void/obs/otlp :as otlp)
+
+# at load time: parses the .proto files on the build machine and
+# marshals the descriptors into the image
+(def otlp-proto-module (require "void/obs/otlp-proto"))
+
+(defn main [& args]
+  (otlp/use-module! otlp-proto-module)
+  ...)
+```
+
+No extra install: the module and its `.proto` files are part of the
+`void` bundle already.
+
 ## The binary is also the CLI
 
 `cli/app-main` — what the generated `main` calls — runs the application

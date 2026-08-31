@@ -136,4 +136,16 @@
 (assert (= "990" (get (proto/to-json :shop.orders/Order read-back) "total"))
         "and the JSON name the file gave the field is the one that comes out")
 
+# -- hex enum values ------------------------------------------------------
+# a real file writes an enum's bit masks in hex — opentelemetry's
+# SpanFlags has `SPAN_FLAGS_TRACE_FLAGS_MASK = 0x000000FF`
+
+(def flags-file
+  (parse/parse "syntax='proto3'; enum Flags { FLAGS_NONE = 0; FLAGS_MASK = 0x000000FF; FLAGS_REMOTE = 0x100; }"
+               "<flags>"))
+(def flags (first (flags-file :descriptors)))
+(assert (= 255 (get-in flags [:values :FLAGS_MASK]))
+        "a hex enum value is its number, not a parse error")
+(assert (= 256 (get-in flags [:values :FLAGS_REMOTE])))
+
 (print "parse ok")

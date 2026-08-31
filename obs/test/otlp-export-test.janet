@@ -12,6 +12,8 @@
 (import void/obs/metrics :as metrics)
 (import void/obs/trace :as trace)
 (import void/obs/otlp :as otlp)
+(import void/obs/otlp-proto :as otlp-proto)
+(import void/proto :as proto)
 
 (log/set-level! "void.obs" :error)
 (log/set-level! "void.http" :error)
@@ -21,18 +23,30 @@
 (def received @[])
 (var fail-times 0)
 
+(defn- read-body
+  "JSON decoded, protobuf kept as the bytes it is — the decode is the
+  assertion's job."
+  [req]
+  (if (= "application/x-protobuf" (get-in req [:headers "content-type"]))
+    (req :body)
+    (json/decode (req :body))))
+
 (defn- collector [req]
   (case (req :path)
     "/v1/traces"
     (do
-      (array/push received {:signal :traces :body (json/decode (req :body))})
+      (array/push received {:signal :traces
+                            :content-type (get-in req [:headers "content-type"])
+                            :body (read-body req)})
       (if (pos? fail-times)
         (do (-- fail-times) (ring/text 503 "later"))
         (ring/response 200 "{}" @{"content-type" "application/json"})))
 
     "/v1/metrics"
     (do
-      (array/push received {:signal :metrics :body (json/decode (req :body))})
+      (array/push received {:signal :metrics
+                            :content-type (get-in req [:headers "content-type"])
+                            :body (read-body req)})
       (ring/response 200 "{}" @{"content-type" "application/json"}))
 
     "/refuses"
@@ -197,6 +211,40 @@
 (assert (not (otlp/state :running)))
 (assert (nil? (otlp/state :client)) "and the connection to the collector is closed")
 
+# -- the second encoding --------------------------------------------------
+#
+# The same payload, the seam's other value: the collector sees
+# application/x-protobuf, and the bytes decode against the vendored
+# OTLP descriptors into the span that was exported.
+
+(array/clear received)
+(otlp/start! (config {:encoding :protobuf :metrics {:enabled true :interval 3600}}) "shop")
+(def binary-span (trace/start "binary.encoded" {:kind :server}))
+(trace/end! binary-span)
+(otlp/span-exporter binary-span)
+(otlp/flush!)
+(ev/sleep 0.3)
+
+(def pbatch (first (traces-of)))
+(assert (= "application/x-protobuf" (pbatch :content-type))
+        "a protobuf request says what it is")
+(def pdecoded (proto/decode otlp-proto/traces-message (pbatch :body)))
+(def pspan (get-in pdecoded [:resource_spans 0 :scope_spans 0 :spans 0]))
+(assert (= "binary.encoded" (pspan :name)))
+(assert (= 16 (length (pspan :trace_id)))
+        "the trace id crossed the wire as its 16 raw bytes")
+
+(array/clear received)
+(assert (= :ok (otlp/export-metrics!)))
+(ev/sleep 0.1)
+(def pmetrics (find |(= :metrics ($ :signal)) received))
+(assert (= "application/x-protobuf" (pmetrics :content-type)))
+(def mdecoded (proto/decode otlp-proto/metrics-message (pmetrics :body)))
+(assert (index-of "void_test_exported_requests"
+                  (map |($ :name) (get-in mdecoded [:resource_metrics 0 :scope_metrics 0 :metrics])))
+        "the same snapshot, under the same names, in the third projection")
+(otlp/stop!)
+
 # -- credentials in the clear --------------------------------------------
 
 (def [ok err] (protect (otlp/start! {:endpoint "http://collector.example:4318"
@@ -226,7 +274,7 @@
 
 (each [slice reason]
   [[{:obs-otlp {:endpoint 42}} "an endpoint that is not a string"]
-   [{:obs-otlp {:encoding :protobuf}} "an encoding that needs void/proto first"]
+   [{:obs-otlp {:encoding :msgpack}} "an encoding that is neither of the two OTLP has"]
    [{:obs-otlp {:retries -1}} "a negative retry count"]
    [{:obs-otlp {:traces {:queue 0}}} "a queue with no room in it"]
    [{:obs-otlp {:metrics {:interval 0}}} "an export period of zero"]]

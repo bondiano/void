@@ -166,9 +166,12 @@
       (defproto "protos/orders.proto")
       (defproto "protos/orders.proto" {:paths ["vendor/protos"]})
 
-  The path is relative to the file this form appears in, and imports
-  resolve next to the importing file and then along `:paths` — except
-  `google/protobuf/*.proto`, which ./wkt already has. Parsing happens
+  The path is relative to the file this form appears in — and so is
+  every relative `:paths` entry, because both name files that travel
+  with the module, not with whatever directory the process was started
+  in. Imports resolve next to the importing file and then along
+  `:paths` — except `google/protobuf/*.proto`, which ./wkt already
+  has. Parsing happens
   while the module compiles and the descriptors are baked into it as
   values, so a running application never reads a `.proto` (SPEC §8.5
   rule 3: what can happen at build time does).
@@ -178,13 +181,15 @@
   [path &opt opts]
   (default opts {})
   (def dir (source-dir))
-  (def where (if (string/has-prefix? "/" path) path (string dir "/" path)))
+  (defn rooted [p] (if (string/has-prefix? "/" p) p (string dir "/" p)))
+  (def where (rooted path))
+  (def paths (map rooted (get opts :paths [])))
   # `seen` is how `load` remembers which files it has parsed, and
   # therefore exactly which files this form is responsible for — this
   # one and everything its imports reached, and nothing that some other
   # module registered earlier in the same compilation
   (def seen @{})
-  (def file (parse/load where (merge {:paths []} opts {:seen seen})))
+  (def file (parse/load where (merge opts {:seen seen :paths paths})))
   (def all @[])
   (each parsed (values seen)
     (when (dictionary? parsed)

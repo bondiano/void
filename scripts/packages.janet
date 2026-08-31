@@ -144,12 +144,15 @@
    # thereby start shedding. void/http is two plugins' in this package
    # (the void/cache — void/cache-http split): void/obs-http's server
    # side, and void/obs-otlp's client — the OTLP exporter POSTs to a
-   # collector through void/http/client (ADR-0027).
+   # collector through void/http/client (ADR-0027). void/proto is the
+   # exporter's second encoding: void/obs/otlp-proto bakes the vendored
+   # OTLP .proto files into descriptors, and only a composition that
+   # configures [:obs-otlp :encoding] :protobuf ever loads it.
    # void/dev and void/cache are the suite's: inject for the endpoints,
    # a real component for the instrumentation. void/rest is
    # test-support/overhead-probe.janet's, which measures what obs costs
    # a request on the B1 shape (§8.2's ≤ 7%).
-   {:dir "obs" :deps [:void/core :void/http :void/pressure]
+   {:dir "obs" :deps [:void/core :void/http :void/pressure :void/proto]
     :test-deps [:void/dev :void/cache :void/rest] :jpm [:spork]}
 
    :void/auth
