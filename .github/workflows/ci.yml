@@ -256,6 +256,20 @@ jobs:
           ls db/migrations/*_create_products.janet
           janet test/products-test.janet | grep -q 'products-test ok'
 
+      - name: void make auth, and the suite it generates
+        # the scaffold is checked by what it itself generates (ROADMAP
+        # 6.2): the generated suite boots the generated plugin on sqlite
+        # and drives register, verify, sign in, CSRF and the reset
+        run: |
+          cd "$(mktemp -d)"
+          void new accounts
+          cd accounts
+          void make auth < /dev/null
+          test -f auth.janet
+          test -f test/auth-test.janet
+          ls db/migrations/*_create_users.janet
+          janet test/auth-test.janet | grep -q 'auth-test ok'
+
       - name: void plugins lock, and the drift it catches
         run: |
           cd "$(mktemp -d)"

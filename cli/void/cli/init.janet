@@ -161,6 +161,7 @@
 (def builtin-help
   [["new NAME" "create a project skeleton in ./NAME"]
    ["make resource NAME" "scaffold entity + routes + views + migration + tests"]
+   ["make auth [NAME]" "scaffold register/login/logout, reset and verify"]
    ["dev" "run the app in the :dev profile (watcher + netrepl by default)"]
    ["repl" "connect to the running app's netrepl (see void repl --help)"]
    ["deploy check" "is this composition fit for [:deploy :shape]?"]

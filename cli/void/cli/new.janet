@@ -208,6 +208,12 @@ a suite, every one of them a projection of one declaration:
 
     void make resource Product name:string price:int notes:text?
 
+Scaffold the pages every application writes by hand — register, sign
+in, sign out, a password reset and an address to verify — on top of
+void/auth, with a suite that drives all of them:
+
+    void make auth
+
 Lock the composition, so that "why is the middleware stack different in
 production" is a diff rather than an investigation:
 

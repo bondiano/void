@@ -297,7 +297,7 @@ Repository API (Data Mapper, всегда доступен, работает с 
 ### 5.17 `void/cli` — artisan *(M)*
 - Бинарь `void`: команды — extension point `:void/cli`, любой plugin добавляет свои (`void db migrate`, `void jobs work`, `void routes`, `void openapi export`).
 - Bootstrap подмножества system по требованию команды (`:needs [:db/pool]`).
-- Codegen/scaffold: `void new`, `void make resource User` (schema+routes+views+migration+tests) — шаблоны как данные, переопределяемые проектом.
+- Codegen/scaffold: `void new`, `void make resource User` (schema+routes+views+migration+tests), `void make auth` (register/login/logout + reset и verify через `challenge!`, migration, сюита) — шаблоны как данные, переопределяемые проектом.
 - Интерактив через rawterm/getline; `void repl` → netrepl client в запущенный процесс.
 
 ### 5.18 `void/mcp` *(S/M)*

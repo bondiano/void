@@ -87,8 +87,17 @@
    # runs `void new` and then boots the generated project, which is the
    # full wave-1 plugin list — and it runs `void make resource`, whose
    # output declares an entity, so void/db loads there too.
+   #
+   # `void make auth` is why the second half of that list is here. Its
+   # generated suite is the scaffold's own proof (ROADMAP 6.2): it
+   # boots the generated plugin on a real database and drives register,
+   # sign in, reset and verify through test/inject — so everything the
+   # generated composition names has to be importable here. The
+   # examples are deliberately not what checks this; the scaffold is
+   # checked by what it itself generates.
    {:dir "cli" :deps [:void/core]
-    :test-deps [:void/http :void/html :void/htmx :void/dev :void/db]
+    :test-deps [:void/http :void/html :void/htmx :void/dev :void/db
+                :void/db-sqlite :void/crypto :void/auth :void/security]
     :jpm [:spork]}
 
    :void/db

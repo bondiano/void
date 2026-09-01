@@ -43,13 +43,13 @@
 - [x] `:local`-store под `[:deploy :shape] :fleet` — та же проверка на старте, что у всех per-process хранилищ (ADR-0030)
 - [x] `examples/shop`: картинка товара — одна строка в `defentity`, minio в `docker-compose.yml`
 
-### 6.2 `void make auth` — auth-скаффолд *(M)*
+### 6.2 `void make auth` — auth-скаффолд *(M)* ✅
 
-Паритет: phx.gen.auth / Laravel Breeze / Rails 8 authentication generator. Машинерия есть вся (`auth/password`, identity, strategies, `challenge!` + `mail-auth`, sessions) — но каждое приложение руками пишет одни и те же страницы.
+Паритет: phx.gen.auth / Laravel Breeze / Rails 8 authentication generator. Машинерия есть вся (`auth/password`, identity, strategies, `challenge!` + `mail-auth`, sessions) — но каждое приложение руками писало одни и те же страницы. Теперь пишет генератор, и reset с verify — один поток: `challenge!` + один redeem-роут, потому что доставщик строит один URL.
 
-- [ ] Генератор по образцу `make resource`: register/login/logout, reset и verify через `challenge!`; шаблоны — данные с проектными overrides
-- [ ] Сгенерированная сюита тестов через `test/inject`
-- [ ] Примеры не переписываются: скаффолд проверяется тем, что сам генерирует
+- [x] Генератор по образцу `make resource`: register/login/logout, reset и verify через `challenge!`; шаблоны — данные с проектными overrides (`templates/auth/<key>.janet`)
+- [x] Сгенерированная сюита тестов через `test/inject` — со своим `:void.auth/deliver`, так что оба challenge проверяются без почтового ящика
+- [x] Примеры не переписываются: скаффолд проверяется тем, что сам генерирует (`cli/test/make-auth-test.janet` гоняет сгенерированную сюиту на sqlite)
 
 ### 6.3 Jobs-дашборд *(S/M)*
 
