@@ -4,18 +4,20 @@
 ### serve, ...) reads the app binding below — and so does this file's
 ### own `main`, which *is* that CLI when it is given arguments.
 ###
-### The composition is the whole point of this example. Thirty-five
-### void plugins plus this application's own (thirty-eight with
-### redis), and the application code that knows about any of them is
+### The composition is the whole point of this example. Thirty-eight
+### void plugins plus this application's own (forty-three with redis
+### and a bucket), and the application code that knows about any of them is
 ### the route metadata in each module's controller: the transactions,
 ### the identity, the policies, the CSRF token, the rate limits, the
 ### caching, the metrics, the tracing, the load shedding and the whole
 ### back office are all *composed* here rather than called there.
 ###
-### Two things are chosen by environment, and both are one line:
+### Three things are chosen by environment, and each is one line:
 ###
 ###   VOID_SHOP_DB=postgres     the driver (sqlite by default)
 ###   VOID_SHOP_REDIS=1         sessions and the cache in redis
+###   VOID_SHOP_STORAGE=s3      product pictures in a bucket (a
+###                             directory by default)
 ###
 ### Everything else is identical between a laptop and the compose file
 ### in ./docker-compose.yml — which is the claim this example makes,
@@ -60,6 +62,9 @@
 (import void/admin)
 (import void/admin/jobs)
 (import void/admin/mcp)
+(import void/storage)
+(import void/storage/http)
+(import void/storage/admin)
 (import void/dev)
 (import ./src/app)
 
@@ -69,6 +74,16 @@
   never loads libpq (or void/fdwait's native module) at all.``
   {:sqlite (fn [] (require "void/db-sqlite/init") :void/db-sqlite)
    :postgres (fn [] (require "void/db-postgres/init") :void/db-postgres)})
+
+(defn- s3-plugins
+  ``The bucket, when this deployment has one. Required rather than
+  imported, for the reason the driver is: a laptop keeping product
+  pictures in ./storage never loads a signer, and never opens the TLS
+  stack that an https endpoint would need (ADR-0038, ADR-0039).``
+  []
+  (require "void/storage/s3")
+  (require "void/tls/init")
+  [:void/storage-s3 :void/tls])
 
 (defn- redis-plugins
   ``The three plugins that move state out of the process: sessions
@@ -82,7 +97,7 @@
   [:void/redis :void/redis-http :void/cache-redis])
 
 (defn plugins
-  ``The composition, as a function of the two things a deployment
+  ``The composition, as a function of the three things a deployment
   changes. Everything else is the same list on a laptop and in the
   compose file.``
   [database &opt opts]
@@ -153,6 +168,14 @@
    # already had
    :void/admin :void/admin-jobs :void/admin-mcp
 
+   # product pictures (ADR-0039): the contract, the route that serves
+   # what a disk store holds, and the admin widget that puts an upload
+   # behind the one `:file` field in catalog.model. Which store is
+   # behind them is the third thing a deployment changes — see
+   # `storage` below
+   :void/storage :void/storage-http :void/storage-admin
+
+   ;(if (get opts :s3) (s3-plugins) [])
    ;(if (get opts :redis) (redis-plugins) [])
 
    # void/dev stays in the :prod composition of *this* application, and
@@ -188,6 +211,16 @@
   (truthy? (let [v (os/getenv "VOID_SHOP_REDIS")]
              (and v (not (index-of v ["" "0" "false" "no"]))))))
 
+(defn s3?
+  ``Whether product pictures live in a bucket. Off on a laptop (a
+  directory, nothing to install), on in the compose file, where minio
+  is the bucket and the web tier is more than one process — a picture
+  uploaded to one replica's disk is a 404 on the next, which is what
+  `[:deploy :shape] :fleet` refuses to start with (ADR-0030).``
+  []
+  (truthy? (let [v (os/getenv "VOID_SHOP_STORAGE")]
+             (and v (= "s3" (string/ascii-lower v))))))
+
 (defn profile
   "The profile this process runs under."
   []
@@ -204,7 +237,7 @@
   environment of the CI runner frozen into the executable
   (docs/DEPLOY.md rule 1). Here that is harmless — the CLI loads this
   file on the machine it runs on — and there it would be a lie.``
-  {:plugins (plugins (database) {:redis (redis?)})
+  {:plugins (plugins (database) {:redis (redis?) :s3 (s3?)})
    :profile (profile)})
 
 (defn main [& args]
@@ -217,6 +250,6 @@
   # against the composition inside this file and no other. A deployment
   # that cannot run its own migrations is not a deployment
   # (docs/DEPLOY.md)
-  (cli/app-main {:plugins (plugins (database) {:redis (redis?)})
+  (cli/app-main {:plugins (plugins (database) {:redis (redis?) :s3 (s3?)})
                  :profile prof}
                 ;(drop 1 args)))

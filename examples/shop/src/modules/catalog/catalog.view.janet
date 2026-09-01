@@ -6,6 +6,7 @@
 ### modules on the HTML side, and it points the right way — the catalog
 ### knows there is a cart, the cart does not know there is a catalog
 ### page.
+(import void/storage :as storage)
 (import ../../shared/values :as values)
 (import ../../web/layout :as layout)
 (import ../cart/cart.view :as cart-view)
@@ -15,8 +16,21 @@
     [:span {:class "stock"} (string (product :stock) " in stock")]
     [:span {:class "stock out"} "Sold out"]))
 
+(defn- picture
+  ``The product's image, or nothing. `storage/url` is the only thing on
+  this page that knows where files live, and it answers a path under
+  [:storage :serve :prefix] on a laptop and a minio URL in the compose
+  file — from the same column, because the column holds a key
+  (ADR-0039). A product with no picture draws no element rather than a
+  broken one: the catalog was seeded before anybody uploaded anything.``
+  [product class]
+  (when-let [key (product :image)]
+    [:img {:class class :src (storage/url key) :alt (product :name)
+           :loading "lazy"}]))
+
 (defn product-card [product]
   [:li {:class "card"}
+   (picture product "thumb")
    [:span {:class "sku"} (product :sku)]
    [:a {:class "name" :href (string "/products/" (product :id))} (product :name)]
    [:span {:class "price"} (values/format-price (product :price-cents))]
@@ -40,6 +54,7 @@
 
 (defn product-view [product]
   [:div {:id "product"}
+   (picture product "photo")
    [:p {:class "sku"} (product :sku)]
    [:h1 (product :name)]
    [:p {:class "price"} (values/format-price (product :price-cents))]

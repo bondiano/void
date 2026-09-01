@@ -74,6 +74,13 @@
              :type (get format-input-types (props :format) "text")
              :attrs {:minlength (props :min)
                      :maxlength (props :max)}}
+    # the upload seam (ADR-0039): a :file field stores a storage key,
+    # the browser submits bytes — void/storage's save-upload! (or the
+    # admin widget) bridges the two. :storage/accept is an annotation
+    # this projection reads and validation never does (ADR-0008)
+    :file {:control :file
+           :attrs {:accept (when-let [a (props :storage/accept)]
+                             (string/join (map string a) ","))}}
     {:control :input :type "text"}))
 
 (defn field-specs
@@ -139,6 +146,13 @@
                     :value (when (not (nil? value)) (string value))}
                    (get spec :attrs {}))]
 
+    # no :value on purpose: a file input's value is not scriptable, and
+    # re-rendering an invalid submission cannot restore the choice —
+    # the browser owns it
+    :file
+    [:input (merge {:type "file" :name name :id id :required required}
+                   (get spec :attrs {}))]
+
     (errorf "unknown form control %q for field %q" (spec :control) (spec :name))))
 
 (defn errors-by-field
@@ -191,9 +205,14 @@
   (unless (in {:get true :post true} method)
     (errorf "form method must be :get or :post, got %q" method))
   (def form-errors (get (errors-by-field (get opts :errors)) :form))
+  # a form with a file input that is not multipart submits the
+  # filename and drops the file — the enctype is a consequence of the
+  # schema, not an option to remember (:attrs still overrides)
+  (def multipart? (some |(= :file ($ :control)) (field-specs sch opts)))
   [:form (merge {:action (or (opts :action)
                              (error "form opts need an :action"))
-                 :method (string method)}
+                 :method (string method)
+                 :enctype (when multipart? "multipart/form-data")}
                 (get opts :attrs {}))
    (when-let [csrf (and (= :post method) (dyn :void.html/csrf))]
      (csrf))

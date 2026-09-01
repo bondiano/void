@@ -12,7 +12,8 @@
 > void/security void/mail void/mail-jobs void/mail-auth void/bus
 > void/bus-db void/bus-jobs void/ws void/ws-htmx void/proto
 > void/grpc void/mcp void/mcp-http void/mcp-obs void/admin
-> void/admin-jobs void/admin-mcp void/dev void/bench)
+> void/admin-jobs void/admin-mcp void/storage void/storage-http
+> void/storage-s3 void/storage-admin void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -80,11 +81,11 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/widget`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
+- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
 - **contribution schema:**
 
   ```janet
-  {:assets [:optional :dictionary] :display [:optional :function] :doc [:optional :string] :filter [:optional :function] :match [:optional :function] :name :keyword :parse [:optional :function] :priority [:optional :int] :render :function :routes [:optional :function] :types [:optional [:vector :keyword]]}
+  {:assets [:optional :dictionary] :display [:optional :function] :doc [:optional :string] :encoding [:optional [:enum :multipart]] :filter [:optional :function] :match [:optional :function] :name :keyword :parse [:optional :function] :priority [:optional :int] :render :function :routes [:optional :function] :types [:optional [:vector :keyword]]}
   ```
 
 ### `:void.auth/deliver`

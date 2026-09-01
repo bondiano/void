@@ -281,6 +281,23 @@
    {:dir "tls" :deps [:void/core :void/crypto :void/http :void/redis :void/mail]
     :test-deps [:void/dev]}
 
+   :void/storage
+   # Files and uploads (ADR-0039). Four plugins in one package, the
+   # void/cache — void/cache-http split: the kernel and the :local
+   # store are plain Janet over the filesystem, so the real edges are
+   # the other three's. void/http is void/storage-http's (the serve
+   # route through the static machinery) and the s3 store's transport
+   # (http/client — and void/tls closes the https seam at runtime,
+   # never an edge, ADR-0038); void/crypto is SigV4's; void/security
+   # is a *module* edge for temporary URLs (./sign reads the signing
+   # keys the way void/obs reads void/pressure's sampler — composing
+   # :void/security is what arms it); void/admin is
+   # void/storage-admin's, the upload widget. The suite reaches
+   # void/dev for test/start! (ADR-0017) and void/db-sqlite for a real
+   # database under the admin resource whose form carries an upload.
+   {:dir "storage" :deps [:void/core :void/crypto :void/http :void/security :void/admin]
+    :test-deps [:void/dev :void/db-sqlite]}
+
    :void/ws
    # WebSocket over the HTTP kernel (ADR-0028): the handshake is
    # answered from an ordinary route handler, so the only edge is
@@ -400,6 +417,11 @@
            :void/obs :void/pressure
            :void/crypto :void/auth :void/authz :void/security
            :void/mail :void/bus :void/mcp :void/admin
+           # product pictures (ADR-0039): the contract and the disk
+           # store on a laptop, the bucket in the compose file — and
+           # void/tls under it, because an https endpoint is a TLS
+           # stack the composition has to carry (ADR-0038)
+           :void/storage :void/tls
            :void/dev :void/cli]
     :example true :jpm [:spork :sqlite3]}
 

@@ -48,6 +48,7 @@
 (add-tree (string (os/cwd) "/grpc"))
 (add-tree (string (os/cwd) "/mcp"))
 (add-tree (string (os/cwd) "/admin"))
+(add-tree (string (os/cwd) "/storage"))
 (add-tree (string (os/cwd) "/bench"))
 
 (import void/core/plugin :as plugin)
@@ -101,6 +102,10 @@
 (require "void/admin/init")
 (require "void/admin/jobs")
 (require "void/admin/mcp")
+(require "void/storage/init")
+(require "void/storage/http")
+(require "void/storage/s3")
+(require "void/storage/admin")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -122,6 +127,7 @@
                :void/proto :void/grpc
                :void/mcp :void/mcp-http :void/mcp-obs
                :void/admin :void/admin-jobs :void/admin-mcp
+               :void/storage :void/storage-http :void/storage-s3 :void/storage-admin
                :void/dev :void/bench]
      :profile :dev
      # two drivers now provide :void/db-driver, two stores provide
@@ -135,7 +141,10 @@
                     :void/jobs-backend {:impl :jobs/redis}
                     :void/auth-user-store {:impl :auth.db/users}
                     :void/auth-token-store {:impl :auth.db/tokens}
-                    :void/auth-challenge-store {:impl :auth.db/challenges}}}}))
+                    :void/auth-challenge-store {:impl :auth.db/challenges}
+                    :void/storage-store {:impl :storage/s3}
+                    :storage-s3 {:endpoint "http://minio.invalid:9000" :bucket "docs"
+                                 :access-key "docs" :secret-key "docs-secret"}}}}))
 
 # -- deterministic rendering of schema shorthand -------------------------
 

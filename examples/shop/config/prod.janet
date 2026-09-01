@@ -33,6 +33,35 @@
  # that does not print (ADR-0007 §5). Without it the process refuses to
  # start in :prod — an ephemeral key would sign tokens the next
  # deployment rejects
+ # -- product pictures, in a bucket --------------------------------------
+ #
+ # Two components provide :void/storage-store once void/storage-s3 is
+ # composed, and the kernel refuses to guess — the same shape
+ # [:void/cache-store] has three lines down. The disk store is what
+ # `void deploy check` would refuse here: a picture uploaded to one
+ # replica is a 404 on the next, and the container that gets replaced
+ # takes the uploads with it (ADR-0030, ADR-0039).
+ #
+ # The endpoint, the bucket and the credentials are **not** here: they
+ # arrive as VOID_STORAGE_S3__* environment variables, so one image
+ # runs against minio in the compose file and against a real S3 or an
+ # R2 without a rebuild. :public-url is the origin a browser reads the
+ # pictures from — the same minio, published on the host — while the
+ # application itself talks to it over the compose network, and the
+ # CSP origin that has to agree with it travels in the same file
+ # (VOID_SECURITY__CSP__POLICY__IMG_SRC).
+ :void/storage-store {:impl :storage/s3}
+
+ # The credentials are the one part of the connection that is written
+ # here rather than passed as a plain VOID_* variable, and for the
+ # reason SHOP_SECRET_KEY is: a secret reference resolves out of the
+ # environment into a box that does not print, so a credential cannot
+ # reach a log line or a `void config explain` (ADR-0007 §5). The key
+ # is spelled :secret-key and not :secret — a slice key called :secret
+ # *is* the env-reference form, and the literal would be read as one.
+ :storage-s3 {:access-key {:secret "MINIO_ACCESS_KEY"}
+              :secret-key {:secret "MINIO_SECRET_KEY"}}
+
  :security {:signing-key {:secret "SHOP_SECRET_KEY"}
             # the rate limiter counts in the shared cache (redis, three
             # lines down), so the limit is the limit however many web

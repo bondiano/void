@@ -339,6 +339,18 @@ Django-admin/Filament-класс, но данные-first: админка — **
 - Prefork: sampler per-worker (свой loop — своё давление), master помечается `:mode :supervisor` и не сэмплирует; агрегации нет и не нужно — SO_REUSEPORT раскидывает трафик от воркера, отвечающего мгновенным 503.
 - Волна 2 (зависит только от core + http).
 
+### 5.24 `void/storage` — файлы и загрузки *(L; ADR-0039)*
+Паритет Laravel Storage / Rails ActiveStorage: то, чего не хватало между multipart-парсингом §5.1 и `<img>` на странице.
+- Четыре plugin'а в одном пакете, шов `void/cache` / `void/cache-http`: `void/storage` (контракт + `:local`-store, только core), `void/storage-http` (маршрут отдачи — нужен `void/http`), `void/storage-s3` (bucket — `http/client`, `void/crypto`, `void/tls` для https), `void/storage-admin` (виджет — нужен `void/admin`).
+- Контракт `:void/storage-store`: `put!`/`get`/`stream`/`delete!`/`url` плюс необязательные `:stat`/`:close` с документированными фолбэками; выбор реализации — `{:void/storage-store {:impl ...}}`, как у `:void/cache-store`.
+- **Ключ — данные**: относительный путь в обычной текстовой колонке (`products/2026/09/4f2a1c.png`), а не URL и не объект со своей таблицей; правила ключа (никаких `..`, NUL, абсолютных путей) проверяются на границе контракта, а не в каждом бэкенде.
+- `:local` — запись через tmp+rename (читатель не видит половину загрузки), отдача через существующий `static/file-response`: тот же сильный ETag, `304`, `Range` и `416`, одной реализацией.
+- `:s3` — PUT/GET/HEAD/DELETE своим стеком, path-style, SigV4 чистыми функциями над `void/crypto` (проверяется на опубликованных векторах AWS и на живом minio в CI).
+- Временные URL: локально — HMAC на ключах `void/security` с ротацией (форма токена §5.16), в bucket — SigV4 query auth, который проверяет тот конец.
+- Шов со схемой: тип `:file` + аннотации `:storage/*` (в смысле ADR-0008) → `input type=file` и `enctype` в `void/html`, виджет с превью и серверной проверкой типа/размера в `void/storage-admin`, `save-upload!` в обычном контроллере.
+- Диск — per-process хранилище: `:shared? false`, и `[:deploy :shape] :fleet` отказывает на старте с именем замены (ADR-0030).
+- Волна 6 (зависит от core, http, crypto, security, admin).
+
 ---
 
 ## 6. Сводный граф работ и волны
@@ -354,6 +366,8 @@ Django-admin/Filament-класс, но данные-first: админка — **
 **Волна 4 — протоколы и админка:** void/http/client + void/obs-otlp (OTLP/JSON, ADR-0027) → void/proto → void/grpc (Connect) → void/ws → void/mcp → **void/admin** (после authz+htmx+mcp — чтобы MCP-проекция вошла в первый релиз админки).
 
 **Волна 5 — тяжёлый FFI и прочее:** void/kafka (+kafka-backend для void/bus) → void/db-mysql → void/oauth → void/i18n → void/datastar (экспериментально) → TLS-plugin (по необходимости).
+
+**Волна 6 — паритет и первое приложение:** void/storage (ADR-0039) → остальное по [ROADMAP](ROADMAP.md).
 
 Правило зависимостей волн: каждый plugin зависит только от core и plugins ≤ своей волны.
 

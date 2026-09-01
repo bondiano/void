@@ -40,7 +40,7 @@
 (def- allowed-keys
   {:name true :doc true :types true :match true :priority true
    :render true :display true :filter true :parse true :assets true
-   :routes true})
+   :routes true :encoding true})
 
 (defn normalize
   "Validate a widget declaration — the shape both the extension point
@@ -61,6 +61,14 @@
       (unless (callable? f)
         (errorf "admin widget %q: %q must be a function, got %q"
                 (get w :name :anonymous) k f))))
+  # :encoding is how a widget says its control cannot ride a urlencoded
+  # form: form-page flips the <form> to multipart when any resolved
+  # widget declares it, and `submitted` hands such a widget's :parse
+  # the request even when (req :form) never saw the field (ADR-0039 §6)
+  (when-let [enc (get w :encoding)]
+    (unless (= :multipart enc)
+      (errorf "admin widget %q: :encoding must be :multipart, got %q"
+              (get w :name :anonymous) enc)))
   (freeze (merge {:name :anonymous :priority 100} w)))
 
 # -- the default text projection -----------------------------------------
@@ -314,6 +322,27 @@
   (when-let [f (get-in entry [:widget :filter])]
     (f (merge {:field (entry :field) :mode :filter} ctx))))
 
+(def field-error-key
+  ``What a widget's `:parse` throws to refuse a submitted value: a
+  refusal is not a panic, and it is not a 500 either — the operator
+  chose a file of the wrong type, and what they need is that sentence
+  next to the field they chose it in.``
+  :void.admin/field-error)
+
+(defn refuse!
+  ``Refuse a submitted value from inside a widget's `:parse`. The
+  message lands on the field, the form re-renders with a 422, and
+  nothing else about the submission is lost — which is what separates
+  "you chose a .svg" from an exception (ADR-0029 §4, ADR-0039 §6).``
+  [message]
+  (error {field-error-key (string message)}))
+
+(defn field-error
+  "The message of a widget refusal, or nil when the error is anything
+  else — anything else is a bug and stays one."
+  [err]
+  (when (dictionary? err) (get err field-error-key)))
+
 (defn parse
   "One submitted string -> the domain value, when the widget says how.
   Without a :parse the value goes through schema-layer coercion, which
@@ -322,6 +351,14 @@
   (if-let [f (get-in entry [:widget :parse])]
     (f raw (merge {:field (entry :field)} ctx))
     raw))
+
+(defn multipart?
+  ``Does any of these resolved entries draw a control that cannot ride
+  a urlencoded body? The enctype of a form is a consequence of the
+  widgets on it: a file input in a form that forgot the attribute
+  submits its filename and drops the file, silently (ADR-0039 §6).``
+  [entries]
+  (truthy? (some |(= :multipart (get-in $ [:widget :encoding])) (or entries []))))
 
 (defn assets
   "The {:style :script} of every distinct widget a page used — glued

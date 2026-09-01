@@ -140,7 +140,7 @@
     (mail/clear-outbox!)
 
     (def applied (db/migrate-up! {:dir "db/migrations"}))
-    (assert (= 6 (length applied)) "six migrations applied")
+    (assert (= 7 (length applied)) "seven migrations applied")
     (reset-bus!)
     (bus/start-consumers! (bus-state/active))
     (assert (get (bus/stats) :outbox)

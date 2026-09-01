@@ -122,20 +122,43 @@
   ``The form, keywordized, with each widget's `:parse` applied and the
   fields the declaration froze as read-only removed. A read-only field
   is not merely not drawn: a POST that names it is a POST that must
-  not reach `save!`.``
+  not reach `save!`.
+
+  A widget whose `:encoding` is `:multipart` is asked even when the
+  field is absent from `(req :form)`, because that is where its value
+  always is — the parsing middleware folds only the *non-file* parts
+  into the form (ADR-0039 §6). Such a widget answering nil means "no
+  file was chosen", and the field stays out of the update rather than
+  overwriting what is stored with nothing.
+
+  Returns `[values errors]`: a widget may refuse what was submitted
+  (`widget/refuse!`), and a refusal is a message on its field, in the
+  same shape `schema/check` produces — so the form re-renders with it
+  where the operator can read it, rather than as a 500 or as a status
+  line with no sentence in it.``
   [desc req]
   (def raw (form/params (get req :form {})))
   (def readonly (tabseq [k :in (desc :readonly)] k true))
   (def out @{})
+  (def errors @[])
   (each fd (desc :form-fields)
     (def k (fd :name))
     (unless (in readonly k)
-      (when (in raw k)
-        (def entry (ctx/widget-entry (desc :name) k))
-        (put out k (if entry
-                     (widget/parse entry (get raw k) {:resource desc :request req})
-                     (get raw k))))))
-  out)
+      (def entry (ctx/widget-entry (desc :name) k))
+      (def own-body (widget/multipart? [entry]))
+      (when (or (in raw k) own-body)
+        (def [ok value]
+          (if entry
+            (protect (widget/parse entry (get raw k) {:resource desc :request req}))
+            [true (get raw k)]))
+        (cond
+          ok (unless (and own-body (nil? value))
+               (put out k value))
+          (widget/field-error value)
+          (array/push errors {:path [k] :code :void.admin/widget
+                              :message (widget/field-error value)})
+          (error value)))))
+  [out errors])
 
 (defn- checked [desc values]
   (schema/check (desc :form-schema) values {:coerce true}))
@@ -173,8 +196,12 @@
 
 (defn create [desc]
   (fn admin-create [req]
-    (def values (submitted desc req))
-    (def result (checked desc values))
+    (def [values refused] (submitted desc req))
+    (def checked-result (checked desc values))
+    # a widget's refusal is an error about the submission like any
+    # other, and it renders in the same place
+    (def result (merge checked-result
+                       {:errors [;refused ;(checked-result :errors)]}))
     (if (empty? (result :errors))
       (let [row (db/insert! (desc :entity) (with-defaults desc req (result :value)))
             id (get row (get-in desc [:entity :pk]))]
@@ -226,8 +253,10 @@
   (fn admin-update [req]
     (def row (row! desc req))
     (def before (snapshot-of row))
-    (def values (submitted desc req))
-    (def result (checked desc values))
+    (def [values refused] (submitted desc req))
+    (def checked-result (checked desc values))
+    (def result (merge checked-result
+                       {:errors [;refused ;(checked-result :errors)]}))
     (defn invalid [errors extra]
       (def resp (page req (view/form-page desc (merge {:row row
                                                        :values (get req :form {})
@@ -285,9 +314,17 @@
     (def before (snapshot-of row))
     (def entry (ctx/widget-entry (desc :name) fname))
     (def raw (get-in req [:form (string fname)]))
-    (def parsed (if entry (widget/parse entry raw {:resource desc :request req}) raw))
-    (def result (schema/check (schema/select (get-in desc [:entity :schema]) [fname])
-                              {fname parsed} {:coerce true}))
+    (def [ok parsed]
+      (if entry
+        (protect (widget/parse entry raw {:resource desc :request req}))
+        [true raw]))
+    (unless (or ok (widget/field-error parsed)) (error parsed))
+    (def result
+      (if ok
+        (schema/check (schema/select (get-in desc [:entity :schema]) [fname])
+                      {fname parsed} {:coerce true})
+        {:value {} :errors [{:path [fname] :code :void.admin/widget
+                             :message (widget/field-error parsed)}]}))
     (if (empty? (result :errors))
       (do
         (put row fname (get-in result [:value fname]))
@@ -347,10 +384,12 @@
     (def row (row! desc req))
     (def [inline child] (inline-of desc req))
     (ensure-child! child :create nil)
-    (def values (submitted child req))
+    (def [values refused] (submitted child req))
     # the link to the parent comes from the URL, never from the form
     (def fk (get-in inline [:rel :key]))
-    (def result (schema/check (child :form-schema) values {:coerce true}))
+    (def checked-result (schema/check (child :form-schema) values {:coerce true}))
+    (def result (merge checked-result
+                       {:errors [;refused ;(checked-result :errors)]}))
     (if (empty? (result :errors))
       (do
         (def created
@@ -380,8 +419,10 @@
     (def c (inline-child! req inline child parent-id))
     (ensure-child! child :update c)
     (def before (snapshot-of c))
-    (def values (submitted child req))
-    (def result (schema/check (child :form-schema) values {:coerce true}))
+    (def [values refused] (submitted child req))
+    (def checked-result (schema/check (child :form-schema) values {:coerce true}))
+    (def result (merge checked-result
+                       {:errors [;refused ;(checked-result :errors)]}))
     (if (empty? (result :errors))
       (do
         (eachp [k v] (result :value) (put c k v))

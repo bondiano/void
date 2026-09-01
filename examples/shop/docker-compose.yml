@@ -3,7 +3,7 @@
 ###     docker compose up --build          the shop on http://localhost:8080
 ###     docker compose --profile obs up    plus prometheus and grafana
 ###
-### Six services, and every one of them is a claim this example makes
+### Eight services, and every one of them is a claim this example makes
 ### about void being deployable rather than demonstrable:
 ###
 ###   postgres   the data, the queue, the message log and the outbox —
@@ -13,6 +13,13 @@
 ###              web tier be more than one process (ADR-0010)
 ###   mailpit    an SMTP relay with a web inbox: the receipts, the
 ###              cancellations and the magic-link letters land in it
+###   minio      the bucket the product pictures live in — because a
+###              picture uploaded to one replica's disk is a 404 on the
+###              next, which is what [:deploy :shape] :fleet refuses to
+###              start with (ADR-0030, ADR-0039)
+###   createbucket  a one-shot `mc mb` — the bucket is part of this
+###              deployment's schema, so it is created the way the
+###              tables are
 ###   migrate    a one-shot `void db migrate` + `void shop seed`
 ###   web        the storefront and the JSON API
 ###   worker     the same image, with the worker and the scheduler on
@@ -52,6 +59,28 @@ x-app: &app
     VOID_MAIL__SMTP__HOST: mailpit
     VOID_MAIL__SMTP__PORT: "1025"
     VOID_MAIL__BASE_URL: http://localhost:8080
+    # product pictures in the bucket rather than on a container's disk
+    # (ADR-0039). main.janet reads this one the way it reads
+    # VOID_SHOP_DB: it decides which plugins are composed, so a
+    # deployment on a disk never loads the signer or the TLS stack
+    VOID_SHOP_STORAGE: s3
+    # the application reaches minio over the compose network...
+    VOID_STORAGE_S3__ENDPOINT: http://minio:9000
+    VOID_STORAGE_S3__BUCKET: shop
+    VOID_STORAGE_S3__REGION: us-east-1
+    # ...and a browser reads the pictures from the host, which is why
+    # the public origin is a second key rather than the same one
+    VOID_STORAGE_S3__PUBLIC_URL: http://localhost:9000/shop
+    # secret references, like SHOP_SECRET_KEY above: the values live in
+    # the environment and the config tree holds boxes that do not print
+    # (ADR-0007 §5)
+    MINIO_ACCESS_KEY: shop
+    MINIO_SECRET_KEY: shop-shop-shop
+    # the pictures come from an origin the default policy does not
+    # know, and a CSP that blocks an image blocks it silently — so the
+    # deployment that adds the origin is the file that adds it to the
+    # policy. The value is a janet literal, like the queue list below
+    VOID_SECURITY__CSP__POLICY__IMG_SRC: '[:self "data:" "http://localhost:9000"]'
     # /metrics answers this bearer token and nothing else
     VOID_OBS_HTTP__TOKEN: prometheus-scrape-token
     # /openapi.json and the Swagger UI at /docs are a dev-profile thing
@@ -66,6 +95,8 @@ x-app: &app
       condition: service_healthy
     mailpit:
       condition: service_started
+    createbucket:
+      condition: service_completed_successfully
 
 services:
   postgres:
@@ -105,6 +136,47 @@ services:
       # magic-link letter, watch what void/mail-jobs actually sent
       - "8025:8025"
 
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: shop
+      MINIO_ROOT_PASSWORD: shop-shop-shop
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - miniodata:/data
+    ports:
+      # 9000 is the S3 API, and it is published because the *browser*
+      # loads the product pictures from it — the application talks to
+      # the same server over the compose network under the name minio.
+      # 9001 is the console: http://localhost:9001 (shop / shop-shop-shop),
+      # where the objects the desk uploaded are visible as objects
+      - "9000:9000"
+      - "9001:9001"
+
+  # One shot, like `migrate` below and for the same reason: a bucket is
+  # part of the schema of this deployment. `mc anonymous set download`
+  # is what makes the pictures readable without a signature — the shop
+  # serves them straight to a browser, and a private bucket would mean
+  # a presigned URL per image per page. A bucket holding receipts would
+  # keep the default and let void/storage mint those links instead.
+  createbucket:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      sh -c "
+      mc alias set local http://minio:9000 shop shop-shop-shop &&
+      mc mb --ignore-existing local/shop &&
+      mc anonymous set download local/shop
+      "
+
   # One shot, and it has to finish before anything serves: the schema
   # is the application's (void/auth-db and void/bus-db ship their DDL
   # as data, and the migration that creates their tables is ours —
@@ -132,6 +204,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      createbucket:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
 
@@ -156,6 +230,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      createbucket:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
 
@@ -196,3 +272,4 @@ services:
 
 volumes:
   pgdata:
+  miniodata:

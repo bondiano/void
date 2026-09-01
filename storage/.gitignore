@@ -1,0 +1,4 @@
+# Where the suites put the roots they store into: every one of them
+# takes its own directory away on success, and this is what a crashed
+# run leaves behind.
+tmp/

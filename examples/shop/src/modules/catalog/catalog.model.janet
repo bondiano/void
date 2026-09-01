@@ -14,7 +14,13 @@
 ### This file is the only one in the module that names a table. Every
 ### query about a product is in ./catalog.repository, and nothing above
 ### the repository knows the word "products".
+### The import of `void/storage` below is not decoration: `:file` is a
+### schema type this package registers when its module loads, and a
+### `defentity` normalizes its schema right there — so the entity that
+### uses the type has to have loaded the module that registers it
+### (ADR-0039 §6, the void/proto pose).
 (import void/db :as db)
+(import void/storage)
 
 (db/defentity Product
   {:id [:int {:db/pk true :db/type "integer"}]
@@ -31,6 +37,20 @@
    # two drivers disagree about what a boolean column reads back as,
    # and a demo that claims one application on two engines does not
    # get to have a `case` on the dialect in a template
-   :status [:enum "active" "archived"]}
+   :status [:enum "active" "archived"]
+   # The picture, and the whole of what this application says about
+   # uploads (ADR-0039). What the column holds is a storage **key**,
+   # so the same row works against a disk in development and against
+   # the minio bucket the compose file runs — `storage/url` is what
+   # turns it into an address. The three annotations are read by the
+   # form projection and by the admin widget and ignored by
+   # validation, exactly like the `:db/*` ones above (ADR-0008): the
+   # accept list is enforced on the server as well as rendered into
+   # the input, because a browser filters politely and a request is
+   # bytes anybody assembled.
+   :image [:optional [:file {:db/type "text"
+                             :storage/prefix "products"
+                             :storage/accept ["image/png" "image/jpeg" "image/webp"]
+                             :storage/max-bytes 2097152}]]}
   :db/table "products"
   :db/rels {:cart-items [:has-many :CartItem :product-id]})

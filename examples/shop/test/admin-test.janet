@@ -29,6 +29,8 @@
 (import void/bus :as bus)
 (import void/bus/db :as busdb)
 (import void/bus/state :as bus-state)
+(import void/http/multipart :as multipart)
+(import void/storage :as storage)
 (import spork/json)
 (import ../main)
 (import ../src/seed :as seed)
@@ -44,6 +46,18 @@
 
 (def sqlite-path
   (string (or (os/getenv "TMPDIR") "/tmp") "/void-shop-admin-" (os/time) ".sqlite3"))
+
+(def storage-root
+  "Where the uploaded picture lands during the suite — a temporary
+  directory, not the ./storage a `void dev` on this checkout uses."
+  (string (or (os/getenv "TMPDIR") "/tmp") "/void-shop-admin-files-" (os/time)))
+
+(defn- rm-rf [path]
+  (case (os/stat path :mode)
+    :directory (do (each e (os/dir path) (rm-rf (string path "/" e)))
+                   (os/rmdir path))
+    :file (os/rm path)
+    nil))
 
 (def engines
   (filter identity
@@ -88,6 +102,7 @@
                            :auth {:scrypt {:ln 10}}
                            :crypto {:kdf {:in-thread false}}
                            :mail {:transport :memory}
+                           :storage {:local {:root storage-root}}
                            :bus {:consume false}
                            :bus-db {:poll-interval 0.05
                                     :forwarder {:enabled false}}}
@@ -96,7 +111,11 @@
   (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue
                                          :crypto/lib :auth/registry :authz/registry
                                          :obs/registry :obs/tracer :pressure/sampler
-                                         :bus/broker :bus.db/schema]})]
+                                         :bus/broker :bus.db/schema
+                                         # the desk uploads a product
+                                         # picture, so the store it goes
+                                         # into is up (ADR-0039)
+                                         :storage/store]})]
 
     (drop-tables! app-tables)
     (jobs/clear!)
@@ -210,6 +229,76 @@
     (assert (>= (forged :status) 400)
             "and only the columns :editable named — the rest is a 4xx, not a write")
     (note "in-place edit, bounded by the declaration")
+
+    # -- a picture, which is one line in catalog.model --------------------
+    #
+    # The desk uploads it, the storefront shows it, and neither the
+    # admin declaration nor the view says anything about buckets: the
+    # `:file` field resolves to void/storage-admin's widget, the value
+    # in the column is a **key**, and `storage/url` turns it into an
+    # address — a path under /uploads here, a minio URL in the compose
+    # file (ADR-0039).
+
+    (def edit-page (test/inject desk {:uri (string "/admin/products/" (mug :id) "/edit")}))
+    (assert (string/find "multipart/form-data" (text edit-page))
+            "the form the widget is on says multipart, or the file would never arrive")
+    (assert (string/find "image/png,image/jpeg,image/webp" (text edit-page))
+            "and the input carries the media types the schema annotated")
+
+    (def png "\x89PNG\r\n\x1a\n-not-really-a-png-but-bytes-are-bytes")
+    (def enc (multipart/encode
+               [{:name "sku" :value (mug :sku)}
+                {:name "name" :value (mug :name)}
+                {:name "description" :value (mug :description)}
+                {:name "price-cents" :value (string (mug :price-cents))}
+                {:name "stock" :value (string (mug :stock))}
+                {:name "status" :value (mug :status)}
+                {:name "image" :filename "mug.png"
+                 :content-type "image/png" :value png}]))
+    (def uploaded
+      (test/inject desk {:method :post
+                         :uri (string "/admin/products/" (mug :id))
+                         :headers {"x-csrf-token" (token-of desk)
+                                   "content-type" (enc :content-type)}
+                         :body (enc :body)}))
+    (assert (< (uploaded :status) 400)
+            (string "upload: " (uploaded :status) " " (text uploaded)))
+
+    (def with-image (db/find catalog/Product (mug :id)))
+    (assert (string/has-prefix? "products/" (with-image :image))
+            "what the column holds is a key in the field's own namespace, not a URL")
+    (assert (= png (string (storage/get (with-image :image))))
+            "and the bytes are in whichever store this composition resolved")
+
+    # the storefront draws it, from the same column
+    (cache/clear!)
+    (def product-page (test/inject c {:uri (string "/products/" (mug :id))}))
+    (assert (string/find (string "/uploads/" (with-image :image)) (text product-page))
+            "the storefront's <img> src is what storage/url answered for that key")
+
+    # and the server refuses what the accept list does not cover, whatever
+    # the browser filtered — with the reason on the field
+    (def bad-enc (multipart/encode
+                   [{:name "sku" :value (mug :sku)}
+                    {:name "name" :value (mug :name)}
+                    {:name "description" :value (mug :description)}
+                    {:name "price-cents" :value (string (mug :price-cents))}
+                    {:name "stock" :value (string (mug :stock))}
+                    {:name "status" :value (mug :status)}
+                    {:name "image" :filename "invoice.pdf"
+                     :content-type "application/pdf" :value "%PDF-1.7"}]))
+    (def refused
+      (test/inject desk {:method :post
+                         :uri (string "/admin/products/" (mug :id))
+                         :headers {"x-csrf-token" (token-of desk)
+                                   "content-type" (bad-enc :content-type)}
+                         :body (bad-enc :body)}))
+    (assert (= 422 (refused :status)) "a pdf is not a product picture")
+    (assert (string/find "image/png" (text refused))
+            "and the form comes back saying what the field does take")
+    (assert (= (with-image :image) ((db/find catalog/Product (mug :id)) :image))
+            "the refusal changed nothing")
+    (note "an upload: one :file field, and the desk, the storefront and the store agree")
 
     # -- the action that is a domain call ---------------------------------
     #
@@ -351,6 +440,7 @@
   (run-suite engine))
 (log/set-sinks! nil)
 (os/rm sqlite-path)
+(rm-rf storage-root)
 
 (unless (pg/available?)
   (printf "shop admin-test: SKIPPED the Postgres pass (set %s to a conninfo or a postgres:// url)"

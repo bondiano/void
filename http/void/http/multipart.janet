@@ -119,6 +119,25 @@
              @[prev (p :value)]))))
   out)
 
+(defn files
+  ``Fold the file parts into a name -> part table (duplicate names
+  accumulate into arrays) — the file half of what `fields` does for
+  plain values. A file input left empty submits a part with an empty
+  filename and no bytes; that is "no file", so it is left out.``
+  [parts]
+  (def out @{})
+  (each p parts
+    (when (and (p :name) (p :filename)
+               (not (empty? (p :filename)))
+               (not (empty? (or (p :value) ""))))
+      (def prev (get out (p :name)))
+      (put out (p :name)
+           (cond
+             (nil? prev) p
+             (indexed? prev) (array/push prev p)
+             @[prev p]))))
+  out)
+
 # -- building ------------------------------------------------------------
 
 (defn new-boundary

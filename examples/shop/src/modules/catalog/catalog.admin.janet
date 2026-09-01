@@ -33,11 +33,17 @@
   # exactly what it is for: `values/format-price` is the only place in
   # this application where cents become "€14.99", and the desk uses
   # that one rather than a second one that would round differently
-  :list [:id :sku :name
+  # `:image` is in the list, the detail and the form, and this file
+  # says nothing else about it: the `:file` type in ./catalog.model
+  # resolves to void/storage-admin's upload widget, which draws the
+  # thumbnail here, the preview on the detail page and the file input
+  # on the form — and stores what is submitted (ADR-0039 §6).
+  # `void admin widgets` prints that resolution and why
+  :list [:id :sku :image :name
          {:name :price :label "Price"
           :value (fn [row] (values/format-price (row :price-cents)))}
          :stock :status]
-  :detail [:id :sku :name :description :price-cents :stock :status]
+  :detail [:id :sku :image :name :description :price-cents :stock :status]
   :search [:sku :name :description]
   :filters [:status]
   :sortable [:id :sku :name :price-cents :stock]
@@ -47,7 +53,7 @@
   # editable in place — a price changed by a mis-click is a price
   # nobody reviewed
   :editable [:stock]
-  :form [:sku :name :description :price-cents :stock :status]
+  :form [:sku :name :description :price-cents :stock :status :image]
   :order-by [[:sku :asc]]
   # a product is archived, never deleted: an order's lines point at
   # this row, and a shop that deleted a product would be a shop whose

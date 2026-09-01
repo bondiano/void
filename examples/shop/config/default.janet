@@ -32,6 +32,22 @@
  # operator, which is the shape a cache is actually for
  :cache {:prefix "shop:" :ttl 60}
 
+ # -- product pictures ---------------------------------------------------
+ #
+ # A directory next to the checkout, served by void/storage-http under
+ # /uploads with the same ETag and Range handling the stylesheet gets
+ # (ADR-0039). This is the right store for one process and the wrong
+ # one for anything past it, exactly like the in-memory session store
+ # above: config/prod.janet moves it into the minio bucket, and a
+ # deployment that forgets does not start ([:deploy :shape] :fleet,
+ # ADR-0030).
+ #
+ # The prefix is public: a product picture is on a page anybody can
+ # open. `[:storage :serve :signed] true` would make every URL a
+ # temporary signed one, which is what a receipt or an invoice needs.
+ :storage {:local {:root "storage"}
+           :serve {:prefix "/uploads"}}
+
  # -- who is asking ------------------------------------------------------
  #
  # Three interfaces have two implementations each — the memory stores
@@ -143,6 +159,12 @@
                            :form-action [:self]
                            :frame-ancestors [:none]
                            :object-src [:none]
+                           # product pictures come from this origin in
+                           # development (void/storage-http serves them
+                           # under /uploads) and from the bucket in the
+                           # compose file — config/prod.janet adds that
+                           # origin, because a picture a policy blocks
+                           # is a picture that silently does not draw
                            :img-src [:self "data:"]}}}
 
  # -- the desk -----------------------------------------------------------

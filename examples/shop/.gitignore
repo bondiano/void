@@ -3,6 +3,9 @@ db/*.sqlite3
 db/*.sqlite3-*
 # the :file mail transport, in dev
 tmp/
+# the :local storage store, in dev: product pictures uploaded through
+# the desk. In the compose file they live in the minio bucket instead
+storage/
 
 # `void plugins lock` writes this, and a deployment commits it (see the
 # README): the composition of *this* example is a function of two

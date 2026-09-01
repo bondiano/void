@@ -31,16 +31,17 @@
 
 Тема волны: закрыть то, обо что настоящее приложение спотыкается в первую неделю, но чего нет на фоне Laravel/Rails/Phoenix, — и собрать это приложение. Метрика — §9 дословно: время «идея → работающий деплой» и доля вертикали без выхода из стека. Каждый пакет — свой ADR; порядок внутри волны — по тому, что попросит приложение.
 
-### 6.1 `void/storage` — файлы и загрузки *(L; свой ADR)*
+### 6.1 `void/storage` — файлы и загрузки *(L; [ADR-0039](adr/0039-hranilishe-fajlov-klyuch-kak-dannye.md))* ✅
 
-Паритет: Laravel Storage / Rails ActiveStorage. Сегодня между multipart-парсингом и URL на странице — ничего.
+Паритет: Laravel Storage / Rails ActiveStorage. Между multipart-парсингом и URL на странице теперь один шов, и он один и тот же для формы, admin и контроллера.
 
-- [ ] Контракт `:void/storage-store`: `put!`/`get`/`stream`/`delete!`/`url`; ключ и метаданные — данные
-- [ ] `:local`-store — диск, отдача через существующий static (etag/range)
-- [ ] `:s3`-store — S3-совместимый API своим стеком: `http/client` + `void/tls` + SigV4 на `void/crypto`
-- [ ] Signed/temporary URL
-- [ ] Шов с формами и admin: schema-аннотация файла → form-хелпер и admin-виджет (upload, превью)
-- [ ] `:local`-store под `[:deploy :shape] :fleet` — та же проверка на старте, что у всех per-process хранилищ (ADR-0030)
+- [x] Контракт `:void/storage-store`: `put!`/`get`/`stream`/`delete!`/`url`; ключ и метаданные — данные
+- [x] `:local`-store — диск (запись через tmp+rename), отдача через существующий static (etag/range) в `void/storage-http`
+- [x] `:s3`-store — S3-совместимый API своим стеком: `http/client` + `void/tls` + SigV4 на `void/crypto`, проверенный на опубликованных векторах AWS
+- [x] Signed/temporary URL — локально на ключах `void/security` (с ротацией), в bucket — SigV4 query auth
+- [x] Шов с формами и admin: тип схемы `:file` + аннотации `:storage/*` → `input type=file` и `enctype` в `void/html`, виджет с превью и серверной проверкой в `void/storage-admin`
+- [x] `:local`-store под `[:deploy :shape] :fleet` — та же проверка на старте, что у всех per-process хранилищ (ADR-0030)
+- [x] `examples/shop`: картинка товара — одна строка в `defentity`, minio в `docker-compose.yml`
 
 ### 6.2 `void make auth` — auth-скаффолд *(M)*
 

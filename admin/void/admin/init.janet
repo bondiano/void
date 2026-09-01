@@ -57,7 +57,7 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.admin/widget
-  :doc "Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why"
+  :doc "Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why"
   :schema {:name :keyword
            :render :function
            :doc [:optional :string]
@@ -68,7 +68,8 @@
            :filter [:optional :function]
            :parse [:optional :function]
            :assets [:optional :dictionary]
-           :routes [:optional :function]}
+           :routes [:optional :function]
+           :encoding [:optional [:enum :multipart]]}
   :validate (fn [contribs]
               (def seen @{})
               (each c contribs

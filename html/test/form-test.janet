@@ -108,6 +108,34 @@
 (assert (not (first (protect (form/form SignUp {:action "/x" :method :delete}))))
         "only :get and :post are HTML form methods")
 
+# -- file fields, and what they do to the form ---------------------------
+#
+# The :file type is void/storage's (ADR-0039); this projection is
+# void/html's, and it works on any schema that uses one — the type is
+# registered here so the assertions stand without that package.
+
+(schema/register-type! :file {:validate (fn [v _] (string? v))})
+
+(def Avatar
+  {:name [:string {:min 1}]
+   :photo [:file {:storage/accept ["image/png" "image/jpeg"]}]})
+
+(def specs (form/field-specs Avatar))
+(def photo (find |(= :photo ($ :name)) specs))
+(assert (= :file (photo :control)) "a :file field is a file control")
+(assert (= "image/png,image/jpeg" (get-in photo [:attrs :accept]))
+        "carrying the media types the schema annotated")
+
+(def avatar-form (render (form/form Avatar {:action "/me" :values {:photo "a/b.png"}})))
+(assert (string/find `enctype="multipart/form-data"` avatar-form)
+        "a form with a file control says multipart — a form that forgot would submit the filename and drop the file")
+(assert (string/find `type="file"` avatar-form))
+(assert (nil? (string/find `value="a/b.png"` avatar-form))
+        "and carries no value: a file input's value is not scriptable, so re-rendering cannot restore the choice")
+
+(assert (nil? (string/find "enctype" (render (form/form SignUp {:action "/signup"}))))
+        "a form with no file control is left alone")
+
 # -- snapshot ------------------------------------------------------------
 
 (assert (test/snapshot "form-signup"

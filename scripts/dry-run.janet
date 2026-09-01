@@ -7,6 +7,7 @@
 ### void/ws + void/ws-htmx +
 ### void/proto + void/grpc +
 ### void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
+### void/storage (+ -http, -s3, -admin) +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
@@ -85,6 +86,10 @@
 (require "void/admin/init")
 (require "void/admin/jobs")
 (require "void/admin/mcp")
+(require "void/storage/init")
+(require "void/storage/http")
+(require "void/storage/s3")
+(require "void/storage/admin")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -108,6 +113,7 @@
                              :void/proto :void/grpc
                              :void/mcp :void/mcp-http :void/mcp-obs
                              :void/admin :void/admin-jobs :void/admin-mcp
+                             :void/storage :void/storage-http :void/storage-s3 :void/storage-admin
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # three drivers now provide :void/db-driver, two stores provide
@@ -126,7 +132,12 @@
                   # stores and void/auth-db ships database ones
                   :void/auth-user-store {:impl :auth.db/users}
                   :void/auth-token-store {:impl :auth.db/tokens}
-                  :void/auth-challenge-store {:impl :auth.db/challenges}}}}))
+                  :void/auth-challenge-store {:impl :auth.db/challenges}
+                  # and two stores provide :void/storage-store, once
+                  # void/storage-s3 is in the composition
+                  :void/storage-store {:impl :storage/s3}
+                  :storage-s3 {:endpoint "http://minio.invalid:9000" :bucket "gate"
+                               :access-key "gate" :secret-key "gate-secret"}}}}))
 
 (printf "dry-run ok (profile %q)" (report :profile))
 (printf "  plugins:    %j (active: %j)" (report :plugins) (report :active))

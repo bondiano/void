@@ -221,6 +221,7 @@ button.danger { color:var(--danger); }
                  :hx-target "this"
                  :hx-swap "outerHTML"
                  :hx-trigger "change"
+                 :enctype (when (widget/multipart? [entry]) "multipart/form-data")
                  :class "admin-cell"}
                 (when entry
                   (widget/render entry {:mode :list :value value :row row
@@ -381,6 +382,16 @@ button.danger { color:var(--danger); }
      [:ul {:class "field-errors"}
       (seq [e :in errs] [:li (schema/error-str e)])])])
 
+(defn- form-attrs
+  ``The <form> attributes of a form drawing `fields` of `desc`: the
+  class, plus the enctype when a widget on it says its control needs
+  one (ADR-0039 §6).``
+  [desc fields &opt extra]
+  (def entries (map |(ctx/widget-entry (desc :name) ($ :name)) fields))
+  (merge {:class "admin-form"}
+         (if (widget/multipart? entries) {:enctype "multipart/form-data"} {})
+         (or extra {})))
+
 (defn form-page
   ``The create/edit form. The version column, when the entity declares
   one, rides along as a hidden field: `save!` compares it and a lost
@@ -399,7 +410,7 @@ button.danger { color:var(--danger); }
           (string "Edit " (desc :singular) " " (id-of desc row)))]
    (when-let [c (get opts :conflict)]
      [:p {:class "admin-warn"} c])
-   (post-form :post action {:class "admin-form"}
+   (post-form :post action (form-attrs desc (desc :form-fields))
      (when-let [errs (get (form/errors-by-field errors) :form)]
        [:ul {:class "form-errors"} (seq [e :in errs] [:li (schema/error-str e)])])
      (when (and vfield row)
@@ -541,7 +552,10 @@ button.danger { color:var(--danger); }
             (post-form :post (string base "/" cid)
                        {:hx-post (string base "/" cid)
                         :hx-target (string "#inline-" (inline :name))
-                        :hx-swap "outerHTML"}
+                        :hx-swap "outerHTML"
+                        :enctype (when (widget/multipart?
+                                         [(ctx/widget-entry (child :name) f)])
+                                   "multipart/form-data")}
               (widget/render (ctx/widget-entry (child :name) f)
                              {:mode :inline :value (get c f) :row c :resource child
                               :name (string f) :id (string "i-" cid "-" f)})
@@ -555,10 +569,11 @@ button.danger { color:var(--danger); }
              [:button {:type "submit" :class "danger"} "Delete"]))]])]]
    (when (inline :can-add)
      (post-form :post base
-                {:class "admin-form"
-                 :hx-post base
-                 :hx-target (string "#inline-" (inline :name))
-                 :hx-swap "outerHTML"}
+                (form-attrs child
+                            (filter |(index-of ($ :name) fields) (child :form-fields))
+                            {:hx-post base
+                             :hx-target (string "#inline-" (inline :name))
+                             :hx-swap "outerHTML"})
        (when-let [errs (get (form/errors-by-field errors) :form)]
          [:ul {:class "form-errors"} (seq [e :in errs] [:li (schema/error-str e)])])
        ;(seq [f :in fields]

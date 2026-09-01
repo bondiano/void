@@ -6,7 +6,7 @@ that takes money, a back office nobody wrote pages for, a JSON API with
 its own OpenAPI document, an MCP server for an agent, and the
 enterprise layer under all of it — metrics and traces, load shedding,
 sign-in, row-level authorization, CSRF, rate limits, mail, background
-jobs and an audit trail.
+jobs, uploaded product pictures and an audit trail.
 
 Everything here runs on **sqlite or Postgres**, chosen by one
 environment variable, and the suite runs twice to keep that honest.
@@ -22,6 +22,7 @@ void admin widgets    # which widget draws which field, and why
 void shop stock       # this application's own command — and an MCP tool
 void jobs stats       # what the queue is holding
 void jobs work        # run the queue in another terminal
+void storage info     # which store the product pictures are in
 void deploy check     # is every store fit for [:deploy :shape]?
 void repl             # a repl inside the running process
 ```
@@ -251,6 +252,18 @@ confirmation becomes a progress page, with the identity that pressed
 the button riding along so the per-row policies decide about the same
 subject.
 
+**A product picture is one line in the model, and nowhere else.**
+`:image [:optional [:file {:storage/accept [...] :storage/max-bytes ...}]]`
+in `catalog/catalog.model.janet` is the whole declaration: the desk
+gets a file input carrying that accept list (on a form that flipped
+itself to `multipart/form-data`), the list and the detail page get a
+thumbnail and a preview, a submitted file is checked against those two
+annotations **on the server** and stored, and what lands in the column
+is a storage **key**. `catalog.view` turns it back into an `<img>` with
+`storage/url`. Nothing in the admin declaration mentions files —
+`void admin widgets` prints which widget was resolved for the field and
+why (ADR-0039).
+
 **The gate is shut until one line opens it, and that line names a
 policy the shop already had.** `{:admin {:access :staff}}` in
 `config/default.janet` — the same `:staff` the storefront's own
@@ -369,17 +382,29 @@ docker compose --profile obs up --build  # plus Prometheus and Grafana
 | <http://localhost:8080/admin> | the desk (sign in as `desk@shop.example`) |
 | <http://localhost:8080/docs> | Swagger UI over `/openapi.json` |
 | <http://localhost:8025> | Mailpit — every receipt, cancellation and sign-in link |
+| <http://localhost:9001> | the minio console (`shop` / `shop-shop-shop`) — the product pictures, as objects |
 | <http://localhost:3000> | Grafana, with the "void shop" dashboard provisioned (`--profile obs`) |
 | <http://localhost:9090> | Prometheus (`--profile obs`) |
 | `localhost:55432` | Postgres, published so `psql` can look at the outbox and the trail |
 
-Six services, and the interesting one is that **web and worker are the
+Eight services, and the interesting one is that **web and worker are the
 same image running the same code**: what differs is two environment
 variables (`VOID_JOBS__WORKER__ENABLED`, `VOID_JOBS__SCHEDULER__ENABLED`).
 That is the deployment shape void/jobs is built for — the process that
 enqueues is usually not the process that runs.
 
 A few things the compose file is making a point about:
+
+* **The pictures are in a bucket, and that is a config line.** On a
+  laptop `[:storage :local :root]` is a directory and
+  `void/storage-http` serves it under `/uploads`; here
+  `VOID_SHOP_STORAGE=s3` composes `void/storage-s3` and
+  `{:void/storage-store {:impl :storage/s3}}` points the same
+  `storage/url` at minio. Nothing in `catalog.model`, `catalog.view` or
+  `catalog.admin` changes, because the column holds a **key** and not a
+  URL (ADR-0039). The disk store is what `void deploy check` refuses
+  here: a picture uploaded to one replica is a 404 on the next, and the
+  container that gets replaced takes the uploads with it.
 
 * **The schema is migrated by a one-shot service**, not by whichever
   process boots first. `[:jobs-db :auto-create]` and

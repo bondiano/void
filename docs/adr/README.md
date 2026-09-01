@@ -46,3 +46,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0036](0036-i18n-slovar-kak-vklad-locale-kak-dyn-oshibki-perevodyatsya-sami.md) | `void/i18n` — словарь как вклад с `:precedence`, locale как dyn; schema-ошибки переводятся через шов ADR-0008 | accepted |
 | [0037](0037-datastar-stranica-kak-otvet-morph-cherez-sse.md) | `void/datastar` — страница как ответ: morph `<title>`+`<body>` через SSE; middleware мельче рендера | accepted (experimental) |
 | [0038](0038-tls-ishodyashij-cherez-libssl-memory-bio.md) | `void/tls` — исходящий TLS через libssl и memory-BIO; шов вместо ребра; входящий остаётся у прокси | accepted |
+| [0039](0039-hranilishe-fajlov-klyuch-kak-dannye.md) | `void/storage` — ключ как данные, отдача поверх static, SigV4 на `void/crypto`, диск как per-process хранилище | accepted |

@@ -87,6 +87,23 @@ p.lede { color: var(--muted); margin-top: 0; }
   gap: 0.4rem;
 }
 
+/* the product picture: uploaded through the desk, served by
+   void/storage-http on a laptop and out of the minio bucket in the
+   compose file — the markup is the same either way */
+.card .thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--line);
+}
+#product .photo {
+  max-width: 22rem;
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
 .card .name { font-weight: 600; }
 .card .sku { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.04em; }
 .card .price { font-variant-numeric: tabular-nums; font-weight: 600; }

@@ -13,8 +13,8 @@ jobs:
     # clients of a real server or they are nothing, and void/cache's and
     # void/jobs's redis backends are too: their integration suites run
     # when VOID_TEST_PG / VOID_TEST_MYSQL / VOID_TEST_REDIS /
-    # VOID_TEST_KAFKA name a server, and skip (loudly) when they do not
-    # — so CI is where they are a gate.
+    # VOID_TEST_KAFKA / VOID_TEST_S3 name a server, and skip (loudly)
+    # when they do not — so CI is where they are a gate.
     services:
       redis:
         image: redis:7
@@ -78,6 +78,13 @@ jobs:
       # every kafka suite works under a topic prefix of its own too —
       # the broker keeps the log, which is the point and the hazard
       VOID_TEST_KAFKA: 127.0.0.1:9092
+      # and the bucket void/storage-s3 signs against; every object it
+      # writes carries this process's pid in its key, and the suite
+      # takes them away afterwards
+      VOID_TEST_S3: http://127.0.0.1:9000
+      VOID_TEST_S3_BUCKET: void-test
+      VOID_TEST_S3_KEY: void
+      VOID_TEST_S3_SECRET: void-void-void
 
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +118,23 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libpq5 libmariadb3 librdkafka1
           # void/redis needs no client library at all (a connection is a
           # net/ stream)
+
+      - name: Start minio (void/storage-s3's server)
+        # Not a service container: `minio server /data` is a *command*,
+        # and a GitHub service cannot override one. It is here for the
+        # half AWS's published vectors cannot check — that a signature
+        # this code produces is one a real server accepts (ADR-0039).
+        run: |
+          docker run -d --name void-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=void -e MINIO_ROOT_PASSWORD=void-void-void \
+            minio/minio:latest server /data
+          for i in $(seq 30); do
+            curl -sf http://127.0.0.1:9000/minio/health/live && break
+            sleep 2
+          done
+          docker run --rm --network host --entrypoint sh minio/mc:latest -c \
+            "mc alias set ci http://127.0.0.1:9000 void void-void-void &&
+             mc mb --ignore-existing ci/void-test"
 
       - name: Build void/fdwait
         # the monorepo's one native module (ADR-0011). void/db-postgres
