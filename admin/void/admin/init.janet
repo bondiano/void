@@ -125,12 +125,21 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.admin/menu
-  :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}"
-  :schema {:name :keyword :label :string :href :string}
+  :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}. A link to a page inside the admin says :path instead — {:name :jobs :label \"Jobs\" :path \"/jobs\"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two"
+  :schema {:name :keyword :label :string
+           :href [:optional :string]
+           :path [:optional :string]}
   :validate (fn [contribs]
               (def seen @{})
               (each c contribs
                 (when (in seen (c :name)) (errorf "duplicate admin menu item %q" (c :name)))
+                (when (= (nil? (get c :href)) (nil? (get c :path)))
+                  (errorf (string "admin menu item %q: name the link once — :href for a URL "
+                                  "of its own, :path for one under [:admin :prefix]")
+                          (c :name)))
+                (when-let [p (get c :path)]
+                  (unless (string/has-prefix? "/" p)
+                    (errorf "admin menu item %q: :path must start with /" (c :name))))
                 (put seen (c :name) true)))
   :reduce |(sorted-by |($ :name) $))
 

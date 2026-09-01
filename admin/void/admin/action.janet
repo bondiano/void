@@ -72,23 +72,28 @@
 
 # -- responses -----------------------------------------------------------
 
-(defn- page
+(defn page
   ``A full admin page: the configured frame, and the widget resolution
   of this resource in the render context — that is where the layout
-  finds the `:assets` it has to glue in once.``
+  finds the `:assets` it has to glue in once. A `:void.admin/page`
+  answers through this too, so a contributed section is framed by the
+  same layout as the seven conventional actions.``
   [req content &opt rname opts]
   (html/page content
              (merge {:layout (view/frame)
                      :context {:void.admin/widgets (if rname (ctx/widget-entries rname) {})}}
                     (or opts {}))))
 
-(defn- partial? [req]
+(defn partial?
+  "Is this request asking for the fragment rather than the page? A
+  history restore is not: the browser is putting a whole page back."
+  [req]
   (and (htmx/request? req) (not (htmx/history-restore? req))))
 
 (defn- see-other [url]
   (ring/response 303 nil @{"location" url}))
 
-(defn- redirect-back [req url]
+(defn redirect-back [req url]
   ``After a write: htmx gets an HX-Redirect (it will not follow a 303
   into a swap target), a browser gets the 303 it expects.``
   (if (htmx/request? req)

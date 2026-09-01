@@ -61,11 +61,11 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/menu`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Extra items in the admin navigation: {:name :docs :label "Docs" :href "/admin/reports"}
+- Extra items in the admin navigation: {:name :docs :label "Docs" :href "/admin/reports"}. A link to a page inside the admin says :path instead — {:name :jobs :label "Jobs" :path "/jobs"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two
 - **contribution schema:**
 
   ```janet
-  {:href :string :label :string :name :keyword}
+  {:href [:optional :string] :label :string :name :keyword :path [:optional :string]}
   ```
 
 ### `:void.admin/page`

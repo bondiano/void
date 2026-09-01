@@ -175,7 +175,10 @@
 
 (def make-record "See record/make — a pending record from resolved policy." record/make)
 (def record-states "See record/states." record/states)
+(def record-live-states "See record/live-states — the states that still owe work." record/live-states)
+(def record-fields "See record/fields — every field of a record, in a stable order." record/fields)
 (def record-summary "See record/summary — one line for a listing." record/summary)
+(def record-age "See record/ago — the age of a record as one column: \"42s\", \"3h\"." record/ago)
 
 (def memory-backend "See memory/store — the in-process backend." memory/store)
 (def make-memory "See memory/make — the table behind one." memory/make)

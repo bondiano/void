@@ -78,6 +78,9 @@ button.danger { color:var(--danger); }
 .field-errors, .form-errors { color:var(--danger); margin:.25rem 0 0; padding-left:1rem; }
 .field-invalid input, .field-invalid select, .field-invalid textarea { border-color:var(--danger); }
 .admin-empty { color:var(--muted); padding:1rem 0; }
+.admin-note { color:var(--muted); font-size:.85rem; margin:.25rem 0; }
+.admin-button.danger { color:var(--danger); }
+form.admin-act { display:inline; }
 .admin-count { font-variant-numeric:tabular-nums; }
 .admin-warn { border-left:3px solid var(--danger); padding:.5rem .75rem; background:var(--soft); }
 .admin-cards { display:flex; gap:1rem; flex-wrap:wrap; }
@@ -94,7 +97,8 @@ button.danger { color:var(--danger); }
     (def d (res/lookup rname))
     (array/push items {:label (d :title) :href (ctx/base d)}))
   (each m (ctx/setting :menu [])
-    (array/push items {:label (m :label) :href (m :href)}))
+    (array/push items {:label (m :label)
+                       :href (or (get m :href) (ctx/at (m :path)))}))
   (seq [i :in items]
     [:a {:href (i :href)
          :class (when (string/has-prefix? (i :href) here) "active")}

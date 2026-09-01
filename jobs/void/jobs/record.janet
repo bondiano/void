@@ -274,7 +274,11 @@
 
 # -- rendering -----------------------------------------------------------
 
-(defn- ago [t now]
+(defn ago
+  ``How long ago `t` was, in one column's worth of characters: "now",
+  "42s", "9m", "3h", "5d". The age of a record is read in a terminal
+  and in a back office, and two spellings of "3h" would drift.``
+  [t now]
   (if (nil? t)
     "-"
     (let [d (- now t)]

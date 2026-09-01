@@ -316,7 +316,8 @@ Django-admin/Filament-класс, но данные-first: админка — **
 - **Авторизация насквозь через void/authz**: каждый action = policy, row-level scoping через attribute providers (админ видит только свой бренд/тенант — критично для back-office мультибрендовых платформ).
 - Audit log встроен: hooks на каждую запись, страница истории по entity.
 - Custom actions (row/bulk) — функции; тяжёлые уходят в void/jobs с прогрессом в UI.
-- Extension points: `:void.admin/page` (произвольные страницы), `:void.admin/dashboard-widget`, `:void.admin/menu`.
+- **Jobs-дашборд** (`void/admin-jobs`, паритет Horizon/Sidekiq-web): очереди и их глубина, записи одного фильтра, одна запись целиком, retry/discard для DLQ под обычными policy-именами. Проекция восьми функций `:void/jobs-backend` — ни одной новой; собран из `:void.admin/page`, потому что очередь не entity и проецировать в `defresource-admin` нечего.
+- Extension points: `:void.admin/page` (произвольные страницы), `:void.admin/dashboard-widget`, `:void.admin/menu` (`:href` наружу, `:path` — под `[:admin :prefix]`).
 - **MCP-синергия**: те же resource-декларации автоматически экспонируются как MCP tools/resources (с теми же ABAC-политиками) → одна декларация даёт админку для людей и для агентов.
 - Волна 3–4: требует html/htmx/db/auth/authz.
 
