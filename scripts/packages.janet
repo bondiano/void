@@ -307,6 +307,29 @@
    {:dir "storage" :deps [:void/core :void/crypto :void/http :void/security :void/admin]
     :test-deps [:void/dev :void/db-sqlite]}
 
+   :void/notify
+   # Unified notifications (ADR-0040). Five plugins in one package, the
+   # void/cache — void/cache-http split: the kernel is core-only, and
+   # every edge here belongs to one channel. void/mail is
+   # void/notify-mail's (the letter is built by the mailer and goes
+   # back out through mail/send-delivery, so [:mail :queue] keeps
+   # meaning what it means); void/db, void/http and void/html are
+   # void/notify-inapp's — the table the bell reads, the four routes
+   # that draw it and the fragments they answer with; void/http is also
+   # the webhook's transport (http/client — and void/tls closes the
+   # https seam at runtime, never an edge, ADR-0038), with void/crypto
+   # a *module* edge for its signature, the void/storage/sign pose:
+   # composing :void/crypto is what arms it. void/jobs is
+   # void/notify-jobs'. No edge to void/auth and that is the design
+   # (ADR-0024): the bell reads the identity off the dyn key, so an
+   # application with its own authentication gets the same widget. The
+   # suite reaches void/dev for test/start! (ADR-0017), void/db-sqlite
+   # for a real table under the in-app channel and void/auth to prove
+   # the dyn seam works from both ends.
+   {:dir "notify" :deps [:void/core :void/crypto :void/http :void/html
+                         :void/db :void/jobs :void/mail]
+    :test-deps [:void/dev :void/db-sqlite :void/auth] :jpm [:spork]}
+
    :void/ws
    # WebSocket over the HTTP kernel (ADR-0028): the handshake is
    # answered from an ordinary route handler, so the only edge is

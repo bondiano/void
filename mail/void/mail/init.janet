@@ -264,6 +264,23 @@
     false false
     (not (nil? enqueue))))
 
+(defn send-delivery
+  ``Send a delivery that is already built, applying this composition's
+  queue decision — the second half of `send`, and what a caller with a
+  rendered letter in hand calls directly (void/notify's mail channel,
+  which rendered it where the request was, and a retry of one that was
+  kept).
+
+  Rendering happened once, wherever it happened; this is only the
+  routing.``
+  [delivery]
+  (if (queued?)
+    (let [job (enqueue delivery)]
+      (log/debug "mail queued" :ns log-ns
+                 :id (delivery :id) :to (get-in delivery [:message :recipients]))
+      (transport/receipt :queue delivery {:queued true :job (get job :id)}))
+    (deliver! delivery)))
+
 (defn send
   ``Send a message. With a queue in the composition it is rendered
   here — so that what the worker sends is what this request meant,
@@ -276,13 +293,7 @@
   actually delivered — on the worker, for a queued one — because that
   is the event, and "handed to a queue" is not it.``
   [msg &opt opts]
-  (def delivery (build msg opts))
-  (if (queued?)
-    (let [job (enqueue delivery)]
-      (log/debug "mail queued" :ns log-ns
-                 :id (delivery :id) :to (get-in delivery [:message :recipients]))
-      (transport/receipt :queue delivery {:queued true :job (get job :id)}))
-    (deliver! delivery)))
+  (send-delivery (build msg opts)))
 
 # -- public surface ------------------------------------------------------
 

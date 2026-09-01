@@ -8,6 +8,7 @@
 ### void/proto + void/grpc +
 ### void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
 ### void/storage (+ -http, -s3, -admin) +
+### void/notify (+ -mail, -inapp, -webhook, -jobs) +
 ### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
 ### the core extension points.
 ### The plugin list below is the composition; the module path under it
@@ -90,6 +91,11 @@
 (require "void/storage/http")
 (require "void/storage/s3")
 (require "void/storage/admin")
+(require "void/notify/init")
+(require "void/notify/mail")
+(require "void/notify/inapp")
+(require "void/notify/webhook")
+(require "void/notify/jobs")
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
@@ -114,6 +120,7 @@
                              :void/mcp :void/mcp-http :void/mcp-obs
                              :void/admin :void/admin-jobs :void/admin-mcp
                              :void/storage :void/storage-http :void/storage-s3 :void/storage-admin
+                             :void/notify :void/notify-mail :void/notify-inapp :void/notify-webhook :void/notify-jobs
                              :void/dev :void/bench :bench/probe :demo/greeter]
                    :profile :dev
    # three drivers now provide :void/db-driver, two stores provide

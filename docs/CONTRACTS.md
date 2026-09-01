@@ -13,7 +13,9 @@
 > void/bus-db void/bus-jobs void/ws void/ws-htmx void/proto
 > void/grpc void/mcp void/mcp-http void/mcp-obs void/admin
 > void/admin-jobs void/admin-mcp void/storage void/storage-http
-> void/storage-s3 void/storage-admin void/dev void/bench)
+> void/storage-s3 void/storage-admin void/notify void/notify-mail
+> void/notify-inapp void/notify-webhook void/notify-jobs void/dev
+> void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -426,6 +428,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:doc [:optional :string] :expand [:optional :function] :fn [:optional [:or :function :symbol]] :name :keyword :needs [:optional [:vector :keyword]] :read-only? [:optional :boolean] :schema [:optional :any] :title [:optional :string]}
+  ```
+
+### `:void.notify/channel`
+
+- **owner:** `:void/notify` · **cardinality:** `:many`
+- Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed
+- **contribution schema:**
+
+  ```janet
+  {:address [:optional :keyword] :deliver :function :doc [:optional :string] :health [:optional :function] :name :keyword :permanent? [:optional :function] :project [:optional :function]}
   ```
 
 ### `:void.oauth/sign-in`

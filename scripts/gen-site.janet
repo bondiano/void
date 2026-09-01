@@ -92,6 +92,11 @@
 (require "void/storage/http")
 (require "void/storage/s3")
 (require "void/storage/admin")
+(require "void/notify/init")
+(require "void/notify/mail")
+(require "void/notify/inapp")
+(require "void/notify/webhook")
+(require "void/notify/jobs")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -115,6 +120,7 @@
                :void/mcp :void/mcp-http :void/mcp-obs
                :void/admin :void/admin-jobs :void/admin-mcp
                :void/storage :void/storage-http :void/storage-s3 :void/storage-admin
+               :void/notify :void/notify-mail :void/notify-inapp :void/notify-webhook :void/notify-jobs
                :void/dev :void/bench]
      :profile :dev
      # the ambiguity picks every gate makes: several plugins provide
