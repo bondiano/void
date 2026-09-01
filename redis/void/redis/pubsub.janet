@@ -1,5 +1,5 @@
 ### void/redis/pubsub — publish/subscribe on a connection of its own
-### (SPEC.md §5.10, ROADMAP 2.2).
+### (SPEC.md §5.10).
 ###
 ### A subscribed connection is not a request/response connection any
 ### more. In RESP2 it accepts nothing but SUBSCRIBE, UNSUBSCRIBE and

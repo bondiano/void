@@ -1,4 +1,4 @@
-### void/bench/pg — where B2 and B3 find a Postgres (ROADMAP 2.5).
+### void/bench/pg — where B2 and B3 find a Postgres.
 ###
 ### The database-backed benchmarks need a server, and rather than
 ### guess at one they ask for it by name — the same bargain the

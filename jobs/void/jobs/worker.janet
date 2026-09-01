@@ -1,5 +1,5 @@
 ### void/jobs/worker — the executor: fibers that claim, run and settle
-### (SPEC.md §5.12, ADR-0012, ROADMAP 2.4).
+### (SPEC.md §5.12, ADR-0012).
 ###
 ### A worker is `concurrency` fibers on the ev loop, each one running
 ### the same three lines forever — claim a job, run it, write down what

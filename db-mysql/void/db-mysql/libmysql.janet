@@ -1,5 +1,5 @@
 ### void/db-mysql/libmysql — the libmysqlclient surface this driver
-### uses, and nothing more (ADR-0033, SPEC.md §5.10, ROADMAP 5).
+### uses, and nothing more (ADR-0033, SPEC.md §5.10).
 ###
 ### The shape is void/db-postgres/libpq's, for the same two reasons:
 ### the library path is configuration ([:db-mysql :library]) rather

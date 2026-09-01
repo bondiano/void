@@ -1,4 +1,4 @@
-### The wave-4 half of the demo (ROADMAP 4.4, exit criterion 1): a back
+### The wave-4 half of the demo (exit criterion 1): a back
 ### office over the entities this application already had, scoped per
 ### author, and the same declarations reachable by an agent through MCP
 ### under the same policies.
@@ -224,7 +224,7 @@
 
     # -- and the same declarations, read by an agent ----------------------
     #
-    # ROADMAP 4.4's last line and wave 4's first exit criterion: the
+    # Wave 4's first exit criterion: the
     # back office and the agent are two projections of one registry, so
     # there is nowhere for them to disagree. Nothing in ./admin.janet
     # mentions MCP, and nothing in void/admin does either.

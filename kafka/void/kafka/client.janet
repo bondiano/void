@@ -1,5 +1,5 @@
 ### void/kafka/client — one librdkafka handle and the pump that turns
-### its events into calls (ADR-0035, SPEC.md §5.11, ROADMAP 5).
+### its events into calls (ADR-0035, SPEC.md §5.11).
 ###
 ### The whole integration is here, and it is short: the library parks
 ### its news (delivery reports, fetched messages, errors) on a queue,

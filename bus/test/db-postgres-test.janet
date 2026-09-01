@@ -14,7 +14,7 @@
 # by `pg_notify` rather than by a poll interval.
 #
 # Skipped without VOID_TEST_PG; a gate in CI, which runs a service
-# container (ROADMAP 3.6, the bargain void/db-postgres and void/jobs
+# container (the bargain void/db-postgres and void/jobs
 # already strike).
 
 (if-not (pg/available?)

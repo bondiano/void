@@ -1,5 +1,5 @@
 ### void/obs/runtime — what a process knows about itself (SPEC.md
-### §5.13 and §8.4, ROADMAP 3.1).
+### §5.13 and §8.4).
 ###
 ### **The event-loop lag histogram is the point of this module.** On a
 ### single-threaded ev loop (ADR-0010) every other number is downstream

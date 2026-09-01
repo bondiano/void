@@ -9,7 +9,7 @@
 
 (log/set-level! "void" :error)
 
-# The seam ROADMAP 3.6 asks for: "tracing continuation из HTTP" — a
+# The seam ADR-0012 asks for: "tracing continuation из HTTP" — a
 # trace that starts in a request and continues in whatever consumes
 # the message that request published.
 #

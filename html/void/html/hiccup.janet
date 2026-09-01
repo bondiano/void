@@ -1,4 +1,4 @@
-### void/html/hiccup — the hiccup pipeline (SPEC.md §5.4, ROADMAP 1.2).
+### void/html/hiccup — the hiccup pipeline (SPEC.md §5.4).
 ###
 ### Views are plain data rendered by spork/htmlgen; this module adds
 ### the component layer on top: a tuple whose head is a function is a

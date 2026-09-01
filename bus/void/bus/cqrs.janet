@@ -1,5 +1,5 @@
 ### void/bus/cqrs — commands and events, with the shape declared once
-### (SPEC.md §5.22, ADR-0012, ROADMAP 3.6).
+### (SPEC.md §5.22, ADR-0012).
 ###
 ### An optional layer, and a thin one: it adds no transport and no
 ### second registry of handlers. What it adds is a **name with a

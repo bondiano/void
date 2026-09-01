@@ -1,5 +1,5 @@
 ### void/obs/trace — spans, and the context that travels with them
-### (SPEC.md §5.13, ROADMAP 3.1).
+### (SPEC.md §5.13).
 ###
 ### **A span lives in a dyn, and that is the whole propagation
 ### mechanism.** ev fibers are the unit of a request in void (ADR-0010),
@@ -196,7 +196,7 @@
 (defn context
   ``The correlation ids of the current span, as the log context wants
   them: {:trace-id ... :span-id ...}, or {} outside a span. This is
-  the seam ROADMAP 3.1 asks for in the logs line — void/core/log
+  the seam ADR-0021 asks for in the logs line — void/core/log
   (ADR-0018) already binds a context per fiber, and obs puts the trace
   ids into it.``
   [&opt span]
@@ -358,7 +358,7 @@
 
       (trace/inject! @{"content-type" "application/json"})
 
-  This is the "traceparent out" half of ROADMAP 3.1 — the half that
+  This is the "traceparent out" half of ADR-0021 — the half that
   does not need an HTTP client of our own — and now that void has one
   (`void/http/client`, ADR-0027) it is still the caller who injects:
   whatever makes the call, from void/redis to the client, propagates

@@ -1,5 +1,5 @@
 ### void/jobs/record — the queued job: its fields, its states and the
-### transitions between them (SPEC.md §5.12, ROADMAP 2.4).
+### transitions between them (SPEC.md §5.12).
 ###
 ### A record is a plain table, and deliberately flat: every backend has
 ### to be able to store it, and the ones that are not Janet — a

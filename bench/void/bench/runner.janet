@@ -164,7 +164,7 @@
     (wrk/run opts)))
 
 (defn- run-broadcast-target
-  ``B4's методика (ROADMAP 4.2): one generator run of its own, because
+  ``B4's методика: one generator run of its own, because
   the load shape is a fan-out and wrk speaks HTTP. There is no second
   mode to average against and no median over runs — the run is already
   a fixed-rate one lasting `:duration` seconds, and the percentile it

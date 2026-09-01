@@ -1,5 +1,5 @@
 ### void/http/prefork — multi-core via preforked worker processes
-### (ADR-0010, ROADMAP 1.1).
+### (ADR-0010).
 ###
 ### N worker processes × SO_REUSEPORT: janet's net/listen already sets
 ### SO_REUSEPORT (and SO_REUSEADDR) on platforms that have it, so every

@@ -1,5 +1,4 @@
-### void/jobs/memory — the in-process backend (SPEC.md §5.12,
-### ROADMAP 2.4).
+### void/jobs/memory — the in-process backend (SPEC.md §5.12).
 ###
 ### The backend an application starts with: a table of records in this
 ### process's heap, which is a real queue with real retries, real

@@ -1,5 +1,5 @@
 ### void/db-mysql/types — MySQL values in and out (ADR-0033,
-### SPEC.md §5.10, ROADMAP 5).
+### SPEC.md §5.10).
 ###
 ### The text protocol, for the reason void/db-postgres/types gives and
 ### one more. The reason it shares: text is what the `mysql` client

@@ -1,6 +1,6 @@
 (declare-project
   :name "void-db-postgres"
-  :description "void/db-postgres — Postgres as the :void/db-driver: async libpq on the ev loop through void/fdwait, no thread pool (SPEC §5.10, ADR-0011, ROADMAP 2.2)."
+  :description "void/db-postgres — Postgres as the :void/db-driver: async libpq on the ev loop through void/fdwait, no thread pool (SPEC §5.10, ADR-0011)."
   :version "0.0.1")
 
 # No jpm dependency pulls libpq in: it is opened at runtime through

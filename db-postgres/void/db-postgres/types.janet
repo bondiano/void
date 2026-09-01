@@ -1,5 +1,5 @@
 ### void/db-postgres/types — Postgres values in and out, in the text
-### protocol (SPEC.md §5.10, ROADMAP 2.2).
+### protocol (SPEC.md §5.10).
 ###
 ### Results are requested in text format, not binary. Binary is
 ### faster for a handful of types and a per-type reimplementation of

@@ -1,6 +1,6 @@
 ### void/jobs/state — the queue an application talks to: policy
 ### resolution, enqueue, inspection and the lifecycle events (SPEC.md
-### §5.12, ADR-0012, ROADMAP 2.4).
+### §5.12, ADR-0012).
 ###
 ### The shape is void/db's and void/cache's, because the problem is:
 ### one component holds the value, a dyn overrides it for a scope

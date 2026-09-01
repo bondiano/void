@@ -1,5 +1,4 @@
-### void/jobs — the background jobs plugin (SPEC.md §5.12, ADR-0012,
-### ROADMAP 2.4).
+### void/jobs — the background jobs plugin (SPEC.md §5.12, ADR-0012).
 ###
 ### Two interfaces and one runtime. `:void/jobs-backend` is storage —
 ### eight functions over records, one of which has to be atomic

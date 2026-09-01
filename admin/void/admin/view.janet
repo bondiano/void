@@ -4,7 +4,7 @@
 ### as the fragment htmx swaps into a page that is already open. There
 ### is no second template for the second case — the fragment functions
 ### are what the page functions call, and `:void.htmx/partial` on the
-### route decides which of the two the response carries (ROADMAP 1.3).
+### route decides which of the two the response carries.
 ###
 ### **htmx is an improvement, never a requirement.** A form is a
 ### `<form method="post">`, a link is a link, a confirmation is a page

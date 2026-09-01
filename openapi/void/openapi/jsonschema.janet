@@ -1,5 +1,5 @@
 ### void/openapi/jsonschema — normalized schema nodes -> JSON Schema
-### (SPEC.md §5.3, ADR-0008, ROADMAP 1.5).
+### (SPEC.md §5.3, ADR-0008).
 ###
 ### The OpenAPI side of "one declaration, many projections": a walk
 ### over the node structs void/core/schema normalizes everything into,

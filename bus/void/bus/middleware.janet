@@ -1,5 +1,5 @@
 ### void/bus/middleware — the chain a message passes through on its
-### way to a handler (SPEC.md §5.22, ROADMAP 3.6).
+### way to a handler (SPEC.md §5.22).
 ###
 ### A middleware is a wrapper `(fn [handler opts] handler')` over
 ### `(fn [message] result)`, registered through `:void.bus/middleware`

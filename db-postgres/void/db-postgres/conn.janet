@@ -1,5 +1,5 @@
 ### void/db-postgres/conn — one Postgres connection on the ev loop
-### (ADR-0011, SPEC.md Appendix A, ROADMAP 2.2).
+### (ADR-0011, SPEC.md Appendix A).
 ###
 ### libpq has a complete non-blocking API: PQconnectStart/PQconnectPoll
 ### to connect, PQsendQuery* / PQflush to send, PQconsumeInput /

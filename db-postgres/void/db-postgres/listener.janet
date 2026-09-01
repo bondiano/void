@@ -1,5 +1,5 @@
 ### void/db-postgres/listener — LISTEN/NOTIFY on a connection of its
-### own (SPEC.md §5.10, ROADMAP 2.2).
+### own (SPEC.md §5.10).
 ###
 ### Postgres delivers a notification to the *session* that ran LISTEN.
 ### That single sentence is why this cannot live on the pool: LISTEN

@@ -1,4 +1,4 @@
-### void/redis/conn — one connection (SPEC.md §5.10, ROADMAP 2.2).
+### void/redis/conn — one connection (SPEC.md §5.10).
 ###
 ### A redis connection is a plain `net/` stream and a buffer, which is
 ### the whole reason this plugin has no native code and no thread pool:

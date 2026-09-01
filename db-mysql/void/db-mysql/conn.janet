@@ -1,5 +1,5 @@
 ### void/db-mysql/conn — one connection, seen from the ev loop
-### (ADR-0033, SPEC.md §5.10, ROADMAP 5).
+### (ADR-0033, SPEC.md §5.10).
 ###
 ### ./worker is the thread that owns the MYSQL*. This is the half that
 ### talks to it: `open` starts the thread and waits for it to say

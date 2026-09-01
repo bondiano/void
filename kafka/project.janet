@@ -1,6 +1,6 @@
 (declare-project
   :name "void-kafka"
-  :description "void/kafka — Kafka through librdkafka's event API: the library's news arrives on an fd one fiber sleeps on, produce is confirmed by the delivery report, and the bus backend's consumer groups are Kafka's own (SPEC §5.11, §5.22, ADR-0035, ROADMAP 5)."
+  :description "void/kafka — Kafka through librdkafka's event API: the library's news arrives on an fd one fiber sleeps on, produce is confirmed by the delivery report, and the bus backend's consumer groups are Kafka's own (SPEC §5.11, §5.22, ADR-0035)."
   :version "0.0.1")
 
 # No jpm dependency pulls librdkafka in: it is opened at runtime

@@ -1,5 +1,5 @@
 ### void/obs-otlp — OTLP export of spans and metrics (SPEC.md §5.13,
-### ADR-0021, ADR-0027, ROADMAP 4.1).
+### ADR-0021, ADR-0027).
 ###
 ### The third plugin of the obs package, and the one that takes what
 ### this process measured somewhere else: finished sampled spans to

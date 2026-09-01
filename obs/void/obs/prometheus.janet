@@ -1,5 +1,4 @@
-### void/obs/prometheus — the text exposition format (SPEC.md §5.13,
-### ROADMAP 3.1).
+### void/obs/prometheus — the text exposition format (SPEC.md §5.13).
 ###
 ### A pure projection of `metrics/snapshot`: data in, one string out,
 ### no state and no I/O. That is what makes it testable without a

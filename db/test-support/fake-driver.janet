@@ -3,7 +3,7 @@
 # params) decides what comes back. It keeps the kernel's own tests
 # honest about the SQL they cause — one batched IN per preload, a
 # partial UPDATE from save!, BEGIN/SAVEPOINT/COMMIT order — without
-# waiting for a real driver (void/db-sqlite, ROADMAP 2.2).
+# waiting for a real driver (void/db-sqlite).
 #
 # The mutable state lives outside the driver value, since
 # driver/normalize freezes it.

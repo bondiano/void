@@ -1,5 +1,5 @@
 ### void/db-sqlite/driver — the :void/db-driver contract over
-### janet-lang/sqlite3 (SPEC.md §5.10, ROADMAP 2.2).
+### janet-lang/sqlite3 (SPEC.md §5.10).
 ###
 ### This is the reference implementation of the driver contract (see
 ### void/db/driver): a plain dictionary of :dialect/:connect/:close/

@@ -1,5 +1,5 @@
 ### void/db-mysql/driver — the :void/db-driver contract over
-### libmysqlclient (ADR-0033, SPEC.md §5.10, ROADMAP 5).
+### libmysqlclient (ADR-0033, SPEC.md §5.10).
 ###
 ### The contract itself is void/db/driver: a dictionary of
 ### :dialect/:connect/:close/:execute plus the optional keys a database

@@ -1,5 +1,4 @@
-### void/proto — protobuf, in Janet (SPEC.md §5.7, ADR-0013,
-### ROADMAP 4.5).
+### void/proto — protobuf, in Janet (SPEC.md §5.7, ADR-0013).
 ###
 ### The foundation of the protocol branch, and the one ADR-0013 says
 ### to write first: void/grpc needs it to speak Connect's binary

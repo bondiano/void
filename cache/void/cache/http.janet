@@ -1,5 +1,5 @@
 ### void/cache-http — response caching on routes that ask for it
-### (SPEC.md part II §2.5 row `:void.cache/response`, ROADMAP 2.3).
+### (SPEC.md part II §2.5 row `:void.cache/response`).
 ###
 ### The piece of void/cache that needs void/http, kept a separate
 ### plugin so a CLI or a worker never drags the HTTP kernel in — what

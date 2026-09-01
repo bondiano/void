@@ -1,4 +1,4 @@
-### blog/admin — the back office, declared (ROADMAP 4.4, ADR-0029).
+### blog/admin — the back office, declared (ADR-0029).
 ###
 ### This whole file is declarations. There are no handlers, no
 ### templates and no routes: `void/admin` projects the registry into

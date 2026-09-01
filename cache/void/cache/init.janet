@@ -1,4 +1,4 @@
-### void/cache — the cache plugin (SPEC.md §5.11, ROADMAP 2.3).
+### void/cache — the cache plugin (SPEC.md §5.11).
 ###
 ### Two interfaces and one funnel. `:void/cache-store` is a backend —
 ### four functions over strings and values (./store); `:void/cache` is

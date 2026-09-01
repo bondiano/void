@@ -137,6 +137,9 @@
     {:src "docs/DEPLOY.md" :out "deploy.html" :here "deploy.html"}
     {:src "docs/BENCH-v0.1.md" :out "bench.html" :here "bench.html"}
     {:src "CONTRIBUTING.md" :out "contributing.html" :here nil}
+    # itself a projection (scripts/gen-changelog.janet) — the site
+    # renders it like CONTRACTS: a projection of a projection
+    {:src "CHANGELOG.md" :out "changelog.html" :here nil}
     {:src "docs/adr/README.md" :out "adr/index.html" :here "adr/index.html"}])
 
 (each f (sorted (os/dir "docs/adr"))

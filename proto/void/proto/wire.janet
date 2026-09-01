@@ -1,5 +1,5 @@
 ### void/proto/wire — the protobuf wire format (SPEC.md §5.7,
-### ADR-0013, ROADMAP 4.x).
+### ADR-0013).
 ###
 ### The bottom of the package: bytes in, bytes out, and no idea what a
 ### message is. Everything above it — ./codec, ./json, the parser —

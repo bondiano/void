@@ -1,4 +1,4 @@
-### The desk (ROADMAP 4.4, ADR-0029) — a back office over the entities
+### The desk (ADR-0029) — a back office over the entities
 ### this application already had, and the same declarations reachable
 ### by an agent under the same policies.
 ###

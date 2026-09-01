@@ -1,5 +1,5 @@
 ### void/html/form — form helpers from the schema layer (SPEC.md §5.4,
-### ROADMAP 1.2, ADR-0008).
+### ADR-0008).
 ###
 ### One map schema drives validation, docs and now markup: field-specs
 ### projects the schema's fields into plain control descriptions

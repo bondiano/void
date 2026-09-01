@@ -1,5 +1,5 @@
 ### void/bus/message — a message, and what a topic is (SPEC.md §5.22,
-### ADR-0012, ROADMAP 3.6).
+### ADR-0012).
 ###
 ### A message is a plain table:
 ###

@@ -1,5 +1,5 @@
 ### void/mcp — the application as an MCP server (SPEC.md §5.18,
-### ADR-0031, ROADMAP 4.3).
+### ADR-0031).
 ###
 ### The promise of §5.18 is one sentence: "админка из коробки — это
 ### AI-агент". What makes it cheap is that the application has already

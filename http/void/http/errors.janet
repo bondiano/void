@@ -1,5 +1,4 @@
-### void/http/errors — exception -> response mapping (SPEC.md §5.1,
-### ROADMAP 1.1).
+### void/http/errors — exception -> response mapping (SPEC.md §5.1).
 ###
 ### wrap-panic is the phase-0 panic guard: everything a route chain
 ### throws becomes a response instead of a dropped connection. A

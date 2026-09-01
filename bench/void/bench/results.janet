@@ -116,7 +116,7 @@
               (and (< (e :delta) (- threshold))
                    (> (- b c) latency-floor-ms))
               (array/push improvements e))))
-        # B4's own two numbers (ROADMAP 4.2): messages delivered per
+        # B4's own two numbers: messages delivered per
         # second, higher better, and delivery p50/p99, lower better.
         # They live in their own mode because they mean something
         # different from a request's — the comparison must not put a

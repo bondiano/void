@@ -1,4 +1,4 @@
-### void/redis — the redis client plugin (SPEC.md §5.10, ROADMAP 2.2).
+### void/redis — the redis client plugin (SPEC.md §5.10).
 ###
 ### RESP2 and RESP3 in pure Janet on the ev loop: a connection is a
 ### `net/` stream and a buffer, so there is no native module here, no

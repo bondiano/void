@@ -1,6 +1,6 @@
 ### void/db-mysql/config — from the [:db-mysql] config slice to the
 ### plain-data spec a worker thread connects with (ADR-0033,
-### SPEC.md §5.10, ROADMAP 5).
+### SPEC.md §5.10).
 ###
 ### void/db-postgres/config has to build a *string*, because libpq
 ### parses one. libmysqlclient does not: `mysql_real_connect` takes

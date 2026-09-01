@@ -1,5 +1,5 @@
 ### void/ws — WebSocket (RFC 6455) over the HTTP kernel (SPEC §5.6,
-### ADR-0028, ROADMAP 4.2).
+### ADR-0028).
 ###
 ### **A websocket is a route.** `ws/accept` is called from an ordinary
 ### handler, so the handshake has already been routed, has already had

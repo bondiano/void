@@ -1,5 +1,5 @@
 ### void/grpc — Connect-RPC over the void/http kernel (SPEC.md §5.8,
-### ADR-0013, ROADMAP 4.5).
+### ADR-0013).
 ###
 ### gRPC compatibility without HTTP/2, which is the trade ADR-0013
 ### made and the reason this package is M rather than XL. A unary call

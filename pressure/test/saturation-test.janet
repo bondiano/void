@@ -9,7 +9,7 @@
 
 (log/set-level! "void" :error)
 
-# The wave-2 exit criterion (ROADMAP, ADR-0019): a real server, a real
+# The wave-2 exit criterion (ADR-0019): a real server, a real
 # blocked loop, a real socket. Everything else in this suite feeds
 # samples in by hand — which is the only way to test a threshold
 # without testing a clock — so exactly one test has to close the loop

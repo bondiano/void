@@ -1,5 +1,4 @@
-### void/pressure — load shedding (SPEC.md §5.23, ADR-0019,
-### ROADMAP 2.6).
+### void/pressure — load shedding (SPEC.md §5.23, ADR-0019).
 ###
 ### A single-threaded ev-loop process does not degrade gracefully on
 ### its own: the accept queue grows, loop-lag lands on *every* request
@@ -99,7 +98,7 @@
   process that has already stopped meeting every latency budget it
   has, and 100 ms of lag means the request being accepted right now
   starts 100 ms late. Under-pressure's own examples sit in the same
-  decade. Calibration against B2/B3 is ROADMAP 2.5.
+  decade.
 
   `:max-rss-bytes` is 0 — off. A memory ceiling is the deployment's
   number (the container limit, minus headroom), and a default that

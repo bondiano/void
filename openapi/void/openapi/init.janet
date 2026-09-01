@@ -1,4 +1,4 @@
-### void/openapi — OpenAPI 3.1 plugin (SPEC.md §5.3, ROADMAP 1.5).
+### void/openapi — OpenAPI 3.1 plugin (SPEC.md §5.3).
 ###
 ### A pure projection, nothing to keep in sync by hand: `spec` reads
 ### the built route table and the schema registry and folds them into
@@ -15,8 +15,7 @@
 ### contributed as ordinary routes (hidden from the spec itself),
 ### answering only when [:openapi :enabled] — default: the :dev
 ### profile. `export` writes the document to a file; the :void.core/cli
-### contribution makes that `void openapi export [path]` once the CLI
-### binary lands (ROADMAP 1.6).
+### contribution makes that `void openapi export [path]`.
 
 (import void/core/plugin :as plugin)
 (import void/core/schema :as schema)
@@ -238,8 +237,7 @@
 
 (defn export
   ``Write the current document to a file (the `void openapi export`
-  CLI once ROADMAP 1.6 lands the binary; callable from a REPL against
-  a booted system today):
+  CLI; callable from a REPL against a booted system too):
 
       (openapi/export "openapi.json")``
   [&opt path opts]

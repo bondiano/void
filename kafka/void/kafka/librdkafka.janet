@@ -1,5 +1,5 @@
 ### void/kafka/librdkafka — the librdkafka surface this plugin uses,
-### and nothing more (ADR-0035, SPEC.md §5.11, ROADMAP 5).
+### and nothing more (ADR-0035, SPEC.md §5.11).
 ###
 ### The shape is void/db-mysql/libmysql's: the library path is
 ### configuration ([:kafka :library]) rather than a compile-time

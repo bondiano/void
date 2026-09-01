@@ -1,5 +1,5 @@
 ### void/pressure-http — the flag, as a 503 (SPEC.md §5.23,
-### ADR-0019, ROADMAP 2.6).
+### ADR-0019).
 ###
 ### The piece of void/pressure that needs void/http, kept a separate
 ### plugin so a jobs worker or a CLI never drags the HTTP kernel in —

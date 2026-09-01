@@ -1,6 +1,7 @@
-### ROADMAP 4.4's last line, checked: the same declarations become MCP
-### tools and resources with the same ABAC policies, and `void/admin`
-### does not carry a line about MCP to make it happen.
+### The admin-as-MCP promise (ADR-0029), checked: the same
+### declarations become MCP tools and resources with the same ABAC
+### policies, and `void/admin` does not carry a line about MCP to make
+### it happen.
 ###
 ### Two claims are worth more than the rest here. First, the input
 ### schema of the create tool **is** the resource's form schema — not a

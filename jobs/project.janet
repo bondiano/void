@@ -1,6 +1,6 @@
 (declare-project
   :name "void-jobs"
-  :description "void/jobs — background jobs: defjob, retries with backoff, priorities, delayed and unique jobs, flows, rate limiting, a dead letter queue and cron schedules (SPEC §5.12, ADR-0012, ROADMAP 2.4)."
+  :description "void/jobs — background jobs: defjob, retries with backoff, priorities, delayed and unique jobs, flows, rate limiting, a dead letter queue and cron schedules (SPEC §5.12, ADR-0012)."
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 

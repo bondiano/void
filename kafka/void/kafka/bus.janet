@@ -1,5 +1,5 @@
 ### void/kafka/bus — the :kafka contribution to `:void.bus/backend`
-### (ADR-0035, ADR-0012, SPEC.md §5.22, ROADMAP 5).
+### (ADR-0035, ADR-0012, SPEC.md §5.22).
 ###
 ### The last backend from ADR-0012's list, and the test of its claim
 ### that the contract was already shaped for streams with consumer

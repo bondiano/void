@@ -1,5 +1,4 @@
-### B3 — Postgres + hiccup SSR ~15KB (SPEC.md §8.2, ADR-0014,
-### ROADMAP 2.5). Budget: p50 < 5ms, p99 < 20ms, ≥ 1.5k RPS
+### B3 — Postgres + hiccup SSR ~15KB (SPEC.md §8.2, ADR-0014). Budget: p50 < 5ms, p99 < 20ms, ≥ 1.5k RPS
 ### (1 worker, 1 vCPU).
 ###
 ### The shape a void application actually is: a query, a page of

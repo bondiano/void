@@ -4,7 +4,7 @@
 #     VOID_TEST_PG="postgres://void:void@127.0.0.1:5432/void_test" jpm test
 #
 # CI sets it against a service container, so "the same application on
-# Postgres" is a real gate there (ROADMAP, exit criterion 1 of wave 2).
+# Postgres" is a real gate there (exit criterion 1 of wave 2).
 # On a laptop without one the suite runs the sqlite pass and says the
 # other was skipped — the same bargain void/db-postgres, void/redis and
 # void/jobs strike.

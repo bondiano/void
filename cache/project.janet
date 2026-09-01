@@ -1,6 +1,6 @@
 (declare-project
   :name "void-cache"
-  :description "void/cache — the :void/cache interface, an in-process TTL+LRU store, the (cache/wrap f) decorator and a redis backend (SPEC §5.11, ROADMAP 2.3)."
+  :description "void/cache — the :void/cache interface, an in-process TTL+LRU store, the (cache/wrap f) decorator and a redis backend (SPEC §5.11)."
   :version "0.0.1")
 
 # No dependencies. The kernel and the memory store are plain Janet;

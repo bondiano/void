@@ -6,8 +6,7 @@
 ### same :key (:components override). Factories come straight from the
 ### schema layer through the :generator projection — one declaration
 ### feeds validation, docs and test data alike (ADR-0008). `snapshot`
-### stores golden renderings under test/snapshots (hiccup views,
-### ROADMAP 1.2).
+### stores golden renderings under test/snapshots (hiccup views).
 
 (import spork/json)
 (import void/core/system :as system)
@@ -121,7 +120,7 @@
   ``Compare the string rendering of `actual` against the stored
   snapshot `dir`/`name`.snap (dir defaults to "test/snapshots",
   relative to the package root jpm test runs from — hiccup snapshot
-  testing, ROADMAP 1.2, but any stringable value works).
+  testing, but any stringable value works).
 
   A missing snapshot is created and the call succeeds — review and
   commit it. On a mismatch the call throws with both versions; run

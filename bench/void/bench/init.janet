@@ -1,5 +1,4 @@
-### void/bench — the bench-suite plugin (SPEC.md §8.3, ADR-0014,
-### ROADMAP 1.7).
+### void/bench — the bench-suite plugin (SPEC.md §8.3, ADR-0014).
 ###
 ### `void bench` is a :void.core/cli contribution like any other — the
 ### suite itself is a tiny void application (see ../../main.janet)

@@ -1,5 +1,5 @@
 ### void/datastar/proto — the Datastar SSE wire format (v1), as pure
-### functions (SPEC §5.5's experiment, ROADMAP wave 5, ADR-0037).
+### functions (SPEC §5.5's experiment, ADR-0037).
 ###
 ### Datastar reads two SSE event types: `datastar-patch-elements`
 ### (HTML morphed/patched into the DOM) and `datastar-patch-signals`

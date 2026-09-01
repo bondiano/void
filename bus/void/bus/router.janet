@@ -1,6 +1,5 @@
 ### void/bus/router — `defhandler`, the subscription registry, and the
-### chain a delivered message runs through (SPEC.md §5.22, ADR-0012,
-### ROADMAP 3.6).
+### chain a delivered message runs through (SPEC.md §5.22, ADR-0012).
 ###
 ###     (bus/defhandler user-created
 ###       "Index a new user."

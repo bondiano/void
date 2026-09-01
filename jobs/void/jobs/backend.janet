@@ -1,5 +1,5 @@
 ### void/jobs/backend — the :void/jobs-backend contract (SPEC.md
-### §5.12, ADR-0012, ROADMAP 2.4).
+### §5.12, ADR-0012).
 ###
 ### A backend is a plain dictionary produced by a backend component's
 ### :start (the component declares :provides [:void/jobs-backend], so

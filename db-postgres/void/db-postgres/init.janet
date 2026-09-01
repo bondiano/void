@@ -1,5 +1,5 @@
 ### void/db-postgres — the production :void/db-driver (SPEC.md §5.10,
-### ADR-0011, ROADMAP 2.2).
+### ADR-0011).
 ###
 ### Postgres over libpq's non-blocking API, driven from the ev loop
 ### through void/fdwait: no thread pool, no blocking syscall on the

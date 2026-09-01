@@ -21,8 +21,7 @@
 # polling path. The Postgres one (a `pg_notify` on the inserting
 # connection, a consumer parked on the listener) is different code for
 # the same contract, and it runs the same conformance suite in
-# test/db-postgres-test.janet when VOID_TEST_PG names a server;
-# ROADMAP 3.6.
+# test/db-postgres-test.janet when VOID_TEST_PG names a server.
 
 (def sandbox (string (os/cwd) "/.tmp-bus-db-" (os/time) "-" (os/getpid)))
 (os/mkdir sandbox)

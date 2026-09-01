@@ -1,5 +1,5 @@
 ### void/kafka — Kafka through librdkafka's event API (ADR-0035,
-### SPEC.md §5.11, ROADMAP 5).
+### SPEC.md §5.11).
 ###
 ### librdkafka runs its own threads either way; what this package
 ### adds is the integration that keeps them out of Janet: the library

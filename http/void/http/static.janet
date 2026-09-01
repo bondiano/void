@@ -1,4 +1,4 @@
-### void/http/static — static file serving (SPEC.md §5.1, ROADMAP 1.1).
+### void/http/static — static file serving (SPEC.md §5.1).
 ###
 ### file-response serves one file with a strong ETag (size-mtime),
 ### If-None-Match conditional GETs and single-part Range requests;

@@ -1,5 +1,5 @@
 ### void/bus — messaging: a message is data, a guarantee is declared
-### (SPEC.md §5.22, ADR-0012, ROADMAP 3.6).
+### (SPEC.md §5.22, ADR-0012).
 ###
 ### The shape of this package is one sentence: **a message is a plain
 ### table on a keyword topic, what happens to it when a handler throws

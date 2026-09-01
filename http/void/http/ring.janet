@@ -1,4 +1,4 @@
-### void/http/ring — the Ring model helpers (SPEC.md §5.1, ROADMAP 1.1).
+### void/http/ring — the Ring model helpers (SPEC.md §5.1).
 ###
 ### Request and response are plain tables, nothing more: a handler is
 ### (fn [request] response), middleware wraps handlers. Response shape:

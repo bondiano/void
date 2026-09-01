@@ -1,5 +1,5 @@
 ### void/rest/problem — RFC 7807 / RFC 9457 problem+json responses
-### (SPEC.md §5.2, ROADMAP 1.4).
+### (SPEC.md §5.2).
 ###
 ### Every REST failure is one media type: application/problem+json with
 ### the standard members (type, title, status, detail, instance) plus

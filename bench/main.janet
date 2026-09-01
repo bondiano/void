@@ -1,5 +1,4 @@
-### bench — the void bench-suite entrypoint (SPEC.md §8.3, ADR-0014,
-### ROADMAP 1.7).
+### bench — the void bench-suite entrypoint (SPEC.md §8.3, ADR-0014).
 ###
 ### Standalone (CI, no binary needed):    janet main.janet b0 b1 --quick
 ### Through the CLI (run from bench/):    void bench b0 b1 --quick

@@ -1,4 +1,4 @@
-### The B4 load generator (SPEC §8.2, ROADMAP 4.2).
+### The B4 load generator (SPEC §8.2).
 ###
 ### wrk and wrk2 speak HTTP, and B4 is not an HTTP benchmark: it is a
 ### fan-out, measured from the receiving end. So this is the generator

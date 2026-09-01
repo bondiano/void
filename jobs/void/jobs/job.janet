@@ -1,6 +1,5 @@
 ### void/jobs/job — what a job *is*: the definition registry, `defjob`,
-### and the options a definition carries (SPEC.md §5.12, ADR-0012,
-### ROADMAP 2.4).
+### and the options a definition carries (SPEC.md §5.12, ADR-0012).
 ###
 ### A job definition is a name, a handler and a policy. The name is a
 ### keyword and it is what travels: a queued job is `{:job :welcome-mail

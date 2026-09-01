@@ -1,5 +1,5 @@
 ### void/db-postgres/driver — the :void/db-driver contract over async
-### libpq (SPEC.md §5.10, ROADMAP 2.2, ADR-0011).
+### libpq (SPEC.md §5.10, ADR-0011).
 ###
 ### The contract itself is void/db/driver: a dictionary of
 ### :dialect/:connect/:close/:execute plus the optional keys a database

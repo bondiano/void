@@ -1,5 +1,5 @@
 ### void/ws-htmx — the htmx ws-extension, from the server's side
-### (SPEC §5.6, ROADMAP 4.2).
+### (SPEC §5.6).
 ###
 ### htmx's `ws` extension makes a websocket look like the rest of htmx:
 ### an element opens the socket (`hx-ext="ws" ws-connect="/live"`), a

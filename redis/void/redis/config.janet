@@ -1,5 +1,5 @@
 ### void/redis/config — from the [:redis] config slice to the options
-### one connection opens with (SPEC.md §5.10, ROADMAP 2.2).
+### one connection opens with (SPEC.md §5.10).
 ###
 ### Two spellings meet here. A URL is what a deployment hands you —
 ### REDIS_URL is as much a convention as DATABASE_URL — and explicit

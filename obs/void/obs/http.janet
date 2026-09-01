@@ -1,6 +1,5 @@
 ### void/obs-http — RED per route, the root span, and the three
-### endpoints an operator needs (SPEC.md §5.13, §8.4 and part II §2.5,
-### ROADMAP 3.1).
+### endpoints an operator needs (SPEC.md §5.13, §8.4 and part II §2.5).
 ###
 ### The half of obs that needs the HTTP kernel, kept a separate plugin
 ### so a jobs worker or a CLI never drags it in — what void/cache-http

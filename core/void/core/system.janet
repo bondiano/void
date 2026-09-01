@@ -240,7 +240,7 @@
   (def providers (interface-providers comps))
   # >1 implementation demands an explicit config {:impl ...} choice even
   # when nothing depends on the interface yet — instance lookup by
-  # interface must never be ambiguous (ROADMAP 0.1).
+  # interface must never be ambiguous.
   (each iface (sorted (keys providers))
     (when (> (length (providers iface)) 1)
       (resolve-ref comps providers config "interface" iface)))

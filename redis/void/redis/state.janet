@@ -1,6 +1,6 @@
 ### void/redis/state — the runtime: current client, dyn-scoped
 ### connections, and the funnel every command passes through (SPEC.md
-### §5.10, ROADMAP 2.2).
+### §5.10).
 ###
 ### The shape is void/db's, because the problem is: a checked-out
 ### connection lives in a dyn (:void.redis/conn), so everything inside

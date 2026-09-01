@@ -1,4 +1,4 @@
-### void/bench/seed — the one table B2 and B3 read (ROADMAP 2.5).
+### void/bench/seed — the one table B2 and B3 read.
 ###
 ### Both database benchmarks read the same shape, on purpose: B3 minus
 ### B2 should be the cost of rendering, not the cost of a different

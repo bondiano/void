@@ -1,5 +1,5 @@
 ### void/db-postgres/config — from the [:db-postgres] config slice to
-### the connection string libpq opens (SPEC.md §5.10, ROADMAP 2.2).
+### the connection string libpq opens (SPEC.md §5.10).
 ###
 ### libpq takes either a keyword string (`host=db user=void`) or a URI
 ### (`postgres://void@db/app`), and it fills in whatever neither one

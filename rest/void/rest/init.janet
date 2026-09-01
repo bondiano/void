@@ -1,5 +1,5 @@
 ### void/rest — REST/JSON API plugin, sugar over void/http (SPEC.md
-### §5.2, ROADMAP 1.4).
+### §5.2).
 ###
 ### Three moves, all driven by the :void.schema/* route metadata keys
 ### this plugin declares (the SPEC part II §2.5 reserved rows):

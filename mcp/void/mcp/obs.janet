@@ -1,5 +1,5 @@
 ### void/mcp-obs — this process's metrics as an MCP resource (SPEC.md
-### §5.18, ROADMAP 4.3).
+### §5.18).
 ###
 ### The third plugin of the package, and the smallest: one
 ### contribution to `:void.mcp/resource`. It is separate because the

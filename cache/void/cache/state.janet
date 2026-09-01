@@ -1,5 +1,5 @@
 ### void/cache/state — the runtime: the active cache, the funnel every
-### call passes through, and single-flight (SPEC.md §5.11, ROADMAP 2.3).
+### call passes through, and single-flight (SPEC.md §5.11).
 ###
 ### The shape is void/db's and void/redis's: one component value in a
 ### module-level var, a dyn (`cache-dyn`) that overrides it for a

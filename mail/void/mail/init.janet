@@ -1,5 +1,5 @@
 ### void/mail — mail as data, delivery as a composition decision
-### (SPEC.md §5.19, ADR-0026, ROADMAP 3.5).
+### (SPEC.md §5.19, ADR-0026).
 ###
 ### The shape of this package is one sentence: **a message is data, a
 ### body is a void/html view, a transport is a contribution, and

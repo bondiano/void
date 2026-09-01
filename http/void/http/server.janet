@@ -1,5 +1,5 @@
 ### void/http/server — the HTTP/1.1 connection loop (ADR-0015,
-### ADR-0010, ROADMAP 1.1).
+### ADR-0010).
 ###
 ### One fiber per connection on the ev loop; the loop is: read head
 ### (idle timeout while waiting between keep-alive requests, read

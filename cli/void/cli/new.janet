@@ -1,4 +1,4 @@
-### void/cli/new — `void new NAME`: the project skeleton (ROADMAP 1.6).
+### void/cli/new — `void new NAME`: the project skeleton.
 ###
 ### The template is data — a tuple of {:path :render} entries, each
 ### :render a pure (fn [name] string) over the one hole this generator

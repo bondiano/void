@@ -1,5 +1,4 @@
-### blog/audit — the trail, and nothing that produces it (ROADMAP 3.6,
-### exit criterion 1 of wave 3).
+### blog/audit — the trail, and nothing that produces it (exit criterion 1 of wave 3).
 ###
 ### This file subscribes to the bus and writes rows. That is all it
 ### does, and the interesting part is what it does *not* need: no

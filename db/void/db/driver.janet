@@ -1,5 +1,4 @@
-### void/db/driver — the :void/db-driver contract (SPEC.md §5.9,
-### ROADMAP 2.1).
+### void/db/driver — the :void/db-driver contract (SPEC.md §5.9).
 ###
 ### A driver is a plain dictionary produced by a driver component's
 ### :start (the component declares :provides [:void/db-driver], so the

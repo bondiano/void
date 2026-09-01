@@ -1,5 +1,5 @@
 ### void/obs/log — what obs adds to the logger (SPEC.md §3.7 and
-### §5.13, ADR-0018, ROADMAP 3.1).
+### §5.13, ADR-0018).
 ###
 ### The logger itself is core and has been since wave 1: records are
 ### plain tables, levels are a per-namespace tree, the context is a

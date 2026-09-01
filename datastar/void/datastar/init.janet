@@ -1,5 +1,5 @@
 ### void/datastar — Datastar integration plugin, an experiment
-### (SPEC §5.5, ROADMAP wave 5, ADR-0037).
+### (SPEC §5.5, ADR-0037).
 ###
 ### The Biff idiom, standing on what the repository already has: a
 ### handler keeps returning the full page it always returned, and the

@@ -1,4 +1,4 @@
-### void/db/erd — entity registry -> ER diagram (ROADMAP 2.1, wave-2
+### void/db/erd — entity registry -> ER diagram (wave-2
 ### exit criterion 3).
 ###
 ### `:db/rels` and `:db/fk` are the single source of truth for the

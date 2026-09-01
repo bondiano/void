@@ -1,5 +1,4 @@
-### void/obs/metrics — the metric registry (SPEC.md §5.13, ROADMAP
-### 3.1).
+### void/obs/metrics — the metric registry (SPEC.md §5.13).
 ###
 ### Three instrument kinds, the Prometheus data model and nothing
 ### else: a counter only goes up, a gauge is a number right now, a

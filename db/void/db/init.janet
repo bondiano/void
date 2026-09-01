@@ -1,5 +1,4 @@
-### void/db — the database kernel plugin (SPEC.md §5.9, ADR-0009,
-### ROADMAP 2.1).
+### void/db — the database kernel plugin (SPEC.md §5.9, ADR-0009).
 ###
 ### The kernel owns no driver: it declares the :void/db-driver
 ### interface and starts a pool over whichever component provides it

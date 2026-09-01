@@ -1,5 +1,4 @@
-### void/http — the HTTP kernel plugin (SPEC.md §5.1, ADR-0006,
-### ROADMAP 1.1).
+### void/http — the HTTP kernel plugin (SPEC.md §5.1, ADR-0006).
 ###
 ### The first and heaviest consumer of the plugin API: void/http owns
 ### the extension points other plugins hang HTTP behavior on —
@@ -612,7 +611,7 @@
 
 (defn with-request
   ``Run a request through the full stack — routing, middleware,
-  sessions, error rendering — without a socket (ROADMAP 1.1):
+  sessions, error rendering — without a socket:
 
       (http/with-request {:uri "/orders/42?full=1"})
       (http/with-request {:method :post :uri "/orders"

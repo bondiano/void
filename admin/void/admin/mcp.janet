@@ -1,5 +1,5 @@
 ### void/admin-mcp — the same declarations, read by an agent
-### (ROADMAP 4.4, ADR-0029 §1, ADR-0031).
+### (ADR-0029 §1, ADR-0031).
 ###
 ### This is the payoff of deciding, in §1, that a resource is a
 ### **value** and not a function that builds routes. Nothing here
@@ -288,6 +288,6 @@
              (mapcat |(resources-for (res/lookup $)) (res/resources)))})
 
 (plugin/defplugin void/admin-mcp
-  :doc "The admin's declarations, projected into MCP tools and resources with the same ABAC policies (ROADMAP 4.4): list/get/describe are read-only and exposed, create/update/delete and every declared action are not, so an operator names them in [:mcp :tools] before an agent may call one. The input schema of create is the resource's form schema — one value, two readers (ADR-0029 §1, ADR-0031)."
+  :doc "The admin's declarations, projected into MCP tools and resources with the same ABAC policies: list/get/describe are read-only and exposed, create/update/delete and every declared action are not, so an operator names them in [:mcp :tools] before an agent may call one. The input schema of create is the resource's form schema — one value, two readers (ADR-0029 §1, ADR-0031)."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/admin ">=0.0.1" :void/mcp ">=0.0.1"})

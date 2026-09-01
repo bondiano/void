@@ -1,6 +1,5 @@
 ### void/bus/state — the broker an application talks to: publish, the
-### outbox, the consumers and the numbers (SPEC.md §5.22, ADR-0012,
-### ROADMAP 3.6).
+### outbox, the consumers and the numbers (SPEC.md §5.22, ADR-0012).
 ###
 ### The shape is void/db's and void/jobs's, because the problem is:
 ### one component holds the value, a dyn overrides it for a scope

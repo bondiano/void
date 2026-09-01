@@ -1,4 +1,4 @@
-### void/obs — observability (SPEC.md §5.13 and §8.4, ROADMAP 3.1).
+### void/obs — observability (SPEC.md §5.13 and §8.4).
 ###
 ### The three signals, and what each one is here:
 ###

@@ -1,6 +1,6 @@
 ### void/bus-db — the message log, the cursors and the transactional
 ### outbox, in the application's own database (SPEC.md §5.22,
-### ADR-0012, ROADMAP 3.6).
+### ADR-0012).
 ###
 ### The piece of void/bus that needs void/db, kept a separate plugin so
 ### an application whose messages never leave the process never loads a

@@ -1,5 +1,5 @@
 ### void/kafka/consumer — a balanced group member whose offset moves
-### only behind the handler (ADR-0035, SPEC.md §5.11, ROADMAP 5).
+### only behind the handler (ADR-0035, SPEC.md §5.11).
 ###
 ### At-least-once is two properties and one rule:
 ###

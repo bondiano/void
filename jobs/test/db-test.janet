@@ -22,7 +22,7 @@
 # the portable claim path. The Postgres path (one statement, FOR
 # UPDATE SKIP LOCKED) is different code for the same contract, and it
 # runs the same conformance suite in test/db-postgres-test.janet when
-# VOID_TEST_PG names a server; ROADMAP 2.4.
+# VOID_TEST_PG names a server.
 
 (def sandbox (string (os/cwd) "/.tmp-jobs-db-" (os/time) "-" (os/getpid)))
 (os/mkdir sandbox)

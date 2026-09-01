@@ -1,5 +1,5 @@
 ### void/db-mysql/worker — one connection, on a thread of its own
-### (ADR-0033, SPEC.md §5.10, ROADMAP 5).
+### (ADR-0033, SPEC.md §5.10).
 ###
 ### This file is the half of the driver that never runs on the ev
 ### loop. `serve` is an `ev/thread` body: it opens the client library

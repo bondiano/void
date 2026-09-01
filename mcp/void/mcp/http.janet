@@ -1,5 +1,5 @@
 ### void/mcp-http — MCP over HTTP, as a route (SPEC.md §5.18,
-### ADR-0031, ROADMAP 4.3).
+### ADR-0031).
 ###
 ### The second transport, and a separate plugin in this package: an
 ### agent talking to a jobs worker over stdio has no reason to compose

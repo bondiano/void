@@ -1,4 +1,4 @@
-### B2 — Postgres single query (SPEC.md §8.2, ADR-0014, ROADMAP 2.5).
+### B2 — Postgres single query (SPEC.md §8.2, ADR-0014).
 ### Budget: p50 < 3ms, p99 < 12ms, ≥ 3k RPS (1 worker, 1 vCPU).
 ###
 ### One indexed row per request, over the pool, through a prepared

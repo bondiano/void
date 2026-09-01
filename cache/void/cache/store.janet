@@ -1,5 +1,4 @@
-### void/cache/store — the :void/cache-store contract (SPEC.md §5.11,
-### ROADMAP 2.3).
+### void/cache/store — the :void/cache-store contract (SPEC.md §5.11).
 ###
 ### Two interfaces, deliberately, and the split is the whole design of
 ### this plugin:

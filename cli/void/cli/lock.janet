@@ -1,5 +1,5 @@
 ### void/cli/lock — `void plugins lock` and `void plugins check`
-### (SPEC.md §6 "manifests are serializable", ADR-0003, ROADMAP 4.5).
+### (SPEC.md §6 "manifests are serializable", ADR-0003).
 ###
 ### A composition is already a value: `plugin/bootstrap` produces the
 ### plugin list, every extension point with its contributions **in the

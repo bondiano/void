@@ -1,5 +1,5 @@
 ### void/kafka/producer — produceva in, delivery reports out
-### (ADR-0035, SPEC.md §5.11, ROADMAP 5).
+### (ADR-0035, SPEC.md §5.11).
 ###
 ### `produce!` has two modes, and the difference between them is the
 ### whole reason ADR-0035 exists twice over:

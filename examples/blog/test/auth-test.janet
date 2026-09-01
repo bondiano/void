@@ -1,4 +1,4 @@
-### The wave-3 half of the demo (ROADMAP 3.2-3.4): signing in, a
+### The wave-3 half of the demo (wave 3): signing in, a
 ### row-level policy, and the CSRF token nobody had to write a line for.
 ###
 ### Like ./crud-test it is a function of the database and runs once per
@@ -261,7 +261,7 @@
 
     # -- the sign-in link ------------------------------------------------
     #
-    # The last piece of the wave-3 exit criterion (ROADMAP): the
+    # The last piece of the wave-3 exit criterion: the
     # application issues a challenge and says nothing else about it —
     # the letter, the URL and the one-time code belong to
     # void/mail-auth (ADR-0026 §6), and it goes out through the queue

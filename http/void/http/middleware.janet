@@ -1,5 +1,5 @@
 ### void/http/middleware — middleware phases and chain building
-### (SPEC.md part II §1.4, ROADMAP 1.1).
+### (SPEC.md part II §1.4).
 ###
 ### Middleware is a wrapper (fn [handler] handler') registered through
 ### the :void.http/middleware extension point with a numeric phase —

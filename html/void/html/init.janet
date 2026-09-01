@@ -1,5 +1,4 @@
-### void/html — server-side rendering plugin (SPEC.md §5.4, ROADMAP
-### 1.2).
+### void/html — server-side rendering plugin (SPEC.md §5.4).
 ###
 ### The view layer over void/http: handlers return lazy view responses
 ### (html/page, html/fragment) carrying content + layout as data, and

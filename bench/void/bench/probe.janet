@@ -1,5 +1,5 @@
 ### void/bench/probe — the runtime budgets of §8.2, measured from
-### inside the process that is under load (ROADMAP 2.5).
+### inside the process that is under load.
 ###
 ### The latency and throughput budgets are measured by wrk from
 ### outside. The other two are not measurable from out there at all:

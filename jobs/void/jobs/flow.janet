@@ -1,5 +1,4 @@
-### void/jobs/flow — parent-child job graphs (SPEC.md §5.12,
-### ROADMAP 2.4).
+### void/jobs/flow — parent-child job graphs (SPEC.md §5.12).
 ###
 ### A flow is one job that must not start until several others have
 ### finished, with what they returned available to it:

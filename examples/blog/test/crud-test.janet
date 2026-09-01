@@ -1,4 +1,4 @@
-### The wave-2 example is also its smoke test (ROADMAP exit criteria 1
+### The wave-2 example is also its smoke test (wave-2 exit criteria 1
 ### and 3): a CRUD application on Postgres with migrations, background
 ### jobs and a cache — and the same application on sqlite with the
 ### driver swapped and nothing else.

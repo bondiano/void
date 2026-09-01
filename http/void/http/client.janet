@@ -1,5 +1,4 @@
-### void/http/client — the HTTP/1.1 client (SPEC.md §5.1, ADR-0015,
-### ROADMAP 4.1).
+### void/http/client — the HTTP/1.1 client (SPEC.md §5.1, ADR-0015).
 ###
 ### The other direction of the kernel. void has had a server since
 ### wave 1 and no client at all: `void/obs` could put a `traceparent`

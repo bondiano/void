@@ -1,4 +1,4 @@
-### void/cli — the `void` binary (SPEC.md §5.17, ROADMAP 1.6).
+### void/cli — the `void` binary (SPEC.md §5.17).
 ###
 ### Commands are an extension point, not a switch statement: everything
 ### beyond the built-ins (new/repl/help/version) comes from the

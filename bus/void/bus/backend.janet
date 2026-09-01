@@ -1,5 +1,5 @@
 ### void/bus/backend — the `:void.bus/backend` contract (SPEC.md
-### §5.22, ADR-0012, ROADMAP 3.6).
+### §5.22, ADR-0012).
 ###
 ### A backend is contributed as a **factory**, not as a component:
 ###

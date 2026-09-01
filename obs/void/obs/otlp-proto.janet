@@ -1,5 +1,5 @@
 ### void/obs/otlp-proto — the protobuf half of the OTLP seam
-### (ADR-0027, ROADMAP 4.1).
+### (ADR-0027).
 ###
 ### ADR-0027 shipped the exporter on OTLP/JSON and left
 ### `[:obs-otlp :encoding]` as a seam with one legal value, promising

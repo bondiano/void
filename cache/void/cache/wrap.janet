@@ -1,4 +1,4 @@
-### void/cache/wrap — the decorator (SPEC.md §5.11, ROADMAP 2.3).
+### void/cache/wrap — the decorator (SPEC.md §5.11).
 ###
 ###     (def rates (cache/wrap fetch-rates {:ttl 300}))
 ###     (rates "usd")   # computed once, then read from the cache

@@ -1,6 +1,6 @@
 (declare-project
   :name "void-pressure"
-  :description "void/pressure — load shedding: an event-loop lag / RSS sampler, thresholds with recovery hysteresis, and a 503 + Retry-After for void/http while the process is over them (SPEC §5.23, ADR-0019, ROADMAP 2.6)."
+  :description "void/pressure — load shedding: an event-loop lag / RSS sampler, thresholds with recovery hysteresis, and a 503 + Retry-After for void/http while the process is over them (SPEC §5.23, ADR-0019)."
   :version "0.0.1")
 
 # No dependencies. The sampler and the state machine are plain Janet;

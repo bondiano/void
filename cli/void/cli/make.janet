@@ -1,5 +1,5 @@
 ### void/cli/make — `void make resource NAME field:type ...`
-### (SPEC.md §5.17, ROADMAP 4.5).
+### (SPEC.md §5.17).
 ###
 ### A resource is one declaration written into four files, and the
 ### point of generating them together is that they are four projections

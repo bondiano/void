@@ -87,7 +87,7 @@
 
 (defn- form-spec
   "The html/form control description of one field — projected by the
-  module that already projects schemas into controls (ROADMAP 1.2)."
+  module that already projects schemas into controls."
   [field]
   (def specs (form/field-specs {(field :name) (field :schema)}))
   (merge (first specs) {:label (field :label)}))

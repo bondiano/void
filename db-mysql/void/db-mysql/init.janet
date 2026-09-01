@@ -1,5 +1,5 @@
 ### void/db-mysql — MySQL as the :void/db-driver (ADR-0033,
-### SPEC.md §5.10, ROADMAP 5).
+### SPEC.md §5.10).
 ###
 ### MySQL and MariaDB over libmysqlclient, which is synchronous all
 ### the way down: there is no non-blocking API to park on the way

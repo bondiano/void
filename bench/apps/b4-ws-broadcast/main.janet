@@ -1,4 +1,4 @@
-### B4 — WebSocket broadcast (SPEC.md §8.2, ADR-0014, ROADMAP 4.2).
+### B4 — WebSocket broadcast (SPEC.md §8.2, ADR-0014).
 ### Budget: delivery < 50 ms to 1000 connections, 10k messages a
 ### second. There is no p50/p99 *request* latency here and no
 ### throughput floor in requests: B4 measures a fan-out, and the number

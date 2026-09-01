@@ -1,4 +1,4 @@
-### void/db/builder — SQL as data (SPEC.md §5.9, ROADMAP 2.1).
+### void/db/builder — SQL as data (SPEC.md §5.9).
 ###
 ### honeysql-style: a statement is a plain map compiled per dialect
 ### into [sql params]:

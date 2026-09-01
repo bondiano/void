@@ -1,5 +1,5 @@
 ### void/cache/memory — the in-process store: TTL and an exact LRU
-### (SPEC.md §5.11, ROADMAP 2.3).
+### (SPEC.md §5.11).
 ###
 ### A table of entries plus a recency list, which is the textbook
 ### answer; the one decision worth stating is how the list is built.

@@ -1,5 +1,4 @@
-### void/redis/commands — the command surface (SPEC.md §5.10, ROADMAP
-### 2.2).
+### void/redis/commands — the command surface (SPEC.md §5.10).
 ###
 ### Redis has some two hundred and forty commands. What is here is the
 ### handful an application reaches for daily, given a shape Janet code

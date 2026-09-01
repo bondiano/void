@@ -1,5 +1,4 @@
-### void/obs/instrument — auto-instrumentation (SPEC.md §5.13,
-### ROADMAP 3.1).
+### void/obs/instrument — auto-instrumentation (SPEC.md §5.13).
 ###
 ### An instrumentation is a contribution to `:void.obs/instrument`:
 ###
@@ -265,7 +264,7 @@
   in the composition.
 
   The http-client one is the exception to "each through its
-  component": `void/http/client` (ROADMAP 4.1) is a module with
+  component": `void/http/client` is a module with
   process-wide counters and nothing in the system graph to name, so it
   needs nothing and installs wherever void/http is on the module path.
   The outbound trace context stays the caller's — `trace/inject!`

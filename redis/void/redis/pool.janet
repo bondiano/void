@@ -1,5 +1,4 @@
-### void/redis/pool — fiber-aware connection pool (SPEC.md §5.10,
-### ROADMAP 2.2).
+### void/redis/pool — fiber-aware connection pool (SPEC.md §5.10).
 ###
 ### The same shape as void/db's pool, and deliberately not the same
 ### code: a cache should not require a database, so the two packages

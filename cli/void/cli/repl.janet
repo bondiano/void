@@ -1,5 +1,5 @@
 ### void/cli/repl — `void repl`: a netrepl client into the running
-### process (SPEC.md §5.17, ROADMAP 1.6).
+### process (SPEC.md §5.17).
 ###
 ### The void/dev plugin serves netrepl on a unix socket
 ### (.void/repl.sock) by default; this connects spork's stock client to

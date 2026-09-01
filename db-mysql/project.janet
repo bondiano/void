@@ -1,6 +1,6 @@
 (declare-project
   :name "void-db-mysql"
-  :description "void/db-mysql — MySQL as the :void/db-driver: libmysqlclient on a worker thread per connection, the blocking client API kept off the ev loop (SPEC §5.10, ADR-0033, ROADMAP 5)."
+  :description "void/db-mysql — MySQL as the :void/db-driver: libmysqlclient on a worker thread per connection, the blocking client API kept off the ev loop (SPEC §5.10, ADR-0033)."
   :version "0.0.1")
 
 # No jpm dependency pulls libmysqlclient in: it is opened at runtime

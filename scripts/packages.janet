@@ -365,8 +365,7 @@
    # void/cli because its entrypoint is the one `void new` writes, and
    # that one calls cli/app-main: with no arguments it runs the app,
    # with arguments it *is* the void binary — which is what makes a
-   # single-binary deploy able to run its own migrations (ROADMAP 4.5,
-   # docs/DEPLOY.md).
+   # single-binary deploy able to run its own migrations (docs/DEPLOY.md).
    {:dir "examples/guestbook"
     :deps [:void/core :void/http :void/html :void/htmx :void/dev :void/cli]
     :example true :jpm [:spork]}
@@ -392,7 +391,7 @@
    # void/admin brings its three plugins (the desk, the agent's half
    # and the queue's), and void/cli is here because the entrypoint
    # calls cli/app-main: with no arguments it runs the app, with
-   # arguments it *is* the void binary (ROADMAP 4.5, docs/DEPLOY.md).
+   # arguments it *is* the void binary (docs/DEPLOY.md).
    {:dir "examples/shop"
     :deps [:void/core :void/http :void/html :void/htmx
            :void/rest :void/openapi

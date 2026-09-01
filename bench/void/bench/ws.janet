@@ -1,5 +1,5 @@
 ### void/bench/ws — driving the B4 load generator and reading its
-### output (SPEC §8.3, ADR-0014, ROADMAP 4.2).
+### output (SPEC §8.3, ADR-0014).
 ###
 ### What ./wrk is to B0–B3, this is to B4. The difference is that the
 ### generator is ours (loadgen/ws-broadcast.janet — wrk speaks HTTP and

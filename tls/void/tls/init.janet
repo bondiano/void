@@ -1,5 +1,5 @@
 ### void/tls — outbound TLS from the system libssl through ffi
-### (SPEC §1 п. 4, ROADMAP wave 5, ADR-0038).
+### (SPEC §1 п. 4, ADR-0038).
 ###
 ### The plugin closes the bookmark ADR-0010 left open — "an ffi plugin
 ### void/tls is possible later" — for the half where the reverse-proxy

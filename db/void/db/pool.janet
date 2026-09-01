@@ -1,5 +1,4 @@
-### void/db/pool — fiber-aware connection pool (SPEC.md §5.9, ROADMAP
-### 2.1).
+### void/db/pool — fiber-aware connection pool (SPEC.md §5.9).
 ###
 ### One pool per :db/pool component, fed by the configured
 ### :void/db-driver. Connections are created lazily up to :size; a

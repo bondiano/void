@@ -1,6 +1,6 @@
 ### void/kafka/config — from the [:kafka] config slice to the
 ### property list librdkafka is configured with (ADR-0035, SPEC.md
-### §5.11, ROADMAP 5).
+### §5.11).
 ###
 ### librdkafka is configured entirely through string properties
 ### ("bootstrap.servers", "acks", ...), of which there are several

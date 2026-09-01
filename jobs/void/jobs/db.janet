@@ -1,5 +1,5 @@
 ### void/jobs-db — the job queue in the database (SPEC.md §5.12,
-### ADR-0012, ROADMAP 2.4).
+### ADR-0012).
 ###
 ### The piece of void/jobs that needs void/db, kept a separate plugin
 ### so an application whose jobs live in its heap never loads a

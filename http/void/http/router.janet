@@ -1,5 +1,5 @@
 ### void/http/router — routes as data, PEG dispatch, metadata merge
-### (SPEC.md §5.1 + part II §2, ADR-0002, ADR-0005, ROADMAP 1.1).
+### (SPEC.md §5.1 + part II §2, ADR-0002, ADR-0005).
 ###
 ### Routes are plain data: `route`/`GET`/`group`/`routes` are ordinary
 ### functions building tables; the one macro, `defroutes`, writes the
@@ -348,7 +348,7 @@
 
 (defn build-table
   ``Build an immutable route table from route sources
-  (ROADMAP 1.1; every failure across every route lands in one batched
+  (every failure across every route lands in one batched
   error):
 
       (router/build-table
@@ -561,7 +561,7 @@
 
 (defn explain-route
   ``The routing verdict for a path — the matched entry plus the origin
-  of every metadata value by layer (ROADMAP 1.1, ADR-0005):
+  of every metadata value by layer (ADR-0005):
 
       (explain-route table "/admin/users")
       (explain-route table "/orders/42" :post)

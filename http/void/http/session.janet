@@ -1,5 +1,5 @@
 ### void/http/session — cookie sessions over a pluggable store
-### (SPEC.md §5.1, ROADMAP 1.1).
+### (SPEC.md §5.1).
 ###
 ### The store contract behind the :void.http/session-store extension
 ### point: {:load (fn [sid] data|nil) :save (fn [sid data ttl])

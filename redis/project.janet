@@ -1,6 +1,6 @@
 (declare-project
   :name "void-redis"
-  :description "void/redis — RESP2/RESP3 in pure Janet on the ev loop: a fiber-aware pool, pipelining, Lua scripts and pub/sub (SPEC §5.10, ROADMAP 2.2)."
+  :description "void/redis — RESP2/RESP3 in pure Janet on the ev loop: a fiber-aware pool, pipelining, Lua scripts and pub/sub (SPEC §5.10)."
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
