@@ -1,0 +1,88 @@
+(import ../test-support/paths)
+(import void/i18n/message :as message)
+(import void/i18n/plural :as plural)
+
+# -- interpolation -------------------------------------------------------
+
+(assert (= "Hello, void!" (message/interpolate "Hello, {name}!" {:name "void"})))
+(assert (= "5 of 10" (message/interpolate "{n} of {total}" {:n 5 :total 10}))
+        "numbers stringify")
+(assert (= "Hello, {name}!" (message/interpolate "Hello, {name}!" {}))
+        "an absent parameter stays verbatim — visible, never a crash")
+(assert (= "Hello, {name}!" (message/interpolate "Hello, {name}!" nil)))
+(assert (= "a {b} c" (message/interpolate "a {{b}} c" {:b "X"}))
+        "{{ }} escapes literal braces")
+(assert (= "set {x: 1}" (message/interpolate "set {{x: 1}" {}))
+        "a lone escaped brace needs no closing pair")
+(assert (= "a { b" (message/interpolate "a { b" {}))
+        "a stray brace is text, not an error")
+(assert (= "" (message/interpolate "" {:a 1})))
+(assert (= "плюс {минус}" (message/interpolate "плюс {минус}" {}))
+        "a non-ascii placeholder name renders back verbatim too")
+
+# -- plural rules --------------------------------------------------------
+
+(def ru (plural/rules :ru))
+(assert (= :one (ru 1)))
+(assert (= :few (ru 2)))
+(assert (= :few (ru 4)))
+(assert (= :many (ru 5)))
+(assert (= :many (ru 11)) "teens are :many")
+(assert (= :many (ru 14)))
+(assert (= :one (ru 21)) "21 ends in 1 outside the teens")
+(assert (= :few (ru 22)))
+(assert (= :many (ru 25)))
+(assert (= :one (ru 101)))
+(assert (= :many (ru 111)))
+(assert (= :many (ru 0)))
+(assert (= :other (ru 1.5)) "fractions are :other")
+
+(def pl (plural/rules :pl))
+(assert (= :one (pl 1)))
+(assert (= :few (pl 22)))
+(assert (= :many (pl 21)) "Polish: only exactly 1 is :one")
+
+(def cs (plural/rules :cs))
+(assert (= :one (cs 1)))
+(assert (= :few (cs 2)))
+(assert (= :few (cs 4)))
+(assert (= :other (cs 5)))
+(assert (= :many (cs 1.5)) "Czech fractions are :many")
+
+(def fr (plural/rules :fr))
+(assert (= :one (fr 0)) "French: 0 and 1 share the singular")
+(assert (= :one (fr 1)))
+(assert (= :one (fr 1.5)))
+(assert (= :other (fr 2)))
+
+(def ar (plural/rules :ar))
+(assert (= :zero (ar 0)))
+(assert (= :one (ar 1)))
+(assert (= :two (ar 2)))
+(assert (= :few (ar 3)))
+(assert (= :few (ar 110)) "3..10 mod 100")
+(assert (= :many (ar 11)))
+(assert (= :other (ar 100)))
+
+(def ja (plural/rules :ja))
+(assert (= :other (ja 1)) "no plural forms at all")
+
+(assert (= :one (plural/one-other 1)))
+(assert (= :other (plural/one-other 2)))
+(assert (nil? (plural/rules :xx)) "an unknown language is not in the table — callers decline to one-other")
+
+# -- rendering -----------------------------------------------------------
+
+(def items {:one "{count} товар" :few "{count} товара" :many "{count} товаров" :other "{count} товара"})
+(assert (= "1 товар" (message/render items {:count 1} ru)))
+(assert (= "3 товара" (message/render items {:count 3} ru)))
+(assert (= "5 товаров" (message/render items {:count 5} ru)))
+(assert (= "21 товар" (message/render items {:count 21} ru)))
+(assert (= "{count} товара" (message/render items {} ru))
+        "no :count selects :other, and the placeholder stays visible")
+(assert (= "few missing" (message/render {:other "few missing"} {:count 2} ru))
+        "a category the table does not carry falls back to :other")
+(assert (= "plain {x}: 7" (message/render "plain {{x}}: {x}" {:x 7} ru))
+        "a plain string ignores plural machinery")
+
+(print "message-test: ok")

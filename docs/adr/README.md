@@ -43,3 +43,5 @@ ADR фиксируют архитектурные решения проекта 
 | [0033](0033-mysql-potok-na-soedinenie-i-tekstovyj-protokol.md) | MySQL — поток на соединение вместо ev loop; текстовый протокол вместо `mysql_stmt_*` | accepted |
 | [0034](0034-oauth-klient-code-pkce-sessiya-kak-pending.md) | `void/oauth` — клиент code+PKCE; сессия вместо нового хранилища; identity отдаёт приложение | accepted |
 | [0035](0035-kafka-event-api-fd-ot-biblioteki-publish-zhdyot-podtverzhdeniya.md) | Kafka — event API вместо callbacks, fd от библиотеки вместо потоков; `publish!` ждёт подтверждения | accepted |
+| [0036](0036-i18n-slovar-kak-vklad-locale-kak-dyn-oshibki-perevodyatsya-sami.md) | `void/i18n` — словарь как вклад с `:precedence`, locale как dyn; schema-ошибки переводятся через шов ADR-0008 | accepted |
+| [0037](0037-datastar-stranica-kak-otvet-morph-cherez-sse.md) | `void/datastar` — страница как ответ: morph `<title>`+`<body>` через SSE; middleware мельче рендера | accepted (experimental) |

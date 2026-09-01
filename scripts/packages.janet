@@ -179,6 +179,31 @@
    {:dir "oauth" :deps [:void/core :void/crypto :void/http :void/auth]
     :test-deps [:void/dev] :jpm [:spork]}
 
+   :void/i18n
+   # Dictionaries as contributions, the locale as a dyn (ADR-0036).
+   # void/http is the one runtime edge: the middleware that resolves
+   # the locale and binds it together with the :void.schema/messages
+   # seam void/core/schema has carried since wave 0. No edge to
+   # void/html, and that is the design — a template reaches `t`
+   # through the dyn, because the render middleware runs inside the
+   # chain. The suite reaches void/html to prove exactly that (a
+   # hiccup view and a form error rendered in Russian through a full
+   # boot) and void/dev for the test scaffolding.
+   {:dir "i18n" :deps [:void/core :void/http]
+    :test-deps [:void/dev :void/html]}
+
+   :void/datastar
+   # The Datastar experiment (ADR-0037): SSE patch events, data-*
+   # builders, and the Biff idiom — the morph middleware slices the
+   # page void/html already rendered, so the edge to void/html is
+   # real (hiccup rendering inside morph-stream), and the SSE framing
+   # is void/http's ring/sse from wave 0. No edge to void/htmx: the
+   # two are alternative idioms an application picks between, not
+   # layers. The suite reaches void/dev for inject (ADR-0017) — the
+   # SSE frames are parsed out of :raw by test/sse-events.
+   {:dir "datastar" :deps [:void/core :void/http :void/html]
+    :test-deps [:void/dev] :jpm [:spork]}
+
    :void/authz
    # No edge to void/auth, and that is the design (ADR-0024): the
    # identity is read from the dyn key void/auth publishes, so an
@@ -331,6 +356,16 @@
    # docs/DEPLOY.md).
    {:dir "examples/guestbook"
     :deps [:void/core :void/http :void/html :void/htmx :void/dev :void/cli]
+    :example true :jpm [:spork]}
+
+   :example/counter
+   # The wave-5 experiment's example (ADR-0037): the Biff idiom on
+   # void/datastar — a live counter where every action returns the
+   # full page, Datastar morphs the live DOM, and morph-stream + poke!
+   # keep every open tab converging on the same count. void/cli for
+   # the same reason as guestbook's: the entrypoint calls cli/app-main.
+   {:dir "examples/counter"
+    :deps [:void/core :void/http :void/html :void/datastar :void/dev :void/cli]
     :example true :jpm [:spork]}
 
    :example/shop

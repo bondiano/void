@@ -189,7 +189,7 @@ jobs:
                     (import void/jobs) (import void/pressure) (import void/obs)
                     (import void/crypto) (import void/auth) (import void/authz) (import void/security)
                     (import void/mail) (import void/bus) (import void/kafka)
-                    (import void/ws)
+                    (import void/ws) (import void/i18n) (import void/datastar)
                     (import void/dev)
                     (import void/fdwait)
                     (print "every package imports from the installed tree")'
