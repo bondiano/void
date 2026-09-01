@@ -8,6 +8,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/http/server :as server)
+(import void/http/client :as client)
 (import void/http/ring :as ring)
 (import void/obs/metrics :as metrics)
 (import void/obs/trace :as trace)
@@ -250,12 +251,24 @@
 (def [ok err] (protect (otlp/start! {:endpoint "http://collector.example:4318"
                                      :headers {"authorization" "Bearer hunter2"}}
                                     "shop")))
-(assert (not ok) "a token to a remote collector fails the boot: there is no TLS (ADR-0010)")
-(assert (string/find "ADR-0010" (string err)))
+(assert (not ok) "a token over plaintext to a remote collector fails the boot")
+(assert (string/find "in the clear" (string err)))
 (otlp/stop!)
 
 (def [ok2 err2] (protect (otlp/start! {:endpoint "https://collector.example:4318"} "shop")))
-(assert (not ok2) "and so does an https endpoint, at start rather than at the first flush")
+(assert (not ok2) "an https endpoint without :void/tls fails at start rather than at the first flush")
+(assert (string/find ":void/tls" (string err2)) "naming the plugin as a way in (ADR-0038)")
+(otlp/stop!)
+
+# with the TLS seam closed (what :void/tls does on load), an https
+# endpoint carrying credentials is a working configuration: encrypted
+# is exactly what the gate was protecting
+(set client/tls-connect (fn stub [&] (error "never dialed at start")))
+(def [ok3 err3] (protect (otlp/start! {:endpoint "https://collector.example:4318"
+                                       :headers {"authorization" "Bearer hunter2"}}
+                                      "shop")))
+(set client/tls-connect nil)
+(assert ok3 (string "an https endpoint with a token starts once TLS is composed: " err3))
 (otlp/stop!)
 
 # -- the plugin ----------------------------------------------------------

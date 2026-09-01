@@ -25,12 +25,14 @@
 ### application that wants them later keeps them in its own column and
 ### calls `oauth/refresh!`.
 ###
-### **TLS is outside, and the boot check names it** (ADR-0010): the
-### authorization endpoint may be https — the *browser* goes there —
-### but the metadata, token, JWKS and userinfo endpoints are called by
-### void's own client, and https in any of them is a boot error that
-### names the two ways out (an internal issuer over http, or an egress
-### relay beside the process).
+### **TLS comes with the composition, and the boot check knows it**
+### (ADR-0010, ADR-0038): the authorization endpoint may always be
+### https — the *browser* goes there — while the metadata, token,
+### JWKS and userinfo endpoints are called by void's own client. With
+### `:void/tls` composed they may be https too, which is what talking
+### to a real IdP looks like; without it, https in any of them is a
+### boot error naming the ways out (the plugin, an internal issuer
+### over http, or an egress relay beside the process).
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)

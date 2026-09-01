@@ -8,24 +8,26 @@
 ### them (`250-PIPELINING` … `250 8BITMIME`) — a client that reads one
 ### line answers the next command with the tail of this one.
 ###
-### **This client speaks plaintext, and says so.** void has no TLS
-### (ADR-0010: TLS is the reverse proxy's, and `void/tls` is wave 5),
-### so `smtps://` is refused the way `rediss://` is, and STARTTLS
-### cannot be used even when the server offers it. The deployment that
-### follows from that is the one void already recommends for inbound
-### traffic, pointed outward: a relay on the machine or next to it
-### (Postfix, msmtp, a sidecar) holds the credentials and the TLS
-### session, and the application talks to it over loopback. A provider
-### reached over HTTPS is an application's own `:void.mail/transport`
-### contribution — the point exists so that this limitation costs a
-### plugin and not a fork.
+### **This client speaks plaintext by default, and says so.** The
+### default deployment stays ADR-0026's: a relay on the machine or
+### next to it (Postfix, msmtp, a sidecar) holds the credentials and
+### the TLS session, and the application talks to it over loopback.
+### With `:void/tls` composed (ADR-0038), `[:mail :smtp :tls]` opens
+### the second road: `:starttls` upgrades the session after EHLO and
+### fails the delivery when the server cannot, `:smtps` speaks TLS
+### from the first byte (the port-465 convention). Either setting
+### without the plugin is a boot error naming it — a channel that was
+### asked to be encrypted never quietly degrades to plaintext. A
+### provider reached over HTTPS is an application's own
+### `:void.mail/transport` contribution, as before.
 ###
 ### **AUTH over a plaintext connection to a remote host is refused.**
-### Not warned about: refused, with the two ways out named
-### (`:allow-plaintext-auth` for a trusted private network, or a local
-### relay). Sending a password in the clear is a decision somebody has
-### to have made on purpose, and a default that makes it silently is
-### how credentials end up on a hotel wifi.
+### Not warned about: refused, with the ways out named (`:tls`, a
+### local relay, or `:allow-plaintext-auth` for a trusted private
+### network). Sending a password in the clear is a decision somebody
+### has to have made on purpose, and a default that makes it silently
+### is how credentials end up on a hotel wifi. An encrypted session
+### passes the gate by construction: AUTH runs after the handshake.
 ###
 ### **The reply code decides whether a failure is retried.** 4xx is
 ### transient and comes back as an error the job retries; 5xx is
@@ -55,9 +57,21 @@
    :password nil
    :auth :auto
    :helo nil
+   # :none | :starttls (upgrade after EHLO, required once asked for) |
+   # :smtps (TLS from the first byte — set :port 465 with it). Either
+   # needs :void/tls in the composition (ADR-0038)
+   :tls :none
    :timeout 60
    :connect-timeout 10
    :allow-plaintext-auth false})
+
+(var tls-wrap
+  ``How a connection is upgraded to TLS — `(fn [stream opts]
+  tls-stream)` — or nil when this composition has none. `void/tls`
+  installs its wrap here on load (ADR-0038 §4); while it is nil, a
+  [:mail :smtp :tls] other than :none is a boot error (see
+  `tls-refusal`), never a silent plaintext session.``
+  nil)
 
 # -- errors --------------------------------------------------------------
 
@@ -100,10 +114,30 @@
 (defn- target [cfg]
   (string (get cfg :host "127.0.0.1") ":" (get cfg :port 25)))
 
+(defn tls-refusal
+  ``Why these settings may not be used, or nil: a [:mail :smtp :tls]
+  other than :none in a composition without `void/tls` would either
+  crash on the first delivery or — worse — quietly speak plaintext. A
+  **pure** function of the configuration and the seam, asked at boot
+  next to `auth-refusal`.``
+  [cfg]
+  (def mode (get cfg :tls :none))
+  (cond
+    (not (index-of mode [:none :starttls :smtps]))
+    (string/format "[:mail :smtp :tls] must be :none, :starttls or :smtps, got %q" mode)
+
+    (and (not= :none mode) (nil? tls-wrap))
+    (string/format (string "[:mail :smtp :tls] is %q and this composition has no TLS — "
+                           "add :void/tls to :plugins (ADR-0038), or set it :none and "
+                           "point [:mail :smtp] at a relay on loopback")
+                   mode)))
+
 (defn open
   "Connect to the server. The connection is a table, so that the
-  capabilities EHLO reports can be written on it."
+  capabilities EHLO reports can be written on it. `:tls :smtps` runs
+  the handshake here, before SMTP says a word."
   [cfg]
+  (when-let [why (tls-refusal cfg)] (fail nil why))
   (def timeout (get cfg :connect-timeout (defaults :connect-timeout)))
   (def stream
     (deadline-call
@@ -111,11 +145,23 @@
       (fn [] (net/connect (get cfg :host "127.0.0.1") (string (get cfg :port 25))))
       (fn [] (fail nil (string/format "connecting to %s timed out after %.1fs"
                                       (target cfg) timeout)))))
-  @{:stream stream
+  (def secured
+    (if (= :smtps (get cfg :tls :none))
+      (do
+        (def [ok wrapped]
+          (protect (tls-wrap stream {:host (get cfg :host "127.0.0.1")
+                                     :timeout timeout})))
+        (unless ok
+          (fail nil (string "smtps handshake with " (target cfg) " failed: "
+                            (if (string? wrapped) wrapped (describe wrapped)))))
+        wrapped)
+      stream))
+  @{:stream secured
     :buf @""
     :pos 0
     :cfg cfg
     :caps @{}
+    :secure (= :smtps (get cfg :tls :none))
     :closed false})
 
 (defn close
@@ -133,7 +179,9 @@
   (var at (string/find "\n" buf (c :pos)))
   (while (nil? at)
     (def before (length buf))
-    (def [ok result] (protect (net/read (c :stream) 4096 buf timeout)))
+    # a method call, not net/read: after STARTTLS the stream is a TLS
+    # session (ADR-0038), which answers :read with the same signature
+    (def [ok result] (protect (:read (c :stream) 4096 buf timeout)))
     (unless ok (fail nil (string "read failed: " result)))
     (when (or (nil? result) (= before (length buf)))
       (fail nil "the server closed the connection"))
@@ -169,7 +217,7 @@
 
 (defn- write! [c data]
   (def timeout (get-in c [:cfg :timeout] (defaults :timeout)))
-  (def [ok result] (protect (net/write (c :stream) data timeout)))
+  (def [ok result] (protect (:write (c :stream) data timeout)))
   (unless ok (fail nil (string "write failed: " result)))
   nil)
 
@@ -204,27 +252,63 @@
       (put caps (keyword (string/ascii-lower (first parts))) (drop 1 parts))))
   caps)
 
-(defn greet!
-  ``Read the greeting and introduce ourselves. ESMTP first; a server
-  that refuses EHLO gets a plain HELO, which is the one fallback this
-  client keeps — it costs three lines and it is what a minimal relay
-  in a container answers.``
+(defn- ehlo!
+  "Introduce ourselves. ESMTP first; a server that refuses EHLO gets a
+  plain HELO, which is the one fallback this client keeps — it costs
+  three lines and it is what a minimal relay in a container answers."
   [c]
-  (def hello (read-reply c))
-  (unless (= 220 (hello :code))
-    (fail (hello :code) (string "greeting: " (hello :text))))
   (def name (helo-name (c :cfg)))
   (write! c (string "EHLO " name "\r\n"))
   (def reply (read-reply c))
   (if (= 2 (div (reply :code) 100))
     (put c :caps (parse-caps reply))
     (do (command c (string "HELO " name) 2 "HELO")
-        (put c :caps @{})))
-  (when (get (c :caps) :starttls)
-    (log/debug (string "the server offers STARTTLS and void has no TLS — this session "
-                       "is in the clear (ADR-0010: terminate TLS in a relay next to "
-                       "the application)")
-               :ns log-ns :server (target (c :cfg))))
+        (put c :caps @{}))))
+
+(defn- secure!
+  ``STARTTLS (RFC 3207): ask, hand the socket to void/tls, and forget
+  everything learned before the handshake — capabilities *and* any
+  buffered bytes, because both predate the protection (§4.2; bytes a
+  server sent ahead of the handshake are exactly the injection the
+  RFC warns about).``
+  [c]
+  (unless (get (c :caps) :starttls)
+    (fail nil (string/format
+                "[:mail :smtp :tls] is :starttls and %s does not offer STARTTLS"
+                (target (c :cfg)))))
+  (command c "STARTTLS" 2 "STARTTLS")
+  (def cfg (c :cfg))
+  (def [ok wrapped]
+    (protect (tls-wrap (c :stream)
+                       {:host (get cfg :host "127.0.0.1")
+                        :timeout (get cfg :connect-timeout (defaults :connect-timeout))})))
+  (unless ok
+    (fail nil (string "STARTTLS handshake with " (target cfg) " failed: "
+                      (if (string? wrapped) wrapped (describe wrapped)))))
+  (put c :stream wrapped)
+  (buffer/clear (c :buf))
+  (put c :pos 0)
+  (put c :caps @{})
+  (put c :secure true))
+
+(defn greet!
+  ``Read the greeting, introduce ourselves, and secure the session
+  when [:mail :smtp :tls] asks for it — :starttls upgrades here and
+  introduces again, because the pre-handshake EHLO answer is not to
+  be trusted (RFC 3207 §4.2).``
+  [c]
+  (def hello (read-reply c))
+  (unless (= 220 (hello :code))
+    (fail (hello :code) (string "greeting: " (hello :text))))
+  (ehlo! c)
+  (case (get-in c [:cfg :tls] :none)
+    :starttls (do (secure! c) (ehlo! c))
+    :none
+    (when (get (c :caps) :starttls)
+      (log/debug (string "the server offers STARTTLS and [:mail :smtp :tls] is :none — "
+                         "this session is in the clear (set :starttls with :void/tls "
+                         "composed, or keep the relay next to the application)")
+                 :ns log-ns :server (target (c :cfg)))))
   c)
 
 (defn- loopback? [host]
@@ -273,10 +357,14 @@
              (get cfg :password)
              (not= :none (get cfg :auth :auto))
              (not (loopback? (get cfg :host "127.0.0.1")))
+             # an encrypted session passes by construction: AUTH runs
+             # after the handshake :tls asked for (ADR-0038)
+             (= :none (get cfg :tls :none))
              (not (get cfg :allow-plaintext-auth)))
     (string/format
-      (string "refusing to send the SMTP password to %s in the clear: void has no TLS "
-              "(ADR-0010). Point [:mail :smtp] at a relay on loopback that holds the "
+      (string "refusing to send the SMTP password to %s in the clear. Set "
+              "[:mail :smtp :tls] :starttls with :void/tls composed (ADR-0038), "
+              "point [:mail :smtp] at a relay on loopback that holds the "
               "credentials, or set [:mail :smtp :allow-plaintext-auth] true if this "
               "network is trusted")
       (target cfg))))

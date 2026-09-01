@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/redis/config :as config)
+(import void/redis/conn :as conn)
 (import void/core/schema :as schema)
 
 # -- the slice validates -------------------------------------------------
@@ -31,9 +32,15 @@
 (assert (= "worker" ((config/parse-url "redis://h/1?client_name=worker") :client-name))
         "query parameters carry the settings a url customarily does")
 
-(def [ok tls] (protect (config/parse-url "rediss://cache")))
-(assert (not ok) "rediss:// is refused rather than silently downgraded")
-(assert (string/find "ADR-0010" tls) "with the reason and where to read it")
+# rediss:// parses into {:tls true} — whether the composition can
+# honour that is decided where the socket opens (ADR-0038): with no
+# :void/tls the connection refuses loudly, it never downgrades
+(assert (deep= @{:host "cache" :tls true}
+               (config/parse-url "rediss://cache"))
+        "rediss:// is the same url with :tls true")
+(def [tok terr] (protect (conn/open {:host "127.0.0.1" :port 1 :tls true})))
+(assert (not tok) "a :tls target without void/tls is refused before any socket opens")
+(assert (string/find ":void/tls" (string terr)) "naming the plugin as the way in")
 (assert (not (first (protect (config/parse-url "redis://h/?bogus=1"))))
         "an unknown parameter is an error, not a dropped instruction")
 (assert (not (first (protect (config/parse-url "http://h")))) "and so is another scheme")

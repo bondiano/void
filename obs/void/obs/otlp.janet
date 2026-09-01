@@ -59,14 +59,17 @@
 ### resource, `process.pid` says which one it is, and the collector
 ### adds them up. The trade is the mirror image of the scrape's.
 ###
-### **No TLS, so the collector is next door** (ADR-0010). An
-### `https://` endpoint is refused by the client with a text that says
-### so, and credentials — `[:obs-otlp :headers]` — over a non-loopback
-### endpoint are refused *at start*: a bearer token in the clear is
-### the same defect void/mail refuses for SMTP AUTH, and a start-time
-### error is the only place to catch it before it is a habit. The
-### deployment shape is an agent or a sidecar on loopback, which is
-### also where OTLP's own defaults point (`http://127.0.0.1:4318`).
+### **The collector is next door, or the channel is encrypted**
+### (ADR-0010, ADR-0038). Credentials — `[:obs-otlp :headers]` — over
+### a plaintext non-loopback endpoint are refused *at start*: a
+### bearer token in the clear is the same defect void/mail refuses
+### for SMTP AUTH, and a start-time error is the only place to catch
+### it before it is a habit. With `:void/tls` composed, an
+### `https://` endpoint is a working answer — a hosted collector with
+### a token becomes one config line; without the plugin the client
+### itself refuses https with both ways out named. The default
+### deployment shape stays an agent or a sidecar on loopback, which
+### is also where OTLP's own defaults point (`http://127.0.0.1:4318`).
 
 (import spork/json)
 (import void/core/plugin :as plugin)
@@ -686,14 +689,19 @@
   # the first incident
   (def u (client/parse-url endpoint))
   (def headers (get cfg :headers {}))
-  (when (and (not (empty? headers)) (not (loopback? (u :host))))
-    (errorf (string "obs otlp: [:obs-otlp :headers] carries credentials and %s is not "
-                    "loopback — void has no TLS (ADR-0010), so they would go out in "
-                    "the clear. Point the endpoint at a collector or agent on this "
-                    "host and let it hold the credentials.")
+  # an https endpoint (possible when :void/tls is composed — parse-url
+  # gates that itself, ADR-0038) is an encrypted channel: credentials
+  # on it are fine, and so is leaving the host
+  (def encrypted? (= "https" (u :scheme)))
+  (when (and (not (empty? headers)) (not (loopback? (u :host))) (not encrypted?))
+    (errorf (string "obs otlp: [:obs-otlp :headers] carries credentials and %s is "
+                    "neither loopback nor https — they would go out in the clear. "
+                    "Use an https endpoint (:void/tls composed, ADR-0038), or point "
+                    "the endpoint at a collector or agent on this host and let it "
+                    "hold the credentials.")
             endpoint))
-  (unless (loopback? (u :host))
-    (log/warn "otlp endpoint is not loopback — telemetry leaves this host unencrypted (ADR-0010)"
+  (unless (or (loopback? (u :host)) encrypted?)
+    (log/warn "otlp endpoint is neither loopback nor https — telemetry leaves this host unencrypted"
               :ns log-ns :endpoint endpoint))
   u)
 

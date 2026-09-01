@@ -25,9 +25,16 @@
 (assert (= "4318" ((client/parse-url "http://[::1]:4318/v1/metrics") :port)))
 
 (def [ok err] (protect (client/parse-url "https://collector.example/v1/traces")))
-(assert (not ok) "there is no TLS in void (ADR-0010)")
-(assert (string/find "ADR-0010" (string err))
-        "and the error says what to do instead rather than failing at connect time")
+(assert (not ok) "https without :void/tls in the composition is refused (ADR-0038)")
+(assert (string/find ":void/tls" (string err))
+        "and the error names the plugin rather than failing at connect time")
+
+# with the seam closed (what :void/tls does on load), the same URL
+# parses — and knows its default port
+(set client/tls-connect (fn stub [&] (error "never dialed by a parse")))
+(assert (= "443" ((client/parse-url "https://collector.example/v1/traces") :port))
+        "https parses once TLS is composed, with 443 implied")
+(set client/tls-connect nil)
 
 (assert (not (first (protect (client/parse-url "collector:4318"))))
         "a URL without a scheme is not a URL")

@@ -127,15 +127,34 @@
     (slot :done) (slot :value)
     (on-timeout)))
 
+(var tls-connect
+  ``How a `{:tls true}` connection (a rediss:// URL) is opened —
+  `(fn [host port opts] stream)` — or nil when this composition has
+  no TLS. `void/tls` installs its connector here on load (ADR-0038
+  §4); while it is nil, an encrypted target is refused with both ways
+  out named rather than quietly spoken to in plaintext.``
+  nil)
+
 (defn- connect-stream [opts]
   (def timeout (get opts :connect-timeout 5))
   (def [host port]
     (if-let [sock (get opts :unix)]
       [:unix sock]
       [(get opts :host "127.0.0.1") (get opts :port 6379)]))
+  (when (get opts :tls)
+    (when (get opts :unix)
+      (error "redis: :tls over a :unix socket makes no sense — a unix socket does not cross a network"))
+    (when (nil? tls-connect)
+      (errorf (string "redis: %s asks for TLS and this composition has none — add "
+                      ":void/tls to :plugins (ADR-0038), or terminate the TLS in "
+                      "front of redis and point [:redis :url] at the plaintext side")
+              (string (get opts :host) ":" (get opts :port)))))
   (deadline-call
     timeout
-    (fn [] (net/connect host port))
+    (fn []
+      (if (get opts :tls)
+        (tls-connect host (string port) {:timeout timeout})
+        (net/connect host port)))
     (fn [] (errorf "redis: connecting to %s timed out after %.1fs"
                    (if (get opts :unix) (string "unix:" (get opts :unix))
                      (string (get opts :host) ":" (get opts :port)))
@@ -174,8 +193,10 @@
   (def buf (c :buf))
   (while (< (length buf) want)
     (def before (length buf))
+    # a method call, not net/read: the stream may be a TLS session
+    # (ADR-0038), which answers :read with the same signature
     (def [ok result]
-      (protect (net/read s (max default-read-size (- want before)) buf timeout)))
+      (protect (:read s (max default-read-size (- want before)) buf timeout)))
     (unless ok
       (mark-broken! c)
       (error (connection-error c "read failed" result)))
@@ -256,7 +277,7 @@
   (def timeout (get-in c [:opts :timeout] 5))
   (def [ok err]
     (protect (ev/with-lock (c :lock)
-               (net/write (c :stream) bytes timeout))))
+               (:write (c :stream) bytes timeout))))
   (unless ok
     (mark-broken! c)
     (error (connection-error c "write failed" err)))

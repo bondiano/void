@@ -15,10 +15,12 @@
 ###
 ### **What it deliberately does not do.**
 ###
-###   TLS         there is none (ADR-0010): an `https://` URL is an
-###               error with a text that says what to do instead —
-###               a relay, a sidecar or a proxy next to the process,
-###               the same answer void/mail gives for SMTP.
+###   TLS         not by itself (ADR-0010): `https://` works when the
+###               composition has `:void/tls` (ADR-0038), which
+###               installs its connector into `tls-connect` below —
+###               the seam pattern of void/mail-jobs. Without it an
+###               `https://` URL is an error naming both ways out: a
+###               relay next to the process, or the plugin.
 ###   redirects   a 30x comes back as a 30x *unless the caller asked*.
 ###               Following one is a policy — does a POST become a
 ###               GET? is the new host allowed to see the
@@ -62,7 +64,22 @@
 
 (def default-ports
   "Port a scheme implies when the URL does not name one."
-  {"http" "80"})
+  {"http" "80" "https" "443"})
+
+(var tls-connect
+  ``How an https:// connection is opened — `(fn [host port opts]
+  stream)` — or nil when this composition has no TLS. `void/tls`
+  installs its connector here on load (ADR-0038 §4); nothing else
+  may, because "can this process speak TLS" is a fact about the
+  composition and not a thing to guess. While it is nil, an https URL
+  is refused with both ways out named.``
+  nil)
+
+(defn tls-available?
+  "Can this process open https:// connections? What the boot gates of
+  void/oauth and void/obs-otlp ask (ADR-0038 §4)."
+  []
+  (not (nil? tls-connect)))
 
 (def user-agent
   "What this client calls itself. A server that is about to rate-limit
@@ -120,22 +137,22 @@
   `:target` is the request target — path and query, `/` when the URL
   has none.
 
-  An `https://` URL is refused here rather than at connect time: void
-  has no TLS (ADR-0010), and the failure should name the deployment
-  shape that replaces it instead of arriving as a protocol error from
-  a server that got a plaintext request.``
+  An `https://` URL in a composition without TLS is refused here
+  rather than at connect time: the failure should name the ways in —
+  the plugin, or the relay — instead of arriving as a protocol error
+  from a server that got a plaintext request.``
   [url]
   (def s (string url))
   (def sep (string/find "://" s))
   (unless sep
     (errorf "http client: %s is not an absolute URL (want http://host[:port]/path)" s))
   (def scheme (string/ascii-lower (string/slice s 0 sep)))
-  (when (= "https" scheme)
-    (errorf (string "http client: %s — void speaks no TLS (ADR-0010). "
-                    "Put the TLS at a relay, a sidecar or a proxy next to the "
+  (when (and (= "https" scheme) (nil? tls-connect))
+    (errorf (string "http client: %s — this composition has no TLS. Add :void/tls "
+                    "to :plugins (ADR-0038), or put the TLS at a relay next to the "
                     "process and point this at it over http://") s))
   (unless (get default-ports scheme)
-    (errorf "http client: unsupported scheme %s:// (only http:// — ADR-0010)" scheme))
+    (errorf "http client: unsupported scheme %s:// (only http:// and https://)" scheme))
   (def rest (string/slice s (+ sep 3)))
   (def slash (string/find "/" rest))
   (def authority (if slash (string/slice rest 0 slash) rest))
@@ -268,7 +285,9 @@
   "Grow buf from the socket. Returns buf, or nil at EOF; throws
   :void.http/timeout on a read timeout."
   [conn buf timeout]
-  (def [ok res] (protect (net/read conn 8192 buf timeout)))
+  # a method call, not net/read: the connection may be a TLS stream
+  # (ADR-0038), which answers :read with the same signature
+  (def [ok res] (protect (:read conn 8192 buf timeout)))
   (cond
     ok res
     (string/find "timeout" (string res)) (error {:void.http/timeout true})
@@ -479,7 +498,17 @@
   nil)
 
 (defn- connect! [client]
-  (def [ok conn] (protect (net/connect (client :host) (client :port) :stream)))
+  (def [ok conn]
+    (protect
+      (if (= "https" (client :scheme))
+        ((or tls-connect
+             # `open` was handed :host/:scheme directly, skipping
+             # parse-url's early refusal — same message, same both
+             # ways out
+             (error "this composition has no TLS — add :void/tls to :plugins (ADR-0038), or point this at a relay over http://"))
+         (client :host) (client :port)
+         {:timeout (client :connect-timeout)})
+        (net/connect (client :host) (client :port) :stream))))
   (unless ok
     (count! :failures 1)
     (errorf "http client: cannot connect to %s — %s"

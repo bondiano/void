@@ -268,6 +268,19 @@
    # integration half only when VOID_TEST_KAFKA names a cluster.
    {:dir "kafka" :deps [:void/core :void/fdwait :void/bus]}
 
+   :void/tls
+   # Outbound TLS from the system libssl (ADR-0038). libssl is opened
+   # at runtime through ffi/, so it is not a jpm dependency;
+   # void/crypto IS an edge — BIO and the X509 error strings live in
+   # libcrypto, and they are bound off crypto's open handle so the
+   # process holds one crypto stack. The edges to http, redis and
+   # mail point *backward* on purpose: each of those holds a seam
+   # `(var tls-... nil)` (the void/mail-jobs pose), and this package's
+   # :on-load installs the connector into every one — wave 1 never
+   # imports wave 5. The suite reaches void/dev for the boot half.
+   {:dir "tls" :deps [:void/core :void/crypto :void/http :void/redis :void/mail]
+    :test-deps [:void/dev]}
+
    :void/ws
    # WebSocket over the HTTP kernel (ADR-0028): the handshake is
    # answered from an ordinary route handler, so the only edge is

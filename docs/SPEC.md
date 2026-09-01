@@ -55,7 +55,7 @@
 1. Нет HTTP/2 → gRPC через Connect protocol (HTTP/1.1), streaming — v2
 2. GC stop-the-world, простой → короткие request lifetimes, пулы буферов, prefork для multi-core
 3. Threads не шарят heap → cross-thread только через `ev/thread` channels; system живёт в одном OS-thread, workers — отдельные
-4. Нет TLS в stdlib → за TLS отвечает reverse proxy (deploy story) или ffi к openssl/bearssl (plugin `void/tls`, low priority)
+4. Нет TLS в stdlib → за входящий TLS отвечает reverse proxy (deploy story); исходящий — опциональный plugin `void/tls` (ffi к системной libssl, ADR-0038)
 
 ---
 

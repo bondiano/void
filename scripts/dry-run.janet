@@ -61,6 +61,7 @@
 (require "void/auth/db")
 (require "void/auth/oauth")
 (require "void/oauth/init")
+(require "void/tls/init")
 (require "void/i18n/init")
 (require "void/datastar/init")
 (require "void/authz/init")
@@ -98,7 +99,7 @@
                              :void/pressure :void/pressure-http
                              :void/obs :void/obs-http :void/obs-otlp
                              :void/crypto :void/auth :void/auth-http :void/auth-db :void/auth-oauth
-                             :void/oauth :void/i18n :void/datastar
+                             :void/oauth :void/tls :void/i18n :void/datastar
                              :void/authz :void/authz-http :void/security
                              :void/mail :void/mail-jobs :void/mail-auth
                              :void/bus :void/bus-db :void/bus-jobs

@@ -36,9 +36,10 @@
 ### production: a deployment that silently mails nothing looks exactly
 ### like a deployment that works.
 ###
-### What is deliberately not here: TLS (ADR-0010 — a relay next to the
-### application holds it, and `smtps://` is refused the way `rediss://`
-### is), IMAP/POP, and a connection pool (see ./smtp).
+### What is deliberately not here: TLS of our own (a relay next to the
+### application remains the default — ADR-0010; with `:void/tls`
+### composed, [:mail :smtp :tls] turns on STARTTLS or smtps, ADR-0038),
+### IMAP/POP, and a connection pool (see ./smtp).
 
 (import void/core/plugin :as plugin)
 (import void/core/config :as config)
@@ -89,6 +90,7 @@
    :password [:optional :any]
    :auth [:optional [:enum :auto :plain :login :none]]
    :helo [:optional :string]
+   :tls [:optional [:enum :none :starttls :smtps]]
    :timeout [:optional [:number {:min 0.001}]]
    :connect-timeout [:optional [:number {:min 0.001}]]
    :allow-plaintext-auth [:optional :boolean]})
@@ -328,8 +330,10 @@
             name
             (string/join (map |(string/format "%q" $) (sorted (keys transports))) " ")))
   (when (= :smtp name)
-    # a password that would go out in the clear is a misconfiguration,
-    # and boot is where it costs nothing to find (./smtp)
+    # a TLS mode without void/tls, or a password that would go out in
+    # the clear — both misconfigurations, and boot is where finding
+    # them costs nothing (./smtp)
+    (when-let [why (smtp/tls-refusal (get cfg :smtp {}))] (error why))
     (when-let [why (smtp/auth-refusal (get cfg :smtp {}))] (error why)))
   (when (and (= :prod profile) (index-of name deliver-nowhere))
     (errorf (string "[:mail :transport] is %q in the :prod profile, and %q does not "

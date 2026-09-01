@@ -13,12 +13,13 @@
 ### won. Percent-escapes in the userinfo are decoded, because a
 ### password containing @ or / has no other way through a URL.
 ###
-### What is deliberately absent is TLS. `rediss://` is refused with the
-### reason rather than ignored: TLS lives outside the kernel
-### (ADR-0010), so an encrypted hop is a proxy's job (stunnel, haproxy,
-### a service mesh) or a unix socket's — and a client that quietly
-### spoke plaintext to a `rediss://` URL would be the worst of the
-### three answers.
+### TLS is not this package's (ADR-0010): `rediss://` parses into
+### `{:tls true}`, and whether the connection can honour that is
+### decided where the socket opens — `void/redis/conn` holds the seam
+### `void/tls` closes (ADR-0038). A composition without the plugin
+### refuses a `rediss://` URL at connect time with both ways out
+### named; it never quietly speaks plaintext to a URL that asked for
+### encryption.
 ###
 ### Nothing here opens a socket: this module is pure parsing, which is
 ### why all of it is testable with no redis anywhere.
@@ -32,6 +33,10 @@
    :username [:optional :string]
    :password [:optional :string]
    :database [:optional [:int {:min 0}]]
+
+   # encrypt the connection (what a rediss:// URL sets) — honoured by
+   # the void/tls seam in ./conn, refused loudly without it (ADR-0038)
+   :tls [:optional :boolean]
 
    # protocol version asked for in HELLO; 2 pins RESP2 for a server
    # (or a proxy) that answers HELLO with an error
@@ -125,13 +130,8 @@
   (case scheme
     "redis" nil
     "unix" nil
-    "rediss"
-    (errorf (string "rediss:// is not supported: TLS lives outside the kernel "
-                    "(ADR-0010) — terminate it in front of redis (stunnel, haproxy, "
-                    "a service mesh) and point [:redis :url] at the plaintext side, "
-                    "or connect over a unix socket")
-            )
-    (errorf "unknown redis url scheme %q (expected redis:// or unix://)" scheme))
+    "rediss" (put out :tls true)
+    (errorf "unknown redis url scheme %q (expected redis://, rediss:// or unix://)" scheme))
 
   (when (>= (length user-g) 1)
     (def user (percent-decode (in user-g 0)))

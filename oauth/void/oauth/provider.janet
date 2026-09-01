@@ -11,14 +11,17 @@
 ### **The two channels are not the same, and the boot check knows it**
 ### (ADR-0010, ADR-0034). The authorization endpoint is where the
 ### *browser* is redirected — the browser speaks TLS itself, so
-### `https://` is legal there. The token endpoint, the metadata, the
-### JWKS and userinfo are called by `void/http/client`, which has no
-### TLS — `https://` in any of those is a **boot error** naming the
-### two ways out: an internal issuer reachable over http, or an egress
-### relay beside the process (the same relay `void/mail` stands behind).
-### An `https://` issuer stays legal as the string `iss` is compared
-### against — but then the back-channel endpoints must be named
-### explicitly, and discovery is off.
+### `https://` is always legal there. The token endpoint, the
+### metadata, the JWKS and userinfo are called by `void/http/client`,
+### which speaks TLS exactly when the composition holds `:void/tls`
+### (ADR-0038). With the plugin, an https back channel just works —
+### a real IdP becomes reachable directly. Without it, `https://` in
+### any of those is a **boot error** naming the three ways out: the
+### plugin, an internal issuer reachable over http, or an egress
+### relay beside the process (the same relay `void/mail` stands
+### behind). An `https://` issuer then stays legal as the string
+### `iss` is compared against — but the back-channel endpoints must
+### be named explicitly, and discovery is off.
 ###
 ### The keys are the ADR-0032 ring again, one per provider: fetched
 ### lazily (a process nobody signs into never calls its issuer), TTL'd,
@@ -95,9 +98,10 @@
   [:metadata-url :token-endpoint :jwks-uri :userinfo-endpoint])
 
 (def- relay-text
-  (string "void has no TLS (ADR-0010): the back channel is called by void/http/client. "
-          "Either the issuer is reachable over http (an internal IdP), or an egress "
-          "relay beside this process terminates TLS outbound and the endpoint names it."))
+  (string "This composition has no TLS, and the back channel is called by "
+          "void/http/client. Add :void/tls to :plugins (ADR-0038), or reach the "
+          "issuer over http (an internal IdP), or put an egress relay beside this "
+          "process and name its plaintext side."))
 
 (defn openid?
   "Does this provider ask for an id_token?"
@@ -120,16 +124,19 @@
     (errorf "[:oauth :providers %q] has nowhere to send the browser: set :issuer (its metadata names the authorization endpoint) or :authorization-endpoint directly" name))
   (unless (or (resolved :issuer) (resolved :token-endpoint))
     (errorf "[:oauth :providers %q] has nowhere to exchange the code: set :issuer or :token-endpoint" name))
-  (each key back-channel-keys
-    (when (https? (resolved key))
-      (errorf "[:oauth :providers %q %q] is an https URL. %s" name key relay-text)))
-  (when (https? (resolved :issuer))
-    # the issuer string stays what `iss` is compared against; only the
-    # calls move
-    (unless (resolved :token-endpoint)
-      (errorf "[:oauth :providers %q] names an https issuer, so discovery cannot be called — set :token-endpoint explicitly (over http, through a relay). %s" name relay-text))
-    (when (and (openid? resolved) (nil? (resolved :jwks-uri)))
-      (errorf "[:oauth :providers %q] asks for openid under an https issuer — set :jwks-uri explicitly (over http, through a relay), or drop \"openid\" from :scopes. %s" name relay-text)))
+  # with :void/tls composed the back channel speaks https itself
+  # (ADR-0038) and these gates have nothing to refuse
+  (unless (client/tls-available?)
+    (each key back-channel-keys
+      (when (https? (resolved key))
+        (errorf "[:oauth :providers %q %q] is an https URL. %s" name key relay-text)))
+    (when (https? (resolved :issuer))
+      # the issuer string stays what `iss` is compared against; only
+      # the calls move
+      (unless (resolved :token-endpoint)
+        (errorf "[:oauth :providers %q] names an https issuer, so discovery cannot be called — set :token-endpoint explicitly (over http, through a relay). %s" name relay-text))
+      (when (and (openid? resolved) (nil? (resolved :jwks-uri)))
+        (errorf "[:oauth :providers %q] asks for openid under an https issuer — set :jwks-uri explicitly (over http, through a relay), or drop \"openid\" from :scopes. %s" name relay-text))))
   (each a (resolved :algs)
     (unless (get jwt/algorithms a)
       (errorf "[:oauth :providers %q :algs] names %q, which is not a JWS algorithm this build has (%s)"

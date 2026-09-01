@@ -6,6 +6,7 @@
 (import ../test-support/paths)
 (import void/crypto :as crypto)
 (import void/http/wire :as wire)
+(import void/http/client :as client)
 (import void/oauth/pkce :as pkce)
 (import void/oauth/provider :as provider)
 (import void/oauth/flow :as flow)
@@ -43,12 +44,23 @@
                              :authorization-endpoint "http://idp.test/authorize"}}}
          "nowhere to exchange the code")
 
-# the back channel is called by void/http/client, which has no TLS
-# (ADR-0010) — and the refusal names both ways out
+# the back channel is called by void/http/client, which speaks TLS
+# only when :void/tls is composed (ADR-0038) — without it the refusal
+# names the ways out
 (refused {:providers {:acme {:client-id "app"
                              :issuer "http://idp.test"
                              :token-endpoint "https://idp.test/token"}}}
-         "https" "relay")
+         "https" "relay" ":void/tls")
+
+# with the seam closed (what :void/tls does on load) the same https
+# back channel is a working configuration — talking to a real IdP
+(set client/tls-connect (fn stub [&] (error "never dialed by a boot check")))
+(assert (first (protect (build {:base-url "http://app.test"
+                                :providers {:acme {:client-id "app"
+                                                   :issuer "https://accounts.example"
+                                                   :scopes ["openid"]}}})))
+        "an https issuer with discovery builds once TLS is composed")
+(set client/tls-connect nil)
 
 # an https issuer stays legal as the `iss` string, but then discovery
 # is off and the back channel must be named explicitly
