@@ -179,7 +179,7 @@ Structured-логи — примитив ядра (Fastify/pino-паритет),
 ### 5.4 `void/html` — SSR *(M)*
 - htmlgen/hiccup pipeline: layouts, partials, компоненты как функции.
 - Form helpers из schema (поля, ошибки, значения, CSRF автоматически).
-- Asset pipeline: fingerprinting, manifest; в dev — passthrough.
+- Asset pipeline: fingerprinting, manifest; в dev — passthrough. Компиляция — шаг перед обходом (`:steps`): standalone tailwind без node, watcher в `void dev`, `void assets install/build/info`.
 - temple как альтернативный движок (extension point `:void.html/engine`).
 
 ### 5.5 `void/htmx` *(S)*

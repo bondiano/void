@@ -8,10 +8,28 @@
 ### passes the logical path through unchanged and void/http's static
 ### middleware serves the source directory directly — no build step in
 ### the dev loop.
+###
+### Anything that *compiles* an asset is a `:steps` thunk run before
+### the walk rather than a stage in here: it writes its output into the
+### asset root, and from that point on there is no such thing as a
+### generated file — see ./tailwind, the only one that ships.
 
 (import spork/crc)
 
-(def- crc32 (crc/named-variant :crc32))
+# The variant is built per call and never held in a module value, and
+# that is about `jpm build` rather than about speed: spork/crc returns
+# an **abstract** value, and `jpm build` marshals everything its entry
+# point can reach — an abstract value is precisely what marshalling
+# refuses ("cannot marshal <crc/crc32-variant>"). Since the CLI grew
+# `void assets build` this module is reachable from that entry point,
+# so a stored variant made a single binary of *any* application
+# composing void/html fail to link, over a value the build never calls
+# (docs/DEPLOY.md). A cache would bring it back the moment anything
+# fingerprinted a file before the marshal, so there is no cache: the
+# variant costs a table, `fingerprint` runs once per asset, and the
+# invariant is one sentence — no abstract value lives in a def.
+(defn- crc32 [content]
+  ((crc/named-variant :crc32) content))
 
 (defn fingerprint
   "Fingerprinted filename for a logical path: name-<crc32hex>.ext."
@@ -53,10 +71,19 @@
   Copies every file under :root to :out under its fingerprinted name
   and writes the manifest (logical path -> fingerprinted path) as
   janet data to :manifest (default <out>/manifest.jdn). Returns the
-  manifest table.``
+  manifest table.
+
+  `:steps` are thunks run before the walk — a compiler that writes
+  into :root (void/html's tailwind step is the one that ships). That
+  ordering is the whole integration: whatever a step produces is a
+  file under :root by the time anything is fingerprinted, so a
+  compiled stylesheet gets the same content-addressed name and the
+  same far-future caching as a hand-written one, and `html/asset`
+  cannot tell the two apart.``
   [opts]
   (def root (or (opts :root) (error "assets/build! needs a :root directory")))
   (def out (or (opts :out) (error "assets/build! needs an :out directory")))
+  (each s (get opts :steps []) (s))
   (unless (= :directory (get (os/stat root) :mode))
     (errorf "asset root %q is not a directory" root))
   (def manifest @{})

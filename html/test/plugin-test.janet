@@ -6,6 +6,7 @@
 (import void/html/init :as html)
 (import void/html/hiccup :as hiccup)
 (import void/html/temple :as temple)
+(import spork/sh)
 
 # -- a small app: hiccup pages, fragments, a temple view -----------------
 
@@ -103,5 +104,82 @@
   (def r4 (http/with-request {:uri "/asset"}))
   (assert (= "/assets/css/app.css" (string (r4 :body)))
           "no manifest -> dev passthrough asset urls"))
+
+# -- the asset build, end to end -----------------------------------------
+#
+# The deploy sequence of a composition that compiles a stylesheet, in
+# the order a deploy runs it: boot, `void assets build`, boot again.
+# The compiler is a shell script that writes the CSS the real one would
+# — what is under test here is the wiring, not tailwind.
+
+(def tmp "test/tmp-plugin-assets")
+(sh/rm tmp)
+(os/mkdir "test")
+(os/mkdir tmp)
+(os/mkdir (string tmp "/src"))
+(os/mkdir (string tmp "/assets"))
+(spit (string tmp "/assets/logo.svg") "<svg/>")
+(spit (string tmp "/src/app.css") "@import \"tailwindcss\";")
+
+(def fake-tailwind (string tmp "/tailwindcss"))
+(spit fake-tailwind
+      ```
+#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --input) in="$2"; shift 2;;
+    --output) out="$2"; shift 2;;
+    *) shift;;
+  esac
+done
+echo "body{color:red}" > "$out"
+```)
+(os/chmod fake-tailwind 8r755)
+
+(def asset-config
+  {:root (string tmp "/assets")
+   :out (string tmp "/public")
+   :tailwind {:bin fake-tailwind
+              :input (string tmp "/src/app.css")
+              :output (string tmp "/assets/app.css")}})
+
+(defn- boot-with [assets]
+  (plugin/start! {:plugins ["void/http/init" "void/html/init" app-manifest]
+                  :profile :test
+                  :config {:env @{} :cli {:http {:port 0} :html {:assets assets}}}}))
+
+# half a compile is refused at boot, where somebody is still reading
+(assert (not (first (protect (boot-with (merge asset-config
+                                               {:tailwind {:input "a.css"}})))))
+        "[:html :assets :tailwind] with no :output does not boot")
+
+(def build-boot (boot-with asset-config))
+(def manifest
+  (defer (plugin/shutdown! build-boot 3)
+    (def cli (from-pairs (map |[($ :name) $] (plugin/extension build-boot :void.core/cli))))
+    (each name [:assets/build :assets/install :assets/info]
+      (assert (get cli name) (string/format "void/html contributes %q" name)))
+    (assert (get-in cli [:assets/info :read-only?]) "info changes nothing")
+    (assert (not (get-in cli [:assets/build :read-only?])))
+    (assert (empty? (get-in cli [:assets/build :needs] []))
+            "a build opens no port and starts no component")
+    (assert (= :not-watching
+               (get-in build-boot [:system :instances :html/tailwind :disabled]))
+            "a :test process runs no watcher")
+    (html/build-assets!)))
+
+(assert (= 2 (length manifest)) "the compiled stylesheet joined the walk")
+(assert (string/has-prefix? "app-" (manifest "app.css")))
+(assert (= "body{color:red}\n" (string (slurp (string tmp "/public/" (manifest "app.css")))))
+        "what the compiler wrote is what got fingerprinted")
+
+# the second boot finds the manifest the build left, and the same
+# (html/asset "app.css") call now resolves through it
+(def served-boot (boot-with asset-config))
+(defer (plugin/shutdown! served-boot 3)
+  (assert (= (string "/assets/" (manifest "app.css")) (html/asset "app.css"))
+          "one manifest later, the asset url is content-addressed"))
+
+(sh/rm tmp)
 
 (print "plugin-test: ok")

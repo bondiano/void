@@ -34,6 +34,20 @@
            (string (slurp (string tmp "/out/" css-target))))
         "content is copied verbatim under the fingerprinted name")
 
+# -- steps run before the walk -------------------------------------------
+
+(def order @[])
+(def stepped
+  (assets/build! {:root (string tmp "/src")
+                  :out (string tmp "/stepped")
+                  :steps [(fn [] (array/push order :first)
+                            (spit (string tmp "/src/generated.css") "a{}"))
+                          (fn [] (array/push order :second))]}))
+(assert (= [:first :second] (tuple ;order)) "steps run in order")
+(assert (get stepped "generated.css")
+        "what a step wrote into :root is fingerprinted like the rest")
+(os/rm (string tmp "/src/generated.css"))
+
 (def loaded (assets/load-manifest (string tmp "/out/manifest.jdn")))
 (assert (deep= (freeze manifest) (freeze loaded))
         "the manifest round-trips through its file")

@@ -199,6 +199,19 @@ jobs:
           echo "JANET_PATH=$HOME/void-tree/lib" >> "$GITHUB_ENV"
           echo "$HOME/void-tree/bin" >> "$GITHUB_PATH"
 
+      - name: The driver library an application opts into
+        # janet-lang/sqlite3 is deliberately not in the bundle
+        # (ADR-0011, ADR-0020): void/db-sqlite is a plugin an
+        # application lists, and a missing library is a readable error
+        # at :start rather than a dependency everybody installs. So the
+        # applications in this job install it, which is what an
+        # application does — `void make auth` generates a suite that
+        # boots the driver, and examples/hub keeps its data in it.
+        run: |
+          for url in $(janet scripts/packages.janet installed-deps); do
+            jpm --tree="$HOME/void-tree" install "$url"
+          done
+
       - name: The installed binary has exactly one shebang
         # jpm writes it (:is-janet true); cli/bin/void must not carry
         # one of its own
@@ -311,6 +324,21 @@ jobs:
           done
           kill "$server"
           grep -q 'shipped guestbook' /tmp/page.html
+
+      - name: The examples that run off the install rather than the checkout
+        # Everything above this line is a scaffold: `void new` writes it,
+        # a step smokes it, and it is thrown away. examples/hub is an
+        # application that stays — and the one in the repository with no
+        # test-support/paths.janet, so it imports void/... from the tree
+        # installed at the top of this job and from nowhere else
+        # (ROADMAP 6.6, scripts/install-tree.janet). The list is the
+        # package graph's, like every other list here.
+        run: |
+          while IFS=$'\t' read -r name dir; do
+            echo "::group::jpm test $name ($dir)"
+            ( cd "$dir" && jpm --tree="$HOME/void-tree" test )
+            echo "::endgroup::"
+          done < <(janet scripts/packages.janet ci-installed)
 
   # void/crypto is ffi to a library the machine provides, so what it can
   # do is a property of the machine (ADR-0022): the argon2id KDF needs

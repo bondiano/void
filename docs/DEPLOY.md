@@ -199,6 +199,7 @@ run time — so ship `db/migrations/` beside the binary, or run
 
     void plugins lock          # commit void.lock; `void plugins check` in CI
     void deploy check          # every store fit for [:deploy :shape]
+    void assets build          # compile + fingerprint; writes the manifest
     jpm --local build
     ./build/myapp routes       # the binary agrees about the route table
     ./build/myapp plugins check
@@ -221,4 +222,15 @@ environment block above.
   older than the builder's; a container of the deployment's own
   distribution is the usual answer.
 - **Assets.** Files served from disk are still files on disk. Nothing in
-  the build embeds a directory of static assets.
+  the build embeds a directory of static assets, so `void assets build`
+  is a step of its own and its output — `[:html :assets :out]`, the
+  fingerprinted copies and the `manifest.jdn` beside them — ships with
+  the binary. `html/asset` reads that manifest at `:before-start`; a
+  deployment that forgets the step gets dev passthrough URLs and no
+  far-future caching, not a broken page.
+
+  The step needs no node and no npm. A stylesheet that has to be
+  compiled first is `[:html :assets :tailwind]`, and the compiler is
+  tailwind's own standalone binary — `void assets install` puts it in
+  `.void/bin` (a build image can cache that directory, or vendor the
+  binary and name it in `:bin`). `void assets info` says where it is.

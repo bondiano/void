@@ -24,6 +24,13 @@
 ###     janet scripts/packages.janet deps     # the bundle's jpm dependencies
 ###     janet scripts/packages.janet dev-deps # what a checkout needs
 ###     janet scripts/packages.janet check    # graph vs. the tree on disk
+###
+### And, for the examples that run off an installed tree instead of the
+### checkout (`:installed` below, scripts/install-tree.janet):
+###
+###     janet scripts/packages.janet ci-installed    # their `jpm test` steps
+###     janet scripts/packages.janet installed-deps  # what the tree needs
+###                                                  # besides the bundle
 
 # -- the graph -----------------------------------------------------------
 #
@@ -38,8 +45,22 @@
 #               package declares it, an application opts in by plugin
 #   :native     builds a native module into <dir>/build (only fdwait)
 #   :example    an example application, not part of the bundle
+#   :installed  an example that resolves void from an *installed* tree
+#               rather than from the checkout (see below)
 #
 # :deps are direct edges only — the transitive closure is computed.
+#
+# `:installed` inverts what every other entry here is for. An ordinary
+# example imports void through `test-support/paths.janet`, which is this
+# graph projected onto module/paths — so its suite proves the sources
+# work and proves nothing at all about the install. An installed example
+# has no such file: it imports `void/...` the way a stranger does, from
+# whatever `scripts/install-tree.janet` put in a tree, which means it
+# also pays what a stranger pays — a change to the framework reaches it
+# only after that script runs again. Its `:deps` stay written down
+# because they are true (its sources do import those packages) and
+# because they are the composition, in the one place compositions are
+# written; nothing projects them onto a module path.
 
 (def graph
   "The monorepo's packages and the edges between them."
@@ -482,7 +503,31 @@
            # which lives in the same package) into tools for an agent
            :void/admin :void/mcp
            :void/dev]
-    :example true :jpm [:spork :sqlite3]}})
+    :example true :jpm [:spork :sqlite3]}
+
+   :example/hub
+   # The wave-6 application (ROADMAP 6.6): a webhook hub — GitHub
+   # deliveries in, telegram out — and the one example that runs off an
+   # *installed* void rather than off the checkout. It has no
+   # test-support/paths.janet on purpose: `scripts/install-tree.janet`
+   # puts the bundle in a tree, and from there the hub imports
+   # `void/...` with no more privilege than a stranger has. That is why
+   # its suite is not in `suites` below and does not run in CI's
+   # checkout job — it runs in the clean-machine one, which is the only
+   # place where what it proves is true.
+   #
+   # It began as `void new hub` plus `void make auth` and nothing else,
+   # so its first commit is the scaffold's own output: every hand edit
+   # after it is a line in a diff and a candidate for a task.
+   {:dir "examples/hub"
+    :deps [:void/core :void/http :void/html :void/htmx
+           :void/db :void/db-sqlite
+           # the sign-in the scaffold generated: identity, the stores it
+           # keeps people in, the CSRF token its forms carry, and the
+           # deliverer a challenge refuses to live without (ADR-0023 §7)
+           :void/crypto :void/auth :void/security :void/mail
+           :void/dev :void/cli]
+    :example true :installed true :jpm [:spork :sqlite3]}})
 
 (def jpm-urls
   "External jpm dependencies, by the key packages name them with."
@@ -553,12 +598,28 @@
   []
   (map |(string (get-in graph [$ :dir]) "/void") (install-order)))
 
+(defn- installed-example? [name]
+  (and (get-in graph [name :example]) (get-in graph [name :installed])))
+
 (defn suites
-  ``Everything with a `jpm test` suite: the bundle's packages in
-  topological order, then the examples. The list of steps CI runs.``
+  ``Everything with a `jpm test` suite that runs against the checkout:
+  the bundle's packages in topological order, then the examples that
+  reach them through `test-support/paths.janet`. The list of steps CI's
+  test job runs.
+
+  Installed examples are deliberately absent — see `installed-suites`.``
   []
   [;(install-order)
-   ;(sorted (filter |(get-in graph [$ :example]) (keys graph)))])
+   ;(sorted (filter |(and (get-in graph [$ :example])
+                          (not (get-in graph [$ :installed])))
+                    (keys graph)))])
+
+(defn installed-suites
+  ``The examples that run against an *installed* tree rather than the
+  checkout. They are a separate list because they need a different
+  thing done first: not a module path, an install.``
+  []
+  (sorted (filter installed-example? (keys graph))))
 
 (defn jpm-dependencies
   ``External jpm dependencies, in install order and without duplicates.
@@ -574,6 +635,23 @@
                ;(if optional? (or (get-in graph [name :jpm-optional]) []) [])]
       (def url (or (jpm-urls key) (errorf "unknown jpm dependency %q" key)))
       (unless (index-of url urls) (array/push urls url))))
+  urls)
+
+(defn installed-jpm-dependencies
+  ``What has to be in the installed tree besides the bundle itself for
+  the installed examples to run: the external dependencies they declare
+  and the bundle does not carry. janet-lang/sqlite3 is the whole of the
+  list today, and it is here for the reason it is *not* in the bundle —
+  the driver is an application's opt-in (ADR-0011, ADR-0020), so the
+  application that opts in installs it, which is what this is.``
+  []
+  (def bundled (jpm-dependencies))
+  (def urls @[])
+  (each name (installed-suites)
+    (each key (or (get-in graph [name :jpm]) [])
+      (def url (or (jpm-urls key) (errorf "unknown jpm dependency %q" key)))
+      (unless (or (index-of url bundled) (index-of url urls))
+        (array/push urls url))))
   urls)
 
 (defn native?
@@ -626,6 +704,19 @@
     (each key [;(or (entry :jpm) []) ;(or (entry :jpm-optional) [])]
       (unless (jpm-urls key)
         (array/push problems (string/format "%q: unknown jpm dependency %q" name key))))
+    # an installed example is one that imports void the way a stranger
+    # does. A test-support/paths.janet would put the checkout back on
+    # its module path, and the arrangement would go on looking exactly
+    # the same while proving nothing — so the file's absence is the
+    # whole of the rule, and it is checked rather than remembered
+    (when (entry :installed)
+      (unless (entry :example)
+        (array/push problems
+                    (string/format "%q: :installed without :example" name)))
+      (when (= :file (os/stat (string d "/test-support/paths.janet") :mode))
+        (array/push problems
+                    (string/format "%q: is :installed but has test-support/paths.janet — it would import the checkout, not the install"
+                                   name))))
     (each dep [;(entry :deps) ;(or (entry :test-deps) [])]
       (unless (graph dep)
         (array/push problems (string/format "%q: depends on unknown package %q" name dep)))
@@ -659,6 +750,9 @@
     "dev-deps" (each url (jpm-dependencies true) (print url))
     "ci" (each name (suites)
            (printf "%s\t%s" (string name) (get-in graph [name :dir])))
+    "ci-installed" (each name (installed-suites)
+                     (printf "%s\t%s" (string name) (get-in graph [name :dir])))
+    "installed-deps" (each url (installed-jpm-dependencies) (print url))
     "check" (let [problems (check)]
               (unless (empty? problems)
                 (each p problems (eprint "  " p))
@@ -666,4 +760,4 @@
               (printf "package graph ok (%d packages, %d examples)"
                       (length (packages))
                       (- (length graph) (length (packages)))))
-    (errorf "usage: janet scripts/packages.janet [order|trees|deps|dev-deps|ci|check]")))
+    (errorf "usage: janet scripts/packages.janet [order|trees|deps|dev-deps|installed-deps|ci|ci-installed|check]")))

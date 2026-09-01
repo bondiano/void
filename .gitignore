@@ -1,6 +1,10 @@
 # jpm / janet build artifacts
 build/
 jpm_tree/
+
+# the bundle installed into a tree of its own (scripts/install-tree.janet):
+# what examples/hub imports from, and never part of the repository
+.void-tree/
 *.so
 *.dylib
 *.o

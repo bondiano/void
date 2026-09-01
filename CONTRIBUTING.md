@@ -32,6 +32,25 @@ scripts/void new myapp
 cd myapp && ../scripts/void routes
 ```
 
+One example does not work that way, on purpose. `examples/hub` (the
+wave-6 application, [ROADMAP 6.6](docs/ROADMAP.md)) has no
+`test-support/paths.janet`: it imports `void/...` from an **installed**
+tree, the way somebody who never cloned this repository does. A `jpm
+test` of the checkout therefore proves nothing about the install, and
+that is the gap it exists to close:
+
+```sh
+janet scripts/install-tree.janet              # bundle -> ./.void-tree
+eval "$(janet scripts/install-tree.janet --export)"
+cd examples/hub && jpm test
+```
+
+The cost is the point: a change to the framework reaches the hub only
+after `install-tree` runs again. In CI the same two lines are the
+"clean machine" job, which is where `janet scripts/packages.janet
+ci-installed` is run — and the reason an installed example is marked
+`:installed` in the graph rather than merely lacking a paths file.
+
 `void/db-postgres`'s integration tests need a server, named by
 `VOID_TEST_PG` — a conninfo or a `postgres://` URL. Without one they
 announce themselves as skipped instead of failing; CI sets it against a
