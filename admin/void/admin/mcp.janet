@@ -47,7 +47,10 @@
   reads: the query parameters it was given, no params, and a marker
   saying where it came from. The identity is where it always is — the
   dyn key void/auth publishes — so a scope that narrows by tenant
-  narrows the same way for a model as for a person.``
+  narrows the same way for a model as for a person. When no identity
+  was published (a stdio transport, an HTTP gate below `:identity`), a
+  scope that depends on one answers nil — and ./query narrows nil to
+  no rows, so the call fails shut rather than wide.``
   [arguments]
   @{:method :get
     :path (ctx/prefix)
@@ -95,6 +98,19 @@
   [desc row]
   (tabseq [f :in (desc :detail)] f (get row f)))
 
+(defn- row->list-data
+  ``One row as the *list* projects it — the `:list` columns that name a
+  real field, and nothing else. The list page and the list tool must
+  show the same columns: `:detail` is the show page's declaration, and
+  a list tool that read it would hand an agent, two hundred rows at a
+  time, the fields the declaration only meant for one row — or, when
+  `:detail` was never declared, every column of the entity. A computed
+  column (`:value` without a field) renders hiccup for a page and is
+  skipped here.``
+  [desc row]
+  (tabseq [c :in (desc :list) :when (c :field)]
+    (c :name) (get row (c :name))))
+
 (defn- ok
   "A tool answers with a string. `json/encode` builds a buffer, and a
   buffer would reach the model as its printed representation."
@@ -126,7 +142,7 @@
              (put (req :query) (string k) (string v))))
          (ensure! desc :index)
          (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
-         (ok {:rows (map |(row->data desc $) (q/rows desc req st))
+         (ok {:rows (map |(row->list-data desc $) (q/rows desc req st))
               :total (q/total desc req st)
               :page (st :page)
               :per-page (st :per-page)}))})
@@ -263,7 +279,11 @@
                a (res/policy-name (desc :name) a))})
 
 (defn resources-for
-  "The one resource each declaration publishes: itself."
+  ``The one resource each declaration publishes: itself. Reading it
+  passes the same two policies the index route carries — the gate and
+  `:index` — because a declaration names fields, actions and policy
+  names, and "the gate is the admin's gate" (the header's promise)
+  covers what an agent may learn as much as what it may list.``
   [desc]
   [{:name (tool-key (desc :name) "declaration")
     :uri (string "void://admin/" (desc :name))
@@ -271,7 +291,9 @@
     :doc (string "The admin declaration of " (desc :title)
                  ": its fields, actions, filters and policy names")
     :mime-type "application/json"
-    :read (fn read-declaration [] (json/encode (declaration desc)))}])
+    :read (fn read-declaration []
+            (ensure! desc :index)
+            (json/encode (declaration desc)))}])
 
 # -- the projection ------------------------------------------------------
 

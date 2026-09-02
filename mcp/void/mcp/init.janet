@@ -172,17 +172,22 @@
 # -- commands ------------------------------------------------------------
 
 (defn print-tools
-  "The body of `void mcp tools`: what an agent connecting right now
-  would see, and — for every command that is not there — the reason."
+  ``The body of `void mcp tools`: what an agent connecting right now
+  would see, and — for every command that is not there — the reason.
+  Every exposed tool is printed with the plugin that contributed it,
+  because `:read-only? true` is that plugin's own claim (see
+  registry/exposed?): the review this report exists for is "which
+  plugin decided an agent may call this".``
   []
   (def b (boot))
   (def srv (server-value))
   (print "MCP server: " (get-in srv [:info :name]) " " (get-in srv [:info :version]))
   (print)
-  (print "Tools (" (length (srv :tools)) "):")
+  (print "Tools (" (length (srv :tools)) "), each with the plugin whose declaration exposed it:")
   (each t (srv :tools)
-    (printf "  %-24s %s%s"
+    (printf "  %-24s %-20s %s%s"
             (t :name)
+            (string (or (t :plugin) "(unknown)"))
             (if (t :read-only?) "" "(writes) ")
             (get t :description "")))
   (when (empty? (srv :tools))

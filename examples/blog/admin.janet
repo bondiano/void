@@ -92,10 +92,16 @@
 (admin/defresource-admin authors e/Author
   :title "Authors"
   :list [:id :name :email]
+  # the hash is a column, and it is a column *only* for the writes
+  # (./entities says so) — so no projection names it: not the form,
+  # and not the detail page either. Leaving :detail out would derive
+  # it from the entity, and a derived projection is exactly how a
+  # password hash ends up on a show page and in an agent's get tool.
+  :detail [:id :name :email]
   :search [:name :email]
   :sortable [:id :name]
-  # the hash is a column, and it is not a field anybody types: leaving
-  # it out of :form leaves it out of the tool an agent gets, too
+  # leaving the hash out of :form leaves it out of the tool an agent
+  # gets, too
   :form [:name :email]
   :only [:index :show])
 

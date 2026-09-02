@@ -122,11 +122,21 @@
   `:scope` for this request, the declared filters that carry a value,
   and the search term. `extra` is folded in the same way — that is how
   an inline narrows to its parent and a bulk selection narrows to its
-  identifiers, without a second code path.``
+  identifiers, without a second code path.
+
+  A `:scope` that answers nil has not said "everything": it has said
+  nothing, and on a resource that declared one, nothing narrows to
+  **no rows**. The scope that cannot find its tenant — an identity the
+  request never carried — must fail shut, because the alternative is a
+  list page (or an agent's tool call) reading the whole table the one
+  time the narrowing mattered most.``
   [desc req st &opt extra]
   (def parts @[])
   (when-let [scope (desc :scope)]
-    (when-let [c (scope req)] (array/push parts c)))
+    (if-let [c (scope req)]
+      (array/push parts c)
+      # the same matches-nothing clause an empty bulk selection uses
+      (array/push parts [:in (keyword (get-in desc [:entity :pk-column])) []])))
   (array/concat parts (filter-clauses desc st))
   (when-let [term (st :q)]
     (when-let [c (search-clause desc term)] (array/push parts c)))

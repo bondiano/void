@@ -233,4 +233,15 @@
 (assert (string/find "says nothing about whether it writes" out)
         "with the reason, per command")
 
+# :read-only? is a plugin's own claim and nothing verifies it — so the
+# report says whose claim each exposed tool rides on, and the projection
+# carries the provenance for anything else that wants to ask
+(assert (string/find "test/app" out)
+        "every tool is printed with the plugin that contributed it")
+(def srv (mcp/server-value))
+(each name ["test_read" "test_typed"]
+  (def t (find |(= name ($ :name)) (srv :tools)))
+  (assert (= "test/app" (string (t :plugin)))
+          (string name " knows which plugin declared it")))
+
 (print "projection-test ok")
