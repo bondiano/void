@@ -72,12 +72,19 @@
   [body]
   (crypto/hex (crypto/sha256 (or body ""))))
 
+(defn- collapse-ws
+  # SigV4 canonicalizes a header value by trimming it and collapsing
+  # every internal run of whitespace to one space — a value the far
+  # end normalizes differently is a signature that does not match
+  [s]
+  (string (peg/replace-all ~(some (set " \t")) " " s)))
+
 (defn- header-lines
-  "[[lower-name trimmed-value] ...] sorted by name."
+  "[[lower-name trimmed-and-collapsed-value] ...] sorted by name."
   [headers]
   (sorted-by first
              (seq [[k v] :pairs (or headers {})]
-               [(string/ascii-lower (string k)) (string/trim (string v))])))
+               [(string/ascii-lower (string k)) (collapse-ws (string/trim (string v)))])))
 
 (defn signed-headers
   "The SignedHeaders list: sorted lowercase names joined with ;."

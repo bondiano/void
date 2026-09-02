@@ -72,7 +72,11 @@
                          (get-in req [:query "sig"]))
       (errors/abort 403 "this link is expired or not signed")))
   (or (static/file-response req (string root "/" k)
-                            {:max-file-size (settings :max-file-size)})
+                            {:max-file-size (settings :max-file-size)
+                             # what is under this prefix is user-supplied
+                             # bytes: the declared type is the whole truth,
+                             # and a browser must not sniff its way past it
+                             :headers @{"x-content-type-options" "nosniff"}})
       (errors/abort 404)))
 
 (defn- own-routes

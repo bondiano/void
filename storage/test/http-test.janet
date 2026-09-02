@@ -53,6 +53,8 @@
   (assert (= "PNG-BYTES" (test/text resp)))
   (assert (= "image/png" (get-in resp [:headers "content-type"]))
           "with the content type its extension implies")
+  (assert (= "nosniff" (get-in resp [:headers "x-content-type-options"]))
+          "and a browser is told not to sniff past it — these are user-supplied bytes")
 
   # the static machinery is the same one the stylesheet goes through,
   # which is the whole reason this route is three lines

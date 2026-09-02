@@ -69,6 +69,26 @@
 (assert (upload/check-part! charset {:accept ["text/plain"]})
         "a content-type's parameters are not part of the comparison")
 
+# -- a filename is a type claim, and it must not contradict the type -----
+
+# the stored-XSS pair: an image/* accept list would admit the declared
+# type, and the .html name would then decide how the bytes are served
+(def masked @{:name "image" :filename "x.html" :content-type "image/png" :value "<script>"})
+(def [mok merr] (protect (upload/check-part! masked {:accept ["image/*"]})))
+(assert (not mok) "a filename claiming text/html next to a declared image/png is refused")
+(assert (string/find "x.html" (string merr)) "naming the file")
+(assert (string/find "text/html" (string merr)) "and both halves of the disagreement")
+
+(def [mok2 _] (protect (upload/check-part! masked {})))
+(assert (not mok2) "with or without an :accept list — the disagreement itself is the refusal")
+
+(assert (upload/check-part! @{:name "f" :filename "photo.jpeg" :content-type "image/jpeg" :value "J"} {})
+        ".jpeg and image/jpeg are the same claim spelled twice")
+(assert (upload/check-part! @{:name "f" :filename "data.xyz" :content-type "image/png" :value "P"} {})
+        "an extension serving knows nothing about claims nothing")
+(assert (upload/check-part! @{:name "f" :filename "x.html" :content-type "application/octet-stream" :value "B"} {})
+        "and octet-stream is \"no claim\", not a type to contradict")
+
 # -- saving --------------------------------------------------------------
 
 (with-dyns [state/storage-dyn st]
@@ -77,6 +97,19 @@
   (assert (string/has-prefix? "products/" (meta :key)) "the key lands in the given namespace")
   (assert (string/has-suffix? ".png" (meta :key)) "and keeps the extension")
   (assert (= "me.png" (meta :filename)) "the original name comes back as metadata")
+
+  # the extension is the declared type's, not the filename's: .jpeg
+  # arrives, image/jpeg is what it is, .jpg is how it is stored
+  (def jpeg @{:name "image" :filename "shot.jpeg" :content-type "image/jpeg" :value "J"})
+  (assert (string/has-suffix? ".jpg" ((upload/save-part! jpeg {:prefix "products"}) :key))
+          "the stored extension comes from the declared content type")
+
+  # a type this module has no extension for stores the key bare, and
+  # serving answers application/octet-stream rather than guessing
+  (def blob @{:name "f" :filename "export.xyz" :content-type "application/x-blob" :value "B"})
+  (def bare ((upload/save-part! blob {:prefix "products"}) :key))
+  (assert (nil? (string/find "." (last (string/split "/" bare))))
+          "an unknown declared type stores no extension at all")
   (assert (= 3 (meta :size)))
   (assert (= "image/png" (meta :content-type)) "the part's own type is what was stored")
   (assert (= "PNG" (string (state/fetch (meta :key)))) "and the bytes are in the store")

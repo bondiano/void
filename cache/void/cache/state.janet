@@ -273,9 +273,19 @@
   ``Drop every key this cache holds — everything under `[:cache
   :prefix]`, and nothing else. On a shared redis that is a walk of the
   keyspace rather than one command, and it is not atomic: keys written
-  while it walks may survive it.``
-  []
+  while it walks may survive it.
+
+  With an *empty* prefix "everything under the prefix" is every key
+  the store holds — on a shared redis, keys that were never this
+  cache's. That is refused unless the caller says `(clear!
+  :everything)`, which is the word for exactly that.``
+  [&opt confirm]
   (def cache (active-cache))
+  (def prefix (key-prefix))
+  (when (and (or (nil? prefix) (empty? prefix)) (not= :everything confirm))
+    (error (string "cache/clear! with an empty [:cache :prefix] would drop every key "
+                   "the store holds, not just this cache's — set a prefix, or call "
+                   "(cache/clear! :everything) to mean exactly that")))
   (or (attempt cache :clear (fn [] (((cache :store) :clear) (key-prefix))) 0) 0))
 
 (defn incr!
@@ -297,29 +307,53 @@
   (def sf (get opts :single-flight))
   (if (nil? sf) (not= false (cache :single-flight)) sf))
 
+(defn- flight-leaders
+  # key -> the root fiber of the task leading that key's flight —
+  # created lazily so a cache value from an older `make` still works
+  [cache]
+  (or (cache :flight-leaders)
+      (let [t @{}] (put cache :flight-leaders t) t)))
+
 (defn- single-flight
   ``Run `f` once per key, however many fibers ask at the same moment.
   The first caller computes; the rest park on a channel of their own
   and take whatever it produced — the value, or the error, which is
   the important half: a herd that all recompute after a failure is the
-  herd this exists to prevent.``
+  herd this exists to prevent.
+
+  The one caller who must not park is the leader itself: a recursive
+  `remember` on the same key — cache/wrap on a function that calls
+  itself with the same arguments — would park the leading task on its
+  own flight, a deadlock that also leaves the flight entry behind,
+  poisoning the key for every later caller. So a re-entry from the
+  task already computing a key (its root fiber, which `protect` and
+  nesting do not change) just computes: single-flight dedupes
+  concurrent strangers, and a recursion is neither concurrent nor a
+  stranger.``
   [cache k f]
   (def flights (cache :in-flight))
-  (if-let [waiters (get flights k)]
-    (do
-      (bump cache :flight-waits)
-      (def ch (ev/chan 1))
-      (array/push waiters ch)
-      (def [status v] (ev/take ch))
-      (if (= :ok status) v (error v)))
-    (do
-      (def waiters @[])
-      (put flights k waiters)
-      (def [ok res] (protect (f)))
-      (put flights k nil)
-      (def message [(if ok :ok :err) res])
-      (each ch waiters (ev/give ch message))
-      (if ok res (error res)))))
+  (def leaders (flight-leaders cache))
+  (cond
+    (= (fiber/root) (get leaders k))
+    (f)
+
+    (if-let [waiters (get flights k)]
+      (do
+        (bump cache :flight-waits)
+        (def ch (ev/chan 1))
+        (array/push waiters ch)
+        (def [status v] (ev/take ch))
+        (if (= :ok status) v (error v)))
+      (do
+        (def waiters @[])
+        (put flights k waiters)
+        (put leaders k (fiber/root))
+        (def [ok res] (protect (f)))
+        (put leaders k nil)
+        (put flights k nil)
+        (def message [(if ok :ok :err) res])
+        (each ch waiters (ev/give ch message))
+        (if ok res (error res))))))
 
 (defn in-flight
   "How many keys are being computed right now — a number worth looking
@@ -407,4 +441,5 @@
     :single-flight (not= false (get opts :single-flight))
     :on-error (get opts :on-error :degrade)
     :in-flight @{}
+    :flight-leaders @{}
     :stats @{:hits 0 :misses 0 :puts 0 :deletes 0 :errors 0 :flight-waits 0}})

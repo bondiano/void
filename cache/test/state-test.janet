@@ -155,6 +155,28 @@
     (assert (= 3 errs) "the failure reaches every waiter")
     (assert (= 0 (state/in-flight)) "and the flight is cleared")))
 
+# -- a flight its own leader re-enters -----------------------------------
+
+(def [_ rc] (fresh {:ttl 60}))
+(with-cache rc
+  (fn []
+    (assert (= 42 (state/remember "outer" 60
+                                  (fn [] (+ 1 (state/remember "outer" 60 (fn [] 41))))))
+            "a recursive remember on the same key computes instead of parking on its own flight")
+    (assert (= 0 (state/in-flight)) "the flight is cleared, not poisoned")
+    (assert (deep= [true 42] (state/fetch "outer")) "and the outer result is what stays")
+
+    # after the recursion, strangers still share a flight — the dyn
+    # cleanup did not turn single-flight off
+    (var calls 0)
+    (def done (ev/chan 4))
+    (each _ (range 3)
+      (ev/go (fn [] (state/remember "after" 10
+                                    (fn [] (++ calls) (ev/sleep 0.01) :v)))
+             nil done))
+    (each _ (range 3) (ev/take done))
+    (assert (= 1 calls) "single-flight still dedupes concurrent strangers")))
+
 (def [_ nosf] (fresh {:single-flight false}))
 (with-cache nosf
   (fn []
@@ -182,8 +204,25 @@
     (assert (= :computed (state/remember "k" 10 (fn [] :computed)))
             "so the application computes what it needed, exactly as on a cold cache")
     (assert (not (state/delete! "k")))
-    (assert (= 0 (state/clear!)))
+    (assert (= 0 (state/clear! :everything)))
     (assert (< 0 (get-in down [:stats :errors])) "every failure is counted")))
+
+# -- clear! wants to know what it is clearing ----------------------------
+
+(def [_ unprefixed] (fresh))
+(with-cache unprefixed
+  (fn []
+    (def [ok err] (protect (state/clear!)))
+    (assert (not ok) "with an empty prefix, clear! refuses rather than dropping every key the store holds")
+    (assert (string/find ":everything" (string err)) "and says how to mean exactly that")
+    (state/put! "k" 1)
+    (assert (= 1 (state/clear! :everything)) "which then clears")))
+
+(def [_ prefixed] (fresh {:prefix "app:"}))
+(with-cache prefixed
+  (fn []
+    (state/put! "k" 1)
+    (assert (= 1 (state/clear!)) "a prefixed cache clears without ceremony")))
 
 (def strict (broken {:on-error :raise}))
 (with-cache strict

@@ -74,6 +74,21 @@
     (assert (>= ((client/request {:url other}) :status) 400)
             "a presigned URL edited to name another object does not open it")
 
+    # -- a key with bytes SigV4 has to encode ----------------------------
+    # a space and a cyrillic word: the bytes a double-encoded path
+    # (sign %2520, send %20) turns into 403 on every operation
+
+    (def spaced (string prefix "docs/весенний прайс 2026.png"))
+    (defer ((st :delete!) spaced)
+      ((st :put!) spaced body {:content-type "image/png"})
+      (assert (= body (string ((st :get) spaced)))
+              "a key with a space and non-ASCII bytes round-trips — encoded exactly once")
+      (assert (= (length body) (((st :stat) spaced) :size)))
+      (def spaced-url ((st :url) spaced {:expires 300}))
+      (assert (= 200 ((client/request {:url spaced-url}) :status))
+              "and its presigned URL opens")
+      (assert ((st :delete!) spaced)))
+
     # -- delete ------------------------------------------------------------
 
     (assert ((st :delete!) key) "deleting what is there answers true")

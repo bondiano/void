@@ -9,21 +9,31 @@
 ###     {:void.cache/response {:ttl 60 :vary ["accept-language"]}}
 ###
 ### answers from the cache when it can. The wrapper sits between
-### parsing and the session, which is the slot that makes the two
-### promises worth having: a hit is served before any session is
-### opened (so a hit can never carry a Set-Cookie), and it is served
-### after the request has been parsed (so the key is built from a path
-### and a query, not from a byte string).
+### authorization and validation, which is the slot that makes the two
+### promises worth having: a hit is served only to a request that
+### session, auth and authz enforcement (5000) already let through — a
+### cached page on a policy-guarded route is refused to an anonymous
+### request exactly as an uncached one is — and it is served after the
+### request has been parsed (so the key is built from a path and a
+### query, not from a byte string). What is *stored* is the handler's
+### own response, before the outer layers touch it on the way out, so
+### a stored entry never carries the Set-Cookie a session layer adds
+### per request.
 ###
 ### **This is a shared cache, and it behaves like one.** One entry is
 ### served to everybody who asks for that key, so a route whose answer
 ### depends on who is asking either says so with `:vary` or is not
-### marked at all. Four refusals enforce the rest, and each one logs
+### marked at all. Five refusals enforce the rest, and each one logs
 ### the route it refused rather than failing quietly:
 ###
 ###   - a request carrying `authorization` bypasses the cache entirely,
 ###     read and write (RFC 9111 §3.5 says a shared cache must not
 ###     store those; serving one is the same mistake in reverse)
+###   - a request carrying a `cookie` bypasses it too, for the same
+###     reason a Set-Cookie is never stored: a cookie is usually an
+###     identity, and a personal page in a shared cache is served to
+###     the next visitor. A route whose answer genuinely does not
+###     depend on cookies says `{:vary-cookie false}` to opt back in
 ###   - a response carrying `set-cookie` is never stored — that cookie
 ###     belongs to one visitor, and the cache would hand it to the next
 ###   - a response saying `cache-control: private` or `no-store` is
@@ -91,8 +101,13 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.cache/response
    :schema {:ttl [:optional [:number {:min 0}]]
-            :vary [:optional [:vector [:or :string :keyword]]]}
-   :doc "Cache this route's 200 responses in the shared cache for :ttl seconds (0 opts out of a group's setting), keyed by method, path, query and the request headers named in :vary"
+            :vary [:optional [:vector [:or :string :keyword]]]
+            # false says "this answer does not depend on cookies":
+            # requests carrying a cookie are served from and stored in
+            # the shared cache like any other. The default treats a
+            # cookie as an identity and bypasses.
+            :vary-cookie [:optional :boolean]}
+   :doc "Cache this route's 200 responses in the shared cache for :ttl seconds (0 opts out of a group's setting), keyed by method, host, path, query and the request headers named in :vary; requests carrying a cookie bypass unless :vary-cookie false says the answer does not depend on them"
    :merge :replace})
 
 # -- keys ----------------------------------------------------------------
@@ -101,13 +116,15 @@
   (seq [n :in names] (ring/request-header req (string/ascii-lower (string n)))))
 
 (defn response-key
-  ``The key one request is cached under: method, path, the query
-  rendered canonically (so `?b=2&a=1` and `?a=1&b=2` are one entry),
-  and the values of the headers the route varies on.``
+  ``The key one request is cached under: method, host (two virtual
+  hosts behind one process are two caches), path, the query rendered
+  canonically (so `?b=2&a=1` and `?a=1&b=2` are one entry), and the
+  values of the headers the route varies on.``
   [req spec]
   (def names (get spec :vary []))
   (string (settings :prefix)
           (string/ascii-upper (string (get req :method :get)))
+          " " (string/ascii-lower (string (or (ring/request-header req "host") "")))
           " " (get req :path "/")
           " " (key/canonical (get req :query {}))
           (if (empty? names) "" (string " " (key/canonical (vary-values req names))))))
@@ -128,8 +145,21 @@
     (log/warn "not caching this route's responses" :ns log-ns
               :route route :reason reason)))
 
+(defn- response-header
+  ``A response header by its lowercase name, whatever spelling the
+  handler used — handlers write headers by hand, and "Set-Cookie" must
+  refuse storage as surely as "set-cookie".``
+  [resp name]
+  (def hs (get resp :headers {}))
+  (var found (get hs name))
+  (when (nil? found)
+    (eachp [k v] hs
+      (when (and (nil? found) (= name (string/ascii-lower (string k))))
+        (set found v))))
+  found)
+
 (defn- private-response? [resp]
-  (when-let [cc (get-in resp [:headers "cache-control"])]
+  (when-let [cc (response-header resp "cache-control")]
     (def s (string/ascii-lower (if (indexed? cc) (string/join (map string cc) ",") (string cc))))
     (or (string/find "no-store" s) (string/find "private" s))))
 
@@ -145,6 +175,12 @@
          (not (index-of "authorization"
                         (map |(string/ascii-lower (string $)) (get spec :vary [])))))
     false
+    # a cookie is an identity until the route says otherwise
+    # (:vary-cookie false) — a personal page stored under a key with
+    # no identity in it is served to the next visitor
+    (and (ring/request-header req "cookie")
+         (not= false (get spec :vary-cookie)))
+    false
     true))
 
 (defn- storable-response? [req resp]
@@ -153,7 +189,7 @@
     (not= 200 (get resp :status)) false
     (not (bytes? (get resp :body)))
     (do (warn-once req :streaming-body) false)
-    (get-in resp [:headers "set-cookie"])
+    (response-header resp "set-cookie")
     (do (warn-once req :set-cookie) false)
     (private-response? resp)
     (do (warn-once req :cache-control) false)
@@ -199,9 +235,13 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.cache/response
-   # after parsing, before the session: a hit is answered without ever
-   # opening one, which is also why a hit can carry no Set-Cookie
-   :phase 2500
+   # inside authz enforcement (5000), outside validation (6000): a hit
+   # on a policy-guarded route is only served to a request the policy
+   # already admitted — a cache in front of the guard would hand the
+   # guarded page to anybody who asked. What is stored is the handler's
+   # response before the outer layers (session, security headers)
+   # decorate it on the way out, so no Set-Cookie is ever replayed
+   :phase 5500
    :doc "Serve routes marked :void.cache/response from the shared cache, and store their 200 responses"
    :when (fn [rmeta] (dictionary? (get rmeta :void.cache/response)))
    :wrap (fn [handler]
@@ -215,7 +255,7 @@
                       req)))})
 
 (plugin/defplugin void/cache-http
-  :doc "Response caching for void/http: routes marked :void.cache/response answer from the shared cache, with the refusals a shared cache needs (never a Set-Cookie, never an Authorization request, never a stream)."
+  :doc "Response caching for void/http: routes marked :void.cache/response answer from the shared cache, inside authz enforcement, with the refusals a shared cache needs (never a Set-Cookie, never an Authorization or cookie-carrying request unless the route opts in, never a stream)."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/cache ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :cache-http
