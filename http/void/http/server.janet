@@ -36,6 +36,8 @@
    :max-body 1048576
    :read-timeout 30
    :idle-timeout 75
+   :head-timeout 30
+   :body-timeout 300
    :drain-timeout 15
    :max-connections 1024})
 
@@ -142,6 +144,19 @@
 (defn- reject! [status &opt message]
   (error {:reject status :message message}))
 
+(defn- deadline-clock
+  ``Per-read timeouts under a cumulative cap: each call yields the next
+  read's timeout — the smaller of the per-read timeout and what is left
+  of `total` — and rejects 408 once the cap is spent. A read timeout
+  alone is no defense against a peer that drips one byte per interval;
+  the cap is what bounds the whole head or body.``
+  [opts total]
+  (def deadline (+ (now) total))
+  (fn next-timeout []
+    (def remaining (- deadline (now)))
+    (when (<= remaining 0) (reject! 408))
+    (min (opts :read-timeout) remaining)))
+
 (defn- read-head
   ``Fill buf until a full head is there. Returns the parsed head; throws
   {:reject ...} on limits/parse errors, {:hangup true} on EOF/idle
@@ -158,7 +173,14 @@
   [conn buf info opts]
   (var head nil)
   (var scanned 0)
+  # the cumulative :head-timeout arms at the request's first bytes —
+  # idle keep-alive waiting is the idle timeout's business, not this
+  (var clock nil)
+  (defn arm! []
+    (when (and (nil? clock) (pos? (length buf)))
+      (set clock (deadline-clock opts (opts :head-timeout)))))
   (put info :arrived (when (pos? (length buf)) (now)))
+  (arm!)
   (while (nil? head)
     (if-let [end (wire/head-end buf (max 0 (- scanned 3)))]
       (do
@@ -177,8 +199,9 @@
         (def waiting? (empty? buf))
         (put info :busy (not waiting?))
         (def r (read-more conn buf
-                          (if waiting? (opts :idle-timeout) (opts :read-timeout))))
+                          (if waiting? (opts :idle-timeout) (clock))))
         (put info :busy true)
+        (arm!)
         (when (and (nil? (info :arrived)) (pos? (length buf)))
           (put info :arrived (now)))
         (cond
@@ -186,23 +209,23 @@
           (= :timeout r) (if waiting? (error {:hangup true}) (reject! 408))))))
   head)
 
-(defn- read-content-length-body [conn buf head len max-body opts]
+(defn- read-content-length-body [conn buf head len max-body clock]
   (when (> len max-body)
     (reject! 413))
   (def need (+ (head :head-size) len))
   (while (< (length buf) need)
-    (def r (read-more conn buf (opts :read-timeout)))
+    (def r (read-more conn buf (clock)))
     (cond
       (nil? r) (reject! 400 "body cut short")
       (= :timeout r) (reject! 408)))
   [(string/slice buf (head :head-size) need) need])
 
-(defn- read-chunked-body [conn buf head max-body opts]
+(defn- read-chunked-body [conn buf head max-body opts clock]
   (def body @"")
   (var pos (head :head-size))
   (defn want [n]
     (while (< (length buf) n)
-      (def r (read-more conn buf (opts :read-timeout)))
+      (def r (read-more conn buf (clock)))
       (cond
         (nil? r) (reject! 400 "chunked body cut short")
         (= :timeout r) (reject! 408))))
@@ -261,7 +284,8 @@
 
     te
     (if (= "chunked" (string/ascii-lower (string/trim te)))
-      (read-chunked-body conn buf head max-body opts)
+      (read-chunked-body conn buf head max-body opts
+                         (deadline-clock opts (opts :body-timeout)))
       (reject! 501 "unsupported transfer-encoding"))
 
     cl
@@ -269,10 +293,14 @@
       (def vals (distinct (map string/trim (if (indexed? cl) cl [cl]))))
       (when (> (length vals) 1)
         (reject! 400 "conflicting content-length headers"))
-      (def len (scan-number (first vals)))
-      (unless (and len (>= len 0) (= len (math/trunc len)))
+      # strictly DIGIT+ (RFC 9110 §8.6): scan-number's leniency ("0x10",
+      # "1e3", "+5") is a body-boundary disagreement with any front
+      # proxy — the request-smuggling shape
+      (unless (peg/match '(* :d+ -1) (first vals))
         (reject! 400 "malformed content-length"))
-      (read-content-length-body conn buf head len max-body opts))
+      (def len (scan-number (first vals)))
+      (read-content-length-body conn buf head len max-body
+                                (deadline-clock opts (opts :body-timeout))))
 
     [nil (head :head-size)]))
 
@@ -421,6 +449,8 @@
                      body is read
     :host :port      listen address (port "0" for an ephemeral one)
     :max-header :max-body :read-timeout :idle-timeout
+    :head-timeout :body-timeout — cumulative caps on receiving one
+                     head / one body, however lively each read looks
     :max-connections over the limit new connections get an owned 503
 
   Returns the server instance; (server/stop inst) drains it. The

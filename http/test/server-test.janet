@@ -5,9 +5,14 @@
 
 # -- test app ------------------------------------------------------------
 
+(var sse-released false)
+
 (defn- app [req]
   (case (req :path)
     "/hello" (ring/text 200 "hello")
+    "/sse-forever" (ring/sse (coro
+                               (defer (set sse-released true)
+                                 (forever (yield "tick") (ev/sleep 0.01)))))
     "/echo" (ring/text 200 (string (req :body)))
     "/query" (ring/text 200 (string/format "%j" (freeze (req :query))))
     "/chunked" (ring/response 200 ["one" "two" "three"]
@@ -204,6 +209,21 @@
                             "Transfer-Encoding: gzip\r\n\r\n")))
 (assert (= 501 (hte :status)) "unknown transfer-encoding -> 501")
 
+# Content-Length is DIGIT+ and nothing else: scan-number's leniency
+# ("0x10" is 16, "1e3" is 1000) is a body-boundary disagreement with
+# any front proxy — the request-smuggling shape
+(each cl ["0x10" "1e3" "+5" "1_0" "5.0" "-1"]
+  (def [hcl _] (fetch (string "POST /echo HTTP/1.1\r\nHost: t\r\n"
+                              "Content-Length: " cl "\r\nConnection: close\r\n\r\n"
+                              (string/repeat "b" 16))))
+  (assert (= 400 (hcl :status)) (string/format "Content-Length %q -> 400" cl)))
+
+# -- the query part carries what real clients send -----------------------
+
+(def [hq bq] (fetch "GET /query?filter[status]=open&q=caf\xC3\xA9 HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
+(assert (= 200 (hq :status)) "a JSON:API-style bracketed query is served, not 400")
+(assert (string/find "filter[status]" bq) "and the key reaches the handler intact")
+
 # mid-request read timeout -> 408
 (do
   (def c (connect))
@@ -267,6 +287,67 @@
 
 (def [hslow bslow] (fetch "GET /slow HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
 (assert (= 503 (hslow :status)) ":void.http/timeout via limits-fn -> 503")
+
+# -- a hung-up SSE client releases its producer --------------------------
+#
+# The write fails once the client is gone; the server cancels the fiber
+# body so a defer inside it (a subscription, a room membership) runs
+# instead of leaking until process exit.
+
+(do
+  (def c (connect))
+  (:write c "GET /sse-forever HTTP/1.1\r\nHost: t\r\n\r\n")
+  (def buf @"")
+  (net/read c 4096 buf 2)
+  (assert (string/find "data: tick" buf) "the stream is flowing")
+  (assert (not sse-released) "and the producer is alive while the client listens")
+  (:close c)
+  (def deadline (+ (os/clock :monotonic) 3))
+  (while (and (not sse-released) (< (os/clock :monotonic) deadline))
+    (ev/sleep 0.02))
+  (assert sse-released "the producer's defer ran after the client hung up"))
+
+# -- cumulative deadlines: a drip-fed request is cut off -----------------
+#
+# Every dripped byte resets the per-read timeout, so only the
+# :head-timeout / :body-timeout cap explains the 408 here.
+
+(def drip (server/start {:handler app :port "0"
+                         :read-timeout 10 :idle-timeout 10
+                         :head-timeout 0.3 :body-timeout 0.3}))
+(def drip-port (string (drip :port)))
+
+(defn- drip-until-response
+  "Write first-bytes, then drip one filler byte every ~50 ms until the
+  server answers (returns the response head) or the drip runs out (nil)."
+  [first-bytes filler]
+  (def c (net/connect "127.0.0.1" drip-port))
+  (defer (:close c)
+    (:write c first-bytes)
+    (def buf @"")
+    (var head nil)
+    (for i 0 40
+      (unless head
+        (def [wok _] (protect (:write c filler)))
+        (def [rok r] (protect (net/read c 4096 buf 0.05)))
+        (when (and rok r) (set head (wire/parse-response-head buf)))
+        (unless (or wok (and rok r)) (break))))
+    (while (nil? head)
+      (def [rok r] (protect (net/read c 4096 buf 1)))
+      (unless (and rok r) (break))
+      (set head (wire/parse-response-head buf)))
+    head))
+
+(def h408 (drip-until-response "GET /hello HTTP/1.1\r\nX-Drip: " "a"))
+(assert (and h408 (= 408 (h408 :status)))
+        "a drip-fed head is cut at :head-timeout, lively reads and all")
+
+(def b408 (drip-until-response (string "POST /hello HTTP/1.1\r\nHost: t\r\n"
+                                       "Content-Length: 40\r\n\r\n") "b"))
+(assert (and b408 (= 408 (b408 :status)))
+        "a drip-fed body is cut at :body-timeout")
+
+(server/stop drip 1)
 
 # -- graceful drain ------------------------------------------------------
 

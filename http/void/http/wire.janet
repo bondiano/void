@@ -20,8 +20,15 @@
     :rn "\r\n"
     :method '(some (range "AZ"))
     :version (/ ':d ,scan-number)
-    :path-chr (range "az" "AZ" "09" "!!" "$9" ":;" "==" "?@" "~~" "__")
-    :path '(some :path-chr)
+    :path-chr (range "az" "AZ" "09" "!!" "$9" ":;" "==" "@@" "~~" "__")
+    # the query part is laxer than the path: clients following the
+    # JSON:API/Rails nesting convention send [ ] raw
+    # (filter[status]=open), and raw UTF-8 arrives unencoded from
+    # plenty of legitimate tooling. A raw "#" stays a 400 in both
+    # parts: RFC 3986 §3.5 makes it a fragment delimiter, and a
+    # fragment never belongs in a request target.
+    :query-chr (+ :path-chr (set "?[]{}|^\"`\\") (range "\x80\xff"))
+    :path '(* (some :path-chr) (? (* "?" (any :query-chr))))
     :printable (range "\x20~" "\t\t")
     :headers (* (any :header) :rn)
     # lower case header names since http headers are case-insensitive
@@ -393,27 +400,45 @@
 
 # -- response writing ----------------------------------------------------
 
+(def- header-split-peg
+  # CR, LF or NUL inside a header name or value splits the response:
+  # a Location built from user input becomes header injection
+  (peg/compile '(set "\r\n\0")))
+
+(defn- write-header-line [buf k v]
+  (when (or (peg/find header-split-peg (string k))
+            (peg/find header-split-peg (string v)))
+    (error {:header (string k)
+            :message (string/format "response header %q carries CR, LF or NUL"
+                                    (string k))}))
+  (buffer/format buf "%V: %V\r\n" k v))
+
 (defn write-head
   "Format the response status line and headers into buf, without the
   terminating blank line — write-body appends Content-Length or
   Transfer-Encoding plus the terminator. An indexed headers value
   renders the header once per element (duplicate Set-Cookie entries).
+  A header name or value containing CR, LF or NUL raises a structured
+  error naming the header — response splitting never reaches the wire.
   Returns buf."
   [buf status headers]
   (buffer/format buf "HTTP/1.1 %d %s\r\n"
                  status (get status-messages status "Unknown"))
   (eachp [k v] headers
     (if (indexed? v)
-      (each ve v (buffer/format buf "%V: %V\r\n" k ve))
-      (buffer/format buf "%V: %V\r\n" k v)))
+      (each ve v (write-header-line buf k ve))
+      (write-header-line buf k v)))
   buf)
 
 (defn write-body
   "Finish and send a response whose head is already formatted in buf:
   append Content-Length (byte-sequence body), Transfer-Encoding: chunked
   (iterable body — each element one chunk, may be lazy for streaming) or
-  neither (nil body), then write everything to conn. Clears buf so the
-  connection loop can reuse it."
+  neither (nil body), then write everything to conn. Zero-length chunks
+  are skipped (an empty chunk is the wire terminator). A failed write
+  with a fiber body cancels the fiber before re-raising, so a defer
+  inside the producer runs when the consumer hangs up. Clears buf so
+  the connection loop can reuse it."
   [conn buf body]
   (cond
     (nil? body)
@@ -429,11 +454,26 @@
     # default - iterate chunks
     (do
       (buffer/format buf "Transfer-Encoding: chunked\r\n\r\n")
-      (each chunk body
-        (assert (bytes? chunk) "expected byte chunk")
-        (buffer/format buf "%x\r\n%V\r\n" (length chunk) chunk)
-        (:write conn buf)
-        (buffer/clear buf))
-      (buffer/format buf "0\r\n\r\n")
-      (:write conn buf)))
+      (def [ok err]
+        (protect
+          (do
+            (each chunk body
+              (assert (bytes? chunk) "expected byte chunk")
+              # a zero-length chunk would render as "0\r\n\r\n" — the
+              # body terminator — and every later chunk would parse as
+              # the start of the next response on the connection
+              (unless (empty? chunk)
+                (buffer/format buf "%x\r\n%V\r\n" (length chunk) chunk)
+                (:write conn buf)
+                (buffer/clear buf)))
+            (buffer/format buf "0\r\n\r\n")
+            (:write conn buf))))
+      (unless ok
+        # the consumer is gone with the producer parked mid-yield:
+        # cancel it so a defer inside a coro body (an SSE subscription,
+        # a room membership) releases what it holds instead of leaking
+        # until process exit
+        (when (and (fiber? body) (= :pending (fiber/status body)))
+          (protect (cancel body :void.http/consumer-gone)))
+        (error err))))
   (buffer/clear buf))

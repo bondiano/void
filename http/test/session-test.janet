@@ -112,4 +112,22 @@
                       (ring/response 200))))
 (assert (get-in resp9 [:headers "set-cookie"]))
 
+# -- :cookie-opts shape the cookie (H3: Secure must be reachable) --------
+
+(def secure-h
+  (session/wrap-session
+    (fn [req] (put (req :session) :u 1) (ring/response 200))
+    {:store store :ttl 60
+     :cookie-opts {:secure true :same-site :strict}}))
+(def secure-resp (secure-h @{:headers @{}}))
+(def secure-cookie (get-in secure-resp [:headers "set-cookie"]))
+(assert (string/find "Secure" secure-cookie)
+        ":cookie-opts can turn Secure on — a session cookie a browser also
+        sends over plain http is a session to steal")
+(assert (string/find "SameSite=Strict" secure-cookie)
+        "and tighten SameSite")
+(assert (string/find "HttpOnly" secure-cookie)
+        "while the defaults underneath the merge survive")
+(assert (string/find "Path=/" secure-cookie))
+
 (print "session-test ok")

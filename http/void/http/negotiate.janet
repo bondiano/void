@@ -14,6 +14,13 @@
       :entry (* :ows :token (group (any :param)) :ows)
       :main (* :entry (any (* "," :entry)) -1)}))
 
+(def- qvalue-peg
+  # RFC 9110 §12.4.2: 0[.000-999] or 1[.000] and nothing else —
+  # scan-number's hex/exponent leniency has no place in a weight
+  (peg/compile '(* (+ (* "1" (? (* "." (between 0 3 "0"))))
+                      (* "0" (? (* "." (between 0 3 :d)))))
+                   -1)))
+
 (defn- split-media [s]
   (if-let [i (string/find "/" s)]
     [(string/ascii-lower (string/slice s 0 i))
@@ -36,7 +43,8 @@
           (def params (m (inc i)))
           (loop [j :range [0 (length params) 2]]
             (when (= "q" (string/ascii-lower (params j)))
-              (set q (or (scan-number (params (inc j))) 1))))
+              (def v (params (inc j)))
+              (set q (if (peg/match qvalue-peg v) (scan-number v) 1))))
           (array/push entries
                       {:type t :sub sub :q q
                        :specificity (cond (= "*" t) 0 (= "*" sub) 1 2)}))

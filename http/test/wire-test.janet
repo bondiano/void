@@ -168,4 +168,76 @@
         "path segments drop the empties and the query")
 (assert (empty? (wire/path-segments "/")))
 
+# -- header injection stops at the writer --------------------------------
+#
+# A Location (or any header) built from user input must not be able to
+# split the response: CR, LF and NUL are refused with a structured
+# error naming the header, before a single byte reaches the socket.
+
+(each bad ["/a\r\nSet-Cookie: admin=1" "/a\rx" "/a\nx" "va\0lue"]
+  (def [ok err] (protect (wire/write-head @"" 302 {"location" bad})))
+  (assert (not ok) (string/format "header value %q is refused" bad))
+  (assert (= "location" (get err :header)) "and the error names the header"))
+
+(def [nok nerr] (protect (wire/write-head @"" 200 {"x\r\ny" "v"})))
+(assert (not nok) "a header *name* carrying CRLF is refused too")
+(assert (= "x\r\ny" (get nerr :header)))
+
+(def [lok lerr] (protect (wire/write-head @"" 200 {"set-cookie" ["a=1" "b=2\r\nc"]})))
+(assert (not lok) "each element of an indexed header value is checked")
+(assert (= "set-cookie" (get lerr :header)))
+
+# -- an empty chunk is the wire terminator, so the writer skips it -------
+#
+# "0\r\n\r\n" mid-body would end the response early and let the rest be
+# parsed as the next response on the connection — request smuggling
+# behind a proxy.
+
+(let [conn (fake-conn)]
+  (wire/write-body conn @"" ["one" "" "two"])
+  (assert (= "Transfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n"
+             (string (conn :out)))
+          "a zero-length chunk is skipped, not framed as the terminator"))
+
+(let [conn (fake-conn)]
+  (wire/write-body conn @"" (coro (yield "") (yield "later")))
+  (assert (= "Transfer-Encoding: chunked\r\n\r\n5\r\nlater\r\n0\r\n\r\n"
+             (string (conn :out)))
+          "a fiber body yielding \"\" keeps its framing intact"))
+
+# -- a failed write cancels a fiber body so its defer runs ---------------
+
+(do
+  (var cleaned false)
+  (def body (coro (defer (set cleaned true) (forever (yield "tick")))))
+  (var writes 0)
+  (def dying {:write (fn [_ _] (++ writes) (when (> writes 1) (error "broken pipe")))})
+  (def [ok err] (protect (wire/write-body dying @"" body)))
+  (assert (not ok) "the write error still reaches the caller")
+  (assert cleaned "the producer's defer ran — its subscription is released")
+  (assert (not= :pending (fiber/status body)) "the producer is not left parked"))
+
+# -- the query part takes what real clients send -------------------------
+#
+# filter[status]=open is the JSON:API/Rails nesting convention, and raw
+# UTF-8 arrives unencoded from plenty of tooling. The path part stays
+# strict, and a raw # is a fragment delimiter in either part.
+
+(defn- head-of [target]
+  (wire/parse-request-head (buffer "GET " target " HTTP/1.1\r\nHost: t\r\n\r\n")))
+
+(each target ["/s?filter[status]=open" "/s?q=caf\xC3\xA9" "/s?a=1|2"
+              "/s?a={}" "/s?a=x^y" "/s?a=\"b\"" "/s?a=`b`" "/s?a=b\\c"]
+  (def h (head-of target))
+  (assert (table? h) (string/format "%q parses" target))
+  (assert (= target (h :path)) "and the target survives whole"))
+
+(assert (deep= @{"filter[status]" "open"}
+               (wire/parse-query (get (wire/split-path ((head-of "/s?filter[status]=open") :path)) 1)))
+        "and the bracketed key comes out of the query grammar intact")
+
+(each target ["/s?a=b#c" "/s[x]" "/s{y}" "/bad\x01path"]
+  (assert (= :error (head-of target))
+          (string/format "%q is still a 400" target)))
+
 (print "wire-test: all assertions passed")
