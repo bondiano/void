@@ -66,6 +66,7 @@
 (import void/storage/http)
 (import void/storage/admin)
 (import void/dev)
+(import void/dash)
 (import ./src/app)
 
 (def databases
@@ -191,6 +192,13 @@
    # the list, which is one line and what examples/guestbook shows
    # (docs/DEPLOY.md rule 2)
    :void/dev
+
+   # the dev dashboard (ADR-0043): six pages projected off the same
+   # boot value the REPL reads — composition, components, config with
+   # provenance, routes, logs with a live tail, and dash/tap. Open in
+   # :dev; any other profile refuses until [:dash :access] names a
+   # predicate, the same construction as the admin's gate
+   :void/dash
    :shop/app])
 
 (defn database
@@ -236,8 +244,13 @@
   machine that built it, so an `os/getenv` in a `def` is the
   environment of the CI runner frozen into the executable
   (docs/DEPLOY.md rule 1). Here that is harmless — the CLI loads this
-  file on the machine it runs on — and there it would be a lie.``
-  {:plugins (plugins (database) {:redis (redis?) :s3 (s3?)})
+  file on the machine it runs on — and there it would be a lie.
+
+  :plugins-for is the contract `void dev` and run! resolve: this
+  shop's composition does not depend on the profile at all — it
+  depends on the three environment switches, and the closure reads
+  them when it is *called*, which is the running process.``
+  {:plugins-for (fn [_] (plugins (database) {:redis (redis?) :s3 (s3?)}))
    :profile (profile)})
 
 (defn main [& args]
