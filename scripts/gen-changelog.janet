@@ -28,15 +28,42 @@
 
 # -- what the repository says about itself -------------------------------
 
+(defn- ancestor?
+  "Is this ref an ancestor of HEAD — that is, does the history this
+  repository has now actually contain it?"
+  [ref]
+  (def devnull (file/open "/dev/null" :w))
+  (defer (file/close devnull)
+    (zero? (os/execute ["git" "merge-base" "--is-ancestor" (string ref "^{commit}") "HEAD"]
+                       :p {:out devnull :err devnull}))))
+
+(var- skipped
+  "Tags that name commits this history does not contain — reported at
+  the end, never silently dropped."
+  @[])
+
 (defn- tags
-  "Release tags, oldest first — vX.Y sorted numerically."
+  ``Release tags, oldest first — vX.Y sorted numerically, and **only
+  those the current history contains**.
+
+  A tag that is not an ancestor of HEAD names a commit that was
+  rewritten away (this repository's own history was rebuilt once, and
+  v0.3/v0.4 were left pointing into what it used to be). Such a tag
+  cannot be a boundary of anything: the range `v0.4..v0.5` would be the
+  whole history, and every earlier section would describe commits that
+  are no longer here. Rather than project that, the tag is skipped and
+  said out loud — a changelog with a release nobody can `git show` is
+  worse than a changelog with one fewer heading.``
   []
   (def all (filter |(peg/match ~(* "v" :d+ "." :d+ -1) $)
                    (string/split "\n" (git "tag"))))
-  (sorted all (fn [a b]
-                (def [amaj amin] (map scan-number (string/split "." (string/slice a 1))))
-                (def [bmaj bmin] (map scan-number (string/split "." (string/slice b 1))))
-                (or (< amaj bmaj) (and (= amaj bmaj) (< amin bmin))))))
+  (def live (filter ancestor? all))
+  (array/clear skipped)
+  (each t all (unless (index-of t live) (array/push skipped t)))
+  (sorted live (fn [a b]
+                 (def [amaj amin] (map scan-number (string/split "." (string/slice a 1))))
+                 (def [bmaj bmin] (map scan-number (string/split "." (string/slice b 1))))
+                 (or (< amaj bmaj) (and (= amaj bmaj) (< amin bmin))))))
 
 (defn- tag-date [tag]
   (git "log" "-1" "--format=%as" tag))
@@ -109,7 +136,8 @@
   {"v0.1" "конец волны 1 — «можно строить HTMX-приложения, есть что показать»; контракты Plugin API и Route Metadata заморожены"
    "v0.2" "конец волны 2 — продуктовый минимум, Laravel-паритет по ядру"
    "v0.3" "конец волны 3 — enterprise-вертикаль: obs/auth/authz/bus"
-   "v0.4" "конец волны 4 — killer-фичи: admin + MCP; кандидат в публичный анонс"})
+   "v0.4" "конец волны 4 — killer-фичи: admin + MCP; кандидат в публичный анонс"
+   "v0.5" "конец волны 6 — паритет и первое приложение: хранилище, auth-скаффолд, jobs-дашборд, нотификации, tailwind без node, htmx 4 — и examples/hub, задеплоенный"})
 
 (defn- render-release [buf title date theme cs]
   (buffer/push buf "## " title)
@@ -144,12 +172,23 @@
     "теги отмечают границы релизов, ADR-ссылки ведут к решениям. "
     "Файл регенерируется на релизе; правки руками сюда не вносятся — "
     "они вносятся туда, откуда он собран.\n\n")
+  # the same sentence the script prints to stderr, put where a reader
+  # of the file is: a heading that is missing needs to say so, or the
+  # next person goes looking for a bug in the projection
+  (unless (empty? skipped)
+    (buffer/push buf
+      "> " (string/join skipped " и ") " здесь нет: репозиторий однажды "
+      "пересобрал историю, и эти теги остались указывать на коммиты, "
+      "которых в ней больше нет. Тег, которого история не содержит, не "
+      "может быть границей — поэтому релиз ниже охватывает всё, что "
+      "накопилось с предыдущего *живого* тега, а границы волн живут в "
+      "[ROADMAP](docs/ROADMAP.md).\n\n"))
   # unreleased first, newest release next
   (def newest (last ts))
   (def pending (commits (string newest "..HEAD")))
   (unless (empty? pending)
     (render-release buf "Unreleased" nil
-                    (string "после " newest " — волны 5–6, к v0.5 (ROADMAP, волна 7)")
+                    (string "после " newest " (ROADMAP)")
                     pending))
   (loop [i :down-to [(dec (length ts)) 0]]
     (def tag (in ts i))
@@ -158,4 +197,8 @@
                     (commits range)))
   (spit "CHANGELOG.md" (string (string/trimr buf "\n") "\n"))
   (printf "CHANGELOG.md written (%d releases%s)"
-          (length ts) (if (empty? pending) "" " + unreleased")))
+          (length ts) (if (empty? pending) "" " + unreleased"))
+  (unless (empty? skipped)
+    (eprintf (string "skipped %s: not in this history (a rewritten commit), "
+                     "so neither a boundary nor a section — see `tags`")
+             (string/join skipped ", "))))
