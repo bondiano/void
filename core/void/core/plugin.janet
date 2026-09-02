@@ -901,7 +901,12 @@
   (def dep (deploy/resolve! (if cfg (cfg :values) {}) profile errors))
   (checked :config errors sources)
 
-  (def [active inactive] (split-active ms cfg errors))
+  # the profile is reachable from a :when as (dyn :void/profile), the
+  # same way config files already see it (config/load-file) — a plugin
+  # that only belongs in some profiles (void/dev) deactivates itself
+  (def [active inactive]
+    (with-dyns [:void/profile profile]
+      (split-active ms cfg errors)))
   (checked :conditional errors sources)
 
   (def extensions (resolve-extensions active ms errors))
@@ -982,13 +987,25 @@
   (hooks/run! (boot :hooks) :before-start boot)
   (system/start (boot :system))
   (put boot :phase :ready)
-  (hooks/run! (boot :hooks) :after-start boot)
-  # last, because it asks the stores that are now resolved — including
-  # the ones a plugin resolves in an :after-start hook of its own
-  # (void/security's limiter). Under [:deploy :shape] :fleet a store
-  # living in one process's heap stops the boot here, with every
-  # violation in one error (ADR-0030)
-  (put boot :stores (deploy/check! boot))
+  # a failure past this line — an :after-start hook, the deploy check —
+  # happens with every component already :running, and the error is
+  # about to escape to a caller who will exit: stop the system and
+  # flush the logger before it does, or the sockets, pools and workers
+  # it survived keep running with nobody left to stop them
+  (try
+    (do
+      (hooks/run! (boot :hooks) :after-start boot)
+      # last, because it asks the stores that are now resolved —
+      # including the ones a plugin resolves in an :after-start hook of
+      # its own (void/security's limiter). Under [:deploy :shape]
+      # :fleet a store living in one process's heap stops the boot
+      # here, with every violation in one error (ADR-0030)
+      (put boot :stores (deploy/check! boot)))
+    ([e f]
+      (try (system/stop (boot :system)) ([_]))
+      (put boot :phase :stopped)
+      (log/close!)
+      (propagate e f)))
   boot)
 
 (defn shutdown!

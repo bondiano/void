@@ -22,6 +22,27 @@
 (def real-mod (first (keys snap)))
 (assert (string/has-suffix? "watched-mod.janet" real-mod))
 
+# dependency trees and build output are not the application: the
+# default excludes keep the poll from paying for them twice a second
+(def tree-dir (string dir "/jpm_tree"))
+(os/mkdir tree-dir)
+(spit (string tree-dir "/vendored.janet") "(def vendored 1)\n")
+(def build-dir (string dir "/build"))
+(os/mkdir build-dir)
+(spit (string build-dir "/artifact.janet") "(def artifact 1)\n")
+(assert (= 1 (length (watch/scan [dir])))
+        "jpm_tree/ and build/ are skipped by default")
+(assert (= 2 (length (watch/scan [dir] ["jpm_tree"])))
+        "explicit excludes replace the defaults")
+(def generated-dir (string dir "/generated"))
+(os/mkdir generated-dir)
+(spit (string generated-dir "/gen.janet") "(def gen 1)\n")
+(assert (= 1 (length (watch/scan [dir] [;watch/default-excludes "generated"])))
+        "a config :exclude adds to the defaults")
+# not excluded by default — out of the way of the scans below
+(os/rm (string generated-dir "/gen.janet"))
+(os/rmdir generated-dir)
+
 (assert (empty? (watch/changed snap (watch/scan [dir]))) "no change, no files")
 (assert (= [real-mod] (freeze (watch/changed @{} (watch/scan [dir]))))
         "a new file counts as changed")
@@ -83,6 +104,41 @@
 (def bad-report (watch/apply-changes! boot [real-mod]))
 (assert (= 1 (length (bad-report :errors))))
 (assert (empty? (bad-report :restarted)) "no restart after a broken reload")
+(spit mod-path "(defn answer [] 3)\n")
+(watch/apply-changes! boot [real-mod])
+
+# -- a failed restart is retried on the next save ------------------------
+#
+# the reload succeeds but the component's new :start throws (a port in
+# TIME_WAIT, say): the server is down, and the component is no longer
+# :running — saving the file again must retry it, not shrug
+
+(var broken true)
+(def flaky-path (string dir "/flaky-mod.janet"))
+(spit flaky-path "(defn ignored [] 1)\n")
+(require flaky-path)
+(def flaky
+  (plugin/manifest 'test/flaky
+    :source flaky-path
+    :components [(system/component :w/flaky
+                   :start (fn [d c] (when broken (error "port busy")) :up)
+                   :stop (fn [i] nil))]))
+(def fboot (plugin/bootstrap {:plugins [flaky]} true))
+(set broken false)
+(system/start (fboot :system))
+(set broken true)
+(def real-flaky (os/realpath flaky-path))
+(spit flaky-path "(defn ignored [] 2)\n")
+(def down-report (watch/apply-changes! fboot [real-flaky]))
+(assert (= 1 (length (down-report :errors))) "the failed restart is reported")
+(assert (= :stopped (get-in fboot [:system :states :w/flaky])) "the component is down")
+(set broken false)
+(spit flaky-path "(defn ignored [] 3)\n")
+(def up-report (watch/apply-changes! fboot [real-flaky]))
+(assert (= [:w/flaky] (freeze (up-report :restarted)))
+        "the next save retries the component a failed restart left down")
+(assert (= :running (get-in fboot [:system :states :w/flaky])))
+(system/stop (fboot :system))
 
 # -- the component loop ends on stop -------------------------------------
 

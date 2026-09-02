@@ -210,6 +210,53 @@
        :table (snake (plural (kebab ent)))})
     {:name (keyword name) :type tname :optional? optional?}))
 
+# -- flag values ---------------------------------------------------------
+#
+# Every flag value ends up in a path, a table name or generated source,
+# so each is checked once, here, rather than discovered as a file four
+# directories above the project (`--dir ../../..`) or a migration that
+# does not parse.
+
+(defn- check-word
+  "A flag value that becomes an identifier — a table, a plural, a
+  project name."
+  [flag value]
+  (unless (peg/match '(* (range "az") (any (+ (range "az") (range "09") "-" "_")) -1)
+                     (string value))
+    (errorf "%s %q must be a word: a lowercase letter, then letters, digits, - or _"
+            flag value))
+  value)
+
+(defn- check-subpath
+  "A flag value that becomes a directory — inside the project, always."
+  [flag value]
+  (def s (string value))
+  (when (or (empty? s)
+            (string/has-prefix? "/" s)
+            (some |(or (empty? $) (= ".." $)) (string/split "/" s)))
+    (errorf "%s %q must be a relative path inside the project (no leading /, no .. and no empty segments)"
+            flag s))
+  s)
+
+(defn- check-version [value]
+  (unless (peg/match '(* (some (range "09")) -1) (string value))
+    (errorf "--version %q must be digits — a migration timestamp like 20260101120000"
+            value))
+  value)
+
+(defn- check-spec-opts
+  "The flag values common to both generators, checked by what each
+  becomes. `:dir` is separate because auth allows an empty one (the
+  module lands beside app.janet)."
+  [opts]
+  (when-let [v (get opts :plural)] (check-word "--plural" v))
+  (when-let [v (get opts :table)] (check-word "--table" v))
+  (when-let [v (get opts :project)] (check-word "--project" v))
+  (when-let [v (get opts :version)] (check-version v))
+  (when-let [v (get opts :migrations-dir)] (check-subpath "--migrations-dir" v))
+  (when-let [v (get opts :test-dir)] (check-subpath "--test-dir" v))
+  opts)
+
 # -- the spec ------------------------------------------------------------
 
 (defn- timestamp []
@@ -237,6 +284,8 @@
   (unless (peg/match '(* (range "az") (any (+ (range "az") (range "09") "-")) -1) base)
     (errorf "resource name %q must be a word (User, blog-post, BlogPost) — it becomes the plugin %s and the table"
             name (string "<project>/" (plural base))))
+  (check-spec-opts opts)
+  (when-let [d (get opts :dir)] (check-subpath "--dir" d))
   (def plural-name (or (get opts :plural) (plural base)))
   (def project (get opts :project "app"))
   {:name base
@@ -784,6 +833,20 @@
     (set cur (if (empty? cur) part (string cur "/" part)))
     (unless (os/stat cur) (os/mkdir cur))))
 
+(defn- own-migration-version
+  ``The version of an earlier run's `_create_<table>` migration in
+  `dir`, newest if there are several. A `--force` re-run adopts it so
+  the rewrite lands on the same file — a second CREATE TABLE with a
+  fresh timestamp is an orphan the next `void db migrate` trips over.``
+  [dir table]
+  (def suffix (string "_create_" table ".janet"))
+  (when (= :directory (os/stat dir :mode))
+    (last (sorted (seq [f :in (os/dir dir)
+                        :when (string/has-suffix? suffix f)
+                        :let [v (string/slice f 0 (- (length f) (length suffix)))]
+                        :when (peg/match '(* (some (range "09")) -1) v)]
+                    v)))))
+
 (defn resource
   ``The body of `void make resource NAME [field:type ...]`.
 
@@ -806,8 +869,15 @@
     (if interactive? (ask-fields) fields))
   (when (empty? all-fields)
     (error "a resource with no fields is a table with no columns — pass name:type arguments"))
-  (def spec (resource-spec name all-fields
-                           (merge {:project (project-name)} (table/to-struct opts))))
+  (def spec-opts (merge {:project (project-name)} (table/to-struct opts)))
+  (def spec
+    (let [s (resource-spec name all-fields spec-opts)]
+      # --force without an explicit --version replaces its own earlier
+      # migration instead of leaving it orphaned beside a new one
+      (if-let [v (and (opts :force) (nil? (opts :version))
+                      (own-migration-version (s :migrations-dir) (s :table)))]
+        (resource-spec name all-fields (merge spec-opts {:version v}))
+        s)))
   (def entries (templates))
   (def planned
     (seq [e :in entries]
@@ -890,6 +960,13 @@
       (errorf "field %q is one the auth scaffold already declares (%s)"
               (f :name)
               (string/join (map |(string/format "%q" $) auth-reserved) " "))))
+  (check-spec-opts opts)
+  # auth's --dir may be empty (the module lands beside app.janet)
+  (when-let [d (get opts :dir)]
+    (unless (empty? (string d)) (check-subpath "--dir" d)))
+  (when-let [lp (get opts :link-path)]
+    (unless (string/has-prefix? "/" (string lp))
+      (errorf "--link-path %q must be an absolute path of this application, like /auth/link" lp)))
   (def plural-name (or (get opts :plural) (plural base)))
   (def project (get opts :project "app"))
   (def dir (get opts :dir ""))
@@ -943,9 +1020,14 @@
 ### URL — from `[:mail-auth :link-path]` — and which of the two the
 ### link was for is a claim that travelled on the challenge.
 ###
-### **Nothing here says a word about CSRF.** `form/form` has been
+### **CSRF is one word here, on three routes.** `form/form` has been
 ### splicing the token slot since wave 1 and void/security binds it
 ### (ADR-0025) — the forms below carry a token because they are forms.
+### The check, though, fires on cookie-borne requests — and the POSTs a
+### visitor makes *before* they have a session (login, register, the
+### reset request) carry no cookie, which is exactly the login-CSRF
+### hole. Those three routes ask for the check by name, with the
+### `:void.security/csrf` route flag.
 ###
 ### Handlers are registered as symbols, so redefining one in the repl —
 ### or saving this file with `void dev` running — is live (ADR-0002).
@@ -1347,18 +1429,24 @@
 (router/defroutes :{{project}}/auth-routes
   (GET "/register" register-form {:name :auth/register-form
                                   :void.auth/access :public})
+  # the three anonymous POSTs carry no session cookie, so the
+  # cookie-borne CSRF rule never sees them — login CSRF (being signed
+  # into an attacker's account) needs the check asked for by name
   (POST "/register" register {:name :auth/register
-                              :void.auth/access :public})
+                              :void.auth/access :public
+                              :void.security/csrf true})
   (GET "/login" login-form {:name :auth/login-form
                             :void.auth/access :public})
   (POST "/login" login {:name :auth/login
-                        :void.auth/access :public})
+                        :void.auth/access :public
+                        :void.security/csrf true})
   (POST "/logout" logout {:name :auth/logout
                           :void.auth/access :public})
   (GET "/password/reset" reset-form {:name :auth/reset-form
                                      :void.auth/access :public})
   (POST "/password/reset" request-reset {:name :auth/reset-request
-                                         :void.auth/access :public})
+                                         :void.auth/access :public
+                                         :void.security/csrf true})
   # a GET that signs somebody in is safe here for the reason a password
   # POST is: the credential is in the URL and it is single-use
   (GET "{{link-path}}" link {:name :auth/link :void.auth/access :public})
@@ -1557,9 +1645,21 @@
   (assert (string/has-prefix? "$" (ada :password-hash))
           "a PHC string: the algorithm and its cost travel inside the value")
 
+  # an anonymous POST carries no session cookie, which is exactly the
+  # request the cookie-borne rule cannot see — the route asks for the
+  # check by name (:void.security/csrf true), so login CSRF is closed
+  (assert (= 403 ((test/inject (test/client (c :boot))
+                               {:uri "/register"
+                                :form {:email "eve@example.com"
+                                       :password "any password"{{sample}}}})
+                  :status))
+          "an anonymous POST without the token is refused — signing a visitor into an account they did not ask for is CSRF too")
+
+  (def second-visitor (test/client (c :boot)))
   (def taken
-    (test/inject (test/client (c :boot))
+    (test/inject second-visitor
                  {:uri "/register"
+                  :headers {"x-csrf-token" (token-for second-visitor "/register")}
                   :form {:email "ada@example.com"
                          :password "another password"{{sample}}}}))
   (assert (string/find "already has an account" (text taken))
@@ -1927,8 +2027,14 @@
   paths it would have written.``
   [& args]
   (def [name fields opts] (parse-auth-args args))
-  (def spec (auth-spec name fields
-                       (merge {:project (project-name)} (table/to-struct opts))))
+  (def spec-opts (merge {:project (project-name)} (table/to-struct opts)))
+  (def spec
+    (let [s (auth-spec name fields spec-opts)]
+      # as in `resource`: a --force re-run lands on its own migration
+      (if-let [v (and (opts :force) (nil? (opts :version))
+                      (own-migration-version (s :migrations-dir) (s :table)))]
+        (auth-spec name fields (merge spec-opts {:version v}))
+        s)))
   (def entries (auth-templates))
   (def planned
     (seq [e :in entries]

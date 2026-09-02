@@ -9,6 +9,7 @@
 
 (import void/core/plugin :as plugin)
 (import void/core/deploy :as deploy)
+(import void/core/log :as log)
 (import ./netrepl :as netrepl)
 (import ./watch :as watch)
 (import ./generate :as generate)
@@ -18,10 +19,12 @@
   {:netrepl [:optional {:enabled [:optional :boolean]
                         :unix [:optional :string]
                         :host [:optional :string]
-                        :port [:optional :int]}]
+                        :port [:optional :int]
+                        :allow-remote [:optional :boolean]}]
    :watch [:optional {:enabled [:optional :boolean]
                       :paths [:optional [:vector :string]]
-                      :interval [:optional [:number {:min 0.01}]]}]})
+                      :interval [:optional [:number {:min 0.01}]]
+                      :exclude [:optional [:vector :string]]}]})
 
 # -- the banner ----------------------------------------------------------
 #
@@ -49,9 +52,30 @@
          (each l (deploy/report boot) (print l))
          (print))})
 
+# -- where the application is --------------------------------------------
+#
+# void/http fires :void.http/listening with the bound server the moment
+# the socket is open; this is the one line that answers the first
+# question a person at a terminal actually has.
+
+(plugin/contribute! :void.core/hooks
+  {:hook :void.http/listening
+   :phase 1000
+   :name :dev/listening
+   :doc "Say where the application is listening"
+   :fn (fn listening [boot srv]
+         (log/info (string/format "listening on http://%s:%d"
+                                  (get srv :host "127.0.0.1")
+                                  (get srv :port 0))
+                   :ns "void.dev"))})
+
 (plugin/defplugin void/dev
   :doc "Dev experience: in-process netrepl, file watcher with component auto-restart, schema generator."
   :version "0.0.1"
+  # a netrepl is an unauthenticated eval in the application's address
+  # space: whatever the :plugins list says, this plugin has no business
+  # being active in :prod
+  :when (fn [_] (not= :prod (dyn :void/profile)))
   :config-key :dev
   :config-schema Config
   :config-defaults {:netrepl {:enabled true :unix netrepl/default-unix-path}

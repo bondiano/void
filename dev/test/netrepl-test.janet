@@ -12,6 +12,8 @@
 (def inst (netrepl/start {:netrepl {:unix sock}}))
 (assert (get inst :server) "server stream is kept for :stop")
 (assert (= :socket (os/stat sock :mode)) "socket file exists")
+(assert (= "rwx------" (get (os/stat sock) :permissions))
+        "the socket is owner-only — it is an unauthenticated eval, and on a shared machine default permissions hand it to every local user")
 
 # -- a client can connect and evaluate into the shared env ---------------
 
@@ -55,5 +57,24 @@
 
 (assert (= {:disabled true} (netrepl/start {:netrepl {:enabled false}}))
         "disabled netrepl starts nothing")
+
+# -- what start refuses --------------------------------------------------
+
+# a TCP host beyond loopback is a remote eval with no authentication
+(def [remote-ok remote-err]
+  (protect (netrepl/start {:netrepl {:host "0.0.0.0" :port 9365}})))
+(assert (not remote-ok) "0.0.0.0 does not start")
+(assert (string/find "allow-remote" (string remote-err))
+        "and the refusal names the key that overrides it")
+
+# a stale path is only ever deleted when it is a socket: a typo in
+# :unix must not delete a source file
+(def not-a-sock (string "./.void-test-file-" (os/time) ".janet"))
+(spit not-a-sock "(def precious 1)\n")
+(def [typo-ok typo-err] (protect (netrepl/start {:netrepl {:unix not-a-sock}})))
+(assert (not typo-ok) "an existing non-socket file refuses the start")
+(assert (string/find "not a socket" (string typo-err)))
+(assert (os/stat not-a-sock) "and the file is still there")
+(os/rm not-a-sock)
 
 (print "netrepl-test: all assertions passed")

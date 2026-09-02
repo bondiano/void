@@ -2,6 +2,8 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/schema :as schema)
+(import void/core/hooks :as hooks)
+(import void/core/log :as log)
 (import void/dev :as dev)
 
 (defn expect-error [name pat thunk]
@@ -26,6 +28,18 @@
   |(plugin/dry-run {:plugins [:void/dev]
                     :config {:cli {:dev {:watch {:interval "fast"}}}}}))
 
+# -- :prod deactivates the plugin, whatever the :plugins list says -------
+#
+# a netrepl is an unauthenticated eval in the application's address
+# space; leaving it to the composition alone is one forgotten filter
+# away from a remote eval in production
+
+(def prod-report (plugin/dry-run {:plugins [:void/dev] :profile :prod}))
+(assert (= [:void/dev] (prod-report :inactive))
+        ":void/dev deactivates itself in :prod")
+(assert (= [] (freeze (prod-report :components)))
+        "no netrepl and no watcher in the :prod graph")
+
 # -- full cycle: start with a short socket path, use, stop ---------------
 
 (def sock (string "./.void-dev-" (os/time) ".sock"))
@@ -40,6 +54,16 @@
         "watcher honors :enabled false")
 (assert (schema/valid? :int (schema/project :generator :int))
         "the contributed projection is usable")
+
+# void/http fires :void.http/listening with the bound server; the dev
+# plugin's subscription is the line that says where the app is
+(def seen @[])
+(log/set-sinks! [(fn [rec] (array/push seen rec))])
+(hooks/run! (boot :hooks) :void.http/listening boot {:host "127.0.0.1" :port 8080})
+(log/set-sinks! nil)
+(assert (some |(= "listening on http://127.0.0.1:8080" (get $ :msg)) seen)
+        "the :void.http/listening subscription says where the application is")
+
 (plugin/shutdown! boot)
 (assert (nil? (os/stat sock)) "socket removed on shutdown")
 
