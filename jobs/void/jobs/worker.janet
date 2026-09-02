@@ -84,6 +84,12 @@
 
 (defn- now [] (os/clock :realtime))
 
+(def- deadline-error
+  # the exact value `ev/deadline` cancels a task with — matched whole,
+  # never as a substring: a job whose own error merely mentions a
+  # deadline is a failure, not a timeout
+  "deadline expired")
+
 (defn- worker-id []
   (string "w-" (string/slice (record/new-id) 11)))
 
@@ -197,26 +203,44 @@
     (def parent ((b :fetch) pid))
     (if (and parent (record/live? parent))
       (do
+        # the token the stored parent carries right now, taken before
+        # kill! clears it — the fence the settle is made under
+        (def held (parent :token))
         (record/kill! parent
                       (string/format "child job %s (%s) died" (child :id) (child :job))
                       t)
-        ((b :settle!) parent)
-        (state/emit! :dead parent)
-        (set pid (get parent :parent)))
+        (if (nil? ((b :settle!) parent held))
+          # a worker claimed the parent while we were killing it: its
+          # own run owns the rest of the chain now
+          (set pid nil)
+          (do
+            (state/emit! :dead parent)
+            (set pid (get parent :parent)))))
       (set pid nil))))
+
+(defn- claim-lost! [w r what]
+  # the settle was fenced off: a reaper re-tokened the claim while
+  # this worker held it, and the run under the new token is the one
+  # that counts — writing ours over it would be last-writer-wins on a
+  # record somebody else owns
+  (log/warn "job finished but its claim was gone — a reaper gave it to another worker"
+            :ns log-ns :job (r :job) :id (r :id) :queue (r :queue) :outcome what)
+  r)
 
 (defn- settle-completed! [w r result t]
   (def b (get-in w [:queue :backend]))
   (record/complete! r result t)
-  ((b :settle!) r)
-  (update (w :stats) :completed inc)
-  (state/emit! :completed r)
-  (when (and (r :parent) (backend/supports-flows? b))
-    (when-let [parent ((b :release-parent!) r)]
-      (log/debug "flow parent released" :ns log-ns
-                 :parent (parent :id) :job (parent :job))
-      (state/emit! :enqueued parent)))
-  r)
+  (if (nil? ((b :settle!) r (w :id)))
+    (claim-lost! w r :completed)
+    (do
+      (update (w :stats) :completed inc)
+      (state/emit! :completed r)
+      (when (and (r :parent) (backend/supports-flows? b))
+        (when-let [parent ((b :release-parent!) r)]
+          (log/debug "flow parent released" :ns log-ns
+                     :parent (parent :id) :job (parent :job))
+          (state/emit! :enqueued parent)))
+      r)))
 
 (defn- settle-failed! [w r err t]
   (def b (get-in w [:queue :backend]))
@@ -224,24 +248,28 @@
   (if (< (get r :attempt 0) (get r :max-attempts 3))
     (let [wait (job/retry-delay (get r :backoff) (get r :attempt 0))]
       (record/retry! r msg (+ t wait) t)
-      ((b :settle!) r)
-      (update (w :stats) :failed inc)
-      (log/warn "job failed — retrying" :ns log-ns
-                :job (r :job) :id (r :id) :queue (r :queue)
-                :attempt (r :attempt) :of (r :max-attempts)
-                :retry-in (math/round wait) :err msg)
-      (state/emit! :failed r {:retry-in wait})
-      r)
+      (if (nil? ((b :settle!) r (w :id)))
+        (claim-lost! w r :failed)
+        (do
+          (update (w :stats) :failed inc)
+          (log/warn "job failed — retrying" :ns log-ns
+                    :job (r :job) :id (r :id) :queue (r :queue)
+                    :attempt (r :attempt) :of (r :max-attempts)
+                    :retry-in (math/round wait) :err msg)
+          (state/emit! :failed r {:retry-in wait})
+          r)))
     (do
       (record/kill! r msg t)
-      ((b :settle!) r)
-      (update (w :stats) :dead inc)
-      (log/error "job died" :ns log-ns
-                 :job (r :job) :id (r :id) :queue (r :queue)
-                 :attempts (r :attempt) :err msg)
-      (state/emit! :dead r)
-      (kill-parents! b r t)
-      r)))
+      (if (nil? ((b :settle!) r (w :id)))
+        (claim-lost! w r :dead)
+        (do
+          (update (w :stats) :dead inc)
+          (log/error "job died" :ns log-ns
+                     :job (r :job) :id (r :id) :queue (r :queue)
+                     :attempts (r :attempt) :err msg)
+          (state/emit! :dead r)
+          (kill-parents! b r t)
+          r)))))
 
 # -- running one job -----------------------------------------------------
 
@@ -266,7 +294,7 @@
       (def value (fiber/last-value fib))
       (cond
         (= :ok sig) value
-        (and (string? value) (string/find "deadline" value))
+        (= deadline-error value)
         (errorf "timed out after %.3g s" timeout)
         (error value)))))
 
@@ -349,7 +377,7 @@
     (if (pos? wait)
       (do
         (record/defer! r (+ t wait))
-        ((b :settle!) r)
+        ((b :settle!) r (w :id))
         (update (w :stats) :deferred inc)
         (pause-queue! w (r :queue) (+ t wait))
         nil)
@@ -370,7 +398,9 @@
     (unless (w :stopped)
       (def ids (keys (w :running)))
       (unless (empty? ids)
-        (def [ok e] (protect ((b :touch!) ids (now))))
+        # under this worker's token: a claim a reaper already took away
+        # must not be kept alive by its old holder's heartbeat
+        (def [ok e] (protect ((b :touch!) ids (now) (w :id))))
         (unless ok
           (log/warn "could not refresh the claims of running jobs" :ns log-ns
                     :err (err-str e)))))))
@@ -455,10 +485,11 @@
     (def sup2 (ev/chan 1))
     (def task (ev/go (fn waiter [] (ev/take sup)) nil sup2))
     (ev/deadline (max 0.01 (- deadline (os/clock :monotonic))) task task)
-    (def [sig fib] (ev/take sup2))
-    (if (and (= :ok sig) (fiber/last-value fib))
-      (-- left)
-      (break)))
+    (def [sig _] (ev/take sup2))
+    # :ok is the waiter handing over one fiber's exit — count it
+    # drained, whatever the fiber's last value was (a runner's is nil).
+    # :error is the deadline cancelling the waiter: time is up
+    (if (= :ok sig) (-- left) (break)))
   (def stuck (length (w :running)))
   (put w :stop-chan nil)
   (array/clear (w :fibers))

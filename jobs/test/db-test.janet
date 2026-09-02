@@ -99,6 +99,19 @@
     ((keeps-everything :reap!) {:now (os/clock :realtime) :ttl 60 :token "w"})
     (assert ((keeps-everything :fetch) (kept :id)) ":keep-for :none keeps everything")
 
+    # -- the locks table is pruned too -----------------------------------
+    #
+    # A schedule lease is taken and never unlocked, so the reaper is
+    # what keeps `<table>_locks` from growing without bound.
+
+    (def lock-now (os/clock :realtime))
+    ((b :lock!) "prune:ancient" 30 "t" (- lock-now (* 2 jobsdb/lock-keep)))
+    ((b :lock!) "prune:live" 30 "t" lock-now)
+    ((b :reap!) {:now lock-now :ttl 60 :token "w"})
+    (def leases (db/query ["SELECT name FROM void_jobs_locks ORDER BY name" []]))
+    (assert (deep= @["prune:live"] (map |(string (get $ :name)) leases))
+            "the reaper deletes leases that expired past their grace and keeps the rest")
+
     # -- the runtime on top of it ----------------------------------------
 
     ((b :clear!) {})

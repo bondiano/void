@@ -163,6 +163,30 @@
     (assert (empty? ((b :reap!) {:now (+ 3600 (os/clock :realtime)) :ttl 60 :token "w3"}))
             (note "which is exactly what the second reaper finds")))
 
+  # -- settle fencing ----------------------------------------------------
+  #
+  # The other half of reaping: worker A stalls, a reaper hands its job
+  # to B, and A finally finishes anyway. A's settle, fenced by the
+  # token it claimed under, must not overwrite the state B now owns.
+
+  (when (backend/supports-reaping? b)
+    ((b :clear!) {})
+    ((b :push!) (pending :fenced))
+    (def mine (claim b {:token "stalled"}))
+    (def reaped ((b :reap!) {:now (+ 3600 (os/clock :realtime)) :ttl 60 :token "taker"}))
+    (assert (= (mine :id) ((first reaped) :id)) (note "the stalled claim was taken over"))
+    (record/complete! mine :late (os/clock :realtime))
+    (assert (nil? ((b :settle!) mine "stalled"))
+            (note "a settle fenced by a lost token does not land"))
+    (def still ((b :fetch) (mine :id)))
+    (assert (= :running (still :state))
+            (note "the record keeps the state the reaper gave it"))
+    (assert (= "taker" (still :token)) (note "and the new owner's token"))
+    (def theirs (first reaped))
+    (record/complete! theirs :first (os/clock :realtime))
+    (assert ((b :settle!) theirs "taker")
+            (note "while the live claim settles through the same fence")))
+
   # -- heartbeats --------------------------------------------------------
 
   (when (backend/supports-heartbeat? b)
@@ -173,6 +197,18 @@
     ((b :touch!) [(slow :id)] later-t)
     (assert (empty? ((b :reap!) {:now (+ 1010 later-t) :ttl 3600 :token "w9"}))
             (note "a refreshed claim is not stalled")))
+
+  # a heartbeat is fenced the way a settle is: the old holder of a
+  # reaped claim refreshes nothing
+  (when (and (backend/supports-heartbeat? b) (backend/supports-reaping? b))
+    ((b :clear!) {})
+    ((b :push!) (pending :beats))
+    (def held (claim b {:token "stalled"}))
+    ((b :reap!) {:now (+ 3600 (os/clock :realtime)) :ttl 60 :token "taker"})
+    (assert (zero? ((b :touch!) [(held :id)] (+ 7200 (os/clock :realtime)) "stalled"))
+            (note "a heartbeat under a lost token refreshes nothing"))
+    (assert (= 1 ((b :touch!) [(held :id)] (+ 7200 (os/clock :realtime)) "taker"))
+            (note "and one under the live token refreshes the claim")))
 
   # -- flows -------------------------------------------------------------
 

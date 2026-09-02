@@ -21,10 +21,19 @@
 ### gets the lease enqueues; everyone else moves on. The lease is keyed
 ### by the slot rather than by the schedule, so a lease that outlives
 ### its holder cannot stop the *next* occurrence, only a duplicate of
-### this one. On a backend with no shared lock (the in-process one),
-### the lock is per process and the scheduler says so at boot: it is
-### right for one process and wrong for a fleet, and that has to be a
-### sentence somebody reads rather than a surprise.
+### this one. Two honest limits on that promise. The lease is only as
+### long as [:jobs :scheduler :lock-ttl] (60 s): a process whose
+### cursor falls further behind than that — a stopped loop, a very
+### long pause, a restart that kept its cursors — can retake a slot
+### another process already fired, so a job that genuinely must not
+### run twice needs to be idempotent, not merely scheduled. And
+### `:on-start` fires once per *process*, not once per fleet: its slot
+### is the moment that process's scheduler started, which no two
+### replicas share, so the lease dedupes nothing there. On a backend
+### with no shared lock (the in-process one), the lock is per process
+### and the scheduler says so at boot: it is right for one process and
+### wrong for a fleet, and that has to be a sentence somebody reads
+### rather than a surprise.
 ###
 ### **Late, not repeatedly.** A process that was down for six hours
 ### comes back to six missed hourly slots. Firing all six is almost
@@ -104,9 +113,10 @@
                         {:args ["yesterday"] :queue :reports})
 
   Options: :args (the job's arguments), :enabled, :on-start (fire once
-  as soon as the scheduler starts, as well as on the schedule), and
-  the enqueue keys :queue :priority :max-attempts :backoff :timeout
-  :group.``
+  as soon as the scheduler starts, as well as on the schedule — once
+  per process, not once per fleet: each replica's start is its own
+  slot), and the enqueue keys :queue :priority :max-attempts :backoff
+  :timeout :group.``
   [name spec job-name &opt opts0]
   (unless (keyword? name)
     (errorf "schedule name must be a keyword, got %q" name))

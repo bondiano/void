@@ -101,6 +101,43 @@
     (assert (nil? ((b :claim!) {:queues [:race] :now now :token "extra"}))
             "and the ninth claimant gets nothing rather than a duplicate")
 
+    ((b :clear!) {})
+
+    # -- the unique race, on the engine where losing aborts --------------
+    #
+    # Concurrent pushes of one unique key: each pusher's check sees
+    # nothing (the winner's row is uncommitted), so the losers reach
+    # the INSERT and hit the partial index. On Postgres that violation
+    # aborts the transaction (SQLSTATE 25P02) — the documented
+    # "already queued -> nil" branch only runs because the INSERT sits
+    # in its own savepoint. sqlite cannot exercise this: a failed
+    # constraint does not abort its transaction there.
+
+    (def pushers 6)
+    (def pushed (ev/chan pushers))
+    (each i (range pushers)
+      (ev/go (fn pusher []
+               (ev/give pushed
+                        (protect ((b :push!) (record/make {:job :uniq :queue :default
+                                                           :unique-key "pg:race"})))))))
+    (def outcomes (seq [_ :range [0 pushers]] (ev/take pushed)))
+    (assert (all |(get $ 0) outcomes)
+            "no pusher saw an error — the losing INSERT was confined to its savepoint")
+    (assert (= 1 (length (filter |(get $ 1) outcomes)))
+            "exactly one push stored the job and the rest were told nil")
+    ((b :clear!) {})
+
+    # -- the lease race, same 25P02 class --------------------------------
+
+    (def lockers 6)
+    (def leased (ev/chan lockers))
+    (def lt (os/clock :realtime))
+    (each i (range lockers)
+      (ev/go (fn locker []
+               (ev/give leased ((b :lock!) "pg:lease" 30 (string "t" i) lt)))))
+    (assert (= 1 (length (filter truthy? (seq [_ :range [0 lockers]] (ev/take leased)))))
+            "one lease, however many ask at once — and no aborted transactions")
+
     ((b :clear!) {})))
 
 (print "db-postgres-test ok")

@@ -151,8 +151,13 @@
        (record/copy best)))
 
    :settle!
-   (fn mem-settle [r]
+   (fn mem-settle [r &opt expected]
      (def now (get r :finished-at (os/clock :realtime)))
+     # the same fence the shared backends keep: a claim the reaper
+     # re-tokened away is not its old holder's to settle
+     (def cur (get-in m [:jobs (r :id)]))
+     (when (and expected cur (not= expected (cur :token)))
+       (break nil))
      (def stored (record/copy r))
      (put (m :jobs) (r :id) stored)
      (case (r :state)
@@ -238,11 +243,12 @@
      (tuple ;out))
 
    :touch!
-   (fn mem-touch [ids now]
+   (fn mem-touch [ids now &opt token]
      (var n 0)
      (each id ids
        (when-let [r (get-in m [:jobs id])]
-         (when (= :running (r :state))
+         (when (and (= :running (r :state))
+                    (or (nil? token) (= token (r :token))))
            (put r :claimed-at now)
            (++ n))))
      n)
