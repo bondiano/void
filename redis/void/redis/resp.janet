@@ -133,12 +133,31 @@
   {(chr "*") 1 (chr "~") 1 (chr ">") 1 (chr "%") 2 (chr "|") 2})
 
 (defn- count-at
-  "The integer written between i and j, or nil when those bytes are not
-  one."
+  ``The count written between i and j: decimal digits only, with `-1`
+  — the protocol's null marker (`$-1`, `*-1`) — as the one negative
+  spelling allowed. nil for anything else (`1e3`, `0x10`, `-2`, a
+  stray sign): the grammar accepts exactly `(some (range "09"))`, and
+  a scanner that took more would hand the parser frames it refuses —
+  leaving the connection stuck on a byte it can neither parse nor
+  skip.``
   [buf i j]
-  (when (< i j)
-    (def n (scan-number (string/slice buf i j)))
-    (when (and (number? n) (= n (math/trunc n))) n)))
+  (cond
+    (>= i j) nil
+
+    (and (= (+ i 2) j)
+         (= (chr "-") (in buf i))
+         (= (chr "1") (in buf (inc i))))
+    -1
+
+    (do
+      (var n 0)
+      (var ok true)
+      (loop [k :range [i j] :while ok]
+        (def b (in buf k))
+        (if (<= (chr "0") b (chr "9"))
+          (set n (+ (* 10 n) (- b (chr "0"))))
+          (set ok false)))
+      (when ok n))))
 
 (defn scan
   ``Find the end of the RESP frame starting at `start`. Returns
@@ -151,8 +170,14 @@
   and throws when the bytes are not RESP at all. Nothing is allocated
   per element: a blob is stepped over by its length, so re-scanning a
   partially arrived 10 MB value costs the same as scanning an empty
-  one.``
-  [buf &opt start]
+  one.
+
+  `max-blob`, when given, caps the length any one blob may claim: a
+  14-byte header can otherwise promise gigabytes, and the reader would
+  obligingly allocate them before a single payload byte arrived. An
+  over-claiming header throws — the frame cannot be skipped either,
+  so the stream it came from is done for.``
+  [buf &opt start max-blob]
   (default start 0)
   (def len (length buf))
   (defn streamed [i]
@@ -178,6 +203,10 @@
                                i (string/slice buf i (+ eol 2)))
               # $-1 is RESP2's null blob: a length line and nothing else
               (neg? n) [:done (+ eol 2)]
+              (and max-blob (> n max-blob))
+              (errorf (string "RESP blob of %d bytes exceeds the [:redis :max-bulk] "
+                              "cap of %d — raise the cap if values this large are expected")
+                      n max-blob)
               (let [fin (+ eol 2 n 2)]
                 (if (<= fin len) [:done fin] [:need fin]))))
 
