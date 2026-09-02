@@ -32,6 +32,11 @@
 name: void-shop
 
 x-app: &app
+  # One image for the three services that are this application. Without
+  # it compose gives each service its own tag from the same Dockerfile,
+  # which is three builds of the same thing — and a `build web` that
+  # leaves the worker on older code.
+  image: void-shop
   build:
     context: ../..
     dockerfile: examples/shop/Dockerfile

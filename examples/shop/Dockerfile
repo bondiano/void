@@ -45,11 +45,19 @@ RUN git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm \
 # — void/db-sqlite is a plugin an application opts into, so the bundle
 # does not depend on it, and this image carries it because the shop
 # runs on either engine.
-COPY . /src
+#
+# In two steps, and the split is about the network rather than about
+# size: everything that clones from the internet depends on the two
+# files that say what the dependencies are, so editing the framework's
+# source rebuilds the second step and nothing else.
+COPY project.janet /src/project.janet
+COPY scripts/packages.janet /src/scripts/packages.janet
 RUN cd /src \
  && jpm deps \
- && jpm install \
  && jpm install https://github.com/janet-lang/sqlite3.git
+
+COPY . /src
+RUN cd /src && jpm install
 
 # -------------------------------------------------------------- runtime
 FROM debian:bookworm-slim
