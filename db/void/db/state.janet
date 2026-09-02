@@ -60,23 +60,58 @@
 (defn in-transaction?
   "True inside a `with-tx` scope."
   []
-  (not (nil? (dyn tx-dyn))))
+  # a real tx-dyn is a {:depth n} table; `detached` binds it to false to
+  # sever the parent's transaction across an ev/go, so test truthiness,
+  # not just non-nil
+  (truthy? (dyn tx-dyn)))
 
 # -- connection scope ----------------------------------------------------
 
 (defn with-conn*
   ``Run (f entry) with a connection checked out into `conn-dyn`.
   Re-entrant: an already-bound connection (an enclosing scope or a
-  transaction) is reused and not returned early.``
+  transaction) is reused and not returned early.
+
+  WARNING: a fiber started with `ev/go` inside this scope inherits
+  `conn-dyn` and would share this connection — two fibers on one
+  connection is the protocol error the pool exists to prevent. Run such
+  a fiber inside `(db/detached ...)`, which severs the inherited db
+  bindings; using the connection from another fiber is refused
+  (`execute-sql` checks the owner).``
   [f]
   (if-let [entry (dyn conn-dyn)]
     (f entry)
     (do
       (def p (active-pool))
       (def entry (pool/checkout p))
-      (defer (pool/checkin p entry)
+      # the task that checked the connection out is the only one allowed
+      # to run statements on it (see the ev/go warning above). fiber/root,
+      # not fiber/current: the identity has to survive the inline child
+      # fibers that with-dyns/defer/protect run the body in, yet differ
+      # across ev/go tasks — which is exactly the task root
+      (put entry :owner (fiber/root))
+      # on any exit — a normal return, an error, or a fiber cancelled
+      # mid-query — a connection the driver reports as left mid-protocol
+      # (a cancelled query, an undrained result stream) is discarded, not
+      # handed to the next owner to read the previous one's result
+      (defer (do (unless (driver/reusable? (pool/driver-of p) (entry :conn))
+                   (pool/discard! entry))
+                 (pool/checkin p entry))
         (with-dyns [conn-dyn entry]
           (f entry))))))
+
+(defn detached*
+  ``Run (f) with this fiber's db bindings (the checked-out connection
+  and the open transaction) cleared. A fiber started with `ev/go`
+  inherits the dyns of the fiber that spawned it, so a child started
+  inside `with-conn`/`with-tx` would otherwise share the parent's
+  connection; `detached` gives it a clean slate — its own checkout.``
+  [f]
+  # false, not nil: a fiber's dyn table chains to its parent's, so a nil
+  # binding falls through to the inherited value; false overrides it and
+  # still reads as "no connection / no transaction" (see with-conn*,
+  # in-transaction?, run-tx)
+  (with-dyns [conn-dyn false tx-dyn false] (f)))
 
 (defmacro with-conn
   ``Run the body against one connection from the pool:
@@ -90,6 +125,19 @@
   transaction.``
   [& body]
   ~(,with-conn* (fn with-conn-body [_] ,;body)))
+
+(defmacro detached
+  ``Run the body with the db bindings cleared — for a fiber spawned with
+  `ev/go` from inside a connection or transaction scope:
+
+      (db/with-conn
+        (ev/go (fn [] (db/detached
+                        (db/query {:select [:*] :from "audit"})))))
+
+  Without it the child inherits the parent's connection dyn and the two
+  fibers race on one connection (which `execute-sql` refuses).``
+  [& body]
+  ~(,detached* (fn detached-body [] ,;body)))
 
 # -- execution -----------------------------------------------------------
 
@@ -114,6 +162,15 @@
   (default opts {})
   (with-conn*
     (fn run-statement [entry]
+      # the pool hands one connection to one fiber; a statement run from
+      # a different fiber than checked it out means an ev/go child
+      # inherited conn-dyn and is about to race the owner on the wire
+      (when-let [owner (get entry :owner)]
+        (unless (= owner (fiber/root))
+          (error (string "db: connection used from a fiber other than the one "
+                         "that checked it out — a fiber started with ev/go "
+                         "inside with-conn/with-tx inherits :void.db/conn; run "
+                         "it inside (db/detached ...)"))))
       (def p (active-pool))
       (def drv (pool/driver-of p))
       (def t0 (os/clock :monotonic))

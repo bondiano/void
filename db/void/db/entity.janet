@@ -238,7 +238,13 @@
 
 (defn to-row
   ``Column map for a write: field keys to column names, unknown keys
-  rejected (a typo must not silently vanish from an INSERT).``
+  rejected (a typo must not silently vanish from an INSERT).
+
+  The column names are kept as strings so the builder quotes them
+  verbatim: a :db/column whose spelling is not snake_case (say
+  "createdAt") would otherwise be snake_cased into a column that does
+  not exist (the keyword identifier path snakes; the string one does
+  not).``
   [desc attrs]
   (def out @{})
   (eachp [k v] attrs
@@ -246,7 +252,7 @@
                (errorf "entity %q has no field %q (fields: %s)"
                        (desc :name) k
                        (string/join (map |(string/format "%q" $) (desc :field-order)) " "))))
-    (put out (keyword (f :column)) v))
+    (put out (f :column) v))
   out)
 
 (defn changes
@@ -360,7 +366,10 @@
               (string/join (map |(string/format "%q" $) (sorted (keys allowed))) " ")))))
 
 (defn- select-stmt [desc opts]
-  (def stmt @{:select (tuple ;(map keyword (desc :columns)))
+  # [:col name], not (keyword name): the column names are the descriptor's
+  # own spelling (a :db/column may be "createdAt"), and the keyword path
+  # would snake_case them into columns that do not exist
+  (def stmt @{:select (tuple ;(map |[:col $] (desc :columns)))
               :from (desc :table)})
   (each k [:where :order-by :limit :offset :join :left-join :group-by :having]
     (unless (nil? (get opts k))
@@ -442,7 +451,7 @@
         (if (empty? ids)
           @[]
           (load-rows target
-                     {:where [:in (keyword (get-in target [:fields remote :column]))
+                     {:where [:in [:col (get-in target [:fields remote :column])]
                               (tuple ;ids)]
                       :preload (or nested nil)})))
       (def by-key (group-by-key related remote))
@@ -483,7 +492,7 @@
   (default opts {})
   (def desc (resolve ent))
   (or (when (nil? (get opts :preload)) (id-cache desc id))
-      (one desc (merge opts {:where [:= (keyword (desc :pk-column)) id]}))))
+      (one desc (merge opts {:where [:= [:col (desc :pk-column)] id]}))))
 
 (defn find!
   "Like `find`, but throws when the row does not exist."
@@ -534,7 +543,7 @@
 # -- writing -------------------------------------------------------------
 
 (defn- reload-by-pk [desc id]
-  (one desc {:where [:= (keyword (desc :pk-column)) id]}))
+  (one desc {:where [:= [:col (desc :pk-column)] id]}))
 
 (defn insert!
   ``Insert one row and return the loaded entity:
@@ -580,14 +589,14 @@
   (when (empty? patch) (break 0))
   (state/execute! {:update (desc :table)
                    :set (to-row desc patch)
-                   :where [:= (keyword (desc :pk-column)) id]}))
+                   :where [:= [:col (desc :pk-column)] id]}))
 
 (defn delete!
   "Delete a row by primary key; returns the number of rows deleted."
   [ent id]
   (def desc (resolve ent))
   (state/execute! {:delete (desc :table)
-                   :where [:= (keyword (desc :pk-column)) id]}))
+                   :where [:= [:col (desc :pk-column)] id]}))
 
 (defn delete-where!
   "Delete every row matching a where clause; returns the count."
@@ -621,10 +630,10 @@
   (def where
     (if vfield
       [:and
-       [:= (keyword (desc :pk-column)) id]
-       [:= (keyword (get-in desc [:fields vfield :column]))
+       [:= [:col (desc :pk-column)] id]
+       [:= [:col (get-in desc [:fields vfield :column])]
         (get (snapshot inst) vfield)]]
-      [:= (keyword (desc :pk-column)) id]))
+      [:= [:col (desc :pk-column)] id]))
   (def to-write
     (if vfield
       (merge diff {vfield (inc (or (get (snapshot inst) vfield) 0))})

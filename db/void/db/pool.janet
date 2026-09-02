@@ -67,14 +67,18 @@
 (defn- take-with-deadline
   ``Take from a channel under a timeout without touching the caller's
   root task: the take runs in a supervised child task and lands in
-  `slot`. Cancellation is cooperative (only at ev operations), so a
-  take that returned always reaches the slot.``
+  `slot`. The child is cancelled on any non-normal exit of the caller
+  (a cancelled checkout), so no orphaned taker is ever left parked on
+  the channel to swallow a later handover — the connection then still
+  waits in `slot` (the child took it before dying) or in the channel,
+  and `await-entry` rehomes it.``
   [ch timeout slot]
   (def sup (ev/chan 1))
   (def task (ev/go (fn waiter-task [] (put slot :entry (ev/take ch)))
                    nil sup))
   (ev/deadline timeout task task)
-  (ev/take sup)
+  (defer (protect (ev/cancel task "pool checkout abandoned"))
+    (ev/take sup))
   (get slot :entry))
 
 (def- retry
@@ -82,35 +86,8 @@
   freed, or the pool closed) — the waiter re-enters `checkout`."
   :void.db/retry)
 
-(defn- await-entry
-  "Park until a checkin hands this waiter a connection. Returns the
-  entry, or nil when the waiter should re-enter `checkout`; a real
-  timeout throws."
-  [pool]
-  (def s (pool :stats))
-  (put s :waits (inc (s :waits)))
-  (def waiter @{:chan (ev/chan 1) :live true})
-  (array/push (pool :waiters) waiter)
-  (def t0 (os/clock :monotonic))
-  (def handed (take-with-deadline (waiter :chan) (pool :checkout-timeout) @{}))
-  (put s :wait-us (+ (s :wait-us)
-                     (math/round (* 1_000_000 (- (os/clock :monotonic) t0)))))
-  (put waiter :live false)
-  # the handover may have landed in the channel while the child task
-  # was being cancelled — claim it rather than leak the connection
-  (def value (or handed
-                 (when (pos? (ev/count (waiter :chan)))
-                   (ev/take (waiter :chan)))))
-  (cond
-    (= retry value) nil
-    value value
-    (do (put s :timeouts (inc (s :timeouts)))
-        (errorf "db pool checkout timed out after %.1fs (size %d, in use %d, waiting %d)"
-                (pool :checkout-timeout) (pool :size) (pool :in-use)
-                (count |($ :live) (pool :waiters))))))
-
 (defn- next-waiter
-  "Pop the oldest waiter still parked (dropping timed-out ones)."
+  "Pop the oldest waiter still parked (dropping any left non-live)."
   [pool]
   (def ws (pool :waiters))
   (var found nil)
@@ -119,26 +96,6 @@
     (array/remove ws 0)
     (when (w :live) (set found w)))
   found)
-
-(defn checkout
-  "Take a connection entry: an idle one, a fresh one while under
-  :size, else park until a checkin hands one over (or
-  :checkout-timeout elapses). A waiter woken because a slot was freed
-  (a discarded connection) re-enters the same decision."
-  [pool]
-  (def s (pool :stats))
-  (put s :checkouts (inc (s :checkouts)))
-  (var entry nil)
-  (while (nil? entry)
-    (when (pool :closed)
-      (error "db pool is closed"))
-    (set entry
-         (cond
-           (not (empty? (pool :idle))) (array/pop (pool :idle))
-           (< (pool :created) (pool :size)) (connect-entry pool)
-           (await-entry pool))))
-  (put pool :in-use (inc (pool :in-use)))
-  entry)
 
 (defn discard!
   "Mark an entry broken: the next checkin closes the raw connection
@@ -165,6 +122,75 @@
       (ev/give (w :chan) entry)
       (array/push (pool :idle) entry)))
   nil)
+
+(defn- await-entry
+  "Park until a checkin hands this waiter a connection. Returns the
+  entry, or nil when the waiter should re-enter `checkout`; a real
+  timeout throws."
+  [pool]
+  (def s (pool :stats))
+  (put s :waits (inc (s :waits)))
+  (def waiter @{:chan (ev/chan 1) :live true})
+  (def slot @{})
+  (array/push (pool :waiters) waiter)
+  (def t0 (os/clock :monotonic))
+  (defer
+    # Leave the wait list no matter how we exit — a timed-out or
+    # cancelled waiter that lingered would grow (pool :waiters) without
+    # bound (nothing else prunes it under a stall) and could still be
+    # handed a connection. Then rehome any connection handed to us that
+    # the caller will not use (a cancelled checkout): it sits in `slot`
+    # (the child task took it) or in the channel (a checkin that raced
+    # our exit). This whole block runs with no ev yield, so no checkin
+    # interleaves between marking us dead and draining.
+    (do
+      (put waiter :live false)
+      (when-let [i (index-of waiter (pool :waiters))]
+        (array/remove (pool :waiters) i))
+      (def stranded
+        (or (let [e (get slot :entry)] (put slot :entry nil) e)
+            (when (pos? (ev/count (waiter :chan)))
+              (ev/take (waiter :chan)))))
+      (when (and stranded (not= retry stranded))
+        # the caller never reached checkout's own in-use increment, so
+        # balance the decrement checkin is about to do
+        (put pool :in-use (inc (pool :in-use)))
+        (checkin pool stranded)))
+    (def handed (take-with-deadline (waiter :chan) (pool :checkout-timeout) slot))
+    (put s :wait-us (+ (s :wait-us)
+                       (math/round (* 1_000_000 (- (os/clock :monotonic) t0)))))
+    (def value (or handed
+                   (when (pos? (ev/count (waiter :chan)))
+                     (ev/take (waiter :chan)))))
+    (cond
+      (= retry value) nil
+      # consumed by the caller — clear the slot so the defer does not
+      # rehome the connection we are about to return
+      value (do (put slot :entry nil) value)
+      (do (put s :timeouts (inc (s :timeouts)))
+          (errorf "db pool checkout timed out after %.1fs (size %d, in use %d, waiting %d)"
+                  (pool :checkout-timeout) (pool :size) (pool :in-use)
+                  (count |($ :live) (pool :waiters)))))))
+
+(defn checkout
+  "Take a connection entry: an idle one, a fresh one while under
+  :size, else park until a checkin hands one over (or
+  :checkout-timeout elapses). A waiter woken because a slot was freed
+  (a discarded connection) re-enters the same decision."
+  [pool]
+  (def s (pool :stats))
+  (put s :checkouts (inc (s :checkouts)))
+  (var entry nil)
+  (while (nil? entry)
+    (when (pool :closed)
+      (error "db pool is closed"))
+    (set entry
+         (cond
+           (not (empty? (pool :idle))) (array/pop (pool :idle))
+           (< (pool :created) (pool :size)) (connect-entry pool)
+           (await-entry pool))))
+  (put pool :in-use (inc (pool :in-use)))
+  entry)
 
 (defn close-all!
   "Close the pool: no more checkouts, idle connections closed now,

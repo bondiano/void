@@ -27,6 +27,12 @@
 ###   :ping                         liveness check for pooled entries
 ###   :insert-id                    (fn [conn result] id) — last insert
 ###                                 id where RETURNING is unavailable
+###   :reusable?                    (fn [conn] bool) — is the connection
+###                                 safe to return to the pool, or was an
+###                                 operation left mid-protocol (a
+###                                 cancelled query, an undrained result
+###                                 stream)? Falls back to always-yes: a
+###                                 synchronous driver has no such state.
 ###
 ### plus the flag :returning — true when INSERT ... RETURNING gives the
 ### stored row back (the entity layer re-reads by insert id otherwise).
@@ -44,7 +50,7 @@
 (def- optional
   [:prepare :execute-prepared :begin :commit :rollback
    :savepoint :release-savepoint :rollback-to-savepoint
-   :ping :insert-id])
+   :ping :insert-id :reusable?])
 
 (defn normalize
   ``Validate a driver dictionary and fill in the documented fallbacks.
@@ -81,6 +87,9 @@
         :execute-prepared nil
         :ping nil
         :insert-id nil
+        # a synchronous driver is never mid-protocol: a cancel can only
+        # land at an ev yield, and it has none inside a statement
+        :reusable? (fn reusable [conn] true)
         :begin (fn begin [conn &opt isolation]
                  (when isolation
                    (errorf "db driver %q has no :begin — (db/with-tx {:isolation %q} ...) needs driver support"
@@ -99,6 +108,13 @@
   "True when the driver implements the prepared-statement pair."
   [drv]
   (and (drv :prepare) (drv :execute-prepared) true))
+
+(defn reusable?
+  ``Is `conn` safe to return to the pool — no operation left
+  mid-protocol? The kernel asks before every checkin and discards a
+  connection that says no (see void/db/pool, void/db/state).``
+  [drv conn]
+  ((drv :reusable?) conn))
 
 (defn result
   "Build a driver result — sugar for driver authors:

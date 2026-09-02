@@ -60,13 +60,24 @@
 (def rollback! "See state/rollback! — abort the innermost with-tx." state/rollback!)
 (def with-conn* "See state/with-conn*." state/with-conn*)
 (defmacro with-conn
-  "See state/with-conn — run the body on one pooled connection."
+  ``See state/with-conn — run the body on one pooled connection. A fiber
+  started with `ev/go` inside the scope inherits the connection dyn and
+  must be wrapped in `db/detached`.``
   [& body]
   ~(,state/with-conn* (fn with-conn-body [_] ,;body)))
+(def detached* "See state/detached*." state/detached*)
+(defmacro detached
+  ``See state/detached — run the body with the db bindings cleared, for a
+  fiber spawned with `ev/go` from inside a connection or transaction
+  scope.``
+  [& body]
+  ~(,state/detached* (fn detached-body [] ,;body)))
 (def with-tx* "See state/with-tx*." state/with-tx*)
 (defmacro with-tx
   ``Run the body in a transaction (see state/with-tx): nested scopes
-  become savepoints, an error rolls back and propagates.``
+  become savepoints, an error rolls back and propagates. A fiber started
+  with `ev/go` inside the scope inherits the transaction dyn and must be
+  wrapped in `db/detached`.``
   [& body]
   (def [opts forms]
     (if (and (> (length body) 1) (dictionary? (first body)))

@@ -185,7 +185,12 @@
            :conninfo conninfo
            :opts opts
            :decode (get opts :decode {})
-           :notifications @[]})
+           :notifications @[]
+           # true between a send and the NULL that ends its results: a
+           # statement left mid-protocol (a cancelled query, a decoder or
+           # a stream callback that threw) must not go back to the pool,
+           # or the next query reads this one's rows (see `reusable?`)
+           :in-exchange false})
   (when (= pq/CONNECTION-BAD (pq/PQstatus raw))
     (def msg (or (text (pq/PQerrorMessage raw)) "bad connection parameters"))
     (pq/PQfinish raw)
@@ -250,9 +255,21 @@
 (defn- send! [c thunk &opt sql]
   (unless (live? c)
     (fail! c "sending on a closed connection" sql))
+  # from here the connection carries an unfinished exchange until its
+  # results are drained to NULL; a `collect`/`stream` clears it, and
+  # anything that unwinds before then leaves it set on purpose
+  (put c :in-exchange true)
   (unless (= 1 (thunk))
     (fail! c "sending" sql))
   nil)
+
+(defn reusable?
+  ``Safe to return to the pool? A connection left mid-protocol — a
+  cancelled query, a decoder or a `stream` callback that threw before
+  the results were drained — is not: the next query on it would read
+  the abandoned one's rows.``
+  [c]
+  (and (live? c) (not (c :in-exchange)) true))
 
 (defn- next-result
   "Park this fiber (not the loop) until libpq has a whole result, or
@@ -414,6 +431,11 @@
 
         (unless err (set err (unsupported status sql))))))
   (drain-notifications! c)
+  # reached only after the results are drained to NULL — so the exchange
+  # is complete even when we are about to raise a query error, and the
+  # connection is clean to reuse. A cancel or a throw mid-loop never
+  # reaches here, leaving :in-exchange set (see `reusable?`)
+  (put c :in-exchange false)
   (when err (error err))
   {:rows rows :count count :insert-oid insert-oid})
 
@@ -540,6 +562,10 @@
 
         (unless err (set err (unsupported status sql))))))
   (drain-notifications! c)
+  # drained to NULL — clean even if a decoder deferred an error into
+  # `err`. A throw from `f` mid-stream unwinds before here, leaving the
+  # connection mid-protocol so the pool discards it (see `reusable?`)
+  (put c :in-exchange false)
   (when err (error err))
   n)
 
@@ -564,7 +590,18 @@
     (fail! c "entering pipeline mode"))
   (def out @[])
   (var err nil)
-  (defer (do (pq/PQexitPipelineMode (c :pg)) nil)
+  (defer
+    # cleanup, so it runs even when a send / sync / flush above threw:
+    # the sync result closes the pipeline and reading it is what keeps
+    # the connection out of the mid-protocol state an undrained query
+    # leaves — unless it is already broken, when draining is moot and
+    # `reusable?` will discard it anyway
+    (do
+      (when (and (not (c :broken)) (not (c :closed)))
+        (protect (while (when-let [r (next-result c)] (pq/PQclear r) true)))
+        (put c :in-exchange false))
+      (pq/PQexitPipelineMode (c :pg))
+      nil)
     (each [sql params] statements
       (send-params c sql params true))
     (unless (= 1 (pq/PQpipelineSync (c :pg)))
@@ -576,10 +613,7 @@
         (array/push out res)
         (unless err
           (set err (merge (if (dictionary? res) res {:message res})
-                          {:index i :results (freeze out)})))))
-    # the sync result closes the pipeline; read it, or the connection
-    # is left mid-protocol exactly as after an undrained query
-    (while (when-let [r (next-result c)] (pq/PQclear r) true)))
+                          {:index i :results (freeze out)}))))))
   (when err (error (freeze err)))
   out)
 

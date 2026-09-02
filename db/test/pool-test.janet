@@ -93,4 +93,46 @@
 (assert (= 2 (st5 :closed)) "in-flight connections are closed when they come back")
 (assert (not (first (protect (pool/checkout p5)))) "a closed pool refuses checkouts")
 
+# -- a cancelled waiter leaves the wait list and frees nothing ----------
+
+(def [p6 st6] (new-pool {:size 1 :checkout-timeout 5}))
+(def held6 (pool/checkout p6))
+(def wsup6 (ev/chan 1))
+(def w6 (ev/go (fn [] (pool/checkout p6)) nil wsup6))
+(ev/sleep 0.02)
+(assert (= 1 ((pool/stats p6) :waiting)) "the second checkout is parked")
+(ev/cancel w6 :abandon)
+(ev/take wsup6)
+(ev/sleep 0.01)
+(assert (zero? ((pool/stats p6) :waiting)) "the cancelled waiter left the wait list (M10)")
+(assert (empty? (p6 :waiters)) "and was removed from the array, not just marked dead")
+# the held connection still returns to a usable pool
+(pool/checkin p6 held6)
+(def c6 (pool/checkout p6))
+(assert (= (held6 :id) (c6 :id)) "the connection is reused after the waiter was cancelled")
+(assert (= 1 (st6 :conns)) "no connection was leaked or reopened")
+(pool/checkin p6 c6)
+
+# -- a connection handed to a waiter cancelled in the window is rehomed --
+
+(def [p7 st7] (new-pool {:size 1 :checkout-timeout 5}))
+(def held7 (pool/checkout p7))
+(def wsup7 (ev/chan 1))
+(def w7 (ev/go (fn [] (pool/checkout p7)) nil wsup7))
+(ev/sleep 0.02)
+(assert (= 1 ((pool/stats p7) :waiting)) "the waiter is parked")
+# hand the connection over, then cancel before the waiter consumes it
+(pool/checkin p7 held7)
+(ev/cancel w7 :abandon)
+(ev/take wsup7)
+(ev/sleep 0.01)
+(def s7 (pool/stats p7))
+(assert (zero? (s7 :waiting)) "the cancelled waiter is gone")
+(assert (= 1 (s7 :created)) "the handed-over connection was not lost (H8)")
+(assert (zero? (s7 :in-use)) "and is not stuck marked in use")
+(def c7 (pool/checkout p7))
+(assert (= (held7 :id) (c7 :id)) "the very same connection is handed out again")
+(assert (= 1 (st7 :conns)) "no replacement was opened")
+(pool/checkin p7 c7)
+
 (print "pool-test: ok")

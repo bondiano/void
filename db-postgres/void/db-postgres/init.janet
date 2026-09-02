@@ -276,7 +276,15 @@
     :stop
     (fn stop [l]
       (set current-listener nil)
-      (listener/stop! l))
+      (listener/stop! l)
+      # stop! only signals; the listening fiber is the one that closes
+      # the connection (it alone may touch it). Give it a bounded moment
+      # to do so before the component is considered stopped
+      (var waited 0)
+      (while (and (l :running) (< waited 100))
+        (ev/sleep 0.02)
+        (++ waited))
+      nil)
     :health
     (fn health [l]
       (merge {:status (if (l :running) :up :down)} (listener/stats l)))))
