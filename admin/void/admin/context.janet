@@ -13,7 +13,7 @@
   ``The running admin context, set by ./init's :before-start hook:
   :prefix :title :per-page :select-limit :inline-limit :layout
   :stylesheet :access :widgets :pages :menu :dashboard :history
-  :hooks :bulk-runner :resolved.``
+  :hooks :bulk-runner :resolved :assets.``
   nil)
 
 (defn context

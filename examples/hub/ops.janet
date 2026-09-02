@@ -1,62 +1,36 @@
-### hub/ops — the commands an operator runs.
+### hub/ops — the command an operator runs.
 ###
-### `void hub work` exists because of something this application ran
-### into on its first live delivery, and it is worth writing down.
+### There used to be a second one, and its absence is the more
+### interesting half of this file.
 ###
 ### A CLI command starts the components it declares in `:needs` and
 ### nothing else — that is what lets `void jobs stats` answer without
-### opening a port. `void jobs work` needs `:jobs/queue`, which is
-### true of the worker and not of the **jobs**: this hub's job is a
-### telegram delivery, telegram is https, and https is `:tls/lib` —
-### a component the queue does not depend on. So the worker ran, the
-### job failed five times with a clear message about libssl, and the
-### notification died in the dead letter queue while `:void/tls` sat
+### opening a port. `void jobs work` needs `:jobs/queue`, which is true
+### of the worker and not of the **jobs**: this hub's job is a telegram
+### delivery, telegram is https, and https is `:tls/lib`, a component
+### the queue does not depend on. So the worker ran, the job failed five
+### times against a very clear message about libssl, and the
+### notification went to the dead letter queue while `void/tls` sat
 ### composed and unstarted in the very same process.
 ###
-### The application knows what its jobs need, so the application says
-### so: one command, the same worker, one more line in `:needs`.
-### Whether the framework should learn this instead — a job declaring
-### its own needs, or a notify channel declaring them — is a question
-### for the wave (docs/ROADMAP.md), not something to paper over here
-### with a `tls/load!` call that would ignore `[:tls]` config anyway.
+### The hub carried its own `void hub work` — the same worker with one
+### more line in `:needs` — until the framework learned the general
+### form of it: a job (and a notify channel) declares what its work
+### needs open, and `void jobs work` starts the union over the queues it
+### serves. The declaration is one line in ./telegram.janet now, which
+### is where the fact actually lives, and this file is one command
+### shorter.
 (import void/core/plugin :as plugin)
-(import void/core/log :as log)
 (import void/jobs)
 (import ./intake)
 
-(def log-ns "hub.ops")
-
-(plugin/contribute! :void.core/cli
-  {:name :hub/work
-   :read-only? false
-   :doc "Run the worker with everything a delivery needs open: void hub work [--concurrency N]"
-   # the order is the order the instances arrive in
-   :needs [:jobs/queue :tls/lib]
-   :fn (fn cli-work [queue _tls & args]
-         (var concurrency nil)
-         (var i 0)
-         (while (< i (length args))
-           (def arg (args i))
-           (cond
-             (= "--concurrency" arg)
-             (do (set concurrency (scan-number (or (get args (inc i)) "")))
-                 (+= i 2))
-             (errorf "void hub work: unknown argument %q" arg)))
-         (def w (jobs/make-worker queue
-                                 (if concurrency {:concurrency concurrency} {})))
-         (printf "working %s at concurrency %d — ^C to stop"
-                 (string/join (map string (w :queues)) ", ")
-                 (w :concurrency))
-         (log/info "worker started with the TLS stack open" :ns log-ns)
-         (with-dyns [jobs/queue-dyn queue]
-           (jobs/run-worker! w)))})
-
 # -- replay --------------------------------------------------------------
 #
-# `void hub replay <delivery>` is the other command, and it is the one
-# that makes developing this application bearable. A webhook needs a
-# public hostname to arrive at, so the usual way to change one line of
-# ./route.janet is: a tunnel, a repository, and somebody to push to it.
+# `void hub replay <delivery>` is the command that is left, and it is
+# the one that makes developing this application bearable. A webhook
+# needs a public hostname to arrive at, so the usual way to change one
+# line of ./route.janet is: a tunnel, a repository, and somebody to
+# push to it.
 # Replay says the bytes are already here — one real delivery, received
 # once, routed again as many times as it takes (./intake.janet,
 # `replay!`, for why it routes rather than receives).
@@ -64,7 +38,8 @@
 # It starts three components and not the port: the database the row is
 # in, the store the bytes are in, and the queue the notification goes
 # on. Delivering it is the worker's job, which is why `:tls/lib` is not
-# in this list — nothing here opens a socket to telegram.
+# in this list — nothing here opens a socket to telegram, and the
+# worker declares that need through the channel now (./telegram.janet).
 
 (defn- outcome-of
   ``The end of one channel's line: the job when there is one, and
@@ -107,9 +82,9 @@
                (printf "  %-10s %s%s"
                        (string (out :channel)) (string (out :status)) (outcome-of out)))
              (when (some |(= :queued ($ :status)) outs)
-               (print "run `void hub work` to deliver it")))))})
+               (print "run `void jobs work` to deliver it")))))})
 
 (plugin/defplugin hub/ops
-  :doc "Operator commands: a worker that starts the components this application's jobs need, and a replay that routes a kept delivery again from the bytes it arrived as."
+  :doc "The operator's command: a replay that routes a kept delivery again from the bytes it arrived as, without receiving it again."
   :version "0.1.0"
   :requires {:void/jobs ">=0.0.1" :void/db ">=0.0.1" :void/storage ">=0.0.1"})

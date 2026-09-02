@@ -83,7 +83,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/widget`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
+- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
 - **contribution schema:**
 
   ```janet
@@ -433,11 +433,11 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.notify/channel`
 
 - **owner:** `:void/notify` · **cardinality:** `:many`
-- Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed
+- Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)
 - **contribution schema:**
 
   ```janet
-  {:address [:optional :keyword] :deliver :function :doc [:optional :string] :health [:optional :function] :name :keyword :permanent? [:optional :function] :project [:optional :function]}
+  {:address [:optional :keyword] :deliver :function :doc [:optional :string] :health [:optional :function] :name :keyword :needs [:optional [:vector :keyword]] :permanent? [:optional :function] :project [:optional :function]}
   ```
 
 ### `:void.oauth/sign-in`
@@ -553,9 +553,9 @@ layer.
 | `:void.grpc/service` | `:void/grpc` | `:replace` | `:keyword` | The RPC service this route serves — set by void/grpc's projection, so a middleware can tell an RPC method from a page |
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request-Type: partial with the fragment alone — the view response's layout is stripped before rendering |
 | `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
-| `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific layer may only lower it |
+| `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific *metadata* layer may only lower it (group -> route). `[:http :max-body]` is not one of those layers: it is what a route that declares nothing gets, so a single route that has to accept more than the rest of the application says so on itself and raises nothing for anybody else |
 | `:void.http/middleware` | `:void/http` | `:concat` | `[:vector :keyword]` | Named middleware this route opts into, concatenated group -> route |
-| `:void.http/timeout` | `:void/http` | `:restrict` + `:allow?` | `[:number {:min 0.001}]` | Handler deadline in seconds; a more specific layer may only lower it |
+| `:void.http/timeout` | `:void/http` | `:restrict` + `:allow?` | `[:number {:min 0.001}]` | Handler deadline in seconds; a more specific *metadata* layer may only lower it (group -> route). `[:http :read-timeout]` and the server's own limits are not metadata layers: a route that declares nothing inherits them, and one that declares a deadline is bounded by the group above it and by nothing else |
 | `:void.obs/endpoint` | `:void/obs-http` | `:replace` | `:boolean` | An operator endpoint (health, readiness, metrics): it must answer while the process is refusing everything else, so void/pressure-http never sheds it |
 | `:void.obs/name` | `:void/obs-http` | `:replace` | `:string` | The name this route carries in metrics and spans (default: the route :name) |
 | `:void.obs/sample-rate` | `:void/obs-http` | `:replace` | `[:number {:max 1 :min 0}]` | Head sampling rate for this route's traces, overriding [:obs :trace :sample-rate] — a health endpoint at 0, a payment at 1 |

@@ -117,7 +117,8 @@
 
 (def- allowed-opts
   {:queue true :priority true :max-attempts true :backoff true
-   :timeout true :unique true :unique-ttl true :group true})
+   :timeout true :unique true :unique-ttl true :group true
+   :needs true})
 
 (def unique-modes
   ``How a job's unique key is derived: :args — one job per (name,
@@ -167,6 +168,9 @@
     (unless (or (string? g) (keyword? g) (callable? g))
       (errorf "%s: :group must be a string, a keyword or a function of the job's arguments, got %q"
               who g)))
+  (when-let [n (get opts :needs)]
+    (unless (and (indexed? n) (all keyword? n))
+      (errorf "%s: :needs must be a list of component keys, got %q" who n)))
   (def out (table ;(kvs opts)))
   (when (in opts :backoff)
     (put out :backoff (normalize-backoff (opts :backoff) (string who " :backoff"))))
@@ -244,6 +248,54 @@
   "Drop a definition — for tests, and for a REPL that renamed one."
   [name]
   (put registry name nil))
+
+# -- what the work needs open --------------------------------------------
+#
+# A command starts the components it declares in `:needs` and no
+# others, which is what lets `void jobs stats` answer without opening a
+# port. `:jobs/queue` is true of the *worker* and not of the **work**:
+# a job that posts to an https API needs `:tls/lib`, a component the
+# queue does not depend on and which therefore sits composed and
+# unstarted in the worker's own process — five failed attempts against
+# a very clear message about libssl, which is how this was found
+# (examples/hub, ROADMAP 6.6).
+#
+# So the definition says it, and `void jobs work` starts the union over
+# the queues it serves. `needs!` is the same statement made later, for
+# the definitions whose needs are not known where they are written:
+# void/notify-jobs has one job for every channel, and which components
+# a channel opens is a fact about the channel (ADR-0040).
+
+(defn needs!
+  ``Add component keys to a definition's `:needs`, after the fact.
+  Idempotent and order-preserving. Throws when the job is not defined
+  — a plugin naming a job that does not exist is a boot error, not a
+  worker that quietly starts less than it should.``
+  [name keys]
+  (def d (lookup! name))
+  (unless (and (indexed? keys) (all keyword? keys))
+    (errorf "job %q: :needs must be a list of component keys, got %q" name keys))
+  (def out (array ;(get-in d [:opts :needs] [])))
+  (each k keys (unless (index-of k out) (array/push out k)))
+  (def d2 (merge-into @{} d {:opts (merge (d :opts) {:needs (tuple ;out)})}))
+  (put registry name (table/to-struct d2))
+  (tuple ;out))
+
+(defn needs
+  ``The components every definition on these queues declares, as one
+  ordered list. `queues` is a list of queue names, or nil for every
+  definition in the registry; `dflt` is the queue a definition that
+  named none lands on (the running queue's `[:defaults :queue]`).``
+  [&opt queues dflt]
+  (default dflt :default)
+  (def out @[])
+  (each name (sorted (keys registry))
+    (def d (registry name))
+    (when (or (nil? queues)
+              (index-of (get-in d [:opts :queue] dflt) queues))
+      (each k (get-in d [:opts :needs] [])
+        (unless (index-of k out) (array/push out k)))))
+  (tuple ;out))
 
 (defn handler
   ``The function behind a definition, resolved now rather than when it
@@ -338,8 +390,8 @@
   directly runs the work inline, which is what a test usually wants.
 
   Options: :queue :priority :max-attempts :backoff :timeout :unique
-  :unique-ttl :group — see `normalize-opts`; anything left out is
-  decided by the [:jobs] config slice.
+  :unique-ttl :group :needs — see `normalize-opts`; anything left out
+  is decided by the [:jobs] config slice.
 
   Declare jobs at the top level of a module. One declared inside a
   function still works, but its handler is then the function value

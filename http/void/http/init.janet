@@ -159,14 +159,14 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.http/timeout
    :schema [:number {:min 0.001}]
-   :doc "Handler deadline in seconds; a more specific layer may only lower it"
+   :doc "Handler deadline in seconds; a more specific *metadata* layer may only lower it (group -> route). `[:http :read-timeout]` and the server's own limits are not metadata layers: a route that declares nothing inherits them, and one that declares a deadline is bounded by the group above it and by nothing else"
    :merge :restrict
    :allow? (fn [outer inner] (<= inner outer))})
 
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.http/max-body
    :schema [:int {:min 0}]
-   :doc "Request body cap in bytes; a more specific layer may only lower it"
+   :doc "Request body cap in bytes; a more specific *metadata* layer may only lower it (group -> route). `[:http :max-body]` is not one of those layers: it is what a route that declares nothing gets, so a single route that has to accept more than the rest of the application says so on itself and raises nothing for anybody else"
    :merge :restrict
    :allow? (fn [outer inner] (<= inner outer))})
 

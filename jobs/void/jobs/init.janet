@@ -34,6 +34,14 @@
 ###     {:jobs {:worker {:enabled true :concurrency 10}
 ###             :scheduler {:enabled true}}}
 ###
+### A job may also say what it needs *open* — `{:needs [:tls/lib]}` —
+### and `void jobs work` starts the union of that over the queues it
+### serves. `:jobs/queue` is what the **worker** needs; a delivery over
+### https needs the TLS stack, which the queue does not depend on and
+### which a command that named only the queue therefore leaves composed
+### and unstarted (./job, and ROADMAP 6.6 for how that reads from the
+### outside).
+###
 ### Adding void/jobs-db or void/jobs-redis puts a second component on
 ### `:void/jobs-backend`, which is the ambiguity the kernel refuses to
 ### resolve on its own — the application names the one it means,
@@ -157,6 +165,8 @@
 (def job-definitions "See job/defined — names of every declared job." job/defined)
 (def job-of "See job/lookup — the definition behind a name." job/lookup)
 (def forget-job! "See job/forget!." job/forget!)
+(def job-needs! "See job/needs! — declare what a job's work needs open, after the fact." job/needs!)
+(def job-needs "See job/needs — the components the definitions on these queues declare." job/needs)
 (def job-handler "See job/handler — the function behind a definition, resolved now." job/handler)
 (def retry-delay "See job/retry-delay — the wait before the next attempt." job/retry-delay)
 (def default-backoff "See job/default-backoff." job/default-backoff)
@@ -533,8 +543,24 @@
                         "--poll-interval" [:poll-interval as-number]}))
          (def cfg (slice (get-in plugin/current-boot [:config :values :jobs])))
          (def w (worker/make q (merge (cfg :worker) o)))
+         # `:needs [:jobs/queue]` above is true of the worker and not of
+         # the **work**: a job that posts to an https API needs
+         # `:tls/lib`, which the queue does not depend on and which
+         # would therefore sit composed and unstarted in this very
+         # process (job/needs, and examples/hub for how that reads from
+         # the outside — five attempts and a message about libssl).
+         # What the jobs on these queues declare is started here, and
+         # `run-command`'s stop takes it down with everything else
+         (def extra (job/needs (w :queues) (get-in q [:defaults :queue])))
+         (unless (empty? extra)
+           (system/start (get plugin/current-boot :system) extra)
+           (log/info "started what the work needs" :ns log-ns
+                     :queues (w :queues) :needs extra))
          (printf "working %s at concurrency %d — ^C to stop"
                  (string/join (map string (w :queues)) ", ") (w :concurrency))
+         (unless (empty? extra)
+           (printf "  open for the work: %s"
+                   (string/join (map string extra) ", ")))
          (with-queue q (fn [] (worker/run! w))))})
 
 (plugin/contribute! :void.core/cli

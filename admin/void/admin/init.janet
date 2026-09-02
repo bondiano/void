@@ -47,6 +47,7 @@
 (import ./context :as ctx)
 (import ./mount :as mount)
 (import ./resource :prefix "" :export true)
+(import ./view :as view)
 (import ./widget :as widget)
 
 (def log-ns
@@ -57,7 +58,7 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.admin/widget
-  :doc "Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why"
+  :doc "Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why"
   :schema {:name :keyword
            :render :function
            :doc [:optional :string]
@@ -237,6 +238,10 @@
   (defn resolved [name] (or (get-in boot [:extensions name :resolved]) []))
   (def cfg (merge defaults (or (get-in boot [:config :values :admin]) {})))
   (def widgets (resolved :void.admin/widget))
+  # the widget resolution first, because the asset bundle is a
+  # projection of it: what ./mount serves and what ./view links are two
+  # reads of this one value
+  (def resolved-widgets (mount/resolve-widgets widgets))
   (set ctx/current
        @{:config cfg
          :prefix (cfg :prefix)
@@ -256,7 +261,8 @@
          :history (get-in boot [:extensions :void.admin/history :resolved])
          :bulk-runner (get-in boot [:extensions :void.admin/bulk-runner :resolved])
          :hooks (get boot :hooks)
-         :resolved (mount/resolve-widgets widgets)})
+         :resolved resolved-widgets
+         :assets (view/asset-bundle (cfg :stylesheet) resolved-widgets)})
   (def added (register-action-policies!))
   (log/info "admin ready" :ns log-ns
             :prefix (cfg :prefix)

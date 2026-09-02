@@ -190,18 +190,20 @@
   (assert (not (storage/valid-key? "github/../../etc/passwd.json"))
           "the store would have refused that key too — this refuses earlier, with a status")
 
-  # -- the ceiling the application raised for exactly this route ---------
+  # -- the one route that reads more than a form -------------------------
   #
-  # config/default.janet lifts [:http :max-body] to GitHub's 25 MiB
-  # because `:void.http/max-body` is :restrict — a route may only lower
-  # it. The pages put it back down, and that is asserted here so the
-  # arrangement cannot quietly come undone
-  (assert (= 65536 (get-in (http/explain-route "/register" :get)
-                           [:meta :void.http/max-body]))
-          "a page that serves a form lowered the ceiling back to a form")
-  (assert (nil? (get-in (http/explain-route "/in/github" :post)
+  # `[:http :max-body]` is 64 KiB and is what a route that declares
+  # nothing gets; the intake route declares GitHub's 25 MiB on itself.
+  # `:restrict` binds a route to the *metadata* layers above it, and
+  # this source declares none — asserted here because the shape used to
+  # be the other way round, and the inverse looks identical until you
+  # read what the application means (README, ROADMAP 6.6)
+  (assert (= 26214400 (get-in (http/explain-route "/in/github" :post)
+                              [:meta :void.http/max-body]))
+          "the route that receives a delivery says what a delivery weighs")
+  (assert (nil? (get-in (http/explain-route "/register" :get)
                         [:meta :void.http/max-body]))
-          "and the intake route carries none, so it gets the application's"))
+          "and a page says nothing, so it gets the application's 64 KiB"))
 
 (sh/rm tmp)
 (log/set-sinks! nil)

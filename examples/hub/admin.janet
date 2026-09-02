@@ -167,9 +167,6 @@
   (ring/redirect (http/url-for :admin.page/jobs)))
 
 (router/defroutes :hub/admin-routes
-  # the application's ceiling is 25 MiB for the one route that receives
-  # deliveries; a redirect is not that route (./config/default.janet)
-  {:void.http/max-body 65536}
   (GET "/" home {:name :hub/home :void.auth/access :public}))
 
 (plugin/defplugin hub/admin

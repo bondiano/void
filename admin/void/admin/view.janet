@@ -20,11 +20,16 @@
 ### out of a POST — see ./init. A GET is never rewritten, because a
 ### link that changes state is a link the browser will prefetch.
 ###
-### The markup carries one stylesheet inline. An application with no
-### asset pipeline and no manifest must still get a usable back office
-### the moment it composes the plugin; `[:admin :stylesheet]` replaces
-### the sheet and `[:admin :layout]` replaces the frame entirely.
+### The markup carries no inline style and no inline script: the sheet
+### and every widget's assets are served as two fingerprinted files
+### from the admin's own prefix, so composing the back office costs an
+### application nothing in its content-security policy (see
+### `asset-bundle` below). An application with no asset pipeline and no
+### manifest still gets a usable back office the moment it composes the
+### plugin; `[:admin :stylesheet]` replaces the sheet and
+### `[:admin :layout]` replaces the frame entirely.
 
+(import void/html/assets :as assets)
 (import void/html/hiccup :as hiccup)
 (import void/html/form :as form)
 (import void/core/schema :as schema)
@@ -104,11 +109,53 @@ form.admin-act { display:inline; }
          :class (when (string/has-prefix? (i :href) here) "active")}
      (i :label)]))
 
-(defn- asset-tags [entries]
-  (seq [[_ a] :in (widget/assets entries)]
-    [:span
-     (when-let [s (get a :style)] [:style (hiccup/raw s)])
-     (when-let [j (get a :script)] [:script (hiccup/raw j)])]))
+# -- the two files the frame links ---------------------------------------
+#
+# The sheet and the widgets' assets are *served*, not written into the
+# page. That is a content-security decision before it is a caching one:
+# an inline `<style>` is refused by `default-src 'self'`, so a
+# composition that added the back office used to pay for it with
+# `'unsafe-inline'` — the weakest half of its own policy, spent on
+# somebody else's page. A file from this origin needs no policy line at
+# all.
+#
+# One bundle for the whole admin rather than one per page: a file that
+# is identical everywhere is a file the browser fetches once, and the
+# style of a widget this page does not draw is inert. The name carries
+# a crc32 of the content (the pipeline's own `fingerprint`, 6.5), so
+# the response is immutable and a changed sheet is a changed URL.
+
+(def asset-prefix
+  "Where the two bundles are mounted, under [:admin :prefix]."
+  "/-/assets/")
+
+(defn- join-assets [pairs key]
+  (def parts (filter |(not (empty? $))
+                     (seq [[_ a] :in pairs :let [v (get a key)] :when v] (string v))))
+  (string/join parts "\n"))
+
+(defn asset-bundle
+  ``The admin's served assets, as data: `{:style {:file :body}
+  :script {:file :body}}`, either half nil when there is nothing in it.
+  A pure function of the sheet in force and the whole widget
+  resolution, so ./mount can mount exactly the files ./view links.``
+  [sheet resolved]
+  (def pairs (widget/all-assets (or resolved {})))
+  (def css (string/join
+             (filter |(not (empty? $))
+                     [(string (or sheet stylesheet)) (join-assets pairs :style)])
+             "\n"))
+  (def js (join-assets pairs :script))
+  {:style (unless (empty? css)
+            {:file (assets/fingerprint "admin.css" css) :body css})
+   :script (unless (empty? js)
+             {:file (assets/fingerprint "admin.js" js) :body js})})
+
+(defn asset-url
+  "Where one half of the bundle is served, or nil when it is empty."
+  [half]
+  (when-let [b (get (ctx/setting :assets {}) half)]
+    (ctx/at (string asset-prefix (b :file)))))
 
 (defn layout
   ``The default frame. Replaceable whole through [:admin :layout] — an
@@ -116,14 +163,15 @@ form.admin-act { display:inline; }
   a second one.``
   [content context]
   (def request (get context :request))
-  (def entries (get context :void.admin/widgets {}))
   (hiccup/html5 {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
      [:title (get context :void.admin/title (ctx/setting :title "Admin"))]
-     [:style (hiccup/raw (or (ctx/setting :stylesheet) stylesheet))]
-     ;(asset-tags entries)
+     (when-let [href (asset-url :style)]
+       [:link {:rel "stylesheet" :href href}])
+     (when-let [src (asset-url :script)]
+       [:script {:src src :defer true}])
      [:script {:src (ctx/setting :htmx-src "https://unpkg.com/htmx.org@4.0.0")
                :defer true}]]
     [:body

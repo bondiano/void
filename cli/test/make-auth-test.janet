@@ -81,6 +81,37 @@
   (assert (string/find "a challenge nobody delivered is an error" (string said))
           "and say what happens without a deliverer, which is the one way to compose this wrong")
 
+  # Everything the scaffold made necessary in a file it will not touch,
+  # said here rather than left to be found (ROADMAP 6.6): the driver's
+  # own dependency, and the policy line that the :void/security it just
+  # put in the composition needs for the htmx `void new` writes.
+  (assert (string/find "github.com/janet-lang/sqlite3" (string said))
+          "the suite it generated boots a driver whose library the bundle does not carry — so it names it")
+  (assert (string/find "project.janet" (string said))
+          "...and the file that line goes in")
+  (assert (string/find ":script-src [:self \"https://unpkg.com\"]" (string said))
+          "void/security's default policy refuses the scaffold's own htmx, so the generator prints the policy")
+  (assert (string/find "never rewrites a file you have edited" (string said))
+          "and says why none of this was done for you, since that is a decision and not an omission")
+
+  # printed text nobody parses is text that drifts into being wrong. The
+  # config block is meant to be pasted into a Janet file, so it is
+  # parsed here, from the report, exactly as printed
+  (def report (string/join (make/auth-report
+                             (make/auth-spec "user" [] {:project "demo"}))
+                           "\n"))
+  (def block-start (string/find "{:http {:session" report))
+  (def config-block
+    (string/replace-all "\n       " "\n"
+                        (string/slice report block-start
+                                      (inc (last (string/find-all "}" report))))))
+  (def [parsed-ok parsed] (protect (parse config-block)))
+  (assert parsed-ok (string "the config block a person is told to paste is Janet: " parsed))
+  (assert (index-of "https://unpkg.com" (get-in parsed [:security :csp :policy :script-src]))
+          "...and the policy in it admits the host the generated page loads its script from")
+  (assert (= "users" (get-in parsed [:auth-db :users :table]))
+          "...and names this scaffold's own table, not a template's")
+
   (def module (slurp "auth.janet"))
   (assert (string/find "(db/defentity User" module) "the users table is an entity")
   (assert (string/find ":db/table \"users\"" module) "with the table void/auth-db reads")

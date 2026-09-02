@@ -30,6 +30,7 @@
 (import ./action :as act)
 (import ./context :as ctx)
 (import ./resource :as res)
+(import ./view :as view)
 (import ./widget :as widget)
 
 (def access-policy
@@ -145,7 +146,27 @@
 # handler (`action/ensure-child!`) rather than here, because it decides
 # about a row that only the handler has loaded.
 
-# -- the whole thing -----------------------------------------------------
+# -- the served assets ---------------------------------------------------
+
+(defn- asset-route
+  ``One half of the admin's asset bundle as a route. The URL carries a
+  crc32 of the body (./view), so the response is immutable — and
+  `private` rather than `public`, because it is behind the same gate as
+  every other admin route and a shared cache must not keep it.``
+  [half type]
+  (when-let [b (get (ctx/setting :assets {}) half)]
+    (def body (b :body))
+    (def headers {"content-type" type
+                  "cache-control" "private, max-age=31536000, immutable"})
+    (router/GET (string view/asset-prefix (b :file))
+                (fn admin-asset [_req] {:status 200 :headers headers :body body})
+                {:name (keyword "admin/asset-" (string half))
+                 :void.authz/policy [access-policy]})))
+
+(defn- asset-routes []
+  (filter truthy?
+          [(asset-route :style "text/css; charset=utf-8")
+           (asset-route :script "text/javascript; charset=utf-8")]))
 
 (defn- page-routes []
   (seq [p :in (ctx/setting :pages [])]
@@ -155,6 +176,8 @@
                   (merge {:name (keyword "admin.page/" (p :name))
                           :void.authz/policy [access-policy ;(get p :policies [])]}
                          (get p :meta {})))))
+
+# -- the whole thing -----------------------------------------------------
 
 (defn resolve-widgets
   "Resolve every field of every declared resource once — the table
@@ -185,6 +208,7 @@
               (router/GET "/" act/dashboard
                           {:name :admin/dashboard
                            :void.authz/policy [access-policy]}))
+  (each r (asset-routes) (array/push children r))
   (each r (page-routes) (array/push children r))
   (each rname (res/mounted)
     (def desc (res/lookup rname))

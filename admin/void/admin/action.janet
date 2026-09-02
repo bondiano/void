@@ -74,10 +74,12 @@
 
 (defn page
   ``A full admin page: the configured frame, and the widget resolution
-  of this resource in the render context — that is where the layout
-  finds the `:assets` it has to glue in once. A `:void.admin/page`
-  answers through this too, so a contributed section is framed by the
-  same layout as the seven conventional actions.``
+  of this resource in the render context — which is what a replacement
+  `[:admin :layout]` reads to draw anything of its own. The widgets'
+  `:assets` are not in it: they are served as one file per kind, from
+  the admin's own prefix (./view). A `:void.admin/page` answers through
+  this too, so a contributed section is framed by the same layout as
+  the seven conventional actions.``
   [req content &opt rname opts]
   (html/page content
              (merge {:layout (view/frame)

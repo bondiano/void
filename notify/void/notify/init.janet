@@ -61,13 +61,14 @@
 # -- extension point -----------------------------------------------------
 
 (plugin/defextension-point :void.notify/channel
-  :doc "Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed"
+  :doc "Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)"
   :schema {:name :keyword
            :doc [:optional :string]
            :address [:optional :keyword]
            :project [:optional :function]
            :deliver :function
            :permanent? [:optional :function]
+           :needs [:optional [:vector :keyword]]
            :health [:optional :function]}
   :validate (fn [contribs]
               (def seen @{})

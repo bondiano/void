@@ -422,10 +422,6 @@
 # name, read by more than one thing.
 
 (router/defroutes :hub/auth-routes
-  # not the generator's: the application raised its body ceiling for the
-  # one route that receives webhook deliveries, and a sign-in form has
-  # no business inheriting it (config/default.janet, ./app.janet)
-  {:void.http/max-body 65536}
   (GET "/register" register-form {:name :auth/register-form
                                   :void.auth/access :public})
   (POST "/register" register {:name :auth/register

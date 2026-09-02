@@ -9,15 +9,16 @@
 # is sent. It is configuration rather than code because none of it is a
 # decision this application makes twice.
 {:http {:session {:enabled true}
-        # GitHub caps a delivery at 25 MiB, and this application has to
-        # be able to read the ones it is sent. The cap is raised **here**
-        # rather than on the intake route because `:void.http/max-body`
-        # is `:restrict`: a route may lower the application's ceiling
-        # and never raise it (docs/CONTRACTS.md). So the ceiling goes up
-        # once and every page-serving route puts it back down — see the
-        # metadata layer on ./app.janet's and ./auth.janet's route
-        # sources, and README's note about the shape of this
-        :max-body 26214400}
+        # What a *page* is allowed to post. GitHub caps a delivery at
+        # 25 MiB and this application has to read the ones it is sent,
+        # but that is one route's business: `[:http :max-body]` is what
+        # a route that declares nothing gets, not a ceiling over the
+        # ones that do — `:void.http/max-body` is `:restrict` between
+        # *metadata* layers (group -> route), and the intake route sits
+        # under no group that names one. So the number that is true of
+        # almost every route lives here and the exception says so on
+        # itself (./intake.janet)
+        :max-body 65536}
 
  :db-sqlite {:path "db/hub.sqlite3"}
 
@@ -111,29 +112,25 @@
  # a browser gets a redirect to the sign-in page, not a 401 body
  :auth-http {:unauthenticated :redirect :login-path "/login"}
 
- # The page `void new` writes loads htmx from unpkg, and the moment
+ # One host, and it is the only widening in this file. The page
+ # `void new` writes loads htmx from unpkg, and the moment
  # `void make auth` puts void/security in the composition the default
- # policy (`default-src 'self'`) stops it — a blank page and a console
- # line, in a project where both halves were generated and neither
- # generator said a word about it. examples/shop widened the policy in
- # exactly this way; ./README.md names it as a task rather than leaving
- # it as folklore.
+ # policy (`default-src 'self'`) stops it — a page whose script the
+ # browser refuses and says so only in its console. `void make auth`
+ # now prints this block for exactly that reason; it used to be
+ # folklore, and this application is where that was found.
  #
  # `:policy` replaces the defaults rather than merging into them (a
  # policy is one value, and half a policy is a different policy), so
  # what is written out here is void/security's own default plus the one
- # host — see security/void/security/csp.janet
+ # host — see security/void/security/csp.janet.
  #
- # `:style-src` carries `'unsafe-inline'` for one reason, and it is
- # worth naming rather than absorbing: void/admin's layout writes its
- # stylesheet into the page as a `<style>` element, which
- # `default-src 'self'` refuses — an unstyled desk and a console line,
- # the same shape as the htmx problem above. ./README.md carries it as
- # a task for the framework (a served asset, or a nonce), not as a
- # habit for applications
+ # There is no `:style-src` line: void/admin serves its stylesheet as a
+ # fingerprinted file from its own prefix rather than writing it into
+ # the page, so composing the back office costs this application
+ # nothing. It cost `'unsafe-inline'` until the hub said so.
  :security {:csp {:policy {:default-src [:self]
                            :script-src [:self "https://unpkg.com"]
-                           :style-src [:self :unsafe-inline]
                            :base-uri [:self]
                            :form-action [:self]
                            :frame-ancestors [:none]
@@ -152,13 +149,9 @@
  #     the sign-in page and comes back to where they were going, rather
  #     than a 403 with nothing to do about it. The key is `:restrict`,
  #     so no admin route can loosen it
- #   :void.http/max-body — the application's ceiling is 25 MiB for the
- #     one route that receives deliveries; thirty admin routes have no
- #     business inheriting it (see the note on `[:http :max-body]`)
  :admin {:access :hub/operator
          :title "hub"
-         :route-meta {:void.auth/access :required
-                      :void.http/max-body 65536}}
+         :route-meta {:void.auth/access :required}}
 
  # the one route a letter points at: `challenge!` mints the code, the
  # deliverer builds this URL, and which flow it was for travels on the

@@ -4,6 +4,7 @@
 
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/core/plugin :as plugin)
 (import void/jobs :as jobs)
 (import void/test :as test)
 (import void/notify :as notify)
@@ -101,3 +102,36 @@
   (assert (= :sent (get-in r [:results 0 :status]))
           "an application that wants the request to wait for the delivery can say so")
   (assert (= 1 (length (notify/outbox)))))
+
+# -- :needs — what the delivery needs *open* where it runs ---------------
+#
+# `:project` runs on the request fiber, inside an application whose
+# components are all up. `:deliver` runs on a worker, and a worker is a
+# CLI command: it starts what it declared and nothing else. A channel
+# that posts over https is the only thing that knows it needs the TLS
+# stack, so it says so, and this is where that reaches the job the
+# worker reads (examples/hub, ROADMAP 6.6).
+
+(def over-https
+  (plugin/manifest 'test/over-https
+    :doc "A channel that would open a socket to somebody."
+    :requires {:void/notify ">=0.0.1"}
+    :contributes {:void.notify/channel
+                  [{:name :pigeon
+                    :needs [:tls/lib]
+                    :deliver (fn [payload] (channel/receipt :pigeon payload))}]}))
+
+(def with-needs
+  (test/start! {:plugins [;plugins over-https]
+                :only [:jobs/queue]
+                :profile :test
+                :config {:env @{}
+                         :cli {:log {:level :error}
+                               :jobs {:enabled false}
+                               :notify {:channels [:memory :pigeon]}}}}))
+
+(defer (test/stop! with-needs)
+  (assert (= [:tls/lib] (get-in (jobs/job-of :notify-deliver) [:opts :needs]))
+          "the union of the active channels' :needs is on the delivery job, which is what `void jobs work` starts")
+  (assert (= [:tls/lib] (jobs/job-needs [:notify]))
+          "...and therefore in what the worker on the :notify queue asks for"))

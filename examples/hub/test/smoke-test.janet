@@ -15,6 +15,7 @@
 (import void/core/log :as log)
 (import void/test :as test)
 (import void/db :as db)
+(import void/jobs :as jobs)
 # relative, because nothing puts this directory on module/paths: the
 # other examples get theirs from test-support/paths.janet, which is the
 # file this one does not have
@@ -80,18 +81,17 @@
   #
   # A command starts its `:needs` and nothing else, and `void jobs work`
   # needs the queue — which is true of the worker and not of the jobs.
-  # This application's job is an https delivery, so its own command adds
-  # :tls/lib; without it the composition contains void/tls, unstarted,
-  # while the notification dies against "no libssl open" (./ops.janet).
-  # Live once, asserted from here on
-  (def commands (get-in boot [:extensions :void.core/cli :contributions] []))
-  # a contribution is {:plugin :value} — the plugin that made it, and
-  # what it said
-  (def work (first (map |(get $ :value)
-                        (filter |(= :hub/work (get-in $ [:value :name])) commands))))
-  (assert work "void hub work is contributed")
-  (assert (index-of :tls/lib (get work :needs []))
-          "and it starts the TLS stack the delivery needs, not only the queue")
+  # This application's job is an https delivery, so somebody has to say
+  # `:tls/lib`, or the composition holds void/tls unstarted while the
+  # notification dies against "no libssl open". The thing that knows is
+  # the channel (./telegram.janet); void/notify-jobs puts the union of
+  # the active channels' needs on the delivery job and `void jobs work`
+  # starts it. Live once, asserted from here on
+  (assert (index-of :tls/lib (jobs/job-needs [:notify]))
+          "the worker on the :notify queue opens the TLS stack the delivery needs")
+  (assert (empty? (filter |(= :hub/work (get-in $ [:value :name]))
+                          (get-in boot [:extensions :void.core/cli :contributions] [])))
+          "...so this application no longer carries a worker command of its own")
 
   # -- the policy that lets the page load its script ---------------------
   #
@@ -103,8 +103,8 @@
   (def csp (get-in register [:headers "content-security-policy"]))
   (assert (string/find "https://unpkg.com" csp)
           "the policy admits the host the generated page loads from")
-  (assert (string/find "style-src 'self' 'unsafe-inline'" csp)
-          "and the inline stylesheet void/admin's layout writes into the page")
+  (assert (not (string/find "unsafe-inline" csp))
+          "and nothing else is widened: void/admin serves its stylesheet rather than writing it into the page")
   (assert (string/find "frame-ancestors 'none'" csp)
           "and it is still void/security's default everywhere else"))
 

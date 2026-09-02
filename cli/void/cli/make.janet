@@ -31,9 +31,20 @@
 ### edit the output in anyway.
 ###
 ### **Nothing existing is edited.** `make` writes new files, refuses to
-### clobber (`--force` to insist) and *prints* the one line to add to
-### `:plugins` rather than reaching into main.janet. A generator that
-### rewrites hand-edited code is a generator nobody dares run twice.
+### clobber (`--force` to insist) and *prints* what has to be added to
+### `project.janet`, `main.janet` and a config file rather than reaching
+### into them. A generator that rewrites hand-edited code is a generator
+### nobody dares run twice — phx.gen.auth edits the router because it
+### can pattern-match one line of Elixir it wrote itself, and the three
+### files here are not that.
+###
+### The whole price of that decision is `auth-report`: everything the
+### scaffold *made necessary* elsewhere has to be printed, in full, in
+### one place. A generator that stays out of your files and then does
+### not say what it needs has not been careful, it has been quiet — and
+### the failures are exactly the kind nobody attributes to a generator
+### (a suite that will not import, a page whose script the browser
+### refuses with nothing in the terminal to say so).
 ###
 ### `--dry-run` prints what would be written, to stdout, so it composes
 ### with a pager and a diff. Every question the interactive pass asks
@@ -1776,6 +1787,123 @@
   (when (opts :driver) (put opts :driver (keyword (string/trim (opts :driver) ":"))))
   [name fields opts])
 
+# -- what the generator did not do ---------------------------------------
+#
+# `make` writes new files and edits none (see the module header), and
+# the whole cost of that decision falls here: everything the scaffold
+# *made necessary* in a file somebody has already edited has to be
+# said, in full, in one place, or it becomes folklore — a paste
+# remembered from the last project, and an application that boots into
+# a page whose script the browser refuses with nothing in the terminal
+# to say so. examples/hub found all three of these the expensive way
+# (ROADMAP 6.6), which is why they are printed rather than assumed.
+
+(def driver-dependencies
+  ``The jpm dependency a driver's *library* comes from, by driver. Only
+  sqlite has one: void/db-postgres and void/db-mysql open libpq and
+  libmysqlclient through `ffi/` at run time, so nothing has to be
+  installed for the module to load (ADR-0011).
+
+  The void bundle deliberately does not carry janet-lang/sqlite3
+  (ADR-0020): void/db-sqlite is a plugin an application composes, so
+  the application declares it. The suite this generator writes boots
+  that driver — so on a tree that has only void, the generated suite
+  fails on its first import, with the driver's own (good) message and
+  no hint that a generator caused it.``
+  {:void/db-sqlite "https://github.com/janet-lang/sqlite3.git"})
+
+(defn auth-report
+  ``The lines `void make auth` prints after it has written its files:
+  the three edits it did not make, in the order they have to happen.
+  A pure function of the spec, so a test can read what a person is
+  told rather than only what was written to disk.``
+  [spec]
+  (def out @[])
+  (defn say [& parts] (array/push out (string ;parts)))
+  (def dep (get driver-dependencies (spec :driver)))
+
+  (say "  none of the three edits below was made for you: `void make` writes")
+  (say "  new files and never rewrites a file you have edited — a generator")
+  (say "  that does is one nobody dares run twice. They are printed instead,")
+  (say "  in the order they have to happen.")
+
+  (var step 0)
+  (defn heading [& parts]
+    (++ step)
+    (say)
+    (say "  " step ". " ;parts))
+
+  (when dep
+    (heading "project.janet — :dependencies")
+    (say)
+    (say "       " (string/format "%q" dep))
+    (say)
+    (say "     " (string/format "%q" (spec :driver)) " is a plugin an application composes, so the")
+    (say "     application installs its library: the void bundle leaves it out on")
+    (say "     purpose (ADR-0011). Without this line, on a tree that has only")
+    (say "     void, " (spec :test-dir) "/auth-test.janet fails on its first import."))
+
+  (def composition
+    [[(string ":" (spec :plugin)) "the routes, the entity and the pages"]
+     [(string ":void/db " (string/format "%q" (spec :driver)))
+      "the entity layer and a driver, if not there yet"]
+     [":void/crypto" "every hash and every code is minted here (ADR-0022)"]
+     [":void/auth :void/auth-http :void/auth-db"
+      "the identity, the session and the stores"]
+     [":void/security" "the CSRF token the forms already carry"]
+     [":void/mail :void/mail-auth" "what gets a link to the person"]])
+  (def width (max ;(map |(length (first $)) composition)))
+  (heading "main.janet — :plugins")
+  (say)
+  (each [names doc] composition
+    (say "       " names (string/repeat " " (- width (length names))) "  " doc))
+
+  (heading "config/dev.janet (or default.janet)")
+  (say)
+  (say "       {:http {:session {:enabled true}}")
+  (say "        :void/auth-user-store {:impl :auth.db/users}")
+  (say "        :void/auth-token-store {:impl :auth.db/tokens}")
+  (say "        :void/auth-challenge-store {:impl :auth.db/challenges}")
+  (say "        :auth-db {:users {:table " (string/format "%q" (spec :table))
+       " :subject-kind " (string/format "%q" (spec :name)))
+  (say "                          :email-column \"email\"")
+  (say "                          :password-column \"password_hash\"")
+  (say "                          :claims-columns [\"email\"]}}")
+  (say "        :auth-http {:unauthenticated :redirect :login-path \"/login\"}")
+  (say "        :mail-auth {:link-path " (string/format "%q" (spec :link-path)) "}")
+  (say "        :mail {:transport :file :base-url \"http://localhost:8080\"")
+  (say "               :from \"" (spec :project) " <no-reply@" (spec :project) ".example>\"}")
+  (say "        :security {:csp {:policy {:default-src [:self]")
+  (say "                                  :script-src [:self \"https://unpkg.com\"]")
+  (say "                                  :base-uri [:self]")
+  (say "                                  :form-action [:self]")
+  (say "                                  :frame-ancestors [:none]")
+  (say "                                  :object-src [:none]")
+  (say "                                  :img-src [:self \"data:\"]}}}}")
+  (say)
+  (say "     The last key is there because this generator put :void/security in")
+  (say "     the composition above, and its default policy is `default-src")
+  (say "     'self'` — which refuses the htmx `void new` loads from unpkg. The")
+  (say "     browser says so in its console and nowhere else, so the line is")
+  (say "     printed here rather than found later. `:policy` replaces the")
+  (say "     defaults rather than merging into them (half a policy is a")
+  (say "     different policy), which is why the whole of it is written out;")
+  (say "     serve htmx from your own assets and `:script-src [:self]` is the")
+  (say "     only line that changes.")
+
+  (say)
+  (say "  a challenge nobody delivered is an error (ADR-0023 §7): without")
+  (say "  :void/mail-auth — or a :void.auth/deliver of your own — registering")
+  (say "  and resetting raise rather than mail nothing.")
+  (say)
+  (say "  then:")
+  (say)
+  (when dep (say "    jpm --local deps         # the driver's library"))
+  (say "    void db migrate")
+  (say "    void dev                 # /register")
+  (say)
+  (tuple ;out))
+
 (defn auth
   ``The body of `void make auth [NAME] [field:type ...]`.
 
@@ -1823,51 +1951,8 @@
     (spit (p :path) (p :body))
     (print "  created " (p :path) (if (p :source) (string "  (via " (p :source) ")") "")))
 
-  # what is *not* done, said in full: `make` does not edit main.janet
-  # or a config file (see the module header). The composition and the
-  # config slice below are what the generated suite boots with, printed
-  # rather than written into files somebody has already edited.
-  (def composition
-    [[(string ":" (spec :plugin)) "the routes, the entity and the pages"]
-     [(string ":void/db " (string/format "%q" (spec :driver)))
-      "the entity layer and a driver, if not there yet"]
-     [":void/crypto" "every hash and every code is minted here (ADR-0022)"]
-     [":void/auth :void/auth-http :void/auth-db"
-      "the identity, the session and the stores"]
-     [":void/security" "the CSRF token the forms already carry"]
-     [":void/mail :void/mail-auth" "what gets a link to the person"]])
-  (def width (max ;(map |(length (first $)) composition)))
   (print)
-  (print "  add to :plugins in main.janet:")
-  (print)
-  (each [names doc] composition
-    (printf "    %s%s  %s" names (string/repeat " " (- width (length names))) doc))
-  (print)
-  (print "  and to config/dev.janet (or default.janet):")
-  (print)
-  (print "    {:http {:session {:enabled true}}")
-  (print "     :void/auth-user-store {:impl :auth.db/users}")
-  (print "     :void/auth-token-store {:impl :auth.db/tokens}")
-  (print "     :void/auth-challenge-store {:impl :auth.db/challenges}")
-  (printf "     :auth-db {:users {:table %q :subject-kind %q"
-          (spec :table) (spec :name))
-  (print "                       :email-column \"email\"")
-  (print "                       :password-column \"password_hash\"")
-  (print "                       :claims-columns [\"email\"]}}")
-  (print "     :auth-http {:unauthenticated :redirect :login-path \"/login\"}")
-  (printf "     :mail-auth {:link-path %q}" (spec :link-path))
-  (print "     :mail {:transport :file :base-url \"http://localhost:8080\"")
-  (printf "            :from \"%s <no-reply@%s.example>\"}}" (spec :project) (spec :project))
-  (print)
-  (print "  a challenge nobody delivered is an error (ADR-0023 §7): without")
-  (print "  :void/mail-auth — or a :void.auth/deliver of your own — registering")
-  (print "  and resetting raise rather than mail nothing.")
-  (print)
-  (print "  then:")
-  (print)
-  (print "    void db migrate")
-  (print "    void dev                 # /register")
-  (print)
+  (each line (auth-report spec) (print line))
   (tuple ;(map |($ :path) planned)))
 
 # -- dispatch ------------------------------------------------------------

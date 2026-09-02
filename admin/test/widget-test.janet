@@ -185,9 +185,25 @@
   (def c (test/client boot))
   (assert (= "suggested" (test/text (test/inject c {:uri "/admin/notes/-/w/title/suggest"}))))
 
-  # the widget's stylesheet reaches the page once, through the layout
+  # The widget's stylesheet reaches the page as a *file*, not as an
+  # inline <style>: a composition that adds the back office must not
+  # have to spend `'unsafe-inline'` on somebody else's markup.
   (def page (test/text (test/inject c {:uri "/admin/notes/new"})))
-  (assert (string/find ".from-widget{}" page) "the widget's :assets are in the head")
+  (assert (not (string/find "<style" page))
+          "nothing inline in the head — the sheet is served")
+  (def href
+    (first (peg/match ~(* (thru `<link rel="stylesheet" href="`) (<- (to `"`))) page)))
+  (assert href "the frame links the served sheet")
+  (assert (string/has-prefix? "/admin/-/assets/admin-" href)
+          "...under the admin prefix, fingerprinted")
+  (def sheet (test/inject c {:uri href}))
+  (assert (= 200 (sheet :status)))
+  (assert (string/find ".from-widget{}" (test/text sheet))
+          "and the widget's :assets are in it")
+  (assert (string/find "immutable" (get-in sheet [:headers "cache-control"]))
+          "the URL carries the content's crc32, so the response never expires")
+  (assert (string/has-prefix? "private" (get-in sheet [:headers "cache-control"]))
+          "...and it is behind the admin's gate, so no shared cache keeps it")
 
   # -- the link widget picks its shape from the size of the target ------
   #

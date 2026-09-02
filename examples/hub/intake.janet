@@ -331,8 +331,17 @@
 (router/defroutes :hub/intake-routes
   # No CSRF token and no session: the caller is a machine with a
   # signature, and this route is the one place in the application where
-  # that is the whole of the authentication
-  (POST "/in/:source" receive {:name :intake/receive}))
+  # that is the whole of the authentication.
+  #
+  # And the one place that reads more than 64 KiB. GitHub caps a
+  # delivery at 25 MiB; `:void.http/max-body` is `:restrict`, which
+  # binds a route to the metadata layers above it — and there is no
+  # layer above this one, because a source that declares no ceiling
+  # declares none. `[:http :max-body]` is the value a route that says
+  # nothing gets, so every other route in the application keeps 64 KiB
+  # without a word (./config/default.janet)
+  (POST "/in/:source" receive {:name :intake/receive
+                               :void.http/max-body 26214400}))
 
 (plugin/defplugin hub/intake
   :doc "Receive signed webhook deliveries: verify over the raw bytes, keep the bytes in storage, keep what a person filters by in a row, answer 202."

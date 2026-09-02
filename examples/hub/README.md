@@ -75,24 +75,25 @@ meant rather than one rebuilt later.
 
 ```sh
 VOID_HUB__TELEGRAM__TOKEN=123456:AA... VOID_HUB__TELEGRAM__CHAT_ID=... void dev
-void hub work    # in another terminal: the sending half
+void jobs work   # in another terminal: the sending half
 ```
 
 Without a worker the notifications sit in the queue, which is the
 correct amount of nothing to happen — `void jobs stats` shows them
 waiting.
 
-**`void hub work`, not `void jobs work`**, and the reason is worth the
-paragraph. A command starts the components it declares in `:needs` and
-no others — that is what lets `void jobs stats` answer without opening a
-port. `void jobs work` needs `:jobs/queue`, which is true of the worker
-and false of the **jobs**: this application's job is an https delivery,
-and https is `:tls/lib`, a component the queue does not depend on. The
-first live delivery therefore failed five times against a very clear
-message about libssl while `void/tls` sat composed and unstarted in the
-same process. The application knows what its jobs need, so `ops.janet`
-says so in one more line of `:needs`. Whether the framework should learn
-this instead is a task in the roadmap.
+The channel declares `:needs [:tls/lib]`, and that one line is a bug
+this application found. A command starts the components it declares in
+`:needs` and no others — that is what lets `void jobs stats` answer
+without opening a port. `void jobs work` needs `:jobs/queue`, which is
+true of the worker and false of the **work**: an https delivery needs
+`:tls/lib`, a component the queue does not depend on. The first live
+delivery therefore failed five times against a very clear message about
+libssl while `void/tls` sat composed and unstarted in the same process.
+The hub carried its own `void hub work` — the same worker with one more
+line — until the framework learned the general form: a `defjob` (and a
+notify channel) says what its work needs open, and `void jobs work`
+starts the union over the queues it serves.
 
 ## The desk
 
@@ -155,7 +156,7 @@ void hub replay 2                                      # or the row id
 ```
 replaying dbf9a595-2e45-492e-be62-f80881474673 — github push on bondiano/void, 978 bytes
   telegram   queued (job 41)
-run `void hub work` to deliver it
+run `void jobs work` to deliver it
 ```
 
 **Replay routes again; it does not receive again.** Receiving is a
@@ -169,8 +170,7 @@ interesting half runs as many times as it takes.
 
 The command starts three components and no port — the database the row
 is in, the store the bytes are in, and the queue the notification goes
-on — which is the same argument `void hub work` makes below, from the
-other end.
+on — which is the same argument the worker makes from the other end.
 
 ## What makes it different from the other examples
 
@@ -204,61 +204,74 @@ above sets, because `jpm` does not read `JANET_PATH` at all. In CI this
 is the "clean machine" job, the only place where what this example
 proves is true.
 
-## What had to be written by hand
+## What this application sent back
 
 The first commit of this directory is exactly what `void new hub` and
-`void make auth` produced, with nothing touched. Everything below is the
-diff after it — kept as a list because each line is a candidate task for
-the wave, not a note about this application:
+`void make auth` produced, with nothing touched. Everything after it is
+the diff, and six lines of that diff turned out to be about the
+framework rather than about a webhook hub. All six are now closed, and
+they are kept here because "what a real application found" is the only
+honest way to have picked them:
 
 1. **`janet-lang/sqlite3` in `project.janet`.** The bundle leaves the
    driver's library out on purpose (ADR-0011): `void/db-sqlite` is a
    plugin an application lists, so the application installs it. But
-   `void make auth` generates a suite that boots that driver and does
-   not add the dependency — so the generated suite fails on a tree that
-   has only void, with the driver's (good) error message. *Task: the
-   generator that writes a suite against a driver should write the
-   driver's dependency too, or name it in what it prints.*
+   `void make auth` generated a suite that boots that driver and said
+   nothing about the dependency, so the generated suite failed on a tree
+   that has only void — with the driver's (good) message, and no hint
+   that a generator had caused it. *Fixed: the generator names the
+   dependency, the file it goes in, and why the bundle does not carry
+   it.*
 
-2. **The composition and the config block.** `void make auth` prints ten
-   plugins and a config map and asks for them to be pasted into
-   `main.janet` and `config/`. Everything pasted is identical in every
-   application that runs the generator. *Task: decide whether `make
-   auth` edits those two files the way phx.gen.auth does — and if not,
-   say why in the generator's own text rather than in a habit.*
+2. **The composition and the config block.** `void make auth` printed
+   ten plugins and a config map and asked for them to be pasted into
+   `main.janet` and `config/`. *Decided, not automated: `make` writes
+   new files and edits none — phx.gen.auth rewrites a router because it
+   can pattern-match one line of Elixir it wrote itself, and these three
+   files are not that. The decision is now in the generator's own
+   output, along with everything that decision costs the reader.*
 
 3. **The content security policy.** The page `void new` writes loads
    htmx from unpkg; `void make auth` requires `void/security`, whose
    default policy is `default-src 'self'`. Generate both and the result
    is a page whose script the browser refuses, with nothing in the
-   terminal to say so. `config/default.janet` widens the policy the way
-   `examples/shop` does. *Task: serve htmx from the application's own
-   assets in what `void new` writes (the asset pipeline has fingerprinted
-   it since 6.5), or have `make auth` name the policy line.*
+   terminal to say so. *Fixed: `make auth` prints the policy block it
+   just made necessary. `config/default.janet` here is a paste of it.*
 
-4. **The admin's stylesheet is inline, and the default CSP refuses
-   it.** `void/admin`'s layout writes its stylesheet into the page as a
+4. **The admin's stylesheet was inline, and the default CSP refused
+   it.** `void/admin`'s layout wrote its stylesheet into the page as a
    `<style>` element, which `default-src 'self'` blocks — an unstyled
    desk and a console line, the same shape as the htmx problem above and
-   found the same way. `config/default.janet` adds
-   `:style-src [:self :unsafe-inline]`. *Task: serve the admin's
-   stylesheet as an asset (fingerprinted since 6.5) or mint a nonce for
-   it, so that composing the back office does not cost an application
-   the strictest half of its policy.*
+   found the same way. This application paid for it with
+   `:style-src [:self :unsafe-inline]`, the weakest half of its own
+   policy, spent on somebody else's markup. *Fixed: the admin serves its
+   sheet and every widget's assets as two fingerprinted files from its
+   own prefix, so composing the back office costs an application no
+   policy at all. That line is gone from `config/default.janet`.*
 
-5. **The body ceiling is raised for the whole application to serve one
-   route.** GitHub sends up to 25 MiB and `:void.http/max-body` is
-   `:restrict` — a route may lower the application's ceiling and never
-   raise it. So `config/default.janet` lifts it once and every page in
-   the application puts it back down to 64 KiB — the two route sources
-   of its own, and `[:admin :route-meta]` for the thirty routes
-   `void/admin` projects — which is the inverse of what the application
-   means. *Task: decide whether one route may be allowed to
-   raise it (the metadata contract has `:allow?` for exactly this kind
-   of question) — this hub is the first honest case for it.*
+5. **The body ceiling was raised for the whole application to serve one
+   route.** GitHub sends up to 25 MiB, so `config/default.janet` lifted
+   `[:http :max-body]` once and every page-serving route put it back
+   down to 64 KiB — the inverse of what the application means. *Fixed,
+   and the fix was a misreading, which is the interesting part:
+   `:void.http/max-body` is `:restrict` between **metadata** layers
+   (group → route), and `[:http :max-body]` is not one of those layers —
+   it is what a route that declares nothing gets. So the intake route
+   names its own 25 MiB, under no ceiling but its own, and the rest of
+   the application keeps 64 KiB without a word. The contract needed no
+   change; its docstring did, because it read as if the config were an
+   outer layer.*
 
-One more thing came out of building this and is already fixed rather
-than listed: `jpm build` could not link any application composing
+6. **The worker did not know what the jobs need.** A command starts what
+   it declares in `:needs`; `void jobs work` declares `:jobs/queue`,
+   which is true of the worker and false of the work. A telegram
+   delivery is https, and https is `:tls/lib`. *Fixed: `defjob` takes
+   `:needs`, a `:void.notify/channel` takes `:needs`, and `void jobs
+   work` starts the union over the queues it serves. `telegram.janet`
+   says `:needs [:tls/lib]` and `void hub work` no longer exists.*
+
+One more thing came out of building this and was fixed rather than
+listed: `jpm build` could not link any application composing
 `void/html`, because the asset fingerprint held an abstract value in a
 `def` and `jpm build` marshals everything its entry point reaches.
 
@@ -278,8 +291,7 @@ telegram.janet      the notify channel this application wrote — project
 admin.janet         the operator's half: who is an operator, deliveries as
                     a declaration, the raw body behind a signed URL, and
                     `/` as the jobs dashboard
-ops.janet           the two commands an operator runs: `void hub work`,
-                    `void hub replay`
+ops.janet           the command an operator runs: `void hub replay`
 config/             default.janet, then <profile>.janet, then VOID_*, then
                     CLI overrides (`void config explain :mail :transport`)
 db/migrations/      migrations as data, DDL included

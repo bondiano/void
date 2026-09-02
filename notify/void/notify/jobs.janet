@@ -75,7 +75,22 @@
          (set notify/enqueue
               (fn enqueue-notification [channel payload]
                 (jobs/enqueue :notify-deliver channel payload)))
-         (log/info "notifications go through the queue" :ns log-ns :queue queue-name))})
+         # What the delivery needs *open* is a fact about the channels,
+         # not about the queue: `:deliver` runs on a worker, a worker is
+         # a CLI command, and a command starts what it declared and
+         # nothing else. A channel that posts over https says `:tls/lib`
+         # and this is where that reaches the job — the union over the
+         # channels this process delivers on, so `void jobs work` opens
+         # them and a composed-but-unstarted TLS stack stops being five
+         # failed attempts and a message about libssl (ROADMAP 6.6)
+         (def needs
+           (distinct (mapcat |(get (notify/channel-named $) :needs [])
+                             (notify/active))))
+         (unless (empty? needs)
+           (jobs/job-needs! :notify-deliver needs))
+         (log/info "notifications go through the queue" :ns log-ns
+                   :queue queue-name
+                   :needs needs))})
 
 (plugin/defplugin void/notify-jobs
   :doc "Delivery through void/jobs: notify/send queues each channel's projected payload and a worker delivers it, one job per channel so they retry apart — and a final answer from the far end is recorded rather than retried."

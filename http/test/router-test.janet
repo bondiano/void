@@ -31,6 +31,9 @@
    :void.http/timeout (meta/declare-key :void.http/timeout
                         :schema [:number {:min 0}] :merge :restrict
                         :allow? (fn [outer inner] (<= inner outer)))
+   :void.http/max-body (meta/declare-key :void.http/max-body
+                         :schema [:int {:min 0}] :merge :restrict
+                         :allow? (fn [outer inner] (<= inner outer)))
    :app/flag (meta/declare-key :app/flag :schema :boolean)})
 
 # -- build-table: happy path ---------------------------------------------
@@ -93,6 +96,23 @@
         "route layer tightens the global timeout")
 (assert (= 30 (get-in health [:meta :void.http/timeout]))
         "global default reaches other routes")
+
+# :restrict binds a route to the *layers above it* and to nothing else.
+# A source that declares no ceiling declares no ceiling: the one route
+# in an application that has to accept a 25 MiB webhook says so on
+# itself, and the rest of the application keeps [:http :max-body] —
+# which is the server's fallback for a route that names nothing, not an
+# outer metadata layer (examples/hub, ROADMAP 6.6).
+(def raised
+  (router/build-table
+    {:sources [{:name :app
+                :routes (router/routes {}
+                          (router/POST "/in" (fn [_] nil)
+                                       {:name :in/receive
+                                        :void.http/max-body 26214400}))}]
+     :meta-keys meta-keys}))
+(assert (= 26214400 (get-in raised [:by-name :in/receive :meta :void.http/max-body]))
+        "a route under no ceiling names its own")
 
 # middleware chains: phases, :when by metadata, :named opt-in
 (array/clear trace)

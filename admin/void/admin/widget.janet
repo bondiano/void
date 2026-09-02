@@ -9,7 +9,8 @@
 ###   :display  the cell in a list and the row on a detail page
 ###   :filter   the control in the filter panel
 ###   :parse    the string a form submitted -> a domain value
-###   :assets   style/script glued into the layout once per page
+###   :assets   style/script the admin serves as a fingerprinted file
+###             (once for the whole back office, not once per page)
 ###   :routes   the widget's own server routes — FK autocomplete needs
 ###             an endpoint, and a widget that cannot ask for one turns
 ###             autocompletion into a feature of the core
@@ -361,8 +362,8 @@
   (truthy? (some |(= :multipart (get-in $ [:widget :encoding])) (or entries []))))
 
 (defn assets
-  "The {:style :script} of every distinct widget a page used — glued
-  into the layout once per widget name, not once per control."
+  "The {:style :script} of every distinct widget a page used — once per
+  widget name, not once per control."
   [entries]
   (def seen @{})
   (def out @[])
@@ -373,3 +374,23 @@
         (put seen (w :name) true)
         (array/push out [(w :name) a]))))
   out)
+
+(defn all-assets
+  ``The `:assets` of every distinct widget in the whole resolution —
+  the argument is the mount's `rname -> entries` table, not one
+  resource's.
+
+  The admin serves them as two files rather than writing them into
+  each page (./view), and a file that is the same on every page is a
+  file the browser fetches once. Ordering is by widget name so that
+  two boots of the same composition produce the same bytes and
+  therefore the same fingerprint.``
+  [resolved]
+  (def seen @{})
+  (def out @[])
+  (each rname (sorted (keys resolved))
+    (each [wname a] (assets (get resolved rname {}))
+      (unless (in seen wname)
+        (put seen wname true)
+        (array/push out [wname a]))))
+  (sorted-by first out))

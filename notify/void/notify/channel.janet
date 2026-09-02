@@ -71,7 +71,19 @@
   (unless (or (nil? (get c :address)) (keyword? (get c :address)))
     (errorf "channel %q: :address names a key of :to and must be a keyword, got %q"
             (get c :name) (get c :address)))
-  (merge {:doc nil :address nil :project nil :permanent? nil :health nil} c))
+  # what `:deliver` needs open where it runs. The split is the reason
+  # the key exists: `:project` runs on the request fiber, inside an
+  # application whose components are all up, and `:deliver` runs on a
+  # worker started by a command that opened exactly what it named. A
+  # channel that posts over https needs `:tls/lib` there, and only the
+  # channel knows that (ADR-0040 §3)
+  (unless (or (nil? (get c :needs))
+              (and (indexed? (get c :needs)) (all keyword? (get c :needs))))
+    (errorf "channel %q: :needs is a list of component keys, got %q"
+            (get c :name) (get c :needs)))
+  (merge {:doc nil :address nil :project nil :permanent? nil :health nil
+          :needs []}
+         c))
 
 (defn project
   ``The payload a channel is delivered, or nil when the notification

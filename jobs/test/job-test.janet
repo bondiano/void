@@ -116,4 +116,40 @@
 (assert (= "t-9" (job/group-key (job/lookup :per-tenant) [9 :x] {}))
         "a group derived from the arguments is where a tenant id lives")
 
+# -- :needs — what the *work* needs open, not what the worker does -------
+#
+# A worker is a CLI command and a command starts what it declared. The
+# queue is what the worker needs; `:tls/lib` is what an https delivery
+# needs, and only the job knows that (examples/hub, ROADMAP 6.6).
+
+(job/defjob posts-somewhere {:queue :notify :needs [:tls/lib]} [x] x)
+(job/defjob writes-a-row {:queue :notify :needs [:db/pool]} [x] x)
+(job/defjob needs-nothing {:queue :mail} [x] x)
+
+(assert (= [:tls/lib] (get-in (job/lookup :posts-somewhere) [:opts :needs]))
+        "a definition keeps what it declared")
+(assert (= [:tls/lib :db/pool] (job/needs [:notify]))
+        "the worker starts the union over the queues it serves")
+(assert (= [] (job/needs [:mail]))
+        "and nothing for a queue whose jobs need nothing")
+(assert (index-of :tls/lib (job/needs))
+        "no queue list is every definition — what a worker with no --queues serves")
+
+(job/defjob on-the-default-queue {:needs [:cache/store]} [x] x)
+(assert (index-of :cache/store (job/needs [:default]))
+        "a job that named no queue is on the default one")
+(assert (index-of :cache/store (job/needs [:other] :other))
+        "...whichever queue the running queue calls default")
+
+(def [nok nerr] (protect (job/normalize-opts "job :x" {:needs [:a "b"]})))
+(assert (not nok) "a need that is not a component key is refused")
+(assert (string/find ":needs" (string nerr)))
+
+(assert (= [:tls/lib :db/pool] (job/needs! :posts-somewhere [:db/pool :tls/lib]))
+        "needs! adds without duplicating, and keeps the order it was told")
+(assert (= [:tls/lib :db/pool] (get-in (job/lookup :posts-somewhere) [:opts :needs]))
+        "...on the definition the worker will read")
+(def [uok uerr] (protect (job/needs! :no-such-job [:x])))
+(assert (not uok) "a plugin naming a job that does not exist says so at boot")
+
 (print "job-test ok")
