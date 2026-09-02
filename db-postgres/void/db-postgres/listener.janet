@@ -278,13 +278,15 @@
   l)
 
 (defn stop!
-  ``Stop the listener and close its connection. The listening fiber
-  notices at its next turn, which `interrupt!` makes immediate.``
+  ``Stop the listener. Only the listening fiber may touch the
+  connection — closing it from here (another fiber) while it is parked
+  in `sync-subscriptions!` or `connect!` would free a PGconn out from
+  under it, a use-after-free. So this only sets `:stopped` and wakes the
+  fiber (`nudge!`); the fiber closes the connection and clears `:running`
+  as it leaves `run`.``
   [l]
   (put l :stopped true)
   (nudge! l)
-  (drop-connection! l)
-  (put l :running false)
   l)
 
 # -- sending -------------------------------------------------------------

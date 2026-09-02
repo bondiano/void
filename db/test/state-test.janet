@@ -1,8 +1,13 @@
 (import ../test-support/paths)
 (import ../test-support/fake-driver :as fake)
+(import void/core/log :as log)
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
 (import void/db/state :as db)
+
+# the cancel test deliberately drives a query to its error path; keep the
+# funnel's "db query failed" line out of the test log
+(log/set-level! "void.db.query" :fatal)
 
 (defn- setup [&opt opts]
   (def [drv st] (fake/make (or opts {})))
@@ -117,5 +122,49 @@
 (def s9 (pool/stats p9))
 (assert (= 2 (s9 :queries)) "queries are counted")
 (assert (>= (s9 :query-us) 0) "query time is measured")
+
+# -- H1: a fiber cancelled mid-query never pools the connection dirty ----
+
+(def gate (ev/chan 1))
+(def [pc stc] (setup {:gate gate}))
+(def csup (ev/chan 1))
+# the query parks inside the driver (on the gate) with the connection
+# checked out and mid-protocol
+(def qf (ev/go (fn [] (with-db pc (db/query {:select [:*] :from "users"})))
+               nil csup))
+(ev/sleep 0.02)
+(assert (= 1 ((pool/stats pc) :in-use)) "the query holds its connection")
+(ev/cancel qf :timed-out)
+(ev/take csup)
+(def sc (pool/stats pc))
+(assert (= 1 (stc :closed)) "the cancelled connection was closed, not returned")
+(assert (zero? (sc :created)) "and its pool slot was freed")
+(assert (zero? (sc :idle)) "nothing dirty was left idle")
+(assert (zero? (sc :in-use)) "and nothing was left in use")
+# the pool is fully usable afterwards: a fresh checkout opens a new
+# connection and completes
+(ev/give gate :go)
+(with-db pc
+  (assert (empty? (db/query {:select [:*] :from "users"}))
+          "the pool serves a fresh query after the cancel"))
+
+# -- H5: ev/go inherits the db dyns; db/detached severs them -------------
+
+(def [pd _] (setup))
+(with-db pd
+  (db/with-conn
+    # a child fiber that inherits the parent's connection dyn is refused
+    # rather than allowed to race the parent on one connection
+    (def bad-sup (ev/chan 1))
+    (ev/go (fn [] (db/query {:select [:*] :from "shared"})) nil bad-sup)
+    (def [bad-status _] (ev/take bad-sup))
+    (assert (= :error bad-status)
+            "a child sharing the inherited connection is refused")
+    # db/detached gives the child its own checkout, which succeeds
+    (def ok-sup (ev/chan 1))
+    (ev/go (fn [] (db/detached (db/query {:select [:*] :from "own"}))) nil ok-sup)
+    (def [ok-status _] (ev/take ok-sup))
+    (assert (= :ok ok-status)
+            "a detached child checks out a connection of its own")))
 
 (print "state-test: ok")

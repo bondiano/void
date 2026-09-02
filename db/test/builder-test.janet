@@ -177,6 +177,36 @@
 (assert (not (first (protect (sql/format {:create-index "i" :columns [:a]}))))
         ":create-index needs :on")
 
+# -- DDL string DEFAULT: MySQL escapes the backslash too (M1) ------------
+
+# a value carrying `\'`: on a backslash-escaping dialect the `\` must be
+# doubled, or `\'` reads as an escaped quote, the next `'` closes the
+# string, and the tail becomes bare SQL
+(def backslash-default
+  {:create-table "t" :columns [[:a :text {:default `a\' , (select 1)`}]]})
+(def [ddl-my] (sql/format backslash-default :mysql))
+(assert (string/find "DEFAULT 'a\\\\'' , (select 1)'" ddl-my)
+        "mysql doubles both the backslash and the quote in a DDL default")
+(def [ddl-pg2] (sql/format backslash-default :postgres))
+(assert (string/find "DEFAULT 'a\\'' , (select 1)'" ddl-pg2)
+        "a non-backslash dialect doubles only the quote (a backslash is literal there)")
+(assert (string/find `DEFAULT 'C:\\tmp'`
+                     ((sql/format {:create-table "t"
+                                   :columns [[:p :text {:default `C:\tmp`}]]} :mysql) 0))
+        "and a harmless Windows path still compiles to valid MySQL DDL")
+
+# -- [:col name]: an exact column identifier, never snake_cased (M2) ------
+
+(def [col-s col-p]
+  (sql/format {:select [[:col "createdAt"]] :from "t"
+               :where [:= [:col "createdAt"] 5]} :postgres))
+(assert (= `SELECT "createdAt" FROM "t" WHERE "createdAt" = $1` col-s)
+        "[:col name] quotes the name verbatim on both sides, no snake")
+(assert (deep= [5] col-p) "and the data operand stays a parameter")
+(assert (= `SELECT "created_at" FROM "t"`
+           ((sql/format {:select [:createdAt] :from "t"} :postgres) 0))
+        "a keyword column still snakes — [:col ...] is the opt-out")
+
 # -- rejected statements -------------------------------------------------
 
 (assert (not (first (protect (sql/format {:select [:*]})))) "select needs :from")

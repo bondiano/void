@@ -221,6 +221,10 @@
       :close (fn pg-close [h] (close-handle h))
       :execute (fn pg-execute [h sql params &opt o] (run h sql params o))
       :ping (fn pg-ping [h] (conn/ping (ensure! h "ping")))
+      # a connection left mid-protocol (a cancelled query, a stream that
+      # threw) must not go back to the pool — the kernel asks this on
+      # every checkin (see void/db/state)
+      :reusable? (fn pg-reusable [h] (and (h :conn) (conn/reusable? (h :conn)) true))
 
       :begin
       (fn pg-begin [h &opt isolation]

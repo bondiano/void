@@ -101,6 +101,10 @@
            # own last give
            :resp (ev/thread-chan 4)
            :busy false
+           # true from a request being sent until its reply is consumed;
+           # a cancel between the two leaves it set, marking the reply
+           # still on the wire so the connection is not reused (reusable?)
+           :pending false
            :open false
            :closed false
            :in-tx false
@@ -123,6 +127,12 @@
   "The worker's next answer, or an error saying the thread is gone."
   [h what]
   (def message (ev/take (h :resp)))
+  # the response is off the channel now, so the channel is drained even
+  # if we are about to raise a query error below. A cancel parks at the
+  # ev/take above and never reaches here, leaving :pending set so the
+  # connection — with the worker's reply still to come — is discarded
+  # rather than pooled for the next owner to read (see `reusable?`)
+  (put h :pending false)
   (cond
     (nil? message)
     (do (put h :open false)
@@ -148,6 +158,11 @@
   [h command what]
   (unless (h :open)
     (errorf "mysql: this connection is closed (%s)" what))
+  (when (h :pending)
+    (errorf (string "mysql: a previous statement's reply is still outstanding "
+                    "on this connection (%s) — it was abandoned mid-query (a "
+                    "cancel); the connection must be discarded, not reused")
+            what))
   (when (h :busy)
     (errorf (string "mysql: two fibers used one connection at once (%s) — a "
                     "connection is checked out to one fiber, and a query "
@@ -155,6 +170,10 @@
                     "finish there")
             what))
   (put h :busy true)
+  # a request is outstanding from the give until await consumes its
+  # reply; set before the give so a cancel anywhere after it leaves
+  # :pending set (await clears it once the reply is off the channel)
+  (put h :pending true)
   (defer (put h :busy false)
     (ev/give (h :req) command)
     (await h what)))
@@ -180,6 +199,13 @@
   "Is this handle's worker still holding a usable connection?"
   [h]
   (truthy? (h :open)))
+
+(defn reusable?
+  ``Safe to return to the pool? Not while a reply is still outstanding —
+  a query abandoned mid-flight (a cancel) leaves the worker's answer on
+  the channel, and the next owner's `ev/take` would read it.``
+  [h]
+  (and (truthy? (h :open)) (not (h :pending))))
 
 (defn close
   ``Close the connection and end its thread. Safe twice, and safe on a

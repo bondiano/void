@@ -237,6 +237,30 @@
 (assert (= `DELETE FROM "users" WHERE "id" = ?` (get-in (fake/log st) [0 :sql]))
         "delete! by primary key")
 
+# -- a :db/column that is not snake_case is used verbatim (M2) ------------
+
+(entity/defentity Event
+  {:id [:int {:db/pk true}]
+   :created-at [:int {:db/column "createdAt"}]}
+  :db/table "events")
+
+(fake/clear! st)
+(answer {`FROM "events"` [{:id 1 :createdAt 99}]})
+(def ev (entity/find Event 1))
+(def find-sql (get-in (fake/log st) [0 :sql]))
+(assert (string/find `"createdAt"` find-sql)
+        "the column is selected under its exact name, not snake_cased to created_at")
+(assert (not (string/find "created_at" find-sql))
+        "and never as the non-existent snake column")
+(assert (= 99 (ev :created-at))
+        "the exact column read back maps onto the field — no read/write mismatch")
+
+(fake/clear! st)
+(entity/update! Event 1 {:created-at 100})
+(def upd-sql (get-in (fake/log st) [0 :sql]))
+(assert (string/find `SET "createdAt" = ?` upd-sql)
+        "and a write targets the exact column too")
+
 # -- erd is a projection of the same declarations ------------------------
 
 (def diagram (erd/mermaid [:User :Brand :Bet]))

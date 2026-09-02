@@ -94,7 +94,11 @@
         :types (merge ansi-types (get spec :types {}))
         # the one clause an engine can genuinely not express: see
         # `limit-str`
-        :offset-needs-limit (get spec :offset-needs-limit)})
+        :offset-needs-limit (get spec :offset-needs-limit)
+        # does a backslash escape inside a string literal? MySQL's
+        # default, and nobody else's — a DDL DEFAULT that quotes only
+        # `'` would let a `\'` break out of the string (see `literal`)
+        :backslash-escapes (get spec :backslash-escapes)})
   name)
 
 (defn dialect
@@ -152,6 +156,10 @@
 (register-dialect! :mysql
   {:placeholder (fn [_] "?")
    :quote quote-backtick
+   # MySQL treats `\` as an escape inside a string literal (unless the
+   # session runs NO_BACKSLASH_ESCAPES, which void/db-mysql refuses to
+   # serve), so a DDL DEFAULT literal must double it — see `literal`
+   :backslash-escapes true
    # `OFFSET 10` with no LIMIT is a syntax error, and MySQL's own
    # documented workaround is a LIMIT of the largest BIGINT UNSIGNED
    :offset-needs-limit "18446744073709551615"
@@ -193,6 +201,9 @@
 (defn- val? [x]
   (and (indexed? x) (= :val (first x)) (= 2 (length x))))
 
+(defn- col? [x]
+  (and (indexed? x) (= :col (first x)) (= 2 (length x))))
+
 (defn- value-str
   "A value position: always a parameter (or raw passthrough) — keywords
   here are data, not columns."
@@ -203,11 +214,14 @@
     (param! ctx v)))
 
 (defn- operand
-  "An operand of a binary operator: keyword = column, [:val x] = data,
-  [:raw s] = passthrough, anything else a parameter."
+  "An operand of a binary operator: keyword = column (snake-cased),
+  [:col name] = an exact column identifier (quoted verbatim, no snake —
+  how a caller names a column whose spelling is not snake_case), [:val x]
+  = data, [:raw s] = passthrough, anything else a parameter."
   [ctx x]
   (cond
     (keyword? x) (ident (ctx :d) x)
+    (col? x) (ident (ctx :d) (string (in x 1)))
     (raw? x) (raw-sql x)
     (val? x) (param! ctx (in x 1))
     (param! ctx x)))
@@ -467,16 +481,28 @@
   {:cascade "CASCADE" :restrict "RESTRICT" :set-null "SET NULL"
    :set-default "SET DEFAULT" :no-action "NO ACTION"})
 
+(defn- quote-string-literal
+  ``A string as a DDL literal. `'` doubles everywhere; `\` doubles too
+  on a dialect that treats it as an escape (MySQL) — otherwise a value
+  like `a\'` closes the string one character early and the tail becomes
+  bare SQL.``
+  [d s]
+  (def escaped
+    (if (get d :backslash-escapes)
+      (string/replace-all "'" "''" (string/replace-all `\` `\\` s))
+      (string/replace-all "'" "''" s)))
+  (string "'" escaped "'"))
+
 (defn- literal
   "A DDL literal — a DEFAULT is part of the statement, not a parameter."
-  [v]
+  [d v]
   (cond
     (raw? v) (raw-sql v)
     (= null v) "NULL"
     (nil? v) "NULL"
     (boolean? v) (if v "TRUE" "FALSE")
     (number? v) (string v)
-    (bytes? v) (string "'" (string/replace-all "'" "''" (string v)) "'")
+    (bytes? v) (quote-string-literal d (string v))
     (errorf "sql DDL default must be a number, string, boolean or [:raw sql], got %q" v)))
 
 (defn- type-str [d t]
@@ -539,7 +565,7 @@
   # and `{:default false}` is exactly the declaration whose default
   # would then be dropped — silently, into a nullable column
   (when (has-key? opts :default)
-    (array/push parts (string "DEFAULT " (literal (get opts :default)))))
+    (array/push parts (string "DEFAULT " (literal d (get opts :default)))))
   (when-let [r (references-str d opts)] (array/push parts r))
   (string/join parts " "))
 

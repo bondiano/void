@@ -9,6 +9,8 @@
 (import void/db-postgres/libpq :as libpq)
 
 (log/set-level! "void.db" :error)
+# the cancel test drives a query to its error path on purpose
+(log/set-level! "void.db.query" :fatal)
 
 # Everything here needs a real backend: this is the file that says the
 # driver actually drives Postgres, as opposed to building the right
@@ -267,5 +269,43 @@
       # driver has one and the kernel prefers it
       (assert (pos? (get (pool/stats p) :queries)) "the pool counted them")
       (assert (zero? (get (pool/stats p) :timeouts)) "and nothing waited past its deadline"))))
+
+# -- reusable?: a connection left mid-protocol is discarded, not pooled --
+
+(def rh ((drv :connect)))
+(defer ((drv :close) rh)
+  (exec rh "SELECT 1")
+  (assert (conn/reusable? (rh :conn))
+          "a completed query leaves the connection reusable")
+  (def [eok] (protect (exec rh "SELECT * FROM void_no_such_table_xyz")))
+  (assert (not eok) "a bad query raises")
+  (assert (conn/reusable? (rh :conn))
+          "its results are drained, so a query error keeps the connection reusable (no churn)")
+  (def c (rh :conn))
+  (def [sok] (protect (conn/stream c "SELECT generate_series(1,1000) AS i" []
+                                   (fn [_] (error "boom")))))
+  (assert (not sok) "a throwing stream callback surfaces")
+  (assert (not (conn/reusable? c))
+          "and leaves the connection mid-protocol — unusable, for the pool to discard (H6)"))
+
+# -- a query cancelled mid-flight is discarded by the pool (H1) ----------
+
+(def p2 (pool/make drv {:size 1 :checkout-timeout 5}))
+(defer (pool/close-all! p2)
+  (with-dyns [state/pool-dyn p2]
+    (def qsup (ev/chan 1))
+    (def qf (ev/go (fn [] (with-dyns [state/pool-dyn p2]
+                            (db/query-sql ["SELECT pg_sleep(5)" []])))
+                   nil qsup))
+    (ev/sleep 0.2)
+    (assert (= 1 (get (pool/stats p2) :in-use)) "the sleeping query holds the connection")
+    (ev/cancel qf :timed-out)
+    (ev/take qsup)
+    (def s (pool/stats p2))
+    (assert (zero? (s :created))
+            "the connection cancelled mid-query was discarded, freeing its slot")
+    (assert (zero? (s :in-use)) "and nothing was left in use")
+    (assert (= 1 (db/value ["SELECT 1 AS n" []]))
+            "the pool serves a fresh query on a new connection")))
 
 (print "db-postgres driver: ok")

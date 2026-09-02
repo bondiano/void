@@ -205,6 +205,10 @@
     :close (fn my-close [h] (close-handle h))
     :execute (fn my-execute [h sql params &opt o] (run h sql params))
     :ping (fn my-ping [h] (conn/ping (ensure! h "ping")))
+    # a query abandoned mid-flight (a cancel) leaves the worker's reply
+    # on the channel; such a connection must not be pooled — the kernel
+    # asks this on every checkin (see void/db/state)
+    :reusable? (fn my-reusable [h] (and (h :conn) (conn/reusable? (h :conn)) true))
 
     # mysql_insert_id, carried out of the write that produced it: it
     # is per connection and per statement, and reading it later — with
@@ -215,8 +219,16 @@
     :begin
     (fn my-begin [h &opt isolation]
       (def stmts (begin-statements isolation tx-mode))
+      # ensure! once, before the first statement — reconnecting between
+      # SET TRANSACTION and START TRANSACTION would silently drop the
+      # isolation level (it applies to the next transaction on the
+      # connection that ran it), so both run on the one connection or
+      # neither does. A connection that dies mid-sequence fails the begin
+      # loudly (the second execute raises), never opens a transaction at
+      # the server's default level
+      (def c (ensure! h "begin"))
       (var res nil)
-      (each sql stmts (set res (conn/execute (ensure! h sql) sql [])))
+      (each sql stmts (set res (conn/execute c sql [])))
       (put h :in-tx true)
       res)
 
