@@ -49,7 +49,14 @@
        :needs [:app/service]
        :fn (fn [service & args]
              (array/push log [:ran (service :name) ;args])
-             :done)}]}))
+             :done)}]
+     # the CLI path runs the whole lifecycle: a plugin that allocated
+     # something in :before-start gets its stop hooks here too
+     :void.core/hooks
+     [{:hook :before-stop :name :test/bs
+       :fn (fn [b] (array/push log :hook-before-stop))}
+      {:hook :after-stop :name :test/as
+       :fn (fn [b] (array/push log :hook-after-stop))}]}))
 
 (def boot (cli/bootstrap-app {:plugins [app] :profile :test}))
 (def cli-commands (plugin/extension boot :void.core/cli))
@@ -59,8 +66,10 @@
         "run-command returns the command's value")
 (assert (deep= log @[:start-dep :start-service
                      [:ran :service "x" "y"]
-                     :stop-service :stop-dep])
-        "only :needs + transitive deps start, in order, and stop in reverse")
+                     :hook-before-stop
+                     :stop-service :stop-dep
+                     :hook-after-stop])
+        "only :needs + transitive deps start, in order, and stop in reverse — inside the stop hooks")
 
 # -- run-command without :needs starts nothing ---------------------------
 
@@ -118,6 +127,33 @@
        :what "rooms"
        :ask (fn [_] {:store :process :shared? :by-design
                      :why "a connection lives where its socket does"})}]}))
+
+# -- load-plugins-fn: void dev asks main for the composition -------------
+#
+# `void dev --profile prod` used to boot the unconditional `app` list —
+# netrepl and the watcher included — while `VOID_PROFILE=prod janet
+# main.janet` filtered them out through `plugins`. One project, one
+# composition per profile: the CLI reads the same function.
+
+(def fake-root (string (or (os/getenv "TMPDIR") "/tmp") "/void-cli-test-" (os/time)))
+(os/mkdir fake-root)
+(spit (string fake-root "/fake-main.janet")
+      (string "(def app {:plugins [:void/http :void/dev]})\n"
+              "(defn plugins [profile]\n"
+              "  (if (= :prod profile)\n"
+              "    (filter |(not= :void/dev $) (app :plugins))\n"
+              "    (app :plugins)))\n"))
+(cli/add-project-paths! fake-root)
+(def pf (cli/load-plugins-fn "fake-main"))
+(assert (function? pf) "main's plugins function is found")
+(assert (deep= (pf :prod) @[:void/http])
+        "and answers the :prod composition — without :void/dev")
+(assert (deep= (freeze (pf :dev)) [:void/http :void/dev])
+        "while :dev keeps the whole list")
+(assert (nil? (cli/load-plugins-fn "no-such-module"))
+        "a missing module is nil, not an error — `app` alone is still a valid main")
+(os/rm (string fake-root "/fake-main.janet"))
+(os/rmdir fake-root)
 
 (def boot3 (cli/bootstrap-app {:plugins [surveyed] :profile :test}))
 (def entries (cli/deploy-check boot3))

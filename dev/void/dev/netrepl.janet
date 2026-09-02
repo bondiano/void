@@ -47,10 +47,16 @@
           "  (plugin/inspect)    who registered what\n"
           "  (config/explain (get (boot) :config) :key ...)\n"))
 
+(def- loopback-hosts
+  {"127.0.0.1" true "localhost" true "::1" true "loopback" true})
+
 (defn start
   "Start the netrepl server from the :netrepl slice of the :dev config
-  ({:enabled :unix :host :port}); a unix socket is the default. Returns
-  the instance table (or {:disabled true})."
+  ({:enabled :unix :host :port :allow-remote}); a unix socket is the
+  default. A TCP :host beyond loopback is refused unless :allow-remote
+  is set — netrepl has no authentication, and a reachable one is a
+  remote eval in the application's address space. Returns the instance
+  table (or {:disabled true})."
   [cfg]
   (def opts (get cfg :netrepl {}))
   (if (= false (get opts :enabled))
@@ -60,14 +66,35 @@
         (if-let [h (get opts :host)]
           [h (string (get opts :port 9365))]
           [:unix (get opts :unix default-unix-path)]))
+      (when (and (not= :unix host)
+                 (not (in loopback-hosts (string host)))
+                 (not (get opts :allow-remote)))
+        (errorf (string "netrepl: refusing to listen on %q — netrepl has no "
+                        "authentication, and beyond loopback that is a remote "
+                        "eval in this process; set [:dev :netrepl :allow-remote] "
+                        "true if that is really what you want")
+                host))
       (when (= :unix host)
         (ensure-parent-dir port)
         # a previous process may have left the socket file behind;
-        # closing a listener never unlinks it
-        (when (os/stat port)
+        # closing a listener never unlinks it. Only ever a socket: a
+        # typo in :unix must not delete a source file
+        (when-let [mode (os/stat port :mode)]
+          (unless (= :socket mode)
+            (errorf "netrepl: %s exists and is not a socket — refusing to delete it (check [:dev :netrepl :unix])"
+                    port))
           (os/rm port)))
       (def env (make-repl-env))
-      (def server (netrepl/server host port env nil welcome))
+      # owner-only from the first instant: the socket is a REPL, and on
+      # a shared machine default permissions hand it to every local user
+      (def server
+        (if (= :unix host)
+          (let [mask (os/umask 8r077)]
+            (defer (os/umask mask)
+              (netrepl/server host port env nil welcome)))
+          (netrepl/server host port env nil welcome)))
+      (when (= :unix host)
+        (os/chmod port 8r700))
       @{:server server :host host :port port :env env})))
 
 (defn stop
@@ -75,7 +102,8 @@
   [inst]
   (when-let [server (get inst :server)]
     (:close server))
-  (when (and (= :unix (get inst :host)) (os/stat (get inst :port)))
+  (when (and (= :unix (get inst :host))
+             (= :socket (os/stat (get inst :port) :mode)))
     (os/rm (inst :port))))
 
 (def component

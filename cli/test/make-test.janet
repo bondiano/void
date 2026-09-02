@@ -150,6 +150,34 @@
   (assert (not (string/find "{:control :textarea}" (slurp "resources/articles.janet")))
           "--force insists, and rewrites from the new spec (no text field, no textarea)")
 
+  # a --force re-run without --version adopts the earlier migration's
+  # timestamp: one CREATE TABLE, not an orphaned pair `void db migrate`
+  # trips over
+  (with-dyns [prompt/interactive-dyn false]
+    (make/resource "Article" "title:string" "--force"))
+  (def article-migrations
+    (filter |(string/has-suffix? "_create_articles.janet" $)
+            (os/dir "db/migrations")))
+  (assert (deep= @["20260101000000_create_articles.janet"] article-migrations)
+          "--force lands on its own earlier migration file")
+
+  # -- flag values are checked before anything is written ------------------
+
+  (each [flag value] [["--dir" "../escaped"] ["--dir" "/tmp/escaped"]
+                      ["--migrations-dir" "db/../../escaped"]
+                      ["--test-dir" "/escaped"]]
+    (assert (not (first (protect
+                          (with-dyns [prompt/interactive-dyn false]
+                            (make/resource "Leak" "title:string" flag value)))))
+            (string flag " " value " is refused — a generator must not write outside the project"))
+    (assert (not (os/stat "../escaped")) "and nothing landed outside"))
+  (assert (not (first (protect (make/resource-spec "post" [] {:plural "../pwn"}))))
+          "--plural must be a word, not a path")
+  (assert (not (first (protect (make/resource-spec "post" [] {:table "../pwn"}))))
+          "--table too")
+  (assert (not (first (protect (make/resource-spec "post" [] {:version "../v"}))))
+          "--version must be a migration timestamp")
+
   # -- --dry-run writes nothing --------------------------------------------
 
   (def out @"")

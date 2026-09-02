@@ -129,6 +129,8 @@
           "one redeem route, because a deliverer builds one URL")
   (assert (string/find ":void.auth/access :required" module)
           "and the routes that need somebody say so rather than leaning on the default")
+  (assert (= 3 (length (string/find-all ":void.security/csrf true" module)))
+          "the three anonymous POSTs (login, register, the reset request) ask for the CSRF check by name — they carry no session cookie, which is exactly the login-CSRF hole")
 
   (def migration (slurp "db/migrations/20260101000000_create_users.janet"))
   (assert (string/find ":create-table \"users\"" migration))

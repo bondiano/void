@@ -15,17 +15,27 @@
 
 # -- pure parts (testable without the component fiber) -------------------
 
+(def default-excludes
+  "Directory names the watcher never descends into: dependency trees
+  and build output hold hundreds of .janet files that change without
+  ever meaning a reload, and scanning them twice a second is CPU spent
+  on nothing."
+  ["jpm_tree" "build" ".git" ".void"])
+
 (defn scan
   "Walk files/directories and snapshot every .janet file:
-  @{realpath modified-time}. Hidden directories are skipped."
-  [paths]
+  @{realpath modified-time}. Hidden directories and directories named
+  in `excludes` (default `default-excludes`) are skipped; a path given
+  explicitly is always walked."
+  [paths &opt excludes]
+  (def skip (tabseq [n :in (or excludes default-excludes)] (string n) true))
   (def out @{})
   (defn walk [p]
     (when-let [st (os/stat p)]
       (case (st :mode)
         :directory
         (each name (sorted (os/dir p))
-          (unless (string/has-prefix? "." name)
+          (unless (or (string/has-prefix? "." name) (in skip name))
             (walk (string p "/" name))))
         :file
         (when (string/has-suffix? ".janet" p)
@@ -64,7 +74,9 @@
   "Component keys to restart after `file` changed: the components of
   every manifest in `boot` whose :source is this file, that hold state
   (:stop or :suspend) and are currently :running — in start order.
-  Everything else is already covered by the env reload."
+  A component a failed restart left down (:restart-pending on the
+  system) counts too: saving the fixed file is the retry. Everything
+  else is already covered by the env reload."
   [boot file]
   (def wanted @{})
   (each m (values (get boot :manifests {}))
@@ -73,8 +85,10 @@
       (each c (m :components)
         (when (or (c :stop) (c :suspend))
           (put wanted (c :key) true)))))
+  (def pending (get-in boot [:system :restart-pending] {}))
   (filter |(and (in wanted $)
-                (= :running (get-in boot [:system :states $])))
+                (or (= :running (get-in boot [:system :states $]))
+                    (in pending $)))
           (get-in boot [:system :order] [])))
 
 (defn apply-changes!
@@ -124,7 +138,7 @@
   boot (plugin/current-boot). Returns the report, or nil when nothing
   changed."
   [inst]
-  (def new (scan (inst :paths)))
+  (def new (scan (inst :paths) (inst :excludes)))
   (def files (changed (inst :snapshot) new))
   (put inst :snapshot new)
   (unless (empty? files)
@@ -135,8 +149,9 @@
 
 (defn start
   "Start the watch loop from the :watch slice of the :dev config
-  ({:enabled :paths :interval}). Returns the instance table (or
-  {:disabled true})."
+  ({:enabled :paths :interval :exclude}). :exclude adds directory
+  names to `default-excludes` rather than replacing them. Returns the
+  instance table (or {:disabled true})."
   [cfg]
   (def opts (get cfg :watch {}))
   (if (= false (get opts :enabled))
@@ -144,10 +159,12 @@
     (do
       (def paths (get opts :paths ["."]))
       (def interval (get opts :interval 0.5))
+      (def excludes (tuple ;default-excludes ;(get opts :exclude [])))
       (def inst @{:paths paths
                   :interval interval
+                  :excludes excludes
                   :running true
-                  :snapshot (scan paths)})
+                  :snapshot (scan paths excludes)})
       (put inst :fiber
            (ev/go (fn watch-loop []
                     (while (inst :running)

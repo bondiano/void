@@ -486,4 +486,26 @@
 (expect-error "alias vs declared point" "itself a declared point"
   |(plugin/bootstrap {:plugins [aliased-owner colliding-owner]}))
 
+# -- a late start! failure stops what it started -------------------------
+#
+# :after-start hooks and deploy/check! run with every component
+# :running; an error there used to escape with the sockets and pools
+# still open and nobody left to stop them (the CLI exits right after).
+
+(def late-log @[])
+(def late-failure
+  (plugin/manifest 'test/late-failure
+    :version "1.0.0"
+    :components [(system/component :late/resource
+                   :start (fn [d c] (array/push late-log :opened) :resource)
+                   :stop (fn [i] (array/push late-log :stopped)))]
+    :contributes {:void.core/hooks
+                  [{:hook :after-start
+                    :name :test/boom
+                    :fn (fn [b] (error "late boom"))}]}))
+(expect-error "the :after-start failure propagates" "late boom"
+  |(plugin/start! {:plugins [late-failure]}))
+(assert (deep= late-log @[:opened :stopped])
+        "the component the boot had already started was stopped before the error escaped")
+
 (print "plugin-test: all assertions passed")

@@ -63,6 +63,20 @@
             module))
   app)
 
+(defn load-plugins-fn
+  ``The app module's optional `plugins` binding — (fn [profile]
+  [...]), the composition function `main` itself calls (the `void new`
+  template filters :void/dev out of :prod there). Reading it here is
+  what keeps `void dev --profile prod` and `VOID_PROFILE=prod janet
+  main.janet` the same application. Nil when the module or the binding
+  is missing, or when it is not a function.``
+  [&opt module]
+  (default module default-app-module)
+  (def [ok env] (protect (require module)))
+  (when ok
+    (def f (get-in env ['plugins :value]))
+    (when (function? f) f)))
+
 # -- command words -------------------------------------------------------
 
 (defn command-words
@@ -104,6 +118,9 @@
   exist, but no component has started. Returns the boot value."
   [app &opt profile]
   (def boot (plugin/bootstrap (boot-opts app profile)))
+  # the CLI path honours [:log] the way run! does (start! configures
+  # the logger for the long-running path)
+  (log/configure! (get-in boot [:config :values :log]) (boot :profile))
   (hooks/run! (boot :hooks) :config-loaded boot)
   (hooks/run! (boot :hooks) :before-start boot)
   boot)
@@ -123,7 +140,16 @@
   (def sys (boot :system))
   (unless (empty? needs)
     (system/start sys needs))
-  (defer (system/stop sys)
+  # the other half of the lifecycle bootstrap-app opened: a plugin that
+  # allocated something in :before-start gets its stop hooks even on
+  # the CLI path, and the async log writers are flushed before exit
+  (defer (do
+           (each e (hooks/run-protected! (boot :hooks) :before-stop boot)
+             (eprint e))
+           (system/stop sys)
+           (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
+             (eprint e))
+           (log/close!))
     (f ;(map |(get-in sys [:instances $]) needs) ;args)))
 
 # -- deploy check --------------------------------------------------------
@@ -244,8 +270,14 @@
             (unless (empty? (drop 1 words))
               (errorf "void dev takes no arguments (got %q) — profile via --profile"
                       (string/join (drop 1 words) " ")))
+            (def prof (or profile :dev))
+            # when main defines a `plugins` function, its answer for
+            # this profile is the composition — the same one `janet
+            # main.janet` builds, not the unconditional `app` list
+            (def plugins-fn (unless app-value (load-plugins-fn (gopts :app))))
             (void/run! (merge (the-app)
-                              {:profile (or profile :dev)})))
+                              (if plugins-fn {:plugins (plugins-fn prof)} {})
+                              {:profile prof})))
     # a built-in rather than a contribution, because void/core owns
     # [:deploy :shape] and void/core is not a plugin (ADR-0030)
     "deploy" (do

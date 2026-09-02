@@ -275,6 +275,57 @@
 (system/start sys9b)
 (assert (= (get (system/instance sys9b :db) :host) "h") "valid config passes the schema")
 
+# the documented common case: the schema is data (a Config struct),
+# validated through void/core/schema exactly like a plugin's
+# :config-schema — not silently skipped for not being callable
+(def sys9c
+  (system/init
+    [(system/component :db
+       :config {:key :database :schema {:host :string}}
+       :start (fn [d c] c))]
+    {:database {:host 123}}))
+(expect-error "a data schema rejects bad config" "schema" |(system/start sys9c))
+
+(def sys9d
+  (system/init
+    [(system/component :db
+       :config {:key :database :schema {:host :string}}
+       :start (fn [d c] c))]
+    {:database {:host "h"}}))
+(system/start sys9d)
+(assert (= (get (system/instance sys9d :db) :host) "h")
+        "a data schema passes valid config through")
+
+# -- a failed restart is remembered and retried --------------------------
+
+(var flaky-broken false)
+(def sys12
+  (system/init
+    [(system/component :flaky
+       :start (fn [d c]
+                (when flaky-broken (error "still broken"))
+                :flaky)
+       :stop (fn [i] nil))
+     (system/component :leaf
+       :deps [:flaky]
+       :start (fn [d c] :leaf)
+       :stop (fn [i] nil))]))
+(system/start sys12)
+(set flaky-broken true)
+(expect-error "the failing restart propagates" "still broken"
+  |(system/restart sys12 :flaky))
+(assert (= :stopped (get-in sys12 [:states :flaky])) "the component is down, honestly")
+(assert (= :stopped (get-in sys12 [:states :leaf])) "and so is its dependent")
+(assert (get-in sys12 [:restart-pending :leaf])
+        "what the failed restart took down is remembered on the system")
+(set flaky-broken false)
+(system/restart sys12 :flaky)
+(assert (= :running (get-in sys12 [:states :flaky])) "the retry brings the component back")
+(assert (= :running (get-in sys12 [:states :leaf]))
+        "and the dependent the failed attempt had left stopped")
+(assert (nil? (sys12 :restart-pending)) "the pending set is cleared on success")
+(system/stop sys12)
+
 # -- subset start (:needs bootstrap for CLI commands) --------------------
 
 (def subset-log @[])

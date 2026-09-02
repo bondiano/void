@@ -7,6 +7,8 @@
 ### All runtime state lives inside the system value itself, fully
 ### inspectable from the REPL (`pp sys`) — no hidden singletons.
 
+(import ./schema :as schema)
+
 (def- allowed-component-keys
   {:key true :doc true :plugin true :scope true
    :deps true :provides true :config true
@@ -268,15 +270,19 @@
 (defn- component-config [comp config]
   (when-let [spec (get comp :config)]
     (def cfg (get config (spec :key)))
-    (when-let [schema (get spec :schema)]
-      (when (callable? schema)
-        (def ok
-          (try (schema cfg)
-            ([e] (errorf "component %q: config %q failed schema validation: %s"
-                         (comp :key) (spec :key) (describe e)))))
-        (when (= ok false)
-          (errorf "component %q: config %q failed schema validation"
-                  (comp :key) (spec :key)))))
+    (when-let [sch (get spec :schema)]
+      # a data schema (the common case — Config structs) validates
+      # through schema/validate, exactly as plugin :config-schema does
+      # (load-boot-config); only a callable is called directly
+      (def validator
+        (if (callable? sch) sch (fn [v] (schema/validate sch v))))
+      (def ok
+        (try (validator cfg)
+          ([e] (errorf "component %q: config %q failed schema validation: %s"
+                       (comp :key) (spec :key) (describe e)))))
+      (when (= ok false)
+        (errorf "component %q: config %q failed schema validation"
+                (comp :key) (spec :key))))
     cfg))
 
 (defn- resolved-deps
@@ -392,38 +398,61 @@
   (filter |(in affected $) (sys :order)))
 
 (defn restart
-  "Stop component `k` and its transitive dependents, then start them
+  ``Stop component `k` and its transitive dependents, then start them
   again — the reloaded workflow. Dependents declaring :suspend/:resume
   are suspended instead of stopped and resumed with freshly resolved
-  deps, keeping their instance alive across the restart."
+  deps, keeping their instance alive across the restart.
+
+  A restart that fails half-way (the new :start throws — a port in
+  TIME_WAIT, code that does not compile) does not lose what it took
+  down: the components it left stopped or suspended are remembered on
+  the system as :restart-pending, and the next `restart` of `k` picks
+  them up again — so a dev-server restart that failed once recovers on
+  the next attempt instead of staying down.``
   [sys k]
   (def comp (get-in sys [:components k]))
   (unless comp
     (errorf "unknown component %q" k))
   (when (= :factory (get comp :scope))
     (errorf "component %q has :factory scope — its instances are not managed by the system" k))
+  (def pending (get sys :restart-pending {}))
   (def affected
-    (filter |(= :running (get-in sys [:states $])) (dependents-of sys k)))
+    (filter |(let [s (get-in sys [:states $])]
+               (or (= :running s) (= :suspended s) (in pending $)))
+            (dependents-of sys k)))
   (each j (reverse affected)
     (def c (get-in sys [:components j]))
-    (if (get c :suspend)
-      (do
-        ((c :suspend) (get-in sys [:instances j]))
-        (put (sys :states) j :suspended))
-      (stop-instance sys j)))
+    # a dependent a previous failed restart already suspended or
+    # stopped is left as it is — it only needs the start half below
+    (when (= :running (get-in sys [:states j]))
+      (if (get c :suspend)
+        (do
+          ((c :suspend) (get-in sys [:instances j]))
+          (put (sys :states) j :suspended))
+        (stop-instance sys j))))
   (when (= :running (get-in sys [:states k]))
     (stop-instance sys k))
-  (put (sys :instances) k (start-instance sys k))
-  (put (sys :states) k :running)
-  (each j affected
-    (def c (get-in sys [:components j]))
-    (if (= :suspended (get-in sys [:states j]))
-      (put (sys :instances) j
-           ((c :resume) (get-in sys [:instances j])
-                        (resolved-deps sys j)
-                        (component-config c (sys :config))))
-      (put (sys :instances) j (start-instance sys j)))
-    (put (sys :states) j :running))
+  (try
+    (do
+      (put (sys :instances) k (start-instance sys k))
+      (put (sys :states) k :running)
+      (each j affected
+        (def c (get-in sys [:components j]))
+        (if (= :suspended (get-in sys [:states j]))
+          (put (sys :instances) j
+               ((c :resume) (get-in sys [:instances j])
+                            (resolved-deps sys j)
+                            (component-config c (sys :config))))
+          (put (sys :instances) j (start-instance sys j)))
+        (put (sys :states) j :running))
+      (put sys :restart-pending nil))
+    ([e f]
+      (def left @{})
+      (each j [k ;affected]
+        (unless (= :running (get-in sys [:states j]))
+          (put left j true)))
+      (put sys :restart-pending left)
+      (propagate e f)))
   sys)
 
 # -- inspection ----------------------------------------------------------
