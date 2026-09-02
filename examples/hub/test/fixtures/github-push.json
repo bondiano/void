@@ -1,0 +1,36 @@
+{
+  "ref": "refs/heads/main",
+  "before": "9c1f0a2b3d4e5f60718293a4b5c6d7e8f9012345",
+  "after": "1a2b3c4d5e6f708192a3b4c5d6e7f80912345678",
+  "repository": {
+    "id": 892211734,
+    "name": "void",
+    "full_name": "bondiano/void",
+    "private": false,
+    "default_branch": "main"
+  },
+  "pusher": {
+    "name": "bondiano",
+    "email": "bondiano@users.noreply.github.com"
+  },
+  "sender": {
+    "login": "bondiano",
+    "id": 1041902,
+    "type": "User"
+  },
+  "commits": [
+    {
+      "id": "1a2b3c4d5e6f708192a3b4c5d6e7f80912345678",
+      "message": "feat: hub — the receiving end",
+      "timestamp": "2026-09-02T09:14:11+07:00",
+      "author": { "name": "bondiano", "email": "bondiano@users.noreply.github.com" },
+      "added": ["examples/hub/intake.janet"],
+      "removed": [],
+      "modified": ["examples/hub/main.janet"]
+    }
+  ],
+  "head_commit": {
+    "id": "1a2b3c4d5e6f708192a3b4c5d6e7f80912345678",
+    "message": "feat: hub — the receiving end"
+  }
+}

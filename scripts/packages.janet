@@ -526,6 +526,15 @@
            # keeps people in, the CSRF token its forms carry, and the
            # deliverer a challenge refuses to live without (ADR-0023 §7)
            :void/crypto :void/auth :void/security :void/mail
+           # the receiving end: the raw body of every delivery goes to a
+           # store (ADR-0039) and the burst it arrives in is shed rather
+           # than queued in the kernel
+           :void/storage :void/pressure
+           # and the sending end: rules pick channels, void/notify fans
+           # out over them, the queue (in the same database as the
+           # deliveries) carries the delivery, and void/tls is what an
+           # https bot API needs (ADR-0040, ADR-0038)
+           :void/jobs :void/notify :void/tls
            :void/dev :void/cli]
     :example true :installed true :jpm [:spork :sqlite3]}})
 

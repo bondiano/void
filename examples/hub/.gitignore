@@ -1,3 +1,10 @@
 .void/
 jpm_tree/
 build/
+
+# the :file mail transport's outbox — letters this application delivered
+# to a directory because the dev profile has no mail server behind it
+tmp/
+
+# the dev store: delivery bodies under [:storage :local :root]
+storage/
