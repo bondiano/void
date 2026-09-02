@@ -98,8 +98,10 @@
 (defn generate
   ``A fresh key for an upload: `<prefix>/<yyyy>/<mm>/<token><.ext>`.
   opts: :prefix (default "uploads" — sanitized segments, so a prefix is
-  data too), :filename (only its extension survives, see the module
-  docstring), :now (seconds, for tests).``
+  data too), :ext (the extension to use, dot included — what a caller
+  who derived the type by other means than the filename passes; "" for
+  none), :filename (only its extension survives, see the module
+  docstring; :ext wins over it), :now (seconds, for tests).``
   [&opt opts]
   (default opts {})
   (def prefix
@@ -109,8 +111,15 @@
       (string/join (filter |(not (empty? $)) (map clean (string/split "/" p)))
                    "/")))
   (def d (os/date (get opts :now (os/time))))
+  (def ext
+    # :ext is a caller's word for what the object *is* (upload derives
+    # it from the declared content type); a filename is only consulted
+    # without one — and either way it is cleaned like any extension
+    (if-let [e (get opts :ext)]
+      (extension (string "x" e))
+      (extension (get opts :filename))))
   (check!
     (string (if (empty? prefix) "uploads" prefix)
             "/" (string/format "%04d/%02d" (d :year) (inc (d :month)))
             "/" (token)
-            (extension (get opts :filename)))))
+            ext)))

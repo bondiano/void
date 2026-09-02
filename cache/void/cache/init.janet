@@ -271,12 +271,13 @@
 (plugin/contribute! :void.core/cli
   {:name :cache/clear
    :read-only? false
-   :doc "Drop everything under the cache prefix: void cache clear"
+   :doc "Drop everything under the cache prefix: void cache clear (--everything when the prefix is empty and every key is meant)"
    :needs [:cache/store]
    :fn (fn cli-clear [c & args]
-         (unless (empty? args)
-           (errorf "void cache clear takes no arguments (got %q)" (string/join args " ")))
-         (def n (with-cache c state/clear!))
+         (def everything (deep= args @["--everything"]))
+         (unless (or (empty? args) everything)
+           (errorf "void cache clear takes no arguments but --everything (got %q)" (string/join args " ")))
+         (def n (with-cache c (fn [] (state/clear! (when everything :everything)))))
          (printf "dropped %d %s under %q"
                  n (if (= 1 n) "entry" "entries") (c :prefix)))})
 

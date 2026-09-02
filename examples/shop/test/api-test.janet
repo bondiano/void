@@ -118,16 +118,17 @@
   (defn- price-of [payload sku]
     (get-in (find |(= sku ($ :sku)) (payload :data)) [:price :cents]))
 
-  # A response that sets a cookie is never stored in a shared cache —
-  # void/cache-http refuses, and it is right to: the entry would be
-  # served to the next visitor with somebody else's cookie in it. The
-  # first response to a browser carries the CSRF cookie void/security
-  # sets, so the entry appears on the second request and is served from
-  # the third.
-  (assert (= "MISS" (get-in (test/inject c {:uri "/api/products"}) [:headers "x-cache"])))
+  # The cache sits inside authz (phase 5500), and void/security
+  # decorates the response *outside* it — so what the cache stores never
+  # carries the CSRF cookie, and the very first request of this suite
+  # already stored the entry. A request carrying a cookie would skip the
+  # shared cache by default; the index opts out with :vary-cookie false
+  # because its answer really is the same for everybody (see
+  # catalog.api), which is why the browser's cookie changes nothing
+  # below.
   (def stored (test/inject c {:uri "/api/products"}))
-  (assert (nil? (get-in stored [:headers "set-cookie"]))
-          "the browser now holds the cookie, so this response sets none")
+  (assert (= "HIT" (get-in stored [:headers "x-cache"]))
+          "the first request of the suite stored the entry; this one never reaches a handler")
 
   (db/update! catalog/Product (mug :id) {:price-cents 9999})
   (def cached (test/inject c {:uri "/api/products"}))

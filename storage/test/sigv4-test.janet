@@ -66,6 +66,16 @@
                                  :access-key access :secret-key secret}))
         "which is what the Authorization header carries")
 
+# header values canonicalize by collapsing internal whitespace runs to
+# one space — a value the far end normalizes differently is a
+# signature that does not match
+(def sloppy (sigv4/canonical-request {:method :get :path "/"
+                                      :headers {"host" "iam.amazonaws.com"
+                                                "x-test" "  a   b\t\tc  "}
+                                      :payload-hash (sigv4/hashed-payload "")}))
+(assert (string/find "x-test:a b c\n" sloppy)
+        "internal whitespace runs collapse to one space, edges trim (SigV4 canonicalization)")
+
 # -- the encodings that are not the kernel's -----------------------------
 
 (assert (= "abc-_.~" (sigv4/uri-encode "abc-_.~"))

@@ -59,13 +59,17 @@
    # `url` without :expires answers the endpoint path
    :public-url [:optional :string]
    :timeout [:optional [:number {:min 0.001}]]
-   :max-object [:optional [:int {:min 1}]]})
+   :max-object [:optional [:int {:min 1}]]
+   # the longest a presigned URL may live — AWS caps X-Amz-Expires at
+   # seven days, and a link that outlives that is a credential
+   :presign-max-expires [:optional [:int {:min 1}]]})
 
 (def defaults
   "Defaults of the [:storage-s3] slice."
   {:region "us-east-1"
    :timeout 30
-   :max-object (* 64 1024 1024)})
+   :max-object (* 64 1024 1024)
+   :presign-max-expires (* 7 24 3600)})
 
 (defn- reveal
   "A credential out of the config: a plain string, or a resolved
@@ -107,12 +111,16 @@
     :access-key (reveal :access-key (cfg :access-key))
     :secret-key (reveal :secret-key (cfg :secret-key))
     :public-url (when-let [p (cfg :public-url)] (string/trimr p "/"))
-    :max-object (cfg :max-object)})
+    :max-object (cfg :max-object)
+    :presign-max-expires (cfg :presign-max-expires)})
 
 (defn- object-path [s k]
-  # raw, then encoded once by canonical-path — the same string is
-  # signed and sent, which is the whole trick of getting SigV4 right
-  (sigv4/canonical-path (string "/" (s :bucket) "/" k)))
+  # the *raw* path — sigv4/canonical-path encodes it, exactly once,
+  # both under the signature and on the wire. Encoding it here too was
+  # the classic SigV4 mistake: the signature covered `%2520` while the
+  # request said `%20`, and every key with a space or a non-ASCII byte
+  # answered 403 SignatureDoesNotMatch
+  (string "/" (s :bucket) "/" k))
 
 (defn- request!
   "One signed request. Returns the client response, whatever the
@@ -138,9 +146,11 @@
                              :service "s3"
                              :access-key (s :access-key)
                              :secret-key (s :secret-key)}))
+  # what the signature covered is canonical-path of the raw path; the
+  # wire carries the same string, so signed == sent
   (client/send! (s :client)
                 {:method method
-                 :target path
+                 :target (sigv4/canonical-path path)
                  :headers headers
                  :body (opts :body)}))
 
@@ -209,10 +219,18 @@
   (defn s3-url [k opts]
     (key/check! k)
     (def path (object-path s k))
+    (def wire-path (sigv4/canonical-path path))
     (if-let [expires (get (or opts {}) :expires)]
       (do
         (unless (and (number? expires) (pos? expires))
           (errorf "storage: :expires must be a positive number of seconds, got %q" expires))
+        (def cap (s :presign-max-expires))
+        (when (> expires cap)
+          (errorf (string "storage: :expires %d is over [:storage-s3 :presign-max-expires] "
+                          "%d — a temporary URL that lives longer is a credential, not a link")
+                  (math/trunc expires) cap))
+        # the query is built over the raw path; canonical-request
+        # encodes it once, and wire-path is that same encoding
         (def q (sigv4/presign-query {:method :get
                                      :path path
                                      :host (s :authority)
@@ -222,10 +240,10 @@
                                      :service "s3"
                                      :access-key (s :access-key)
                                      :secret-key (s :secret-key)}))
-        (string (s :scheme) "://" (s :authority) path "?" (sigv4/canonical-query q)))
+        (string (s :scheme) "://" (s :authority) wire-path "?" (sigv4/canonical-query q)))
       (if-let [public (s :public-url)]
         (string public "/" (sigv4/uri-encode k true))
-        (string (s :scheme) "://" (s :authority) path))))
+        (string (s :scheme) "://" (s :authority) wire-path))))
 
   @{:name :s3
     :shared? true

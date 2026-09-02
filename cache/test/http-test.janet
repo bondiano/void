@@ -37,16 +37,34 @@
   (++ computed)
   (ring/text 200 "uncached"))
 
+(defn capitalized-cookie [req]
+  (++ computed)
+  # a handler that spells the header by hand, the way handlers do
+  (def resp (ring/text 200 "personal"))
+  (put (resp :headers) "Set-Cookie" "sid=xyz")
+  resp)
+
+(defn secret [req]
+  (++ computed)
+  (ring/text 200 "members only"))
+
 (def app-routes
   (router/routes {}
     (router/GET "/rates" 'rates {:name :rates :void.cache/response {:ttl 60}})
     (router/GET "/greet" 'greet {:name :greet
                                  :void.cache/response {:ttl 60 :vary ["accept-language"]}})
     (router/GET "/cookie" 'with-cookie {:name :cookie :void.cache/response {:ttl 60}})
+    (router/GET "/capitalized" 'capitalized-cookie
+                {:name :capitalized :void.cache/response {:ttl 60}})
+    (router/GET "/shared" 'rates {:name :shared
+                                  :void.cache/response {:ttl 60 :vary-cookie false}})
     (router/GET "/private" 'private {:name :private :void.cache/response {:ttl 60}})
     (router/GET "/stream" 'streamed {:name :stream :void.cache/response {:ttl 60}})
     (router/GET "/brief" 'rates {:name :brief :void.cache/response {:ttl 0.05}})
     (router/GET "/opted-out" 'rates {:name :opted-out :void.cache/response {:ttl 0}})
+    (router/GET "/secret" 'secret {:name :secret
+                                   :void.cache/response {:ttl 60}
+                                   :test/guarded true})
     (router/GET "/plain" 'plain {:name :plain})))
 
 (def app-manifest
@@ -56,7 +74,25 @@
     :contributes
     {:void.http/route-source [{:name :test/app
                                :routes app-routes
-                               :env (router/env-ref (curenv))}]}))
+                               :env (router/env-ref (curenv))}]
+     # a stand-in for authz enforcement, at authz's own phase (5000):
+     # what the CRITICAL finding needs pinned is the ordering — the
+     # cache (5500) answers *inside* the guard, so a cached page on a
+     # guarded route is never served to a request the guard refuses
+     :void.http/route-meta-key
+     [{:key :test/guarded
+       :schema :boolean
+       :doc "test: this route demands the x-token header"}]
+     :void.http/middleware
+     [{:name :test/enforce
+       :phase 5000
+       :doc "test: refuse requests without x-token, the way authz enforcement would"
+       :when (fn [rmeta] (get rmeta :test/guarded))
+       :wrap (fn [handler]
+               (fn enforce [req]
+                 (if (= "letme" (get-in req [:headers "x-token"]))
+                   (handler req)
+                   @{:status 403 :headers @{} :body "forbidden"})))}]}))
 
 (def plugins [:void/http :void/cache :void/cache-http app-manifest])
 
@@ -140,6 +176,54 @@
   (def authed (http/with-request {:uri "/rates" :headers {"authorization" "Bearer t"}}))
   (assert (= "BYPASS" (get-in authed [:headers "x-cache"]))
           "a request carrying Authorization goes around the cache entirely (RFC 9111 §3.5)")
+
+  (def cookied (http/with-request {:uri "/rates" :headers {"cookie" "sid=abc"}}))
+  (assert (= "BYPASS" (get-in cookied [:headers "x-cache"]))
+          "and so does one carrying a cookie — a cookie is an identity until the route says otherwise")
+
+  (set computed 0)
+  (http/with-request {:uri "/shared" :headers {"cookie" "sid=abc"}})
+  (def shared-again (http/with-request {:uri "/shared" :headers {"cookie" "sid=def"}}))
+  (assert (= "HIT" (get-in shared-again [:headers "x-cache"]))
+          ":vary-cookie false is the route saying its answer does not depend on cookies")
+  (assert (= 1 computed))
+
+  (set computed 0)
+  (http/with-request {:uri "/capitalized"})
+  (assert (= "MISS" (get-in (http/with-request {:uri "/capitalized"}) [:headers "x-cache"]))
+          "a Set-Cookie spelled with capitals refuses storage exactly as a lowercase one")
+  (assert (= 2 computed))
+
+  # -- the key carries the host ------------------------------------------
+
+  (set computed 0)
+  (http/with-request {:uri "/rates" :headers {"host" "a.example"}})
+  (def other-host (http/with-request {:uri "/rates" :headers {"host" "b.example"}}))
+  (assert (= "MISS" (get-in other-host [:headers "x-cache"]))
+          "two virtual hosts behind one process are two caches")
+  (assert (= 2 computed))
+
+  # -- the cache answers inside the guard (the authz ordering) -----------
+
+  (set computed 0)
+  (def refused (http/with-request {:uri "/secret"}))
+  (assert (= 403 (refused :status)) "the guard refuses an anonymous request")
+  (assert (nil? (get-in refused [:headers "x-cache"]))
+          "and the refusal never touched the cache — the guard is outside it")
+  (assert (= 0 computed))
+
+  (def admitted (http/with-request {:uri "/secret" :headers {"x-token" "letme"}}))
+  (assert (= 200 (admitted :status)))
+  (assert (= "MISS" (get-in admitted [:headers "x-cache"])))
+  (def admitted2 (http/with-request {:uri "/secret" :headers {"x-token" "letme"}}))
+  (assert (= "HIT" (get-in admitted2 [:headers "x-cache"]))
+          "an admitted request enjoys the cache")
+  (assert (= 1 computed))
+
+  (def still-refused (http/with-request {:uri "/secret"}))
+  (assert (= 403 (still-refused :status))
+          "and the entry an admitted request stored is not served to an anonymous one")
+  (assert (not= "members only" (string (still-refused :body))))
 
   # -- ttl ---------------------------------------------------------------
 

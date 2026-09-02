@@ -10,11 +10,13 @@
 ### Three decisions worth naming.
 ###
 ### **The catalog is cached at the response, the storefront is not.**
-### `:void.cache/response {:ttl 30}` on the index means the second
-### request for the same page does not reach a handler at all. That is
-### only sound because this response is the same for everybody — the
-### storefront's HTML carries a cart badge and a name, which is why it
-### caches the *query* instead (./catalog.service).
+### `:void.cache/response {:ttl 30 :vary-cookie false}` on the index
+### means the second request for the same page does not reach a handler
+### at all. That is only sound because this response is the same for
+### everybody — which is also why `:vary-cookie false` is honest here: a
+### request carrying a cookie would otherwise bypass the shared cache by
+### default. The storefront's HTML carries a cart badge and a name,
+### which is why it caches the *query* instead (./catalog.service).
 ###
 ### **The API pages, the storefront does not.** void/rest's convention
 ### (`?page=2&per-page=50&sort=-sku`) is one merge into the query schema
@@ -65,8 +67,10 @@
              :response {200 :ProductList}
              :meta {:void.openapi/summary "List the catalog"
                     # the same answer for everybody, so it is cacheable
-                    # at the response — see the module docstring
-                    :void.cache/response {:ttl 30}}}
+                    # at the response — see the module docstring; a
+                    # browser's cookie changes nothing here, which is
+                    # what :vary-cookie false declares
+                    :void.cache/response {:ttl 30 :vary-cookie false}}}
      :show {:handler 'product-show
             :response {200 :ProductView}
             :meta {:void.openapi/summary "One product"}}}))

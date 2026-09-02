@@ -79,6 +79,23 @@
   (def done (ev/chan 8))
   (each _ (range 4) (ev/go (fn [] (expensive)) nil done))
   (each _ (range 4) (ev/take done))
-  (assert (= 1 concurrent) "four fibers, one computation"))
+  (assert (= 1 concurrent) "four fibers, one computation")
+
+  # a wrapped function may recurse — on other keys, and even on its
+  # own: the leader of a flight computes a re-entered key instead of
+  # parking on itself forever
+  (var fib nil)
+  (set fib (wrap/wrap (fn [n] (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
+                      {:name :fib}))
+  (assert (= 55 (fib 10)) "recursion across keys completes")
+
+  (var depth 0)
+  (var stubborn nil)
+  (set stubborn (wrap/wrap (fn [k] (++ depth) (if (< depth 3) (stubborn k) depth))
+                           # ttl 0: compute without storing, so every
+                           # level is a miss and every level re-enters
+                           {:name :stubborn :ttl 0}))
+  (assert (= 3 (stubborn "x")) "recursion on the same key completes rather than deadlocking")
+  (assert (= 0 (state/in-flight)) "and the key is not poisoned"))
 
 (printf "wrap-test: ok")
