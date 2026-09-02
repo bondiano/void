@@ -345,8 +345,11 @@
 
 (router/defroutes :blog/routes
   (GET "/" home {:void.authz/policy :public})
+  # no :void.db/txn: a route transaction would hold the writer through
+  # the password KDF; the register is one INSERT, and the duplicate
+  # address is the email column's unique index's to refuse
   (POST "/register" register
-        {:name :authors/register :void.authz/policy :public :void.db/txn true})
+        {:name :authors/register :void.authz/policy :public})
   (POST "/sign-in" sign-in {:name :session/create :void.authz/policy :public})
   (POST "/sign-in/magic" request-link
         {:name :session/request-link :void.authz/policy :public})
