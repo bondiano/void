@@ -128,32 +128,34 @@
        :ask (fn [_] {:store :process :shared? :by-design
                      :why "a connection lives where its socket does"})}]}))
 
-# -- load-plugins-fn: void dev asks main for the composition -------------
+# -- resolve-plugins: the :plugins-for contract --------------------------
 #
 # `void dev --profile prod` used to boot the unconditional `app` list —
 # netrepl and the watcher included — while `VOID_PROFILE=prod janet
 # main.janet` filtered them out through `plugins`. One project, one
-# composition per profile: the CLI reads the same function.
+# composition per profile: :plugins-for is the explicit contract both
+# `run!` and every CLI command resolve — never a guess at the signature
+# of some binding in main.janet (a real application's `plugins` may
+# take a database, not a profile — examples/shop's does).
 
-(def fake-root (string (or (os/getenv "TMPDIR") "/tmp") "/void-cli-test-" (os/time)))
-(os/mkdir fake-root)
-(spit (string fake-root "/fake-main.janet")
-      (string "(def app {:plugins [:void/http :void/dev]})\n"
-              "(defn plugins [profile]\n"
-              "  (if (= :prod profile)\n"
-              "    (filter |(not= :void/dev $) (app :plugins))\n"
-              "    (app :plugins)))\n"))
-(cli/add-project-paths! fake-root)
-(def pf (cli/load-plugins-fn "fake-main"))
-(assert (function? pf) "main's plugins function is found")
-(assert (deep= (pf :prod) @[:void/http])
-        "and answers the :prod composition — without :void/dev")
-(assert (deep= (freeze (pf :dev)) [:void/http :void/dev])
+(def with-fn {:plugins-for (fn [profile]
+                             (if (= :prod profile)
+                               [:void/http]
+                               [:void/http :void/dev]))})
+(assert (deep= (freeze (cli/resolve-plugins with-fn :prod)) [:void/http])
+        ":plugins-for answers the :prod composition — without :void/dev")
+(assert (deep= (freeze (cli/resolve-plugins with-fn :dev)) [:void/http :void/dev])
         "while :dev keeps the whole list")
-(assert (nil? (cli/load-plugins-fn "no-such-module"))
-        "a missing module is nil, not an error — `app` alone is still a valid main")
-(os/rm (string fake-root "/fake-main.janet"))
-(os/rmdir fake-root)
+(assert (deep= (cli/resolve-plugins {:plugins [:void/http]} :prod) [:void/http])
+        "an app with only :plugins keeps its list for every profile")
+(assert (nil? (cli/resolve-plugins {} :dev))
+        "neither key is nil, not an error")
+(assert (not (first (protect (cli/resolve-plugins {:plugins-for [:not :a :fn]} :dev))))
+        "a :plugins-for that is not a function is refused with a phrase")
+# boot-opts resolves the same contract, so routes/deploy/lock see the
+# per-profile composition too
+(assert (deep= (freeze ((cli/boot-opts with-fn :prod) :plugins)) [:void/http])
+        "boot-opts asks :plugins-for with the effective profile")
 
 (def boot3 (cli/bootstrap-app {:plugins [surveyed] :profile :test}))
 (def entries (cli/deploy-check boot3))

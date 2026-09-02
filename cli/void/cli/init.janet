@@ -65,19 +65,20 @@
             module))
   app)
 
-(defn load-plugins-fn
-  ``The app module's optional `plugins` binding — (fn [profile]
-  [...]), the composition function `main` itself calls (the `void new`
-  template filters :void/dev out of :prod there). Reading it here is
-  what keeps `void dev --profile prod` and `VOID_PROFILE=prod janet
-  main.janet` the same application. Nil when the module or the binding
-  is missing, or when it is not a function.``
-  [&opt module]
-  (default module default-app-module)
-  (def [ok env] (protect (require module)))
-  (when ok
-    (def f (get-in env ['plugins :value]))
-    (when (function? f) f)))
+(defn resolve-plugins
+  ``The app's composition for a profile. An app that declares
+  :plugins-for — (fn [profile] plugins), the explicit contract run!
+  honors too — is asked; anything else keeps its :plugins list. This
+  is what keeps `void dev --profile prod` and `VOID_PROFILE=prod janet
+  main.janet` the same application, without the CLI guessing at the
+  signature of some binding in main.janet.``
+  [app profile]
+  (if-let [f (get app :plugins-for)]
+    (do
+      (unless (function? f)
+        (errorf ":plugins-for must be (fn [profile] plugins), got %q" f))
+      (f profile))
+    (get app :plugins)))
 
 # -- command words -------------------------------------------------------
 
@@ -102,7 +103,7 @@
 
 # -- app command execution -----------------------------------------------
 
-(defn- boot-opts
+(defn boot-opts
   "Boot options for plugin/bootstrap from the app binding: the
   bootstrap subset of keys (run! extras like :signals are dropped),
   profile overridable from the command line."
@@ -112,6 +113,9 @@
     (unless (nil? (get app k))
       (put opts k (app k))))
   (when profile (put opts :profile profile))
+  (def prof (get opts :profile :dev))
+  (when-let [ps (resolve-plugins app prof)]
+    (put opts :plugins ps))
   opts)
 
 (defn bootstrap-app
@@ -283,13 +287,10 @@
               (errorf "void dev takes no arguments (got %q) — profile via --profile"
                       (string/join (drop 1 words) " ")))
             (def prof (or profile :dev))
-            # when main defines a `plugins` function, its answer for
-            # this profile is the composition — the same one `janet
-            # main.janet` builds, not the unconditional `app` list
-            (def plugins-fn (unless app-value (load-plugins-fn (gopts :app))))
-            (void/run! (merge (the-app)
-                              (if plugins-fn {:plugins (plugins-fn prof)} {})
-                              {:profile prof})))
+            # an app that declares :plugins-for gets its composition
+            # for *this* profile — run! resolves the same key, so
+            # `void dev` and `janet main.janet` cannot drift
+            (void/run! (merge (the-app) {:profile prof})))
     # a built-in rather than a contribution, because void/core owns
     # [:deploy :shape] and void/core is not a plugin (ADR-0030)
     "deploy" (do
