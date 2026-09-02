@@ -34,11 +34,14 @@
 
 # -- the pragma list is what the config says -----------------------------
 
-(assert (deep= @[[:busy_timeout 5000] [:foreign_keys true]
+# the in-C busy handler blocks the loop, so the connection carries a
+# token 100 ms cap for the open-time pragmas and the configured budget
+# is waited out cooperatively in the driver (see driver/run)
+(assert (deep= @[[:busy_timeout 100] [:foreign_keys true]
                  [:journal_mode :wal] [:synchronous :normal]]
                (sqlite/pragmas sqlite/defaults))
-        "the declared defaults become pragmas, in order")
-(assert (deep= @[[:busy_timeout 5000] [:foreign_keys true]]
+        "the declared defaults become pragmas, in order — busy capped at 100")
+(assert (deep= @[[:busy_timeout 100] [:foreign_keys true]]
                (sqlite/pragmas sqlite/defaults true))
         "an in-memory database has no journal and no fsync to configure")
 (assert (deep= @[[:foreign_keys false]]
