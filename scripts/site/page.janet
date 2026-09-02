@@ -25,6 +25,15 @@
 
 (def github "https://github.com/bondiano/void")
 
+(def description
+  "The site-wide description meta/OG tags carry; a page may override
+  it through :description."
+  "void — a batteries-included web framework for Janet: Laravel/Spring-level capabilities, Lisp-idiomatic architecture, everything extensible through plugins.")
+
+(def favicon
+  "An emoji favicon as an inline SVG — no file, no extra request."
+  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕳️</text></svg>")
+
 (def css
   ``The whole stylesheet. One file, no build step, and the dark half
   is the same tokens redefined — the scheme is the reader's, not
@@ -111,6 +120,10 @@ dl.ref dd { margin: .3rem 0 0 0; }
 }
 .tag.ro { color: var(--mark); border-color: var(--mark); }
 .muted { color: var(--muted); }
+pre .tok-comment { color: var(--muted); }
+pre .tok-str { color: var(--mark); }
+pre .tok-kw { color: var(--accent); }
+pre .tok-head { color: var(--accent); font-weight: 600; }
 footer {
   max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem;
   border-top: 1px solid var(--line); color: var(--muted); font-size: .82rem;
@@ -125,19 +138,31 @@ footer {
   `depth` is how many directories below the site root the page lives
   (adr/ pages pass 1), so the shared nav and stylesheet resolve with
   relative links and the site works from any prefix — file://, a
-  project page, a mirror.``
-  [{:title title :here here :depth depth :body body :generated generated}]
+  project page, a mirror. `lang` is the document's language ("en" when
+  absent — SPEC and the ADRs pass "ru"); `description` overrides the
+  site-wide meta/OG description.``
+  [{:title title :here here :depth depth :body body :generated generated
+    :lang lang :description desc}]
   (default depth 0)
+  (default lang "en")
+  (default desc description)
   (def up (string/repeat "../" depth))
+  (def full-title (if (or (nil? title) (= "void" title))
+                    "void"
+                    (string title " · void")))
   (h/render-string
     (h/html5
-      {:lang "en"}
+      {:lang lang}
       [:head
         [:meta {:charset "utf-8"}]
         [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-        [:title (if (or (nil? title) (= "void" title))
-                  "void"
-                  (string title " · void"))]
+        [:title full-title]
+        [:meta {:name "description" :content desc}]
+        [:meta {:property "og:type" :content "website"}]
+        [:meta {:property "og:site_name" :content "void"}]
+        [:meta {:property "og:title" :content full-title}]
+        [:meta {:property "og:description" :content desc}]
+        [:link {:rel "icon" :href favicon}]
         [:link {:rel "stylesheet" :href (string up "style.css")}]]
        [:body
         [:nav

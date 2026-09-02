@@ -9,48 +9,14 @@
 ###
 ###     janet scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md
 
-(defn- add-tree [root]
-  (array/insert module/paths 0 [(string root "/:all:/init.janet") :source])
-  (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
+# The module path is the package graph's, not this file's (ADR-0020):
+# a hand-kept list here is how the registry silently lost the points of
+# every package the list forgot (cli, db-mysql, kafka, tls once were).
+# fdwait's native module comes with it — build it first
+# (cd fdwait && jpm build).
+(import ./packages :as packages)
 
-(add-tree (os/cwd))
-(add-tree (string (os/cwd) "/core"))
-(add-tree (string (os/cwd) "/dev"))
-(add-tree (string (os/cwd) "/http"))
-(add-tree (string (os/cwd) "/html"))
-(add-tree (string (os/cwd) "/htmx"))
-(add-tree (string (os/cwd) "/rest"))
-(add-tree (string (os/cwd) "/openapi"))
-(add-tree (string (os/cwd) "/db"))
-(add-tree (string (os/cwd) "/db-sqlite"))
-(add-tree (string (os/cwd) "/db-postgres"))
-(add-tree (string (os/cwd) "/fdwait"))
-# void/db-postgres reaches libpq through void/fdwait, the monorepo's one
-# native module: build it first (cd fdwait && jpm build).
-(array/insert module/paths 0
-              [(string (os/cwd) "/fdwait/build/:all:.so") :native])
-(add-tree (string (os/cwd) "/redis"))
-(add-tree (string (os/cwd) "/cache"))
-(add-tree (string (os/cwd) "/jobs"))
-(add-tree (string (os/cwd) "/pressure"))
-(add-tree (string (os/cwd) "/obs"))
-(add-tree (string (os/cwd) "/crypto"))
-(add-tree (string (os/cwd) "/auth"))
-(add-tree (string (os/cwd) "/oauth"))
-(add-tree (string (os/cwd) "/i18n"))
-(add-tree (string (os/cwd) "/datastar"))
-(add-tree (string (os/cwd) "/authz"))
-(add-tree (string (os/cwd) "/security"))
-(add-tree (string (os/cwd) "/mail"))
-(add-tree (string (os/cwd) "/bus"))
-(add-tree (string (os/cwd) "/ws"))
-(add-tree (string (os/cwd) "/proto"))
-(add-tree (string (os/cwd) "/grpc"))
-(add-tree (string (os/cwd) "/mcp"))
-(add-tree (string (os/cwd) "/admin"))
-(add-tree (string (os/cwd) "/storage"))
-(add-tree (string (os/cwd) "/notify"))
-(add-tree (string (os/cwd) "/bench"))
+(packages/add-paths (packages/packages))
 
 (import void/core/plugin :as plugin)
 (import void/http/middleware :as mw)
@@ -62,6 +28,7 @@
 (require "void/db/init")
 (require "void/db-sqlite/init")
 (require "void/db-postgres/init")
+(require "void/db-mysql/init")
 (require "void/db/http")
 (require "void/redis/init")
 (require "void/redis/http")
@@ -82,6 +49,7 @@
 (require "void/auth/db")
 (require "void/auth/oauth")
 (require "void/oauth/init")
+(require "void/tls/init")
 (require "void/i18n/init")
 (require "void/datastar/init")
 (require "void/authz/init")
@@ -93,6 +61,8 @@
 (require "void/bus/init")
 (require "void/bus/db")
 (require "void/bus/jobs")
+(require "void/kafka/init")
+(require "void/kafka/bus")
 (require "void/ws/init")
 (require "void/ws/htmx")
 (require "void/proto/init")
@@ -118,17 +88,18 @@
 (def boot
   (plugin/bootstrap
     {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
-               :void/db :void/db-sqlite :void/db-postgres :void/db-http
+               :void/db :void/db-sqlite :void/db-postgres :void/db-mysql :void/db-http
                :void/redis :void/redis-http
                :void/cache :void/cache-redis :void/cache-http
                :void/jobs :void/jobs-db :void/jobs-redis
                :void/pressure :void/pressure-http
                :void/obs :void/obs-http :void/obs-otlp
                :void/crypto :void/auth :void/auth-http :void/auth-db :void/auth-oauth
-               :void/oauth :void/i18n :void/datastar
+               :void/oauth :void/tls :void/i18n :void/datastar
                :void/authz :void/authz-http :void/security
                :void/mail :void/mail-jobs :void/mail-auth
                :void/bus :void/bus-db :void/bus-jobs
+               :void/kafka :void/kafka-bus
                :void/ws :void/ws-htmx
                :void/proto :void/grpc
                :void/mcp :void/mcp-http :void/mcp-obs
@@ -137,7 +108,7 @@
                :void/notify :void/notify-mail :void/notify-inapp :void/notify-webhook :void/notify-jobs
                :void/dev :void/bench]
      :profile :dev
-     # two drivers now provide :void/db-driver, two stores provide
+     # three drivers now provide :void/db-driver, two stores provide
      # :void/cache-store, and three backends provide :void/jobs-backend —
      # exactly the ambiguity the kernel refuses to resolve on its own. The
      # gate says which, the way an application's config would (see
@@ -288,7 +259,9 @@
 (p "")
 (p "| Stage | Phase slot | Side |")
 (p "|---|---|---|")
-(each s (sorted-by |(get mw/stage-slots $ 99999) (keys mw/stages))
+# sorted by [slot name] rather than slot alone: the out-of-chain stages
+# share a slot, and table iteration order must not reach a file CI diffs
+(each s (sorted-by |[(get mw/stage-slots $ 99999) (string $)] (keys mw/stages))
   (p "| `%q` | %s | %s |"
      s
      (if-let [slot (get mw/stage-slots s)] (string slot) "— (out of chain)")

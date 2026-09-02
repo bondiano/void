@@ -123,14 +123,20 @@
   out)
 
 (defn- rewrite-links
-  "Apply the link rewriter to every :a in an inline tree."
+  "Apply the link rewriter to every :a in an inline tree — including
+  the ones nested inside :strong/:em, which is where a bold link lives."
   [nodes rewrite]
   (if (nil? rewrite)
     nodes
     (seq [n :in nodes]
-      (if (and (indexed? n) (= :a (first n)))
+      (cond
+        (not (indexed? n))
+        n
+
+        (= :a (first n))
         [:a {:href (rewrite (get-in n [1 :href]))} ;(rewrite-links (array/slice n 2) rewrite)]
-        n))))
+
+        [(first n) ;(rewrite-links (array/slice n 1) rewrite)]))))
 
 # -- slugs ---------------------------------------------------------------
 
@@ -165,7 +171,11 @@
 (def- fence-peg (peg/compile ~(* "```" (capture (any (if-not "\n" 1))) -1)))
 (def- header-peg (peg/compile ~(* (capture (between 1 6 "#")) " " (capture (any 1)))))
 (def- hr-peg (peg/compile ~(* (at-least 3 "-") -1)))
-(def- table-sep-peg (peg/compile ~(* (any (set "|-: ")) "-" (any (set "|-: ")) -1)))
+(def- table-sep-peg
+  # the leading set must not contain "-": `any` is greedy and PEGs do
+  # not backtrack, so a dash in it would be eaten before the mandatory
+  # "-" gets its turn and no separator row would ever match
+  (peg/compile ~(* (any (set "|: ")) "-" (any (set "|-: ")) -1)))
 (def- item-peg
   # indent, marker (bullet or "1."), text
   (peg/compile ~(* (capture (any " "))
@@ -247,6 +257,80 @@
     (++ j))
   [[:blockquote ;(blocks inner rewrite)] j])
 
+(def- delim-bytes
+  "Bytes that end a symbol or keyword in janet source."
+  (tabseq [c :in " \t\n()[]{}\"'`,;"] c true))
+
+(defn- word-end [s i]
+  (var j i)
+  (while (and (< j (length s)) (not (delim-bytes (s j)))) (++ j))
+  j)
+
+(defn- highlight-janet
+  ``A janet code block as hiccup spans: comments, strings, keywords and
+  the head symbol of each form tinted, everything else left as text.
+  A lexer rather than a parser — which is all a code block needs, and
+  the failure direction is untinted text, never wrong text.``
+  [src]
+  (def out @[])
+  (def plain (buffer))
+  (defn flush! []
+    (unless (empty? plain)
+      (array/push out (string plain))
+      (buffer/clear plain)))
+  (defn tok! [cls text]
+    (flush!)
+    (array/push out [:span {:class cls} text]))
+  (var i 0)
+  (while (< i (length src))
+    (def c (src i))
+    (cond
+      # a comment runs to the end of its line
+      (= c 35)                                            # #
+      (let [end (or (string/find "\n" src i) (length src))]
+        (tok! "tok-comment" (string/slice src i end))
+        (set i end))
+
+      # "string", \-escapes included
+      (= c 34)                                            # "
+      (do
+        (var j (inc i))
+        (while (and (< j (length src)) (not= 34 (src j)))
+          (if (= 92 (src j)) (+= j 2) (++ j)))
+        (def end (min (length src) (inc j)))
+        (tok! "tok-str" (string/slice src i end))
+        (set i end))
+
+      # ``long string`` — a backtick run closed by its twin
+      (= c 96)                                            # `
+      (let [open-end (find-run src i)
+            n (- open-end i)
+            close (find-close src open-end n)]
+        (if close
+          (do (tok! "tok-str" (string/slice src i (+ close n)))
+              (set i (+ close n)))
+          (do (buffer/push-byte plain c) (++ i))))
+
+      # :keyword
+      (= c 58)                                            # :
+      (let [end (word-end src (inc i))]
+        (tok! "tok-kw" (string/slice src i end))
+        (set i end))
+
+      # the head symbol of a form
+      (= c 40)                                            # (
+      (do
+        (buffer/push-byte plain c)
+        (++ i)
+        (let [end (word-end src i)]
+          (when (> end i)
+            (tok! "tok-head" (string/slice src i end))
+            (set i end))))
+
+      (do (buffer/push-byte plain c) (++ i))))
+  (flush!)
+  out)
+
 (defn- parse-fence [lines i]
   # matched on the trimmed line: a fence indented under a list item is
   # still a fence, and the indent comes off the body by the same amount
@@ -258,8 +342,9 @@
   (while (and (< j (length lines)) (not (peg/match fence-peg (string/trim (lines j)))))
     (array/push body (dedent (lines j)))
     (++ j))
+  (def text (string (string/join body "\n") "\n"))
   [[:pre [:code (if (empty? lang) {} {:class (string "language-" lang)})
-          (string (string/join body "\n") "\n")]]
+          ;(if (= "janet" lang) (highlight-janet text) [text])]]
    (min (length lines) (inc j))])
 
 (varfn blocks
