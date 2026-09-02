@@ -1,18 +1,25 @@
 # Auto-instrumentation: what installs, what is skipped, what a
-# teardown puts back — and the two built-ins that can be driven
-# without a server behind them (void/cache and the jobs event hook).
+# teardown puts back — the two built-ins that can be driven without a
+# server behind them (void/cache and the jobs event hook), and the db
+# pool one against a live pool.
 
 (import ../test-support/paths)
 (import void/core/log :as log)
 (import void/core/hooks :as hooks)
 (import void/core/system :as system)
 (import void/test :as test)
+(import void/db/pool :as pool)
 (import void/obs/metrics :as metrics)
 (import void/obs/instrument :as instrument)
+(import void/obs/prometheus :as prom)
 (require "void/cache/init")
+(require "void/db/init")
+(require "void/db-sqlite/init")
 
 (log/set-level! "void.obs" :error)
 (log/set-level! "void.cache" :error)
+(log/set-level! "void.db" :error)
+(log/set-level! "void.db.sqlite" :error)
 
 (def empty-boot @{:system (system/init [] {}) :hooks (hooks/registry)})
 
@@ -127,5 +134,54 @@
   (def after (metrics/snapshot))
   (assert (empty? (get-in (first (filter |(= :void.cache/hits-total ($ :name)) after)) [:series]))
           "and a detached instrumentation reports no series rather than the numbers it had when it stopped"))
+
+# -- db: the pool gauges against a live pool -----------------------------
+
+(test/with-system [boot {:plugins [:void/db :void/db-sqlite]
+                         :config {:cli {:log {:level :error}
+                                        :db {:pool {:size 1}}
+                                        :db-sqlite {:path ":memory:"}}}}]
+  (def contribs (filter |(= :void.db/pool ($ :name)) instrument/built-ins))
+  (assert (= 1 (length contribs)) "obs ships the db pool instrumentation itself (see the module docstring)")
+  (def on (instrument/install! boot contribs))
+  (assert (= 1 (length on)) "and it installs when :db/pool is in the composition")
+
+  (def p (system/instance (boot :system) :db/pool))
+  (def held (pool/checkout p))
+  # a second checkout has to park: the pool is at :size with nothing
+  # idle — which is exactly the state the audit wanted a gauge on
+  (ev/go (fn [] (pool/checkin p (pool/checkout p))))
+  (ev/sleep 0.02)
+
+  (defn- pool-gauge [snap name]
+    (get-in (first (filter |(= name ($ :name)) snap)) [:series 0 :value]))
+  (def busy (metrics/snapshot))
+  (assert (= 1 (pool-gauge busy :void.db/pool-size)) "the configured size is a series")
+  (assert (= 1 (pool-gauge busy :void.db/pool-connections)))
+  (assert (= 1 (pool-gauge busy :void.db/pool-in-use)))
+  (assert (zero? (pool-gauge busy :void.db/pool-idle)))
+  (assert (= 1 (pool-gauge busy :void.db/pool-waiting))
+          "the parked fiber is visible while it waits")
+  (assert (zero? (pool-gauge busy :void.db/pool-timeouts-total)) "and it has not timed out")
+
+  # the same numbers reach the text exposition a scraper reads
+  (def text (prom/render busy))
+  (assert (string/find "# TYPE void_db_pool_size gauge" text))
+  (assert (string/find "\nvoid_db_pool_size 1" text))
+  (assert (string/find "\nvoid_db_pool_in_use 1" text))
+  (assert (string/find "\nvoid_db_pool_waiting 1" text))
+
+  # hand the connection over: the parked fiber runs and returns it
+  (pool/checkin p held)
+  (ev/sleep 0.02)
+  (def calm (metrics/snapshot))
+  (assert (zero? (pool-gauge calm :void.db/pool-waiting)))
+  (assert (zero? (pool-gauge calm :void.db/pool-in-use)))
+  (assert (= 1 (pool-gauge calm :void.db/pool-idle)) "the connection is back on the idle stack")
+
+  (instrument/remove! on)
+  (assert (empty? (get-in (first (filter |(= :void.db/pool-size ($ :name)) (metrics/snapshot)))
+                          [:series]))
+          "a detached pool reports no series, not its last numbers"))
 
 (print "instrument-test ok")
