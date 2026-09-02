@@ -368,12 +368,19 @@
       (or (router/dispatch (router/current cell) req)
           (let [allowed (router/allowed-methods (router/current cell) (req :path))]
             (if (empty? allowed)
-              (ring/not-found)
-              (ring/response 405 "405 Method Not Allowed"
-                             @{"allow" (string/join
-                                         (map |(string/ascii-upper (string $)) allowed)
-                                         ", ")
-                               "content-type" "text/plain; charset=utf-8"}))))))
+              # a browser gets the presentable page, everything else the
+              # terse line — the same split the panic guard's floor makes
+              (if (errors/wants-html? req)
+                (errors/prod-page 404)
+                (ring/not-found))
+              (let [allow (string/join
+                            (map |(string/ascii-upper (string $)) allowed)
+                            ", ")]
+                (if (errors/wants-html? req)
+                  (ring/header (errors/prod-page 405) "allow" allow)
+                  (ring/response 405 "405 Method Not Allowed"
+                                 @{"allow" allow
+                                   "content-type" "text/plain; charset=utf-8"}))))))))
   (when static-cfg
     (set h (static/wrap-static h {:root (static-cfg :root)
                                   :prefix (get static-cfg :prefix "/")

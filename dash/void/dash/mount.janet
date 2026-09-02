@@ -70,14 +70,27 @@
 
 # -- the served sheet ----------------------------------------------------
 
-(defn- asset-route []
-  (when-let [b (get (ctx/setting :assets {}) :style)]
-    (def headers {"content-type" "text/css; charset=utf-8"
-                  "cache-control" "private, max-age=31536000, immutable"})
+(defn- asset-route [half type]
+  (when-let [b (get (ctx/setting :assets {}) half)]
     (router/GET (string view/asset-prefix (b :file))
                 (guarded (fn dash-asset [_req]
-                           {:status 200 :headers headers :body (b :body)}))
-                {:name :dash/asset-style})))
+                           # a fresh mutable table per request, never a shared
+                           # struct: the edge middlewares (CSRF's cookie, the
+                           # security headers) *add* headers to whatever a
+                           # handler returns, and a struct here answered every
+                           # composition with void/security a 500 — which is
+                           # an unstyled dashboard, because this route is the
+                           # stylesheet
+                           @{:status 200
+                             :headers @{"content-type" type
+                                        "cache-control" "private, max-age=31536000, immutable"}
+                             :body (b :body)}))
+                {:name (keyword "dash/asset-" (string half))})))
+
+(defn- asset-routes []
+  (filter truthy?
+          [(asset-route :style "text/css; charset=utf-8")
+           (asset-route :script "text/javascript; charset=utf-8")]))
 
 # -- the whole thing -----------------------------------------------------
 
@@ -93,7 +106,7 @@
   (defn add [method pattern handler name]
     (array/push children
                 (router/route method pattern (guarded handler) {:name name})))
-  (when-let [r (asset-route)] (array/push children r))
+  (each r (asset-routes) (array/push children r))
   (add :get "/" pages/overview :dash/overview)
   (add :get "/components" pages/components :dash/components)
   (add :get "/why" pages/why :dash/why)

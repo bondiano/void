@@ -156,10 +156,18 @@
   [half type]
   (when-let [b (get (ctx/setting :assets {}) half)]
     (def body (b :body))
-    (def headers {"content-type" type
-                  "cache-control" "private, max-age=31536000, immutable"})
     (router/GET (string view/asset-prefix (b :file))
-                (fn admin-asset [_req] {:status 200 :headers headers :body body})
+                (fn admin-asset [_req]
+                  # a fresh mutable table per request, never a shared struct:
+                  # the edge middlewares (CSRF's cookie, the security headers)
+                  # add headers to whatever a handler returns, and a struct
+                  # here answered every composition with void/security a 500 —
+                  # an unstyled back office, because these routes are the sheet
+                  # and the widgets' script
+                  @{:status 200
+                    :headers @{"content-type" type
+                               "cache-control" "private, max-age=31536000, immutable"}
+                    :body body})
                 {:name (keyword "admin/asset-" (string half))
                  :void.authz/policy [access-policy]})))
 
