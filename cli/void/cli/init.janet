@@ -33,6 +33,8 @@
 (import ./repl :as repl)
 (import ./make :as make)
 (import ./lock :as lock)
+(import ./doctor :as doctor)
+(import ./services :as services)
 
 (def default-app-module
   "Module the CLI loads to find the application: `main` — the file
@@ -190,6 +192,8 @@
    ["make resource NAME" "scaffold entity + routes + views + migration + tests"]
    ["make auth [NAME]" "scaffold register/login/logout, reset and verify"]
    ["dev" "run the app in the :dev profile (watcher + netrepl by default)"]
+   ["doctor" "is this machine ready? toolchain, libraries, port, socket"]
+   ["services CMD" "dev infrastructure: up|down|status|logs|print (docker compose)"]
    ["repl" "connect to the running app's netrepl (see void repl --help)"]
    ["deploy check" "is this composition fit for [:deploy :shape]?"]
    ["plugins" "print the composition: plugins, points, contribution chains"]
@@ -264,6 +268,14 @@
     # ask: `void make` works in a project whose bootstrap is currently
     # broken, which is often exactly when a file is being added
     "make" (make/create ;(drop 1 words))
+    # a built-in for the strongest form of the same reason: doctor is
+    # the command for the machine where nothing else works — a broken
+    # bootstrap is one of its *rows*, never its crash (every
+    # project-shaped step inside is protected)
+    "doctor" (doctor/run (tuple ;(drop 1 words)) the-app)
+    # likewise before any composition: the dev infrastructure is what a
+    # plugin will *want* running, so it cannot wait for the plugin to boot
+    "services" (services/run (tuple ;(drop 1 words)))
     # the one long-running built-in: the full run!/signals lifecycle in
     # the :dev profile (--profile still wins) — `void new && void dev`
     "dev" (do

@@ -27,10 +27,31 @@
   # -- the skeleton is written -------------------------------------------
   (def files (new/create "sample"))
   (each f ["project.janet" "main.janet" "app.janet"
-           "config/dev.janet" ".gitignore" "README.md"]
+           "config/dev.janet" "config/prod.janet"
+           "docker-compose.dev.yml" "test/smoke-test.janet"
+           ".gitignore" "README.md"]
     (assert (os/stat (string "sample/" f)) (string f " exists")))
   (assert (not (first (protect (new/create "sample"))))
           "an existing directory is refused")
+
+  # the dev compose is infrastructure only — postgres, redis, mailpit —
+  # and never the application as an image: that is the prod form, and it
+  # lives in the examples
+  (def compose (slurp "sample/docker-compose.dev.yml"))
+  (each svc ["postgres" "redis" "mailpit" "healthcheck"]
+    (assert (string/find svc compose) (string "compose runs " svc)))
+  (assert (not (string/find "build:" compose))
+          "no application image in the dev compose")
+  (assert (string/find "54321:5432" compose)
+          "dev ports are non-standard, so a system postgres keeps its own")
+
+  # config/prod.janet is the layer the config chain will eval — it has
+  # to come back as a dictionary, not just parse
+  (def [prod-ok prod] (protect (eval-string (slurp "sample/config/prod.janet"))))
+  (assert prod-ok "config/prod.janet evaluates")
+  (assert (= 8080 (get-in prod [:http :port])) "and answers on a port")
+  (assert (= "0.0.0.0" (get-in prod [:http :host]))
+          "a :prod server answers the network, not loopback")
 
   # every generated janet file parses
   (each f files
@@ -104,6 +125,17 @@
     (cli/run-command boot command args))
   (assert (string/find "GET" (string out)) "void routes prints the method")
   (assert (string/find "/" (string out)) "void routes prints the pattern")
-  (assert (string/find ":home" (string out)) "void routes prints the name"))
+  (assert (string/find ":home" (string out)) "void routes prints the name")
+
+  # -- the generated smoke suite runs ------------------------------------
+  #
+  # The point of shipping a test/ directory: it is green before the
+  # first line is edited. The suite boots the generated composition
+  # through test/with-http and drives the guestbook loop with
+  # test/inject — same as `jpm --local test` will in the new project.
+  (def [smoke-ok smoke-err] (protect (dofile "test/smoke-test.janet")))
+  (assert smoke-ok
+          (string "the generated smoke suite passes against the generated app: "
+                  (if (string? smoke-err) smoke-err (describe smoke-err)))))
 
 (print "new-test ok")
