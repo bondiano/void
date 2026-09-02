@@ -15,7 +15,7 @@
 > void/mcp-http void/mcp-obs void/admin void/admin-jobs
 > void/admin-mcp void/storage void/storage-http void/storage-s3
 > void/storage-admin void/notify void/notify-mail void/notify-inapp
-> void/notify-webhook void/notify-jobs void/dev void/bench)
+> void/notify-webhook void/notify-jobs void/dash void/dev void/bench)
 > Do not edit the generated tables by hand — change the declaration
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
@@ -268,6 +268,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:ask :function :doc [:optional :string] :name :keyword :needs [:optional [:vector :keyword]] :what :string}
+  ```
+
+### `:void.dash/tile`
+
+- **owner:** `:void/dash` · **cardinality:** `:many`
+- Tiles on the dashboard overview: {:name :orders/backlog :label "Backlog"? :render (fn [] hiccup)}. A tile that throws renders its error instead of taking the page down
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :label [:optional :string] :name :keyword :render :function}
   ```
 
 ### `:void.grpc/codec`

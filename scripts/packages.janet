@@ -164,8 +164,12 @@
 
    :void/pressure
    # void/rest in tests only: the 503 goes out as problem+json wherever
-   # it is in the composition.
-   {:dir "pressure" :deps [:void/core :void/http] :test-deps [:void/rest]}
+   # it is in the composition. void/db is the suite's too: the built-in
+   # :db/pool check (pressure/void/pressure/checks.janet) is proved
+   # against a real pool driven to exhaustion — the sources reach
+   # void/db only through a protected `require`, never an import.
+   {:dir "pressure" :deps [:void/core :void/http]
+    :test-deps [:void/rest :void/db]}
 
    :void/obs
    # void/pressure is here for its loop-lag *meter*
@@ -181,9 +185,13 @@
    # void/dev and void/cache are the suite's: inject for the endpoints,
    # a real component for the instrumentation. void/rest is
    # test-support/overhead-probe.janet's, which measures what obs costs
-   # a request on the B1 shape (§8.2's ≤ 7%).
+   # a request on the B1 shape (§8.2's ≤ 7%). void/db and void/db-sqlite
+   # are the suite's as well: instrument-test proves the :void.db/pool
+   # gauges against a live pool (in-memory sqlite) — the sources reach
+   # void/db/pool only through a protected `require`, never an import.
    {:dir "obs" :deps [:void/core :void/http :void/pressure :void/proto]
-    :test-deps [:void/dev :void/cache :void/rest] :jpm [:spork]}
+    :test-deps [:void/dev :void/cache :void/rest :void/db :void/db-sqlite]
+    :jpm [:spork]}
 
    :void/auth
    # Every primitive comes from void/crypto (ADR-0022, ADR-0023): this
@@ -233,6 +241,21 @@
    # SSE frames are parsed out of :raw by test/sse-events.
    {:dir "datastar" :deps [:void/core :void/http :void/html]
     :test-deps [:void/dev] :jpm [:spork]}
+
+   :void/dash
+   # The dev dashboard (wave 7): a fourth projection of the values
+   # plugin/inspect, config/explain, boot :system, deploy/survey and
+   # routes-table already answer, so its runtime edges are only the
+   # web ones — the kernel, the view layer and htmx for the polling
+   # fragments. void/datastar is a *module* edge on purpose (the
+   # void/storage/sign pose): the live morph-stream arms itself only
+   # when the application composes :void/datastar, and without it the
+   # pages poll. Deliberately NO edge to void/obs, void/pressure or
+   # void/admin: those sections read component health off the boot
+   # value by key, and a composition without them gets a page naming
+   # the plugin that would fill it.
+   {:dir "dash" :deps [:void/core :void/http :void/html :void/htmx :void/datastar]
+    :test-deps [:void/dev]}
 
    :void/authz
    # No edge to void/auth, and that is the design (ADR-0024): the
