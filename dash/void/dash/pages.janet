@@ -70,53 +70,57 @@
 (defn- card [title & body]
   [:div {:class "dash-card"} [:h2 title] ;body])
 
-(defn- process-card [boot]
-  (card "Process"
-        [:p {:class "dash-big"}
-         (view/duration-str (- (os/clock :monotonic) (ctx/setting :started-at 0)))]
-        [:p {:class "dash-note"}
-         (string "up · profile " (string (boot :profile))
-                 " · shape " (string (get-in boot [:deploy :shape] :single)))]))
+(defn- vital
+  "One cell of the vitals strip: label, the number, its context."
+  [title & body]
+  [:div {:class "dash-vital"} [:h2 title] ;body])
 
-(defn- runtime-card [boot]
+(defn- process-vital [boot]
+  (vital "Process"
+         [:p {:class "dash-big"}
+          (view/duration-str (- (os/clock :monotonic) (ctx/setting :started-at 0)))]
+         [:p {:class "dash-note"}
+          (string "up · profile " (string (boot :profile))
+                  " · shape " (string (get-in boot [:deploy :shape] :single)))]))
+
+(defn- runtime-vital [boot]
   (if-let [h (component-health boot :obs/registry)]
-    (card "Runtime"
-          [:p {:class "dash-big"} (view/bytes-str (h :rss))]
-          [:p {:class "dash-note"}
-           (string "rss · loop lag p99 " (view/ms (h :loop-lag-p99))
-                   " (max " (view/ms (h :loop-lag-max)) ")"
-                   (if (h :sampling) "" " · sampler off"))]
-          (view/sparkline (history/series :lag-ms))
-          [:p {:class "dash-note"} "loop lag, dash's own samples"])
-    (card "Runtime"
-          (view/absent "the RSS and loop-lag meter" ":void/obs")
-          (view/sparkline (history/series :lag-ms))
-          [:p {:class "dash-note"} "loop lag, dash's own samples"])))
+    (vital "Runtime"
+           [:p {:class "dash-big"} (view/bytes-str (h :rss))]
+           [:p {:class "dash-note"}
+            (string "rss · loop lag p99 " (view/ms (h :loop-lag-p99))
+                    " (max " (view/ms (h :loop-lag-max)) ")"
+                    (if (h :sampling) "" " · sampler off"))]
+           (view/sparkline (history/series :lag-ms))
+           [:p {:class "dash-note"} "loop lag, dash's own samples"])
+    (vital "Runtime"
+           (view/absent "the RSS and loop-lag meter" ":void/obs")
+           (view/sparkline (history/series :lag-ms))
+           [:p {:class "dash-note"} "loop lag, dash's own samples"])))
 
-(defn- http-card [boot]
+(defn- http-vital [boot]
   (if-let [h (component-health boot :http/server)]
-    (card "HTTP"
-          [:p {:class "dash-big"} (string (get h :connections 0))]
-          [:p {:class "dash-note"}
-           (string "open connections · port " (string (get h :port "?"))
-                   " · " (string (get h :status :up)))]
-          (view/sparkline (history/series :connections))
-          [:p {:class "dash-note"} "connections over time"])
-    (card "HTTP"
-          [:p {:class "dash-absent"}
-           "the :http/server component is not running — a kernel-only boot (test/with-http) has no listener."])))
+    (vital "HTTP"
+           [:p {:class "dash-big"} (string (get h :connections 0))]
+           [:p {:class "dash-note"}
+            (string "open connections · port " (string (get h :port "?"))
+                    " · " (string (get h :status :up)))]
+           (view/sparkline (history/series :connections)))
+    (vital "HTTP"
+           [:p {:class "dash-absent"}
+            "the :http/server component is not running — a kernel-only boot (test/with-http) has no listener."])))
 
-(defn- pressure-card [boot]
+(defn- pressure-vital [boot]
   (if-let [h (component-health boot :pressure/sampler)]
-    (card "Pressure"
-          [:p {:class "dash-big"}
-           (if (h :under-pressure) [:span {:class "dash-down"} "shedding"]
-             [:span {:class "dash-up"} "ok"])]
-          [:p {:class "dash-note"}
-           (string "mode " (string (get h :mode "-"))
-                   " · episodes " (string (get h :episodes 0))
-                   " · shed " (string (get h :shed 0)))])
-    (card "Pressure" (view/absent "load shedding" ":void/pressure"))))
+    (vital "Pressure"
+           [:p {:class "dash-big"}
+            (if (h :under-pressure) [:span {:class "dash-down"} "shedding"]
+              [:span {:class "dash-up"} "ok"])]
+           [:p {:class "dash-note"}
+            (string "mode " (string (get h :mode "-"))
+                    " · episodes " (string (get h :episodes 0))
+                    " · shed " (string (get h :shed 0)))])
+    (vital "Pressure" (view/absent "load shedding" ":void/pressure"))))
 
 (defn- health-tiles [boot]
   (def h (plugin/health boot))
@@ -124,14 +128,21 @@
    [:h2 "Health"]
    [:p (view/status-word (h :status))
     [:span {:class "dash-note"} " — plugin/health, the same fold GET /health and void/mcp answer with"]]
-   [:div {:class "dash-cards"}
+   # a patch panel, not a wall of cards: one lamp per component, and
+   # only the components with something to say take more than one line
+   [:div {:class "dash-health"}
     ;(seq [name :in (sorted (keys (h :components)))
-           :let [c (get-in h [:components name])]]
-       [:div {:class "dash-card"}
-        [:h2 (string name)]
-        [:p (view/status-word (get c :status))]
+           :let [c (get-in h [:components name])
+                 status (get c :status)]]
+       [:div {:class (string "dash-health-item"
+                             (case status
+                               :degraded " is-degraded"
+                               :down " is-down"
+                               ""))}
+        [:span (string name)]
+        (view/status-word status)
         (when-let [r (get c :reason)]
-          [:p {:class "dash-note"} (view/value-str r 120)])])]])
+          [:span {:class "dash-health-reason"} (view/value-str r 120)])])]])
 
 (defn- contributed-tiles []
   (def tiles (ctx/setting :tiles []))
@@ -149,11 +160,11 @@
   "Everything the overview poll moves."
   [boot]
   (view/poll-wrap "dash-overview" (ctx/at "")
-    [:div {:class "dash-cards"}
-     (process-card boot)
-     (runtime-card boot)
-     (http-card boot)
-     (pressure-card boot)]
+    [:div {:class "dash-vitals"}
+     (process-vital boot)
+     (runtime-vital boot)
+     (http-vital boot)
+     (pressure-vital boot)]
     (health-tiles boot)
     (contributed-tiles)))
 
@@ -169,6 +180,23 @@
   (if (partial? req)
     (html/fragment (overview-fragment boot))
     (page req (overview-body boot))))
+
+# -- the table filter ----------------------------------------------------
+
+(defn- filter-bar
+  ``The toolbar over a table: a client-side row filter (./view's one
+  script) and the live row count. Progressive — without JavaScript the
+  input is inert and the table is whole.``
+  [table-id what n]
+  [:div {:class "dash-toolbar"}
+   [:div {:class "field"}
+    [:label {:for (string table-id "-filter")} (string "Filter " what)]
+    [:input {:type "search" :id (string table-id "-filter")
+             :class "dash-filter" :placeholder "type to narrow…"
+             :data-dash-filter (string "#" table-id)}]]
+   [:div {:class "field"}
+    [:label "Rows"]
+    [:span {:id (string table-id "-count") :class "dash-count"} (string n)]]])
 
 # -- components ----------------------------------------------------------
 
@@ -187,7 +215,8 @@
    [:h1 "Components"]
    [:p {:class "dash-note"}
     "boot :system — the graph in topological order: every component after the ones it depends on."]
-   [:table {:class "dash-table"}
+   (filter-bar "dash-components-table" "components" (length (get sys :order [])))
+   [:table {:class "dash-table" :id "dash-components-table"}
     [:thead [:tr [:th "component"] [:th "plugin"] [:th "state"]
              [:th "deps"] [:th "provides"] [:th ""]]]
     [:tbody
@@ -258,7 +287,8 @@
   (def rows (plugin/inspect boot))
   [:div
    [:h1 "Plugins"]
-   [:table {:class "dash-table"}
+   (filter-bar "dash-plugins-table" "plugins" (length rows))
+   [:table {:class "dash-table" :id "dash-plugins-table"}
     [:thead [:tr [:th "plugin"] [:th "version"] [:th "active"]
              [:th "components"] [:th "own points"] [:th "contributes"]]]
     [:tbody
@@ -336,7 +366,8 @@
             (string/join (map |(string ($ :layer)) (get cfg :layers [])) " ← ")
             " (later wins) · every value with the layer that set it — config/explain. "
             "Secrets are boxes and print as their reference: safe by construction.")]
-   [:table {:class "dash-table"}
+   (filter-bar "dash-config-table" "paths" (length paths))
+   [:table {:class "dash-table" :id "dash-config-table"}
     [:thead [:tr [:th "path"] [:th "value"] [:th "from"]]]
     [:tbody
      (seq [p :in paths
@@ -366,7 +397,8 @@
    [:h1 "Routes"]
    [:p {:class "dash-note"}
     "The live route table — what `void routes` prints; opening a line is explain-route: every metadata key with the layer that set it."]
-   [:table {:class "dash-table"}
+   (filter-bar "dash-routes-table" "routes" (length entries))
+   [:table {:class "dash-table" :id "dash-routes-table"}
     [:thead [:tr [:th "method"] [:th "pattern"] [:th "name"]
              [:th "source"] [:th "handler"]]]
     [:tbody
