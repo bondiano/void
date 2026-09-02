@@ -163,7 +163,7 @@
     (assert (= 0 (db/count e/Article)) "and nothing was written")
 
     (def created
-      (post "/articles" {:headers {"hx-request" "true" "x-csrf-token" token}
+      (post "/articles" {:headers {"hx-request" "true" "hx-request-type" "partial" "x-csrf-token" token}
                          :form {:title "Fibers all the way down"
                                 :body "A first article."}}))
     (assert (= 200 (created :status)) (text created))
@@ -243,7 +243,7 @@
     (cache/clear!)
     (def commented
       (post (string article-url "/comments")
-            {:headers {"hx-request" "true" "x-csrf-token" token}
+            {:headers {"hx-request" "true" "hx-request-type" "partial" "x-csrf-token" token}
              :form {:author-name "Grace" :body "Nice one."}}))
     (assert (= 200 (commented :status)))
     (assert (string/find "Nice one." (text commented)) "the comment is rendered")

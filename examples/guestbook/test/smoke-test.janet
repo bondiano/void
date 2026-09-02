@@ -63,7 +63,7 @@
 
   # -- valid POST as htmx request: fragment without layout ---------------
   (def good (test/inject c {:uri "/entries"
-                            :headers {"hx-request" "true"}
+                            :headers {"hx-request" "true" "hx-request-type" "partial"}
                             :form {:name "ada" :message "first entry"}}))
   (assert (string/find "first entry" (test/text good)) "the entry is listed")
   (assert (not (string/find "<html" (test/text good)))

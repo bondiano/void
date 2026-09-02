@@ -214,7 +214,7 @@
     # the quantity control is an htmx post answered with the fragment
     (def updated
       (test/inject c {:uri (string "/cart/items/" (mug :id))
-                      :headers {"hx-request" "true" "x-csrf-token" (token-of c)}
+                      :headers {"hx-request" "true" "hx-request-type" "partial" "x-csrf-token" (token-of c)}
                       :form {:quantity 1}}))
     (assert (= 200 (updated :status)) (string (updated :status) " " (text updated)))
     (assert (not (string/find "<html" (text updated)))

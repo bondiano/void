@@ -248,7 +248,7 @@
          :inline-limit (get-in cfg [:bulk :inline-limit] 500)
          :stylesheet (cfg :stylesheet)
          :layout (cfg :layout)
-         :htmx-src (get cfg :htmx-src "https://unpkg.com/htmx.org@2.0.4")
+         :htmx-src (get cfg :htmx-src "https://unpkg.com/htmx.org@4.0.0")
          :widgets widgets
          :pages (resolved :void.admin/page)
          :dashboard (resolved :void.admin/dashboard-widget)

@@ -43,24 +43,44 @@
 (assert (not ok) "an element htmx could not target is refused")
 (assert (string/find "by id" (string err)) "and the error says why")
 
+# -- the other form: htmx 4's JSON control message ------------------------
+
+(def targeted (json/decode (wshtmx/fragment [:p "good evening"]
+                                            {:target "#messages"
+                                             :swap :before-end})))
+(assert (= "<p>good evening</p>" (targeted "content")))
+(assert (= "#messages" (targeted "target")))
+(assert (= "beforeend" (targeted "swap")) "the swap is spelled the way htmx spells it")
+(assert (nil? (targeted "select")))
+
+(def minimal (json/decode (wshtmx/fragment [:p "hi"] {:target "#log"})))
+(assert (nil? (minimal "swap")) "no swap named — the connection's own default stands")
+(assert (= "<p>hi</p>" (minimal "content"))
+        "content addressed by target needs no id of its own")
+
+(assert (= "#a" ((json/decode (wshtmx/fragment "<b>x</b>" {:target "#a" :select ".m"}))
+                 "target")))
+
 # -- the envelope htmx sends ---------------------------------------------
 
 (def envelope
   {:type :text
    :data (json/encode {"message" "hello" "room" "lobby"
-                       "HEADERS" {"HX-Trigger" "say"}})})
+                       "headers" {"HX-Request-Type" "partial"
+                                  "HX-Source" "input#say"}})})
 
 (assert (= "hello" ((wshtmx/fields envelope) :message)))
-(assert (nil? ((wshtmx/fields envelope) :HEADERS))
-        "htmx's own headers are not form fields")
-(assert (= "say" ((wshtmx/headers envelope) :HX-Trigger))
-        "and they are there for the handler that wants to know which element fired")
+(assert (nil? ((wshtmx/fields envelope) :headers))
+        "htmx's own metadata is not a form field")
+(assert (= "input#say" ((wshtmx/headers envelope) :HX-Source))
+        "and it is there for the handler that wants to know which element fired")
 (assert (nil? (wshtmx/fields {:type :text :data "not json at all"}))
         "a payload that is not the envelope is ignored, not raised")
 
-(assert (= "ws" ((wshtmx/connect-attrs "/live") "hx-ext")))
-(assert (= "/live" ((wshtmx/connect-attrs "/live") "ws-connect")))
-(assert (= "true" ((wshtmx/send-attrs) "ws-send")))
+# htmx 4 removed hx-ext: the extension's script tag is the whole opt-in
+(assert (nil? ((wshtmx/connect-attrs "/live") "hx-ext")))
+(assert (= "/live" ((wshtmx/connect-attrs "/live") "hx-ws:connect")))
+(assert (= "true" ((wshtmx/send-attrs) "hx-ws:send")))
 
 # -- and now over the wire ------------------------------------------------
 
@@ -99,9 +119,12 @@
   (def a (wsc/connect (string "ws://127.0.0.1:" port "/chat")))
   (def b (wsc/connect (string "ws://127.0.0.1:" port "/chat")))
 
-  # exactly what htmx's ws-send puts on the wire for a one-field form
+  # exactly what htmx 4's hx-ws:send puts on the wire for a one-field
+  # form: the fields at the top level, its own metadata under `headers`
   (wsc/send! a (json/encode {"message" "good evening"
-                             "HEADERS" {"HX-Request" "true"}}))
+                             "headers" {"HX-Request" "true"
+                                        "HX-Request-Type" "partial"
+                                        "HX-Source" "form#say"}}))
 
   (each peer [a b]
     (assert (= (string "<div id=\"messages\" hx-swap-oob=\"beforeend\">"

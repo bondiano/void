@@ -164,8 +164,9 @@
 
       (html/page {:head (security/meta-markup req)} ...)
 
-  htmx reads `hx-headers` off any ancestor element, so putting it on
-  `<body>` covers every request the page makes.``
+  htmx 4 inherits an attribute only where the name says so, so what
+  goes on `<body>` is `hx-headers:inherited` (./hx-headers) — see
+  ADR-0041.``
   [req cfg]
   (def token (token-for req cfg))
   (def header (get cfg :header (defaults :header)))
@@ -173,9 +174,14 @@
    [:meta {:name "csrf-header" :content header}]])
 
 (defn hx-headers
-  "The attribute map to merge onto `<body>` so every htmx request
-  carries the token."
+  ``The attribute map to merge onto `<body>` so every htmx request
+  carries the token.
+
+  The name carries htmx 4's `:inherited` suffix, and it has to: since
+  4.0 an attribute applies to the element it sits on and no further
+  (ADR-0041), and a token that reached only `<body>`'s own requests
+  would leave every other element's POST to be refused.``
   [req cfg]
-  {:hx-headers (string/format `{"%s": "%s"}`
-                              (get cfg :header (defaults :header))
-                              (token-for req cfg))})
+  {:hx-headers:inherited (string/format `{"%s": "%s"}`
+                                        (get cfg :header (defaults :header))
+                                        (token-for req cfg))})

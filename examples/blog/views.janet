@@ -34,10 +34,12 @@
 (defn layout
   ``The one page frame.
 
-  The two `<meta>` tags and the `hx-headers` attribute are what let a
-  request htmx makes on its own — the Delete button below has no form
-  around it — carry the CSRF token. `security/htmx-meta` builds them
-  from the same token the form fields get.``
+  The two `<meta>` tags and the `hx-headers:inherited` attribute are
+  what let a request htmx makes on its own — the Delete button below
+  has no form around it — carry the CSRF token. `security/htmx-meta`
+  builds them from the same token the form fields get; the suffix is
+  htmx 4's, which inherits an attribute only where the name asks for
+  it (ADR-0041).``
   [content context]
   (def req (get context :request))
   (html/html5 {:lang "en"}
@@ -46,7 +48,7 @@
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
      [:title "void blog"]
      (when req (security/htmx-meta req))
-     [:script {:src "https://unpkg.com/htmx.org@2.0.7"}]]
+     [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
     [:body (if req (security/htmx-attrs req) {})
      [:header [:a {:href "/"} [:h1 "void blog"]] (who-bar)]
      [:main content]]))

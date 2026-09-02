@@ -551,7 +551,7 @@ layer.
 | `:void.db/txn` | `:void/db-http` | `:replace` | `[:or :boolean {:isolation [:optional :keyword]}]` | Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN |
 | `:void.grpc/method` | `:void/grpc` | `:replace` | `:keyword` | The RPC method this route serves — set by void/grpc's projection; its presence is what the Connect error renderer keys on |
 | `:void.grpc/service` | `:void/grpc` | `:replace` | `:keyword` | The RPC service this route serves — set by void/grpc's projection, so a middleware can tell an RPC method from a page |
-| `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request with the fragment alone — the view response's layout is stripped before rendering |
+| `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request-Type: partial with the fragment alone — the view response's layout is stripped before rendering |
 | `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
 | `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific layer may only lower it |
 | `:void.http/middleware` | `:void/http` | `:concat` | `[:vector :keyword]` | Named middleware this route opts into, concatenated group -> route |

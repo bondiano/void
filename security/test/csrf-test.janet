@@ -92,6 +92,10 @@
 (def tags (csrf/meta-markup page cfg))
 (assert (= 2 (length tags)))
 (assert (= "csrf-token" (get-in tags [0 1 :name])))
-(assert (string/find "x-csrf-token" (string/format "%q" (csrf/hx-headers page cfg))))
+(def hx (csrf/hx-headers page cfg))
+(assert (string/find "x-csrf-token" (get hx :hx-headers:inherited "")))
+(assert (nil? (get hx :hx-headers))
+        "htmx 4 inherits by name only — a bare hx-headers on <body> would
+         cover <body>'s own requests and nothing else (ADR-0041)")
 
 (print "csrf-test ok")

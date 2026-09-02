@@ -356,7 +356,7 @@
     [:head
      [:meta {:charset "utf-8"}]
      [:title "{{plural-title}}"]
-     [:script {:src "https://unpkg.com/htmx.org@2.0.7"}]]
+     [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
     [:body [:main content]]))
 
 (defn {{name}}-form

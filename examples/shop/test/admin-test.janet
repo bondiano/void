@@ -215,7 +215,7 @@
       (test/inject desk {:method :patch
                          :uri (string "/admin/products/" (mug :id) "/-/cell/stock")
                          :headers {"x-csrf-token" (token-of desk)
-                                   "hx-request" "true"}
+                                   "hx-request" "true" "hx-request-type" "partial"}
                          :form {:stock "17"}}))
     (assert (< (patched :status) 400) (string "cell: " (patched :status) " " (text patched)))
     (assert (= 17 ((db/find catalog/Product (mug :id)) :stock))

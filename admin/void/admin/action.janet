@@ -85,10 +85,12 @@
                     (or opts {}))))
 
 (defn partial?
-  "Is this request asking for the fragment rather than the page? A
-  history restore is not: the browser is putting a whole page back."
+  ``Is this request asking for the fragment rather than the page? htmx
+  answers that itself in HX-Request-Type: a swap into an element is
+  "partial", a swap into the body — a boosted link, a history restore —
+  is "full" (ADR-0041).``
   [req]
-  (and (htmx/request? req) (not (htmx/history-restore? req))))
+  (htmx/partial-request? req))
 
 (defn- see-other [url]
   (ring/response 303 nil @{"location" url}))
@@ -336,12 +338,12 @@
         (db/save! row)
         (announce! req desc :update (get row (get-in desc [:entity :pk]))
                    before (snapshot-of row))
-        (if (htmx/request? req)
+        (if (partial? req)
           (html/fragment (view/cell desc row (list-column desc fname) true))
           (redirect-back req (ctx/base desc))))
       (do
         (def resp
-          (if (htmx/request? req)
+          (if (partial? req)
             (html/fragment [:td {:class "field-invalid"}
                             (string/join (map schema/error-str (result :errors)) "; ")])
             (redirect-back req (ctx/base desc))))
@@ -380,7 +382,7 @@
 
 (defn- inline-response [desc req row inline child errors]
   (def rows (inline-rows desc req row inline child))
-  (if (htmx/request? req)
+  (if (partial? req)
     (html/fragment (view/inline-block desc row inline child rows errors))
     (redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk])))))))
 

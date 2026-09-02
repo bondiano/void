@@ -1,6 +1,6 @@
 (declare-project
   :name "void-htmx"
-  :description "void/htmx — htmx integration: hx-helpers, HX-Request fragment answers, OOB swaps, HX-Trigger response headers (SPEC §5.5)."
+  :description "void/htmx — htmx 4 integration: hx-helpers, HX-Request-Type fragment answers, OOB and <hx-partial> swaps, HX-Trigger response headers (SPEC §5.5, ADR-0041)."
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 

@@ -13,8 +13,9 @@
 ###   * every non-GET form renders a CSRF field, because
 ###     `void/security` binds the slot `form/form` has been splicing
 ###     since wave 1 — there is no call to make;
-###   * the two `<meta>` tags and the `hx-headers` attribute are what
-###     let a request htmx makes on its own carry the same token;
+###   * the two `<meta>` tags and the `hx-headers:inherited` attribute
+###     are what let a request htmx makes on its own carry the same
+###     token — the suffix is htmx 4's, and load-bearing (ADR-0041);
 ###   * the stylesheet is linked through `html/asset`, which is the
 ###     logical path in development and the fingerprinted one after an
 ###     asset build — the markup does not change either way.
@@ -75,7 +76,7 @@
      [:title "void shop"]
      [:link {:rel "stylesheet" :href (html/asset "shop.css")}]
      (when req (security/htmx-meta req))
-     [:script {:src "https://unpkg.com/htmx.org@2.0.7"}]]
+     [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
     [:body (if req (security/htmx-attrs req) {})
      [:header {:class "site"}
       [:div {:class "bar"}

@@ -183,13 +183,14 @@ Structured-логи — примитив ядра (Fastify/pino-паритет),
 - temple как альтернативный движок (extension point `:void.html/engine`).
 
 ### 5.5 `void/htmx` *(S)*
-- Хелперы hx-атрибутов, партиальный рендеринг (запрос с `HX-Request` → фрагмент без layout), OOB swaps, `HX-Trigger` response headers.
+- Хелперы hx-атрибутов, партиальный рендеринг (`HX-Request-Type: partial` → фрагмент без layout), OOB swaps и `<hx-partial>`, `HX-Trigger` response headers.
+- Диалект — htmx 4 ([ADR-0041](adr/0041-htmx-4-zagolovok-vmesto-treh-pravil-nasledovanie-po-imeni.md)): наследование пишется по имени (`hx-headers:inherited` — то, чем доезжает CSRF-токен §5.21), элемент называется как `tag#id`, morph-свопы и `hx-status` — часть словаря билдеров.
 - Изучить Datastar-режим Biff (SSE + full-page morph) как альтернативную идиому — отдельный экспериментальный plugin `void/datastar`.
 
 ### 5.6 `void/ws` — WebSocket *(M)*
 - RFC 6455 поверх net/: handshake, frames, ping/pong, close; per-connection fiber + spork/msg-style роутинг.
 - Channels/rooms abstraction, broadcast.
-- htmx ws-extension интеграция: шлём hiccup-фрагменты, htmx свапает по id.
+- htmx ws-extension интеграция (`hx-ws`, [ADR-0041](adr/0041-htmx-4-zagolovok-vmesto-treh-pravil-nasledovanie-po-imeni.md)): шлём hiccup-фрагменты — htmx свапает по id (`hx-swap-oob`) либо по названному в сообщении target (JSON `{content, target, swap}`).
 
 ### 5.7 `void/proto` — protobuf runtime *(M)*
 - Pure-Janet кодек: varint, wire types, encode/decode по descriptor.
@@ -732,7 +733,7 @@ Route metadata — открытая map на каждом route; **главны�
 | `:void.obs/sample-rate` | 0..1 | replace | void/obs |
 | `:void.cache/response` | {:ttl :vary} | replace | void/cache mw |
 | `:void.openapi/*` (tags, summary, hidden) | — | replace | void/openapi |
-| `:void.htmx/partial` | bool | replace | void/htmx (фрагмент без layout при HX-Request) |
+| `:void.htmx/partial` | bool | replace | void/htmx (фрагмент без layout при `HX-Request-Type: partial`) |
 
 Non-HTTP протоколы переиспользуют тот же механизм: gRPC-сервисы и Kafka-handlers несут ту же meta-map (`:void.authz/policy` работает на Connect-RPC методе так же, как на HTTP route) — поэтому контракт живёт в void/core (`void/core/meta`), а void/http лишь один из потребителей.
 

@@ -131,12 +131,12 @@
     (seed!)
     (def c (test/client boot))
     (defn get* [uri &opt spec]
-      (test/inject c (merge {:uri uri :headers (if hx {"hx-request" "true"} {})}
+      (test/inject c (merge {:uri uri :headers (if hx {"hx-request" "true" "hx-request-type" "partial"} {})}
                             (or spec {}))))
     (defn post [uri token spec]
       (test/inject c (merge {:method :post :uri uri
                              :headers (merge {"x-csrf-token" token}
-                                             (if hx {"hx-request" "true"} {})
+                                             (if hx {"hx-request" "true" "hx-request-type" "partial"} {})
                                              (get spec :headers {}))}
                             (let [s (merge {} spec)] (put s :headers nil) s))))
 
@@ -149,7 +149,7 @@
             ":scope keeps another owner's row off the page entirely")
     (if hx
       (assert (not (string/find "<html" body))
-              "an HX-Request gets the rows and no frame")
+              "a partial htmx request gets the rows and no frame")
       (assert (string/find "<html" body) "a browser gets a whole page"))
     (assert (string/find "3 rows" body)
             "the count is the scoped count, not the table's")
@@ -236,7 +236,7 @@
 
     # -- a cell -----------------------------------------------------------
     (def cell (test/inject c {:method :patch :uri "/admin/notes/1/-/cell/title"
-                              :headers {"x-csrf-token" etoken "hx-request" "true"}
+                              :headers {"x-csrf-token" etoken "hx-request" "true" "hx-request-type" "partial"}
                               :form {:title "celled"}}))
     (assert (= 200 (cell :status)) "the cell answers with itself")
     (assert (= "celled" ((db/find Note 1) :title)))
@@ -256,7 +256,7 @@
     (def gone (test/inject c {:method :delete
                               :uri (string "/admin/notes/1/-/inline/tags/" (blue :id))
                               :headers (merge {"x-csrf-token" etoken}
-                                              (if hx {"hx-request" "true"} {}))}))
+                                              (if hx {"hx-request" "true" "hx-request-type" "partial"} {}))}))
     (assert (< (gone :status) 400))
     (assert (nil? (db/find Tag (blue :id))))
     (note "inline create and delete, parent from the URL")
@@ -294,7 +294,7 @@
     (def dtoken (csrf-of (get* "/admin/notes/1/edit" {:headers {}})))
     (def dropped (test/inject c {:method :post :uri "/admin/notes/1?_method=delete"
                                  :headers (merge {"x-csrf-token" dtoken}
-                                                 (if hx {"hx-request" "true"} {}))}))
+                                                 (if hx {"hx-request" "true" "hx-request-type" "partial"} {}))}))
     (assert (< (dropped :status) 400) (string "destroy: " (dropped :status)))
     (assert (nil? (db/find Note 1)))
     # ...and never out of a GET: the override is ignored, the request

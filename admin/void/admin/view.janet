@@ -124,7 +124,7 @@ form.admin-act { display:inline; }
      [:title (get context :void.admin/title (ctx/setting :title "Admin"))]
      [:style (hiccup/raw (or (ctx/setting :stylesheet) stylesheet))]
      ;(asset-tags entries)
-     [:script {:src (ctx/setting :htmx-src "https://unpkg.com/htmx.org@2.0.4")
+     [:script {:src (ctx/setting :htmx-src "https://unpkg.com/htmx.org@4.0.0")
                :defer true}]]
     [:body
      [:header {:class "admin-bar"}

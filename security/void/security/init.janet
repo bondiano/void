@@ -156,8 +156,8 @@
   (csrf/meta-markup req (settings :csrf)))
 
 (defn htmx-attrs
-  "The `hx-headers` attribute for `<body>`, so every htmx request
-  carries the token."
+  "The `hx-headers:inherited` attribute for `<body>`, so every htmx
+  request the page makes carries the token (ADR-0041)."
   [req]
   (csrf/hx-headers req (settings :csrf)))
 

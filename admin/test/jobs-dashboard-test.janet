@@ -112,10 +112,10 @@
           "a pending record with a slot ahead of it reads as delayed, not as stuck")
 
   # the fragment half of the same URL, on the same route
-  (def frag (test/inject c {:uri "/admin/jobs" :headers {"hx-request" "true"}}))
+  (def frag (test/inject c {:uri "/admin/jobs" :headers {"hx-request" "true" "hx-request-type" "partial"}}))
   (assert (= 200 (frag :status)))
   (assert (not (string/find "<html" (test/text frag)))
-          "an HX-Request gets the body and no frame")
+          "a partial htmx request gets the body and no frame")
   (assert (string/find `id="admin-jobs"` (test/text frag)))
 
   # -- the dead letter queue --------------------------------------------

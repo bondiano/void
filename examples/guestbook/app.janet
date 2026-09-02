@@ -27,7 +27,7 @@
     [:head
      [:meta {:charset "utf-8"}]
      [:title "guestbook"]
-     [:script {:src "https://unpkg.com/htmx.org@2.0.7"}]]
+     [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
     [:body [:main content]]))
 
 (defn guestbook-view
@@ -75,8 +75,9 @@
 # symbols are quoted for you (late binding) and name their route.
 (router/defroutes :guestbook/routes
   (GET "/" home)
-  # :void.htmx/partial — an HX-Request gets the bare fragment; a plain
-  # form POST still gets the full page
+  # :void.htmx/partial — a swap into an element (HX-Request-Type:
+  # partial) gets the bare fragment; a plain form POST still gets the
+  # full page
   (POST "/entries" create-entry
         {:name :entries/create :void.htmx/partial true}))
 

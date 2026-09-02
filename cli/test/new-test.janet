@@ -83,10 +83,14 @@
   (assert (string/find "field-errors" (string (bad :body)))
           "an invalid submission re-renders with schema errors")
 
+  # what htmx 4 sends when the swap lands in #guestbook rather than in
+  # the body: HX-Request-Type is what :void.htmx/partial reads
   (def good (http/with-request
               {:method :post :uri "/entries"
                :headers {"content-type" "application/x-www-form-urlencoded"
-                         "hx-request" "true"}
+                         "hx-request" "true"
+                         "hx-request-type" "partial"
+                         "hx-target" "div#guestbook"}
                :body "name=ada&message=hello"}))
   (assert (string/find "ada" (string (good :body))) "a valid entry is listed")
   (assert (not (string/find "<html" (string (good :body))))

@@ -66,26 +66,40 @@
   (def full (http/with-request {:uri "/orders"}))
   (assert (string/has-prefix? "<!DOCTYPE html>" (string (full :body))))
 
-  # an htmx request gets the bare fragment
+  # a request whose swap lands in an element gets the bare fragment
   (def frag (http/with-request {:uri "/orders"
-                                :headers {"hx-request" "true"}}))
+                                :headers {"hx-request" "true"
+                                          "hx-request-type" "partial"
+                                          "hx-target" "main#main"}}))
   (assert (= `<ul id="orders"><li>widget</li></ul>` (string (frag :body)))
-          "HX-Request strips the layout on a :void.htmx/partial route")
+          "HX-Request-Type: partial strips the layout on a :void.htmx/partial route")
 
-  # a history restore needs the full page again
+  # a boosted navigation swaps the body — htmx says "full", and the
+  # layout stays on: one header, where two predicates used to disagree
+  (def boosted (http/with-request {:uri "/orders"
+                                   :headers {"hx-request" "true"
+                                             "hx-request-type" "full"
+                                             "hx-boosted" "true"}}))
+  (assert (string/has-prefix? "<!DOCTYPE html>" (string (boosted :body))))
+
+  # a history restore is the same case: htmx 4 caches no pages, it
+  # refetches, and it refetches the whole page
   (def hist (http/with-request {:uri "/orders"
                                 :headers {"hx-request" "true"
+                                          "hx-request-type" "full"
                                           "hx-history-restore-request" "true"}}))
   (assert (string/has-prefix? "<!DOCTYPE html>" (string (hist :body))))
 
   # routes without the meta key keep their layout for htmx too
   (def about (http/with-request {:uri "/about"
-                                 :headers {"hx-request" "true"}}))
+                                 :headers {"hx-request" "true"
+                                           "hx-request-type" "partial"}}))
   (assert (string/has-prefix? "<!DOCTYPE html>" (string (about :body))))
 
   # response helpers compose with view responses
   (def created (http/with-request {:method :post :uri "/orders"
-                                   :headers {"hx-request" "true"}}))
+                                   :headers {"hx-request" "true"
+                                             "hx-request-type" "partial"}}))
   (assert (= "<li>gadget</li>" (string (created :body))))
   (assert (= "order-created" (get-in created [:headers "hx-trigger"]))))
 
