@@ -12,7 +12,10 @@
 (def nav
   "The sections, in bar order: [label href]. hrefs are site-root
   relative; `render` prefixes them for pages below the root."
-  [["Guide" "index.html"]
+  [["Getting started" "getting-started.html"]
+   ["Guide" "index.html"]
+   ["Cookbook" "cookbook/index.html"]
+   ["Modules" "modules/index.html"]
    ["SPEC" "spec.html"]
    ["ROADMAP" "roadmap.html"]
    ["Contracts" "contracts.html"]
@@ -21,6 +24,7 @@
    ["ADR" "adr/index.html"]
    ["Deploy" "deploy.html"]
    ["Idea → deploy" "idea-to-deploy.html"]
+   ["Compare" "comparison.html"]
    ["Bench" "bench.html"]])
 
 (def github "https://github.com/bondiano/void")
@@ -120,6 +124,31 @@ dl.ref dd { margin: .3rem 0 0 0; }
 }
 .tag.ro { color: var(--mark); border-color: var(--mark); }
 .muted { color: var(--muted); }
+a.anchor {
+  margin-left: .4rem; font-size: .78em; text-decoration: none;
+  color: var(--muted); opacity: 0;
+}
+h2:hover > a.anchor, h3:hover > a.anchor,
+h4:hover > a.anchor, a.anchor:focus-visible { opacity: 1; }
+nav.toc { display: none; }
+@media (min-width: 88rem) {
+  nav.toc {
+    display: block; position: fixed; top: 4.5rem;
+    left: calc(50% + 27rem); width: calc(50% - 27rem - 1.5rem);
+    max-width: 17rem; max-height: calc(100vh - 7rem);
+    overflow-y: auto; overscroll-behavior: contain;
+    font-size: .82rem; line-height: 1.45; padding-right: .5rem;
+  }
+  nav.toc .toc-title {
+    font-weight: 600; color: var(--muted); text-transform: uppercase;
+    font-size: .72rem; letter-spacing: .05em; margin-bottom: .4rem;
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc li { margin: .3rem 0; }
+  nav.toc li.toc-h3 { padding-left: .9rem; }
+  nav.toc a { color: var(--muted); text-decoration: none; display: block; }
+  nav.toc a:hover { color: var(--accent); }
+}
 pre .tok-comment { color: var(--muted); }
 pre .tok-str { color: var(--mark); }
 pre .tok-kw { color: var(--accent); }

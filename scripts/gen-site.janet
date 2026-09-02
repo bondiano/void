@@ -97,6 +97,8 @@
 (require "void/notify/inapp")
 (require "void/notify/webhook")
 (require "void/notify/jobs")
+(require "void/tls/init")
+(require "void/datastar/init")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -121,6 +123,7 @@
                :void/admin :void/admin-jobs :void/admin-mcp
                :void/storage :void/storage-http :void/storage-s3 :void/storage-admin
                :void/notify :void/notify-mail :void/notify-inapp :void/notify-webhook :void/notify-jobs
+               :void/tls :void/datastar
                :void/dev :void/bench]
      :profile :dev
      # the ambiguity picks every gate makes: several plugins provide
@@ -145,6 +148,12 @@
   "Markdown sources and the pages they become. :here names the nav
   entry the page lights up."
   @[{:src "README.md" :out "index.html" :here "index.html"}
+    # the tutorial: install -> running app -> single binary, with the
+    # outputs the CLI actually prints — first in the nav, because it is
+    # the page a newcomer is looking for
+    {:src "docs/GETTING-STARTED.md" :out "getting-started.html" :here "getting-started.html"}
+    {:src "docs/COMPARISON.md" :out "comparison.html" :here "comparison.html"}
+    {:src "docs/cookbook/README.md" :out "cookbook/index.html" :here "cookbook/index.html"}
     {:src "docs/SPEC.md" :out "spec.html" :here "spec.html"}
     {:src "docs/ROADMAP.md" :out "roadmap.html" :here "roadmap.html"}
     {:src "docs/CONTRACTS.md" :out "contracts.html" :here "contracts.html"}
@@ -164,6 +173,13 @@
                 {:src (string "docs/adr/" f)
                  :out (string "adr/" (string/slice f 0 -4) ".html")
                  :here "adr/index.html"})))
+
+(each f (sorted (os/dir "docs/cookbook"))
+  (when (and (string/has-suffix? ".md" f) (not= "README.md" f))
+    (array/push doc-pages
+                {:src (string "docs/cookbook/" f)
+                 :out (string "cookbook/" (string/slice f 0 -4) ".html")
+                 :here "cookbook/index.html"})))
 
 (def page-for
   "repo path of a .md -> site path of its page."
@@ -237,6 +253,86 @@
               (string/split " " (string/replace-all "\n" " " s)))
       " ")))
 
+# -- table of contents ---------------------------------------------------
+#
+# Long pages (SPEC is 110 KB) get a generated contents sidebar and
+# every h2/h3 gets a self-link — both projections of the heading ids
+# the markdown parser (or a reference page) already minted. The
+# sidebar is CSS-only: hidden below the width where it would crowd the
+# column, fixed beside it above.
+
+(def- toc-levels {:h2 2 :h3 3})
+
+(def- toc-min
+  "How many h2/h3 headings a page needs before a contents sidebar
+  earns its place."
+  5)
+
+(defn- node-text
+  "The visible text of a hiccup node — without decorated links (the
+  anchor §, a heading's muted source link): those are chrome, not the
+  heading."
+  [n]
+  (cond
+    (not (indexed? n)) (string n)
+    (and (= :a (first n)) (dictionary? (get n 1)) (get-in n [1 :class])) ""
+    (string/join (map node-text (filter |(not (dictionary? $)) (tuple/slice n 1))) "")))
+
+(defn- heading? [n]
+  (and (indexed? n) (toc-levels (first n))
+       (dictionary? (get n 1)) (get-in n [1 :id])))
+
+(defn- add-anchors
+  "Append a self-link to every h2/h3 that has an id — what makes a
+  section shareable by pointing at it."
+  [body]
+  (map (fn [n]
+         (if (heading? n)
+           [;n [:a {:class "anchor"
+                    :href (string "#" (get-in n [1 :id]))
+                    :aria-label "Link to this section"} "§"]]
+           n))
+       body))
+
+(defn- dedup-ids
+  "GitHub's answer to two headings spelled the same (CHANGELOG's
+  repeated «Добавлено»): the second occurrence gets -1, the third -2 —
+  so every anchor on the page points at exactly one place."
+  [body]
+  (def seen @{})
+  (map (fn [n]
+         (if (and (indexed? n) (keyword? (first n))
+                  (dictionary? (get n 1)) (get-in n [1 :id]))
+           (let [id (get-in n [1 :id])
+                 k (get seen id 0)]
+             (put seen id (inc k))
+             (if (zero? k)
+               n
+               [(first n) (merge (n 1) {:id (string id "-" k)})
+                ;(tuple/slice n 2)]))
+           n))
+       body))
+
+(defn- with-toc
+  "The page body, anchored — and prefixed with a contents sidebar when
+  it has enough headings to need one."
+  [body]
+  (def body (dedup-ids body))
+  (def entries
+    (seq [n :in body :when (heading? n)]
+      {:level (toc-levels (first n))
+       :id (get-in n [1 :id])
+       :text (string/trim (node-text n))}))
+  (def anchored (add-anchors body))
+  (if (< (length entries) toc-min)
+    anchored
+    [[:nav {:class "toc" :aria-label "Contents"}
+      [:div {:class "toc-title"} "On this page"]
+      [:ol ;(seq [e :in entries]
+              [:li {:class (string "toc-h" (e :level))}
+               [:a {:href (string "#" (e :id))} (e :text)]])]]
+     ;anchored]))
+
 # -- pages ---------------------------------------------------------------
 
 (var- generated-line
@@ -280,7 +376,7 @@
   (write-page! {:out out :here here
                 :title (or (md/title source) src)
                 :lang (doc-lang source)
-                :body body}))
+                :body (with-toc body)}))
 
 (defn- config-page! []
   (def body @[[:h1 "Config reference"]
@@ -317,7 +413,7 @@
                          [:dd (or (clean-doc (c :doc)) "")]])
                       components)])))
   (write-page! {:out "config.html" :here "config.html"
-                :title "Config reference" :body body}))
+                :title "Config reference" :body (with-toc body)}))
 
 (defn- cli-page! []
   (def commands
@@ -347,6 +443,308 @@
   (write-page! {:out "cli.html" :here "cli.html"
                 :title "CLI reference" :body body}))
 
+# -- module reference ----------------------------------------------------
+#
+# One page per package of the bundle, projected from what the package
+# already says about itself: the :description of its project.janet,
+# the manifests of its plugins (doc, config slice, components,
+# extension points, contributions), the CLI commands those plugins
+# contribute, and — the part no other page has — every documented
+# public binding of every module in its tree, read by importing the
+# module into this generator's composition and walking the module
+# environment. Docstrings are the source of every word; nothing on
+# these pages is written here.
+
+(defn- repo-rel
+  "A path under the repository root, made repo-relative."
+  [path]
+  (def prefix (string packages/root "/"))
+  (if (string/has-prefix? prefix path)
+    (string/slice path (length prefix))
+    path))
+
+(defn- package-description
+  "The :description string of a package's project.janet."
+  [dir]
+  (def path (string packages/root "/" dir "/project.janet"))
+  (when (= :file (os/stat path :mode))
+    (def p (parser/new))
+    (parser/consume p (slurp path))
+    (parser/eof p)
+    (var found nil)
+    (while (parser/has-more p)
+      (def form (parser/produce p))
+      (when (and (indexed? form) (= 'declare-project (first form)))
+        (def kvs (drop 1 form))
+        (loop [i :range [0 (length kvs)]
+               :when (= :description (get kvs i))]
+          (set found (get kvs (inc i))))))
+    (when (string? found) found)))
+
+(defn- module-files
+  "Every .janet file of a package's void/ tree, sorted."
+  [dir]
+  (def out @[])
+  (defn walk [p]
+    (each f (sorted (os/dir p))
+      (def full (string p "/" f))
+      (case (os/stat full :mode)
+        :directory (walk full)
+        :file (when (string/has-suffix? ".janet" f)
+                (array/push out full)))))
+  (def base (string packages/root "/" dir "/void"))
+  (when (= :directory (os/stat base :mode)) (walk base))
+  out)
+
+(defn- module-of
+  "The import name of a module file: <dir>/void/http/router.janet ->
+  void/http/router, with a trailing /init folded away."
+  [dir file]
+  (def base (string packages/root "/" dir "/void/"))
+  (def rel (string/slice file (length base) -7))
+  (def name (string "void/" rel))
+  (if (string/has-suffix? "/init" name)
+    (string/slice name 0 -6)
+    name))
+
+(defn- module-bindings
+  "The documented public bindings of a module, in source order:
+  {:sym :doc :kind :line :file}. Nil when the module does not load in
+  this composition (nothing in the bundle currently refuses)."
+  [name]
+  (def [ok env] (protect (require name)))
+  (when ok
+    (sorted-by
+      |($ :line)
+      (seq [[sym meta] :pairs env
+            :when (and (symbol? sym) (table? meta)
+                       (string? (meta :doc)) (not (meta :private)))]
+        (def v (if (nil? (get meta :value)) (get-in meta [:ref 0]) (meta :value)))
+        (def sm (meta :source-map))
+        {:sym sym
+         :doc (meta :doc)
+         :kind (cond (meta :macro) "macro"
+                     (or (function? v) (cfunction? v)) "fn"
+                     "value")
+         :line (get sm 1 0)
+         :file (get sm 0)}))))
+
+(defn- dedent-doc
+  "A docstring's lines with the source indentation of the continuation
+  lines removed — the first line never carries any."
+  [doc]
+  (def lines (string/split "\n" doc))
+  (def rest-lines (drop 1 lines))
+  (def indents
+    (seq [l :in rest-lines :when (not (empty? (string/trim l)))]
+      (- (length l) (length (string/triml l)))))
+  (def cut (if (empty? indents) 0 (min ;indents)))
+  [(first lines)
+   ;(map |(if (<= (length $) cut) "" (string/slice $ cut)) rest-lines)])
+
+(defn- doc-hiccup
+  "A docstring as hiccup blocks: blank-line paragraphs, and a block
+  whose every line is indented four spaces is a usage example — the
+  convention the corpus's docstrings already follow."
+  [doc]
+  (def blocks @[])
+  (def cur @[])
+  (defn flush! []
+    (unless (empty? cur)
+      (array/push blocks (tuple ;cur))
+      (array/clear cur)))
+  (each line (dedent-doc doc)
+    (if (empty? (string/trim line)) (flush!) (array/push cur line)))
+  (flush!)
+  (seq [b :in blocks]
+    (if (all |(string/has-prefix? "    " $) b)
+      [:pre [:code (string (string/join (map |(string/slice $ 4) b) "\n") "\n")]]
+      [:p ;(md/inline-markup (string/join (map string/trim b) " "))])))
+
+(defn- contribution-entry
+  "One contributed value as [dt-content dd-content]: named
+  contributions show their name and doc, anonymous ones their value."
+  [c]
+  (def v (c :value))
+  (def label (when (dictionary? v) (or (v :name) (v :key))))
+  (if label
+    [[:code (string label)]
+     (or (clean-doc (v :doc)) "")]
+    [[:code (let [r (render-value v)]
+              (if (> (length r) 100) (string (string/slice r 0 100) "…") r))]
+     ""]))
+
+(defn- plugin-section!
+  "The manifest of one plugin as page blocks, pushed onto body."
+  [body m cli-contribs]
+  (def name (m :name))
+  (array/push body [:h2 {:id (md/slug (string name))} [:code (string name)]])
+  (when-let [doc (clean-doc (m :doc))]
+    (array/push body [:p doc]))
+  (def requires (m :requires))
+  (unless (or (nil? requires) (empty? requires))
+    (array/push body
+                [:p {:class "muted"} "Requires: "
+                 ;(mapcat |[[:code (string $)] " "] (sorted (keys requires)))]))
+  (when-let [key (m :config-key)]
+    (array/push body
+                [:p "Config slice: " [:code (string/format "[%q]" key)]
+                 " — see the " [:a {:href "../config.html"} "config reference"]
+                 " for the schema and defaults."])
+    (when-let [defaults (m :config-defaults)]
+      (unless (and (dictionary? defaults) (empty? defaults))
+        (array/push body
+                    [:p {:class "muted"} "Defaults: "
+                     [:code (render-value defaults)]]))))
+  (def components (or (m :components) []))
+  (unless (empty? components)
+    (array/push body [:p [:strong "Components"]])
+    (array/push body
+                [:dl {:class "ref"}
+                 ;(mapcat
+                    (fn [c]
+                      [[:dt [:code (string (c :key))]
+                        ;(seq [p :in (or (c :provides) [])]
+                           [:span {:class "tag"} (string "provides " p)])]
+                       [:dd (or (clean-doc (c :doc)) "")]])
+                    components)]))
+  (def points (or (m :extension-points) {}))
+  (unless (empty? points)
+    (array/push body [:p [:strong "Extension points"]])
+    (array/push body
+                [:dl {:class "ref"}
+                 ;(mapcat
+                    (fn [pname]
+                      (def point (points pname))
+                      [[:dt [:code (string pname)]
+                        [:span {:class "tag"}
+                         (string (get point :cardinality :many))]]
+                       [:dd (or (clean-doc (point :doc)) "")]])
+                    (sorted (keys points)))]))
+  (def contributes (or (m :contributes) {}))
+  (unless (empty? contributes)
+    (array/push body [:p [:strong "Contributes"]])
+    (each pname (sorted (keys contributes))
+      (array/push body
+                  [:p {:class "muted"} "to " [:code (string pname)] ":"])
+      (array/push body
+                  [:dl {:class "ref"}
+                   ;(mapcat
+                      (fn [v]
+                        (def [dt dd] (contribution-entry {:value v}))
+                        [[:dt dt] [:dd dd]])
+                      (contributes pname))])))
+  (unless (empty? cli-contribs)
+    (array/push body [:p [:strong "CLI commands"]])
+    (array/push body
+                [:dl {:class "ref"}
+                 ;(mapcat
+                    (fn [c]
+                      (def spelling
+                        (string/join (string/split "/" (string (c :name))) " "))
+                      [[:dt [:code (string "void " spelling)]
+                        (when (c :read-only?)
+                          [:span {:class "tag ro"} "read-only"])]
+                       [:dd (or (clean-doc (c :doc)) "")]])
+                    cli-contribs)])))
+
+(defn- package-page!
+  "One package's reference page: site/modules/<dir>.html."
+  [pkg]
+  (def dir (get-in packages/graph [pkg :dir]))
+  (def marker (string "/" dir "/void/"))
+  (def plugin-names
+    (sorted (seq [name :in (keys (boot :manifests))
+                  :let [m (get-in boot [:manifests name])]
+                  :when (and (m :source) (string/find marker (m :source)))]
+              name)))
+  (def plugin-set (tabseq [n :in plugin-names] n true))
+  (def cli-by-plugin @{})
+  (each c (or (get-in boot [:extensions :void.core/cli :contributions]) [])
+    (when (plugin-set (c :plugin))
+      (def arr (or (cli-by-plugin (c :plugin))
+                   (let [a @[]] (put cli-by-plugin (c :plugin) a) a)))
+      (array/push arr (c :value))))
+  (def body @[[:h1 [:code (string pkg)]]])
+  (when-let [desc (package-description dir)]
+    (array/push body [:p desc]))
+  (array/push body
+              [:p {:class "muted"}
+               "Source: "
+               [:a {:href (string page/github "/tree/main/" dir)}
+                [:code (string dir "/")]]
+               " · every entry below is projected from the package's "
+               "declarations and docstrings."])
+  (each name plugin-names
+    (plugin-section! body (get-in boot [:manifests name])
+                     (sorted-by |(string ($ :name))
+                                (get cli-by-plugin name []))))
+  (def files (module-files dir))
+  (unless (empty? files)
+    (array/push body [:h2 {:id "api"} "API"])
+    (array/push body
+                [:p "The documented public bindings of every module in "
+                 "the package, read from the modules themselves — name, "
+                 "kind, docstring, and where the definition lives."]))
+  (each file files
+    (def mod (module-of dir file))
+    (def bindings (module-bindings mod))
+    (def gh-file (string page/github "/blob/main/" (repo-rel file)))
+    (array/push body
+                [:h3 {:id (string "api-" (md/slug mod))}
+                 [:code mod]
+                 " " [:a {:class "muted" :href gh-file} "source"]])
+    (cond
+      (nil? bindings)
+      (array/push body
+                  [:p {:class "muted"}
+                   "Not loadable in the reference composition — see the source."])
+
+      (empty? bindings)
+      (array/push body
+                  [:p {:class "muted"} "No documented public bindings."])
+
+      (array/push body
+                  [:dl {:class "ref"}
+                   ;(mapcat
+                      (fn [b]
+                        [[:dt [:a {:href (string gh-file "#L" (b :line))}
+                               [:code (string (b :sym))]]
+                          [:span {:class "tag"} (b :kind)]]
+                         [:dd ;(doc-hiccup (b :doc))]])
+                      bindings)])))
+  (write-page! {:out (string "modules/" dir ".html")
+                :here "modules/index.html"
+                :title (string pkg)
+                :body (with-toc body)}))
+
+(defn- modules-pages!
+  "The per-package pages plus their index. Returns how many pages."
+  []
+  (def pkgs (packages/packages))
+  (def body
+    @[[:h1 "Modules"]
+      [:p "One page per package of the bundle — its plugins with their "
+       "config slices, components, extension points and contributions, "
+       "the CLI commands they bring, and the documented public bindings "
+       "of every module, projected from the code the way the "
+       [:a {:href "../config.html"} "config"] " and "
+       [:a {:href "../cli.html"} "CLI"] " references are. "
+       "No page here is written by hand."]
+      [:div {:class "table-wrap"}
+       [:table
+        [:thead [:tr [:th "Package"] [:th "Description"]]]
+        [:tbody
+         ;(seq [pkg :in pkgs]
+            (def dir (get-in packages/graph [pkg :dir]))
+            [:tr
+             [:td [:a {:href (string dir ".html")} [:code (string pkg)]]]
+             [:td (or (package-description dir) "")]])]]]])
+  (write-page! {:out "modules/index.html" :here "modules/index.html"
+                :title "Modules" :body body})
+  (each pkg pkgs (package-page! pkg))
+  (inc (length pkgs)))
+
 # -- main ----------------------------------------------------------------
 
 (defn- git-sha []
@@ -370,7 +768,9 @@
   (each d doc-pages (doc-page! d))
   (config-page!)
   (cli-page!)
-  (printf "%d pages, %d plugins, %d CLI commands"
-          (+ 2 (length doc-pages))
+  (def module-pages (modules-pages!))
+  (printf "%d pages, %d plugins, %d CLI commands, %d module pages"
+          (+ 2 module-pages (length doc-pages))
           (length (keys (boot :manifests)))
-          (length (or (get-in boot [:extensions :void.core/cli :resolved]) []))))
+          (length (or (get-in boot [:extensions :void.core/cli :resolved]) []))
+          (dec module-pages)))

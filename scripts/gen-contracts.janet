@@ -82,6 +82,7 @@
 (require "void/notify/inapp")
 (require "void/notify/webhook")
 (require "void/notify/jobs")
+(require "void/dash/init")
 (require "void/dev/init")
 (require "void/bench/init")
 
@@ -106,6 +107,7 @@
                :void/admin :void/admin-jobs :void/admin-mcp
                :void/storage :void/storage-http :void/storage-s3 :void/storage-admin
                :void/notify :void/notify-mail :void/notify-inapp :void/notify-webhook :void/notify-jobs
+               :void/dash
                :void/dev :void/bench]
      :profile :dev
      # three drivers now provide :void/db-driver, two stores provide
