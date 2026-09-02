@@ -357,21 +357,38 @@
 
             # an introspection response is claims, and the same three
             # claims decide as they do for a JWT — the endpoint told us
-            # the token is alive, not that it is ours
-            (and (cfg :issuer) (get body :iss) (not= (string (get body :iss)) (cfg :issuer)))
+            # the token is alive, not that it is ours. RFC 7662 makes
+            # both fields optional, so a *missing* claim is a refusal
+            # exactly like a wrong one: a server that does not echo
+            # `aud` would otherwise turn every active token of the
+            # issuer into a token for this resource — the confused
+            # deputy the audience gate exists to prevent
+            (and (cfg :issuer)
+                 (let [iss (get body :iss)]
+                   (or (nil? iss) (not= (string iss) (cfg :issuer)))))
             (no "wrong issuer")
 
             (and (cfg :audience)
                  (let [aud (get body :aud)]
-                   (and aud (not (if (indexed? aud)
-                                   (index-of (cfg :audience) (map string aud))
-                                   (= (string aud) (cfg :audience)))))))
+                   (or (nil? aud)
+                       (not (if (indexed? aud)
+                              (index-of (cfg :audience) (map string aud))
+                              (= (string aud) (cfg :audience)))))))
             (no "wrong audience")
 
             (and (get body :exp) (< (+ (get body :exp) (cfg :leeway)) (os/time)))
             (no "expired")
 
             {:ok true :claims body}))))))
+
+(defn- signature-refusal?
+  ``Did a JWS fail on its *signature* (or on the segment carrying it)?
+  That failure is final: the token is a forged or corrupted JWT, never
+  an opaque token, and asking the issuer about it would let anybody
+  who can mint garbage JWSs spend one introspection call — and one
+  parked fiber — per request against the authorization server.``
+  [reason]
+  (truthy? (and (bytes? reason) (string/find "signature" (string reason)))))
 
 (defn verify
   ``Check an access token and return `{:ok true :claims}` or
@@ -390,8 +407,12 @@
           out
           # a JWS this server cannot verify is not automatically an
           # opaque token: introspection is tried only when it is
-          # configured, and the JWT reason is what the log keeps
-          (if (get-in cfg [:introspection :url])
+          # configured — and never for a signature that failed, which
+          # is a final answer (the fallback is for "no key for this
+          # kid", where the issuer genuinely may know better). The JWT
+          # reason is what the log keeps
+          (if (and (get-in cfg [:introspection :url])
+                   (not (signature-refusal? (out :reason))))
             (introspect tok cfg ring)
             out)))
       (introspect tok cfg ring))))

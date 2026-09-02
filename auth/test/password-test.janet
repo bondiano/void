@@ -55,6 +55,15 @@
 (assert (= :no-such-user ((password/check (users) {:password "hunter2"}) :reason))
         "no selector at all is not a login")
 
+# :by comes off the submitted form, so it is a closed list: an open one
+# would let a visitor pick the WHERE column of the user query
+(def probed (password/check (users) {:by :role :value "admin" :password "hunter2"}))
+(assert (= :bad-selector (probed :reason))
+        "a selector outside the whitelist is refused, not looked up")
+(assert (nil? (probed :identity)))
+(assert (= :bad-selector ((password/check (users) @{"by" "claims" "value" "x" "password" "x"}) :reason))
+        "string keys included — that is exactly how a form would spell it")
+
 # -- rehashing -----------------------------------------------------------
 
 (def written @[])

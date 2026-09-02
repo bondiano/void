@@ -217,4 +217,25 @@
   (assert (= 200 ((test/inject c {:uri "/"}) :status))
           "while a route with no limit of its own is untouched — no global limit is configured"))
 
+# -- one session-cookie name, not two ------------------------------------
+#
+# [:http :session :cookie] names the cookie; [:security :csrf
+# :session-cookie] tells the CSRF rule what to look for. The boot hook
+# keeps them one value: unset, the CSRF side follows http's; set to
+# something else, the boot refuses — the disagreement's only observable
+# effect would be CSRF silently not applying to session-bearing flows.
+
+(test/with-http [c {:plugins plugins :only only
+                    :config (config {:http {:port 0 :access-log false
+                                            :session {:enabled true :cookie "acme-session"}}})}]
+  (assert (= "acme-session" (get-in security/settings [:csrf :session-cookie]))
+          "a renamed session cookie is followed by the CSRF rule without a second setting"))
+
+(def [ok-mismatch err-mismatch]
+  (protect (test/start! {:plugins plugins :profile :test :only only
+                         :config (config {:security {:signing-key (string/repeat "k" 32)
+                                                     :csrf {:session-cookie "legacy-name"}}})})))
+(assert (not ok-mismatch) "a csrf session-cookie that disagrees with http's does not boot")
+(assert (string/find "session-cookie" (string err-mismatch)) (string err-mismatch))
+
 (print "http-test ok")

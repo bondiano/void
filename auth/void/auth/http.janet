@@ -332,12 +332,36 @@
 (defn- access-of [rmeta]
   (get rmeta :void.auth/access (settings :default)))
 
+(defn local-path?
+  ``Is `s` a path on this application — the only kind of value a
+  `?next=` redirect may follow? `//evil.example` is a scheme-relative
+  URL, and `/\evil.example` is the *same* URL to a browser, which
+  normalizes the backslash in a Location header — so any second
+  character from the `/ \` set is refused with it.
+
+  This is the validator for both halves of the flow: `unauthorized`
+  below mints `?next=` from the request URI, and whoever consumes the
+  parameter (a login handler, void/oauth's start route) must pass it
+  through here before redirecting — an unvalidated `?next=` is an
+  open redirect wearing a convenience feature.``
+  [s]
+  (and (bytes? s)
+       (string/has-prefix? "/" s)
+       (or (= 1 (length s))
+           (let [second (in s 1)]
+             (and (not= second (chr "/"))
+                  (not= second (chr "\\")))))))
+
 (defn unauthorized
   ``The response for a request that needed somebody and had nobody:
   a redirect to the login page, or the configured status through the
   error renderers — never a raise, because a stack trace per
   unauthorized request is a bill that comes due exactly when
-  somebody is trying passwords.``
+  somebody is trying passwords.
+
+  The `?next=` it mints is the request's own URI; the login handler
+  that honours it must check it with `local-path?` first — the value
+  round-trips through the visitor's browser and comes back as input.``
   [req &opt names]
   (if (= :redirect (settings :unauthenticated))
     (let [target (get req :uri (get req :path "/"))]

@@ -75,6 +75,10 @@
                         :scope "mcp:tools mcp:resources" :exp (+ (os/time) 300)}
          "opaque-elsewhere" {:active true :sub "user:7" :aud "https://other.example/api"
                              :iss issuer :exp (+ (os/time) 300)}
+         # RFC 7662 makes both claims optional, and a server that
+         # omits them is the common case the refusals below exist for
+         "opaque-no-aud" {:active true :sub "user:7" :iss issuer :exp (+ (os/time) 300)}
+         "opaque-no-iss" {:active true :sub "user:7" :aud resource :exp (+ (os/time) 300)}
          {:active false})))
 
 # -- tokens --------------------------------------------------------------
@@ -206,6 +210,17 @@
 (assert (not ((oauth/verify "opaque-elsewhere") :ok))
         "and so is an active one issued for another resource — `active` is not `mine`")
 
+# a server that does not echo the claim does not get a pass: with
+# [:auth-oauth :audience] set, an answer without `aud` would make every
+# active token of the issuer a token for this resource (the confused
+# deputy), and an answer without `iss` the same for a foreign issuer
+(def no-aud (oauth/verify "opaque-no-aud"))
+(assert (not (no-aud :ok)) "an active token whose introspection carries no aud is refused")
+(assert (string/find "audience" (no-aud :reason)))
+(def no-iss (oauth/verify "opaque-no-iss"))
+(assert (not (no-iss :ok)) "and one whose introspection carries no iss is refused too")
+(assert (string/find "issuer" (no-iss :reason)))
+
 # the request that goes out carries the resource server's own
 # credentials, and never the user's token in a header somebody else
 # might log
@@ -227,6 +242,35 @@
 (assert (not ((oauth/verify "opaque-good" strict ring-state) :ok))
         "[:auth-oauth :mode] :jwt refuses an opaque token")
 (assert (= calls-before (calls :introspect)) "without calling the issuer about it")
+
+# -- what :auto does and does not send to the issuer ---------------------
+#
+# A JWS whose signature failed is a final answer, and forging one costs
+# an attacker nothing — so it must not become an introspection call
+# (one outgoing request and one parked fiber per forged token would be
+# a DoS lever against the authorization server). A kid this process
+# does not know is different: there the issuer genuinely may know
+# better, and the fallback stays.
+
+(def auto-cfg (oauth/build-settings
+                {:config {:values {:auth-oauth
+                                   (oauth-config {:introspection
+                                                  {:url (string issuer "/introspect")}})}}}))
+
+(def genuine (token-for))
+(def forged-sig (let [parts (string/split "." genuine)]
+                  (string (parts 0) "." (parts 1) "." "AAAA")))
+(def before-forged (calls :introspect))
+(assert (not ((oauth/verify forged-sig auto-cfg ring-state) :ok))
+        "a JWS with a broken signature is refused")
+(assert (= before-forged (calls :introspect))
+        "without asking the issuer about it — a forged JWT is not an opaque token")
+
+(def before-kid (calls :introspect))
+(assert (not ((oauth/verify (token-for {} {:kid "rotated-away"}) auto-cfg ring-state) :ok))
+        "a kid nobody published is still refused in the end")
+(assert (= (inc before-kid) (calls :introspect))
+        "but that one *is* worth one introspection call: the issuer may have rotated")
 
 (test/stop! boot)
 

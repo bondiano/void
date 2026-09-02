@@ -53,6 +53,23 @@
 (def old (challenge/issue codes "user:4" {:ttl -1}))
 (assert (nil? (challenge/redeem codes (old :handle) (old :code))) "an expired challenge is not redeemable")
 
+# redeem checks :expires itself, so a store whose :take forgets to is
+# not the last line of defense — the contract does not require the
+# check, and a third-party store without it must not mint eternal links
+(def naive-rows @{})
+(def naive (store/normalize-challenge-store
+             {:put (fn naive-put [id record ttl] (put naive-rows id record) id)
+              :take (fn naive-take [id]
+                      (def r (get naive-rows id))
+                      (put naive-rows id nil)
+                      r)}))
+(def stale (challenge/issue naive "user:5" {:kind :otp :ttl -10}))
+(assert (nil? (challenge/redeem naive (stale :handle) (stale :code)))
+        "an expired record a store hands back anyway is still refused")
+(def live (challenge/issue naive "user:5" {:kind :otp}))
+(assert (= "user:5" ((challenge/redeem naive (live :handle) (live :code)) :subject))
+        "while a live one redeems through the same naive store")
+
 (assert (nil? (challenge/redeem codes nil "123456")))
 (assert (nil? (challenge/redeem codes "nothing" "123456")))
 (assert (nil? (challenge/redeem codes "user:2" nil)))

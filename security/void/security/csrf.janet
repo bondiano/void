@@ -46,6 +46,20 @@
 ### `x-csrf-token` header (what `(security/htmx-meta)` arranges for
 ### htmx and what a fetch() sets), and nothing else: a token in a query
 ### string ends up in logs and referrers.
+###
+### **Login CSRF is the deliberate hole in the cookie-borne rule, and
+### routes must close it themselves.** A `POST /login` from a visitor
+### with no cookie at all is not checked by the rule above — there is
+### no credential of theirs to ride. What that leaves open is *login
+### CSRF*: another origin submits the attacker's credentials, the
+### victim's browser is signed into the attacker's account, and
+### whatever the victim then does there (a saved card, an uploaded
+### document) lands where the attacker can read it. The fix is
+### `:void.security/csrf true` on the login, registration and
+### password-reset routes — the flag that means "always check,
+### cookie or not". The `void make auth` generators stamp it on every
+### route they write; a hand-written login form owes itself the same
+### line.
 
 (import void/crypto :as crypto)
 (import void/http/ring :as ring)
@@ -57,6 +71,12 @@
    :field "_csrf"
    :header "x-csrf-token"
    :cookie "void-csrf"
+   # the same name [:http :session :cookie] defaults to. The boot hook
+   # in ./init keeps them one value: left on this default it follows
+   # http's setting, and set to anything else that disagrees with it
+   # the boot refuses — a renamed session cookie the CSRF rule does
+   # not know about would silently stop the check on every
+   # anonymous-session flow
    :session-cookie "void-session"
    # eight hours: longer than a form sits open, shorter than a session
    :max-age 28800

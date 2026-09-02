@@ -315,6 +315,15 @@
   (assert (= "/" (get-in landed [:headers "location"]))
           "a scheme-relative ?next= falls back to [:oauth :after-sign-in]")
 
+  # and neither is its backslash spelling: browsers normalize \ to /
+  # in a Location header, so /\evil.example is //evil.example in effect
+  (def q8b (start-flow c (string "/oauth/acme?next=" (wire/url-encode `/\evil.example`))))
+  (def landed-b (test/inject c {:uri (string "/oauth/acme/callback?state="
+                                             (wire/url-encode (q8b "state"))
+                                             "&code=" (mint-code! :acme q8b))}))
+  (assert (= "/" (get-in landed-b [:headers "location"]))
+          "a /\\ ?next= falls back to [:oauth :after-sign-in] too")
+
   # -- a provider without OIDC --------------------------------------------
 
   (def q9 (start-flow c "/oauth/plain"))

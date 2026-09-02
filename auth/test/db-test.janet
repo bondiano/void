@@ -107,6 +107,10 @@
   (assert (nil? ((users :find) {:by :email :value "nobody@b.c"})))
   (assert (nil? ((users :find) {:by :username :value "ann"}))
           "a column the configuration does not name cannot be searched")
+  (assert (nil? ((users :find) {:by :role :value "admin"}))
+          "an unknown selector is nobody's column — the table has one, and the caller still does not get to choose the WHERE")
+  (assert (nil? ((users :find) {:by :no_such_column :value "x"}))
+          "and a column that does not exist is nil, not a driver error a login form could probe the schema with")
 
   (assert (= :ok ((password/check users {:email "a@b.c" :password "hunter2"}) :reason))
           "and the password strategy works over it unchanged")

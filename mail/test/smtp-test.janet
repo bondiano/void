@@ -178,6 +178,39 @@
 (assert (nil? (smtp/auth-refusal {:host "smtp.example.com"}))
         "and a server that wants no credentials has none to leak")
 
+# -- a reply with no end is a bounded error, not an allocation -----------
+#
+# The server side of these two is a peer that never finishes: bytes
+# with no line ending, or continuation lines forever. On the plaintext
+# default (and on :starttls before the handshake) that peer can be a
+# MITM, so the failure mode has to be a structural error — not a buffer
+# that grows until the process dies.
+
+(defn- fake-conn
+  "A connection whose :read is scripted — enough of the table for
+  read-reply, no socket."
+  [reader]
+  @{:stream @{:read reader}
+    :buf @""
+    :pos 0
+    :cfg {:timeout 1}
+    :caps @{}
+    :closed false})
+
+(def [ok-line err-line]
+  (protect (smtp/read-reply
+             (fake-conn (fn [_ n buf _] (buffer/push buf (string/repeat "A" 4096)) buf)))))
+(assert (not ok-line) "a line that never ends is an error")
+(assert (string/find "line exceeds" (err-line :message)) (err-line :message))
+(assert (not (smtp/permanent? err-line))
+        "a transport defect is retryable — the server never gave a final answer")
+
+(def [ok-lines err-lines]
+  (protect (smtp/read-reply
+             (fake-conn (fn [_ n buf _] (buffer/push buf "250-still going\r\n") buf)))))
+(assert (not ok-lines) "a reply of endless continuation lines is an error")
+(assert (string/find "lines" (err-lines :message)) (err-lines :message))
+
 # -- the pure halves -----------------------------------------------------
 
 (assert (= "a\r\n..\r\nb" (smtp/dot-stuff "a\n.\nb")))

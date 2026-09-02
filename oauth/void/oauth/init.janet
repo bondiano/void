@@ -108,13 +108,12 @@
 
 # -- the routes -----------------------------------------------------------
 
-(defn- local-path?
-  # the only :next accepted: a path on this application. "//evil.example"
-  # is a scheme-relative URL and the open redirect this check exists for
-  [s]
-  (and (bytes? s)
-       (string/has-prefix? "/" s)
-       (not (string/has-prefix? "//" s))))
+(def- local-path?
+  # the only :next accepted: a path on this application. The check
+  # lives in void/auth/http, next to the ?next= it validates — it
+  # refuses "//evil.example" *and* "/\evil.example", which browsers
+  # read as the same scheme-relative URL
+  auth-http/local-path?)
 
 (defn- refuse
   "A refusal through the error renderers — HTML for a browser,

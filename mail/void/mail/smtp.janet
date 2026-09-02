@@ -173,11 +173,30 @@
     (protect (:close (c :stream))))
   nil)
 
+(def max-reply-line
+  ``The longest reply line this client reads before calling the reply
+  malformed. RFC 5321 §4.5.3.1.5 caps a reply line at 512 octets; the
+  eightfold slack forgives a chatty server, and the limit is what
+  keeps a server (or a MITM on the plaintext default) that never
+  sends a newline from growing the buffer until the process dies.``
+  4096)
+
+(def max-reply-lines
+  ``How many lines one reply may run. EHLO answers a dozen; a server
+  still sending continuation lines after fifty is not finishing a
+  reply, it is feeding an unbounded array.``
+  50)
+
 (defn- read-line! [c]
   (def buf (c :buf))
   (def timeout (get-in c [:cfg :timeout] (defaults :timeout)))
   (var at (string/find "\n" buf (c :pos)))
   (while (nil? at)
+    # bounded *before* the next read: a peer that streams bytes with
+    # no line ending must hit a limit, not the allocator
+    (when (> (- (length buf) (c :pos)) max-reply-line)
+      (fail nil (string/format "reply line exceeds %d bytes without a line ending"
+                               max-reply-line)))
     (def before (length buf))
     # a method call, not net/read: after STARTTLS the stream is a TLS
     # session (ADR-0038), which answers :read with the same signature
@@ -186,6 +205,8 @@
     (when (or (nil? result) (= before (length buf)))
       (fail nil "the server closed the connection"))
     (set at (string/find "\n" buf (c :pos))))
+  (when (> (- at (c :pos)) max-reply-line)
+    (fail nil (string/format "reply line exceeds %d bytes" max-reply-line)))
   (def line (string/slice buf (c :pos) at))
   (put c :pos (inc at))
   (when (> (c :pos) 65536)
@@ -196,15 +217,19 @@
   (string/trimr line "\r"))
 
 (defn read-reply
-  ``Read one reply, however many lines it takes. Returns `{:code
-  :lines :text}` — a continuation line is `250-…`, the last one
-  `250 …`, and reading only the first is the bug that makes every
-  later command answer with somebody else's reply.``
+  ``Read one reply, however many lines it takes — up to
+  `max-reply-lines`, past which the reply is a structural error rather
+  than an array that grows as long as the server keeps hyphenating.
+  Returns `{:code :lines :text}` — a continuation line is `250-…`, the
+  last one `250 …`, and reading only the first is the bug that makes
+  every later command answer with somebody else's reply.``
   [c]
   (def lines @[])
   (var code nil)
   (var done false)
   (while (not done)
+    (when (>= (length lines) max-reply-lines)
+      (fail nil (string/format "reply ran past %d lines without ending" max-reply-lines)))
     (def line (read-line! c))
     (when (< (length line) 3)
       (fail nil (string/format "malformed reply %q" line)))
