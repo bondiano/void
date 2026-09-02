@@ -243,20 +243,44 @@
   "The footer's provenance line, set by main before any page renders."
   nil)
 
-(defn- write-page! [{:out out :title title :here here :body body}]
+(defn- write-page! [{:out out :title title :here here :body body :lang lang}]
   (def path (string out-dir "/" out))
   (def dir (string/join (array/slice (string/split "/" path) 0 -2) "/"))
   (os/mkdir dir)
   (spit path
         (page/render {:title title :here here :depth (depth-of out)
-                      :body body :generated generated-line}))
+                      :body body :generated generated-line :lang lang}))
   (print "  " path))
+
+(defn- doc-lang
+  ``"ru" when the document is mostly Cyrillic prose (SPEC, the ADRs),
+  "en" otherwise — measured, not listed, so a translated document
+  changes its own lang attribute.``
+  [src]
+  (def cyr (count |(or (= $ 0xD0) (= $ 0xD1)) src))
+  (if (> (* 10 cyr) (length src)) "ru" "en"))
+
+(defn- assert-no-raw-tables!
+  ``Refuse a page with an unparsed table: a paragraph that begins with
+  a pipe is a table row the parser did not take — the exact regression
+  scripts/site/markdown.janet's separator PEG once shipped.``
+  [src node]
+  (when (indexed? node)
+    (if (= :p (first node))
+      (let [head (find string? (array/slice node 1))]
+        (when (and head (string/has-prefix? "|" head))
+          (errorf "%s: unparsed table row %q — the markdown parser did not take a table"
+                  src head)))
+      (each child node (assert-no-raw-tables! src child)))))
 
 (defn- doc-page! [{:src src :out out :here here}]
   (def source (slurp src))
+  (def body (md/parse source {:rewrite-link (rewriter src out)}))
+  (each node body (assert-no-raw-tables! src node))
   (write-page! {:out out :here here
                 :title (or (md/title source) src)
-                :body (md/parse source {:rewrite-link (rewriter src out)})}))
+                :lang (doc-lang source)
+                :body body}))
 
 (defn- config-page! []
   (def body @[[:h1 "Config reference"]

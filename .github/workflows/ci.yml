@@ -166,6 +166,13 @@ jobs:
           janet scripts/gen-contracts.janet
           git diff --exit-code docs/CONTRACTS.md
 
+      - name: The docs site generates
+        # site.yml builds and publishes only on push to main, so a PR
+        # that breaks the generator (or ships an unparsed table — the
+        # generator refuses those itself) would surface only after the
+        # merge. This is the same generation, run as a gate.
+        run: janet scripts/gen-site.janet
+
   # The user's path, which nothing above touches: `jpm test` runs against
   # the live sources in the checkout, so an installation that does not
   # work is invisible to it. Here the bundle is installed into a tree
