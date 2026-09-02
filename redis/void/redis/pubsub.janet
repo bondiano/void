@@ -64,6 +64,7 @@
     :patterns @{}
     :conn nil
     :running false
+    :epoch 0
     :fiber nil
     :stats @{:messages 0 :reconnects 0 :errors 0 :delivered 0}})
 
@@ -96,7 +97,15 @@
     (get (l :channels) (msg :channel))))
 
 (defn- deliver [l frame]
-  (when-let [msg (message-of l frame)]
+  # the decode runs on bytes some publisher chose: a payload the codec
+  # cannot read is that message's problem, not the connection's — it
+  # is dropped and counted, and the subscriber stays up
+  (def [ok msg] (protect (message-of l frame)))
+  (unless ok
+    (put-in l [:stats :errors] (inc (get-in l [:stats :errors])))
+    (log/error "an undecodable message was dropped" :ns log-ns
+               :err (if (string? msg) msg (describe msg))))
+  (when (and ok msg)
     (put-in l [:stats :messages] (inc (get-in l [:stats :messages])))
     (each f (or (handlers-for l msg) [])
       (def [ok err] (protect (f msg)))
@@ -135,10 +144,14 @@
       (each cmd (desired-commands l) (conn/send c cmd))
       c)))
 
-(defn- serve [l]
-  "Read frames until the connection fails or the subscriber stops."
+(defn- serve [l epoch]
+  "Read frames until the connection fails, the subscriber stops, or a
+  newer reader takes over."
   (def c (ensure-conn l))
-  (while (and (l :running) (conn/open? c))
+  # reaching here means a connect succeeded: the next drop is a fresh
+  # incident, not a continuation of the last backoff climb
+  (put l :conn-established true)
+  (while (and (l :running) (= epoch (l :epoch)) (conn/open? c))
     # no read timeout: a subscriber is meant to sit silent, and the
     # only thing a timeout here could mean is "nobody published"
     (deliver l (conn/receive c {:timeout conn/no-timeout}))))
@@ -151,11 +164,20 @@
     (set delay (min (b :max) (* delay (b :factor))))
     d))
 
-(defn- reader [l]
-  (def next-delay (backoff-seq l))
-  (while (l :running)
-    (def [ok err] (protect (serve l)))
-    (when (and (not ok) (l :running))
+(defn- reader [l epoch]
+  ``The reading loop of one `start!`. `epoch` is which start! this is:
+  a stop!/start! pair may run before a reader parked in a receive has
+  observed either, and a stale reader that trusted :running alone
+  would serve alongside its successor — every message delivered
+  twice. A reader that finds the epoch moved on simply leaves,
+  touching nothing its successor now owns.``
+  (var next-delay (backoff-seq l))
+  (while (and (l :running) (= epoch (l :epoch)))
+    (put l :conn-established false)
+    (def [ok err] (protect (serve l epoch)))
+    (when (l :conn-established)
+      (set next-delay (backoff-seq l)))
+    (when (and (not ok) (l :running) (= epoch (l :epoch)))
       (put-in l [:stats :reconnects] (inc (get-in l [:stats :reconnects])))
       (when-let [c (l :conn)] (protect (conn/close c)) (put l :conn nil))
       (def delay (next-delay))
@@ -164,9 +186,10 @@
                 :err (if (dictionary? err) (get err :message (describe err))
                        (describe err)))
       (ev/sleep delay)))
-  (when-let [c (l :conn)]
-    (protect (conn/close c))
-    (put l :conn nil)))
+  (when (= epoch (l :epoch))
+    (when-let [c (l :conn)]
+      (protect (conn/close c))
+      (put l :conn nil))))
 
 (defn running?
   "Is the reading fiber alive?"
@@ -179,7 +202,9 @@
   [l]
   (unless (l :running)
     (put l :running true)
-    (put l :fiber (ev/go (fn subscriber [] (reader l)))))
+    (def epoch (inc (get l :epoch 0)))
+    (put l :epoch epoch)
+    (put l :fiber (ev/go (fn subscriber [] (reader l epoch)))))
   l)
 
 (defn stop!

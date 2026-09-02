@@ -233,13 +233,24 @@
   (var done false)
   (while (not done)
     (def [state n]
-      (let [[ok r] (protect (resp/scan (c :buf) (c :pos)))]
+      (let [[ok r] (protect (resp/scan (c :buf) (c :pos)
+                                       (get-in c [:opts :max-bulk])))]
         (unless ok
           (mark-broken! c)
           (error (connection-error c "the server is not speaking RESP" r)))
         r))
     (if (= :done state)
-      (let [[value end] (resp/parse (c :buf) (c :pos))]
+      # the scanner and the grammar are written to agree, but only one
+      # of them is load-bearing for :pos — a frame the grammar refuses
+      # (or that blows up a capture function) must break the
+      # connection, never leave :pos unmoved for the next owner to
+      # trip over the same byte
+      (let [[ok parsed] (protect (resp/parse (c :buf) (c :pos)))]
+        (unless (and ok parsed)
+          (mark-broken! c)
+          (error (connection-error c "the server is not speaking RESP"
+                                   (if ok "the frame does not parse" parsed))))
+        (def [value end] parsed)
         (put c :pos end)
         (compact! c)
         (set out value)
@@ -267,7 +278,9 @@
     (cond
       (resp/attribute? v) nil
       (resp/push? v) (dispatch-push c v)
-      (do (set out v) (set done true))))
+      (do (put c :pending (max 0 (dec (c :pending))))
+          (set out v)
+          (set done true))))
   out)
 
 # -- writing -------------------------------------------------------------
@@ -283,10 +296,30 @@
     (error (connection-error c "write failed" err)))
   nil)
 
+(defn- note-sent!
+  ``Account for one command going out: it is owed a reply (`:pending`),
+  and a few commands open or close state that outlives the exchange —
+  an open MULTI queues the next owner's commands into this owner's
+  transaction, and a standing WATCH aborts it. The pool asks `clean?`
+  before reusing a connection, and this is where the answer is kept.``
+  [c args]
+  (put c :commands (inc (c :commands)))
+  (put c :pending (inc (c :pending)))
+  (def head (first args))
+  (case (when (or (bytes? head) (keyword? head) (symbol? head))
+          (string/ascii-upper (string head)))
+    "MULTI" (put c :in-multi true)
+    "EXEC" (do (put c :in-multi false) (put c :watching false))
+    "DISCARD" (do (put c :in-multi false) (put c :watching false))
+    "WATCH" (put c :watching true)
+    "UNWATCH" (put c :watching false)
+    "RESET" (do (put c :in-multi false) (put c :watching false)))
+  nil)
+
 (defn send
   "Write one command. The reply is left in the stream for `receive`."
   [c args]
-  (put c :commands (inc (c :commands)))
+  (note-sent! c args)
   (write! c (resp/encode args)))
 
 (defn send-all
@@ -294,7 +327,7 @@
   pipeline, and the reason a pipeline is one round trip rather than
   N."
   [c commands]
-  (put c :commands (+ (c :commands) (length commands)))
+  (each args commands (note-sent! c args))
   (write! c (resp/encode-all commands)))
 
 # -- commands ------------------------------------------------------------
@@ -437,6 +470,9 @@
       :id next-id
       :generation 0
       :commands 0
+      :pending 0
+      :in-multi false
+      :watching false
       :protocol 2
       :server @{}
       :database 0
@@ -454,6 +490,17 @@
   "Is this connection usable — open, and not broken by a failure?"
   [c]
   (and (not (c :closed)) (not (c :broken))))
+
+(defn clean?
+  ``Is the protocol state of this connection known-good: every sent
+  command answered, no MULTI open, no WATCH standing? The pool refuses
+  to reuse one that is not — a fiber cancelled between a send and its
+  reply leaves the answer in flight for the next owner to read as its
+  own, and an open transaction would swallow that owner's commands.``
+  [c]
+  (and (zero? (c :pending))
+       (not (c :in-multi))
+       (not (c :watching))))
 
 (defn close
   "Close the connection. Closing twice is not an error — the pool and
@@ -477,6 +524,9 @@
   (put c :stream stream)
   (put c :buf @"")
   (put c :pos 0)
+  (put c :pending 0)
+  (put c :in-multi false)
+  (put c :watching false)
   (put c :closed false)
   (put c :broken false)
   (put c :generation (inc (c :generation)))

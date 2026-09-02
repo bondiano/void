@@ -32,7 +32,10 @@
 ### the honest caveat: a command whose reply was lost may have been
 ### applied, so a retried INCR could count twice. Set
 ### `[:redis :retry] false` where that matters more than the stale
-### socket does.
+### socket does. A *blocking* command (BLPOP and its family) is never
+### retried at all: its lost reply may have carried an element the
+### server already removed, and a replay would quietly take a second
+### one — that error goes to the caller.
 
 (import void/core/log :as log)
 (import ./codec :as codec)
@@ -159,13 +162,31 @@
   (when (indexed? args)
     (string/ascii-upper (string (get args 0 "")))))
 
+(def- blocking-commands
+  ``Commands the server holds the reply to on purpose. A lost reply to
+  one of these may have carried an element the server had already
+  removed — replaying the command would take a second one — so the
+  funnel's retry refuses them and lets the error out. XREAD and
+  XREADGROUP are here wholesale: whether they block depends on an
+  argument, and the safe side of that guess is not retrying.``
+  {"BLPOP" true "BRPOP" true "BLMOVE" true "BRPOPLPUSH" true
+   "BLMPOP" true "BZPOPMIN" true "BZPOPMAX" true "BZMPOP" true
+   "XREAD" true "XREADGROUP" true "WAIT" true "WAITAOF" true})
+
+(defn- blocking-label?
+  [label]
+  (truthy? (get blocking-commands label)))
+
 (defn execute
   ``The funnel: run (f conn) on the fiber's connection, or on one taken
   from the pool for the call. Times it into the pool metrics, logs it
-  at :debug, discards a connection whose protocol state is in doubt,
-  and retries once when a pooled socket turns out to have been closed
-  while idle (see the module docstring for what that trades).``
-  [f &opt label]
+  at :debug, discards a connection whose protocol state is in doubt
+  (any checkin of a connection that is not conn/clean? closes it), and
+  retries once when a pooled socket turns out to have been closed
+  while idle (see the module docstring for what that trades).
+  `no-retry` turns the retry off for this call — what a blocking
+  command needs, where a replay is not idempotent even in principle.``
+  [f &opt label no-retry]
   (def client (active-client))
   (if (scoped?)
     (run-on client (dyn conn-dyn) f label)
@@ -185,6 +206,7 @@
           ok (do (set out res) (set done true))
 
           (and (= 1 attempt)
+               (not no-retry)
                (client :retry)
                (conn/fatal? res)
                (not (c :fresh)))
@@ -202,16 +224,23 @@
 
   An error reply throws (see conn/command-error); `opts` :raw returns
   it as a value instead, and :timeout overrides the read timeout for a
-  blocking command.``
+  blocking command. A blocking command is never retried: its reply may
+  carry an element the server already removed, and a replay would take
+  a second one.``
   [args &opt opts]
-  (execute (fn one [c] (conn/call c args opts)) (label-of args)))
+  (def label (label-of args))
+  (execute (fn one [c] (conn/call c args opts)) label
+           (blocking-label? label)))
 
 (defn pipeline
   "Run several commands in one round trip on one connection. See
-  conn/pipeline for what it does and does not guarantee."
+  conn/pipeline for what it does and does not guarantee. A pipeline
+  carrying a blocking command is, like the command itself, never
+  retried."
   [commands &opt opts]
   (execute (fn many [c] (conn/pipeline c commands opts))
-           (string "PIPELINE(" (length commands) ")")))
+           (string "PIPELINE(" (length commands) ")")
+           (truthy? (some |(blocking-label? (label-of $)) commands))))
 
 (defn codec-encode
   "Encode a value with the active client's codec."

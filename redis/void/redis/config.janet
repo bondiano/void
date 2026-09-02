@@ -46,6 +46,12 @@
    :connect-timeout [:optional [:number {:min 0}]]
    :timeout [:optional [:number {:min 0}]]
 
+   # the largest blob one reply may carry: a 14-byte header can claim
+   # gigabytes, and without a cap the client allocates them before a
+   # single payload byte arrives. Raise it where values that large are
+   # real; the connection that exceeds it is broken, not resynced
+   :max-bulk [:optional [:int {:min 1}]]
+
    # every key this client builds is prefixed with this, which is what
    # makes one redis serve several applications (and one developer's
    # laptop serve several checkouts) without them colliding
@@ -75,6 +81,9 @@
    :protocol 3
    :connect-timeout 5
    :timeout 5
+   # 64 MB: far above any value a cache or a session writes, far below
+   # what a lying length header could make the reader allocate
+   :max-bulk (* 64 1024 1024)
    :prefix ""
    :codec :raw
    :retry true
@@ -177,8 +186,8 @@
 
 (def- connection-keys
   "The slice keys one connection is opened with."
-  [:host :port :unix :username :password :database :protocol :client-name
-   :connect-timeout :timeout])
+  [:host :port :unix :username :password :database :tls :protocol
+   :client-name :connect-timeout :timeout :max-bulk])
 
 (defn options
   ``The [:redis] slice as the option table ./conn opens with: the URL

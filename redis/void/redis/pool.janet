@@ -176,12 +176,16 @@
   (put c :discard true))
 
 (defn checkin
-  "Return a connection: to the oldest waiter if any, else the idle
-  stack (or closed, when discarded / the pool is shutting down)."
+  ``Return a connection: to the oldest waiter if any, else the idle
+  stack — or closed, when discarded, broken, not `conn/clean?`, or the
+  pool is shutting down. The cleanliness check is what makes the
+  discard promise hold on every path: a checkout cancelled mid-reply
+  or abandoned inside a MULTI comes back through here like any other,
+  and the next owner must get a connection, not a crime scene.``
   [pool c]
   (put pool :in-use (dec (pool :in-use)))
   (cond
-    (or (c :discard) (not (conn/open? c)) (pool :closed))
+    (or (c :discard) (not (conn/open? c)) (not (conn/clean? c)) (pool :closed))
     (do (close-conn pool c)
         # the freed slot is what a waiter needs: wake it so it opens a
         # fresh connection instead of parking until the timeout
