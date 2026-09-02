@@ -445,6 +445,27 @@
       (= "0.0.0.0" host)
       (string/has-prefix? "127." host)))
 
+(defn display-endpoint
+  ``The endpoint with its userinfo cut out. `http://user:token@host/`
+  is a supported spelling (client/parse-url reads the credentials
+  off), and every place the endpoint is *shown* — the startup line,
+  the export warnings, `status` and through it /health — must show
+  this form instead: a collector token in a log file or in a health
+  body has left the config it was supposed to live in.``
+  [endpoint]
+  (def s (string endpoint))
+  (if-let [i (string/find "://" s)]
+    (let [rest (string/slice s (+ i 3))
+          slash (string/find "/" rest)
+          authority (if slash (string/slice rest 0 slash) rest)
+          at (string/find "@" authority)]
+      (if at
+        (string (string/slice s 0 (+ i 3))
+                (string/slice authority (inc at))
+                (if slash (string/slice rest slash) ""))
+        s))
+    s))
+
 (defn resource-attributes
   ``The resource every payload carries: what this process *is*, as
   opposed to what it measured. `service.name` is the one attribute a
@@ -546,7 +567,7 @@
       (do
         (metrics/inc! requests [signal :rejected])
         (log/warn "otlp export rejected" :ns log-ns :signal signal
-                  :status status :endpoint (get cfg :endpoint)
+                  :status status :endpoint (display-endpoint (get cfg :endpoint))
                   :body (let [b (get res :body "")]
                           (string/slice b 0 (min 200 (length b)))))
         (set out :rejected))
@@ -560,7 +581,7 @@
       (do
         (metrics/inc! requests [signal :failed])
         (log/warn "otlp export failed" :ns log-ns :signal signal
-                  :endpoint (get cfg :endpoint)
+                  :endpoint (display-endpoint (get cfg :endpoint))
                   :status status
                   :err (when (not ok) (if (string? res) res (describe res))))
         (set out :failed))))
@@ -699,10 +720,10 @@
                     "Use an https endpoint (:void/tls composed, ADR-0038), or point "
                     "the endpoint at a collector or agent on this host and let it "
                     "hold the credentials.")
-            endpoint))
+            (display-endpoint endpoint)))
   (unless (or (loopback? (u :host)) encrypted?)
     (log/warn "otlp endpoint is neither loopback nor https — telemetry leaves this host unencrypted"
-              :ns log-ns :endpoint endpoint))
+              :ns log-ns :endpoint (display-endpoint endpoint)))
   u)
 
 (defn start!
@@ -735,14 +756,14 @@
   (when (get mcfg :enabled true)
     (put state :metrics-fiber (ev/go metrics-ticker)))
   (log/info "obs otlp ready" :ns log-ns
-            :endpoint (cfg :endpoint)
+            :endpoint (display-endpoint (cfg :endpoint))
             :encoding (cfg :encoding)
             :traces (get traces :enabled true)
             :metrics (get mcfg :enabled true)
             :metrics-interval (get mcfg :interval)
             :queue (get traces :queue)
             :max-batch (get traces :max-batch))
-  {:endpoint (cfg :endpoint)
+  {:endpoint (display-endpoint (cfg :endpoint))
    :encoding (cfg :encoding)
    :traces (get traces :enabled true)
    :metrics (get mcfg :enabled true)})
@@ -783,7 +804,7 @@
   reports about itself."
   []
   {:running (state :running)
-   :endpoint (get-in state [:cfg :endpoint])
+   :endpoint (display-endpoint (get-in state [:cfg :endpoint]))
    :encoding (get-in state [:cfg :encoding])
    :queued (when-let [q (state :queue)] (ev/count q))
    :queue-capacity (get-in state [:cfg :traces :queue])

@@ -271,6 +271,26 @@
 (assert ok3 (string "an https endpoint with a token starts once TLS is composed: " err3))
 (otlp/stop!)
 
+# -- credentials in the endpoint itself never leave the config -----------
+#
+# http://user:token@collector/ is a supported spelling, and everywhere
+# the endpoint is *shown* — the startup line, the export warnings,
+# status and through it /health — the userinfo half is cut.
+
+(assert (= "http://collector.example:4318/v1"
+           (otlp/display-endpoint "http://user:hunter2@collector.example:4318/v1")))
+(assert (= "https://collector.example" (otlp/display-endpoint "https://collector.example"))
+        "an endpoint without userinfo passes through unchanged")
+(assert (= "127.0.0.1:4318" (otlp/display-endpoint "127.0.0.1:4318"))
+        "and so does one with no scheme to anchor the parse")
+
+(otlp/start! (config {:endpoint (string "http://svc:hunter2@127.0.0.1:" (inst :port))}) "shop")
+(def shown (string ((otlp/status) :endpoint)))
+(assert (nil? (string/find "hunter2" shown))
+        "the collector token is not in status — which /health republishes")
+(assert (string/find "127.0.0.1" shown) "the host still is")
+(otlp/stop!)
+
 # -- the plugin ----------------------------------------------------------
 
 (def plugins ["void/obs/init" "void/obs/otlp"])

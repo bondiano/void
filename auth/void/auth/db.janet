@@ -165,7 +165,10 @@
       :id id-col
       :email (column cfg :email-column)
       :username (when (cfg :username-column) (column cfg :username-column))
-      (keyword by)))
+      # an unknown selector is nobody's column: db-find answers nil
+      # instead of letting the caller — and a login form's :by field
+      # travels here — choose the WHERE column of the user query
+      nil))
   {:name :db
    :table table
    :find (fn db-find [selector]

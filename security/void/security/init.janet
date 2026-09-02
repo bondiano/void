@@ -182,6 +182,28 @@
    :doc "Resolve the [:security] slice, install the signing keys and build the static header table"
    :fn (fn configure [boot]
          (def cfg (merge-slice (get-in boot [:config :values :security])))
+         # the session-cookie name exists twice — [:http :session
+         # :cookie] names the cookie, [:security :csrf :session-cookie]
+         # tells the CSRF rule what to look for. One value or no boot:
+         # left unset it follows http's, and set to something else it
+         # is an error, because the disagreement's only observable
+         # effect is CSRF silently not applying to session-bearing
+         # requests
+         (def http-cookie
+           (string (get-in boot [:config :values :http :session :cookie] "void-session")))
+         (def csrf-cookie (string (get-in cfg [:csrf :session-cookie])))
+         (cond
+           (= csrf-cookie http-cookie) nil
+           # still on its default: follow http's name (the loader bakes
+           # defaults into the values, so "left unset" reads as this)
+           (= csrf-cookie (string (csrf/defaults :session-cookie)))
+           (put (cfg :csrf) :session-cookie http-cookie)
+           (errorf (string "[:security :csrf :session-cookie] is %q and [:http :session "
+                           ":cookie] is %q — they name the same cookie, and when they "
+                           "disagree the CSRF check quietly stops applying to "
+                           "session-bearing requests. Set [:http :session :cookie] and "
+                           "leave [:security :csrf :session-cookie] unset; it follows.")
+                   csrf-cookie http-cookie))
          (secret/configure! cfg (get boot :profile :dev))
          (csp/validate (get-in cfg [:csp :policy] {}))
          (cors/validate (cfg :cors))

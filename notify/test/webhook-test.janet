@@ -26,6 +26,7 @@
                         :body (req :body)})
   (case (req :path)
     "/hook" (ring/text 200 "ok")
+    "/mine" (ring/text 200 "ok")
     "/gone" (ring/text 404 "no such hook")
     "/later" (ring/text 429 "slow down")
     "/broken" (ring/text 503 "try again")
@@ -42,7 +43,15 @@
                 :config {:env @{}
                          :cli (merge {:log {:level :error}
                                       :notify-webhook {:url (string endpoint "/hook")
-                                                       :signing-key "shhh"}}
+                                                       :signing-key "shhh"
+                                                       # the receiver stands on loopback,
+                                                       # which per-notification URLs may
+                                                       # not reach by default — named, the
+                                                       # way a deployment would name it
+                                                       :allow-hosts ["127.0.0.1"]
+                                                       # the configured endpoint's own
+                                                       # credential (see the headers tests)
+                                                       :headers {"authorization" "Bearer cfg-token"}}}
                                      (or extra {}))}}))
 
 # -- the wire format is a pure projection --------------------------------
@@ -74,6 +83,37 @@
 (assert (not (webhook/permanent? {:status 503})))
 (assert (not (webhook/permanent? {:message "connection reset"}))
         "and a connection that broke never got an answer at all")
+(assert (webhook/permanent? {:blocked true})
+        "a refused address is final too — the address does not get better with retries")
+
+# -- where a notification may point a POST (the pure half) ---------------
+
+(each addr ["127.0.0.1" "127.8.8.8" "10.1.2.3" "172.16.0.1" "172.31.255.255"
+            "192.168.1.1" "169.254.169.254" "0.0.0.0"
+            "::1" "::" "fe80::1" "fd00::1" "fc00::2" "::ffff:127.0.0.1" "::ffff:10.0.0.1"]
+  (assert (webhook/private-address? addr)
+          (string addr " is an address a webhook must not reach by default")))
+(each addr ["8.8.8.8" "1.1.1.1" "172.32.0.1" "172.15.0.1" "198.51.100.7"
+            "2606:4700::1" "::ffff:8.8.8.8"]
+  (assert (not (webhook/private-address? addr))
+          (string addr " is public")))
+(assert (webhook/private-address? "not-an-address")
+        "what cannot be judged is not sent to")
+
+(assert (webhook/target-refusal "http://127.0.0.1:9/x" {})
+        "a per-notification URL at loopback is refused by default — the SSRF the audit is about")
+(assert (webhook/target-refusal "http://localhost:9/x" {})
+        "through the resolver too: the name is resolved and the resolved address judged")
+(assert (webhook/target-refusal "http://169.254.169.254/latest/meta-data" {})
+        "the cloud metadata address above all")
+(assert (nil? (webhook/target-refusal "http://127.0.0.1:9/x" {:allow-hosts ["127.0.0.1"]}))
+        "an allow-listed host may be private")
+(assert (nil? (webhook/target-refusal "http://10.0.0.8/x" {:allow-hosts ["10.0.0.0/8"]}))
+        "an allow-hosts entry may be a CIDR")
+(assert (webhook/target-refusal "http://10.1.0.8/x" {:allow-hosts ["10.0.0.0/16"]})
+        "and an address outside it stays refused")
+(assert (nil? (webhook/target-refusal "http://127.0.0.1:9/x" {:allow-private true}))
+        "[:notify-webhook :allow-private] is the deliberate switch for delivering into one's own network")
 
 # -- a signing key this process cannot sign with -------------------------
 #
@@ -113,6 +153,8 @@
   (assert (= "application/json" (get-in req [:headers "content-type"])))
   (assert (= (result :id) (get-in req [:headers "x-void-notification"])))
   (assert (= "order/shipped" (get-in req [:headers "x-void-event"])))
+  (assert (= "Bearer cfg-token" (get-in req [:headers "authorization"]))
+          "the configured endpoint gets the configured headers — they are its credential")
 
   # -- the signature is verifiable, and it is signed at delivery ---------
 
@@ -131,6 +173,53 @@
   (array/clear received)
   (notify/send {:key :x :title "t" :to {:url (string endpoint "/hook")}})
   (assert (= 1 (length received)) "a notification that names its own endpoint goes there")
+
+  # -- what a per-notification endpoint is not given ----------------------
+  #
+  # /mine is an allow-listed host but not the configured URL: the
+  # delivery goes out, and the configured headers stay home — they are
+  # the configured endpoint's credential, and this URL was chosen by
+  # whoever created the notification.
+
+  (array/clear received)
+  (notify/send {:key :x :title "t" :to {:url (string endpoint "/mine")}})
+  (assert (= 1 (length received)))
+  (assert (nil? (get-in received [0 :headers "authorization"]))
+          "the configured headers do not follow a per-notification URL")
+  (assert (get-in received [0 :headers "x-void-signature"])
+          "while the signature still does — it proves the sender, not the destination")
+
+  # an override's own headers reach a foreign URL only through the
+  # name whitelist: content-type may travel, a credential name may not
+  (array/clear received)
+  (notify/send {:key :x :title "t" :to {:url (string endpoint "/mine")}
+                :webhook {:headers {"content-type" "application/vnd.acme+json"
+                                    "authorization" "Bearer smuggled"
+                                    "x-custom" "1"}}})
+  (assert (= 1 (length received)))
+  (assert (= "application/vnd.acme+json" (get-in received [0 :headers "content-type"]))
+          "a whitelisted override header is applied")
+  (assert (nil? (get-in received [0 :headers "authorization"]))
+          "an override cannot smuggle a credential header to its own URL")
+  (assert (nil? (get-in received [0 :headers "x-custom"])))
+
+  # -- an address outside the allow-list is refused, not dialed ----------
+
+  (def saved-allow (get webhook/settings :allow-hosts))
+  (put webhook/settings :allow-hosts [])
+  (array/clear received)
+  (log/set-level! "void.notify" :fatal)
+  (def blocked (notify/send {:key :x :title "t" :to {:url (string endpoint "/mine")}}))
+  (log/set-level! "void.notify" :error)
+  (assert (= :failed (get-in blocked [:results 0 :status]))
+          "a per-notification URL at an address the deployment did not allow fails")
+  (assert (empty? received) "and nothing was sent — the refusal happens before the socket")
+  (put webhook/settings :allow-hosts saved-allow)
+
+  (array/clear received)
+  (notify/send {:key :x :title "t" :to {:email "ada@example.com"}})
+  (assert (= 1 (length received))
+          "while the configured URL is the operator's own value and is not filtered")
 
   # -- what the status code decides --------------------------------------
 

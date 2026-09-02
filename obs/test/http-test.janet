@@ -80,6 +80,22 @@
 (assert (= 1 (metrics/value obshttp/requests ["(unmatched)" :post 405]))
         "and a 405 is the same route label with the method that was refused")
 
+# the wire accepts a method as any token of capitals and the server
+# interns it — collapsed to :other before it becomes a label or a
+# memo-cache key, or a loop of invented methods grows this process
+# forever (the metric itself would cap at 1000 series and refuse;
+# the cache and the keyword pool it pins would not)
+(test/inject c {:method :brew :uri "/hello"})
+(test/inject c {:method :yolo :uri "/hello"})
+(assert (= 2 (metrics/value obshttp/requests ["(unmatched)" :other 405]))
+        "two invented methods are one series — :other, not themselves")
+
+(assert (= :get (obshttp/normalize-method :get)))
+(assert (= :trace (obshttp/normalize-method :trace)))
+(assert (= :other (obshttp/normalize-method :brew)))
+(assert (= :other (obshttp/normalize-method (keyword (string/repeat "A" 200))))
+        "however long the token was")
+
 (def d (metrics/value obshttp/duration ["hello" :get]))
 (assert (= 2 (d :count)) "durations land in the histogram beside them")
 (assert (pos? (d :sum)))
@@ -180,8 +196,13 @@
 (assert (= 200 ((test/inject c3 {:uri "/metrics"
                                  :headers {"authorization" "Bearer s3cret"}})
                 :status)))
-(assert (= 200 ((test/inject c3 {:uri "/health"}) :status))
-        "and the token guards /metrics only — a health check has no credentials to offer")
+(assert (= 401 ((test/inject c3 {:uri "/health"}) :status))
+        "the token guards /health too — the folded report maps the inside of the process, endpoint addresses included")
+(assert (= 200 ((test/inject c3 {:uri "/health"
+                                 :headers {"authorization" "Bearer s3cret"}})
+                :status)))
+(assert (= 200 ((test/inject c3 {:uri "/ready"}) :status))
+        "while /ready stays bare: it is the boolean an orchestrator polls, and nothing else")
 (test/stop! boot3)
 
 # -- turned off ----------------------------------------------------------

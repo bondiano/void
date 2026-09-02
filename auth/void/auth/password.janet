@@ -26,19 +26,30 @@
 
 (def log-ns "void.auth.password")
 
+(def selectors
+  ``The `:by` values a login is allowed to look a user up with.
+  Closed on purpose: `credentials` is very often `(req :form)`, so an
+  open `:by` would let a visitor pick the WHERE column of the user
+  query — `by=role&value=admin` finds somebody by privilege, and a
+  column that does not exist turns the login form into a
+  schema-probing oracle through the driver's error.``
+  [:email :username :subject :id])
+
 (defn check
   ``Verify credentials against a user store. Returns
 
       {:identity id|nil :needs-rehash bool :record rec|nil :reason kw}
 
-  `:reason` is :ok, :no-such-user, :no-password or :bad-password —
-  for the log and for a rate limiter, never for the response body:
-  telling a visitor which of the four it was is the enumeration this
-  module spends 25 ms avoiding.
+  `:reason` is :ok, :no-such-user, :no-password, :bad-password or
+  :bad-selector — for the log and for a rate limiter, never for the
+  response body: telling a visitor which of them it was is the
+  enumeration this module spends 25 ms avoiding.
 
   Credentials: `{:by :email :value "a@b.c" :password "..."}`, or
-  `{:email ... :password ...}` for the common case. String keys are
-  accepted, so a submitted form goes straight in.``
+  `{:email ... :password ...}` for the common case — `:by` must be one
+  of `selectors`, because a form field must not choose the lookup
+  column. String keys are accepted, so a submitted form goes straight
+  in.``
   [store credentials0 &opt opts]
   (default opts {})
   # a login form arrives from void/http as string keys; every other
@@ -58,9 +69,18 @@
                  (credentials :subject)))
   (def password (or (credentials :password) ""))
   (def now (get opts :now (os/time)))
-  (def record (when value ((store :find) {:by by :value value})))
+  # the whitelist gates the *lookup*: a store never sees a selector a
+  # form invented, and the refusal still burns the hash time so that
+  # a probed selector answers in the same 25 ms an unknown user does
+  (def record (when (and value (index-of by selectors))
+                ((store :find) {:by by :value value})))
   (def secret (when record ((store :secret) record)))
   (cond
+    (not (index-of by selectors))
+    (do (hash/dummy-verify password)
+        (log/debug "login with a selector outside the whitelist" :ns log-ns :by by)
+        {:identity nil :needs-rehash false :record nil :reason :bad-selector})
+
     (nil? record)
     (do (hash/dummy-verify password)
         {:identity nil :needs-rehash false :record nil :reason :no-such-user})

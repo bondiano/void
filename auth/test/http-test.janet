@@ -222,4 +222,18 @@
   (assert (string/find "%2Fme" location)
           "and the redirect carries where the visitor was going, url-encoded"))
 
+# -- the validator for the ?next= that redirect mints --------------------
+
+(assert (auth-http/local-path? "/dash") "a path on this application passes")
+(assert (auth-http/local-path? "/") "the root does too")
+(assert (auth-http/local-path? "/a/b?c=d") "query string and all")
+(assert (not (auth-http/local-path? "//evil.example/phish"))
+        "a scheme-relative URL is the open redirect the check exists for")
+(assert (not (auth-http/local-path? "/\\evil.example"))
+        "and /\\ is the same URL to a browser, which normalizes the backslash in Location")
+(assert (not (auth-http/local-path? "http://evil.example")))
+(assert (not (auth-http/local-path? "")))
+(assert (not (auth-http/local-path? nil)))
+(assert (not (auth-http/local-path? :next)) "only bytes are a path")
+
 (print "http-test ok")

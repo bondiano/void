@@ -57,6 +57,9 @@
 ###                 everything is up, 503 when something is down.
 ###                 It costs what the checks cost (a redis health
 ###                 check pings redis), which is the point of it.
+###                 Behind the same [:obs-http :token] as /metrics:
+###                 the folded report describes the inside of the
+###                 process, endpoint addresses included.
 ###   GET /ready    whether this process is taking traffic: started,
 ###                 not draining. No checks, no I/O — an orchestrator
 ###                 polls it every second or two, and a readiness
@@ -180,6 +183,28 @@
 (def- unmatched-info
   {:label unmatched-label :sample-rate nil :keys @{}})
 
+(def known-methods
+  ``The HTTP methods that may become a label value or a cache key, as
+  themselves; everything else collapses to :other. The wire accepts a
+  method as an arbitrary token of capitals and the server interns it
+  as a keyword, so an uncollapsed method is an unbounded label *and*
+  an unbounded memo-cache key — a loop of invented methods would grow
+  this process's memory for as long as it ran.``
+  {:get :get :head :head :post :post :put :put :patch :patch
+   :delete :delete :options :options :trace :trace})
+
+(defn normalize-method
+  "The closed-set spelling of a request's method: itself for the ones
+  HTTP has, :other for anything somebody typed onto the wire."
+  [method]
+  (get known-methods method :other))
+
+(def- max-label-keys
+  # a route's methods are 9 after normalization and its statuses are
+  # few, so a full cache means something is inventing label inputs —
+  # from there the tuples are built per request instead of remembered
+  256)
+
 (defn forget-routes!
   "Drop the memoized route labels — what a rebuilt route table (a dev
   reload, ADR-0002) needs, since an edited `:void.obs/name` must not
@@ -209,7 +234,10 @@
 
 (defn- labels
   ``The memoized label tuple for one [method status?] of a route —
-  built on the first request that needs it and looked up afterwards.``
+  built on the first request that needs it and looked up afterwards.
+  The cache is capped: past `max-label-keys` entries the tuple is
+  built and not remembered, because a growing memo over inputs the
+  caller controls is the leak the memo was not supposed to be.``
   [info method &opt status]
   (def cache (info :keys))
   (def k (if (nil? status) method [method status]))
@@ -217,7 +245,8 @@
       (let [t (if (nil? status)
                 [(info :label) method]
                 [(info :label) method status])]
-        (put cache k t)
+        (when (< (length cache) max-label-keys)
+          (put cache k t))
         t)))
 
 # -- config --------------------------------------------------------------
@@ -375,11 +404,14 @@
    :doc "Count the request and observe its duration once the response is written — the stage that sees the status the client actually got"
    :fn (fn obs-red [req resp]
          (def info (route-info req))
-         (def method (req :method))
-         # method and status go in as the keyword and the number they
-         # are: the exposition stringifies label values at render time
-         # (prometheus/escape-label), so a scrape every fifteen seconds
-         # pays for it instead of every request
+         # normalized *before* it becomes a label or a cache key: the
+         # wire hands over any token of capitals, and an uncollapsed
+         # method is unbounded cardinality (see known-methods). The
+         # value then goes in as the keyword it is: the exposition
+         # stringifies label values at render time
+         # (prometheus/escape-label), so a scrape every fifteen
+         # seconds pays for it instead of every request
+         (def method (normalize-method (req :method)))
          (metrics/inc! requests (labels info method (get resp :status 200)))
          (when-let [t (req :received)]
            (metrics/observe! duration (labels info method)
@@ -417,6 +449,11 @@
       false)
     true))
 
+(defn- unauthorized []
+  (ring/response 401 "401 Unauthorized"
+                 @{"content-type" "text/plain; charset=utf-8"
+                   "www-authenticate" "Bearer"}))
+
 (defn metrics-handler
   ``GET /metrics — the Prometheus text exposition of every metric this
   process holds. Public so an application can mount it on a path (or a
@@ -424,10 +461,7 @@
   [req]
   (cond
     (not (and (settings :endpoints) (settings :metrics))) (off)
-    (not (authorized? req))
-    (ring/response 401 "401 Unauthorized"
-                   @{"content-type" "text/plain; charset=utf-8"
-                     "www-authenticate" "Bearer"})
+    (not (authorized? req)) (unauthorized)
     (ring/response 200 (prometheus/render (metrics/snapshot))
                    @{"content-type" prometheus/content-type})))
 
@@ -450,13 +484,19 @@
                  @{"content-type" "application/json"}))
 
 (defn health-handler
-  "GET /health — the health report, 200 when nothing is down and 503
-  when something is."
+  ``GET /health — the health report, 200 when nothing is down and 503
+  when something is. Behind the same bearer token as /metrics when
+  `[:obs-http :token]` is set: the report folds every component's
+  `:health` — endpoints, channel lists, runtime numbers — which is a
+  map of the inside of this process, and on a public port it deserves
+  the same door the exposition has. /ready stays bare on purpose —
+  it answers with a boolean an orchestrator needs, and nothing else.``
   [req]
-  (if (settings :endpoints)
+  (cond
+    (not (settings :endpoints)) (off)
+    (not (authorized? req)) (unauthorized)
     (let [report (health-report)]
-      (json-response (if (= :down (report :status)) 503 200) report))
-    (off)))
+      (json-response (if (= :down (report :status)) 503 200) report))))
 
 (defn ready-handler
   ``GET /ready — is this process taking traffic? The flag and the
