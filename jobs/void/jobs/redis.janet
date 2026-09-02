@@ -222,6 +222,42 @@
     return out
     ``))
 
+(def settle-script
+  ``Rewrite a record, but only while the token that claimed it still
+  owns it. A claim the reaper re-tokened away must not be overwritten
+  by its old holder: the job ran again under the new token, and that
+  run's settle is the one that counts.``
+  (rcmd/script
+    ``
+    local key = KEYS[1]
+    local cur = redis.call('HGET', key, 'token')
+    if cur and cur ~= ARGV[1] then return 0 end
+    redis.call('DEL', key)
+    redis.call('HSET', key, unpack(ARGV, 2))
+    return 1
+    ``))
+
+(def touch-script
+  ``Refresh the claims this token still holds — and only those: a
+  heartbeat must not keep alive a claim the reaper already gave to
+  another worker.``
+  (rcmd/script
+    ``
+    local jobs = ARGV[1]
+    local now = ARGV[2]
+    local token = ARGV[3]
+    local n = 0
+    for i = 4, #ARGV do
+      local id = ARGV[i]
+      if redis.call('HGET', jobs .. id, 'token') == token then
+        redis.call('HSET', jobs .. id, 'claimed_at', now)
+        redis.call('ZADD', KEYS[1], tonumber(now), id)
+        n = n + 1
+      end
+    end
+    return n
+    ``))
+
 (def lock-script
   ``Take a lease, or renew the one we already hold. `SET NX` alone
   cannot renew, and a lock that cannot be renewed by its owner is one
@@ -430,25 +466,38 @@
      out)
 
    :settle!
-   (fn redis-settle [r]
+   (fn redis-settle [r &opt expected]
      (def now (get r :finished-at (os/clock :realtime)))
      (def finished (truthy? (index-of (r :state) [:completed :dead])))
      (def release-unique
        (and finished
             (get r :unique-key)
             (or (nil? (get r :unique-until)) (<= (get r :unique-until) now))))
-     (def cmds
-       (array ["DEL" (redis/prefixed (jkey (r :id)))]
-              ["HSET" (redis/prefixed (jkey (r :id))) ;(record->hash r)]
-              ;(index-commands r)))
-     (when release-unique
-       (array/push cmds ["DEL" (redis/prefixed (unique-key (r :unique-key)))]))
-     (when finished
-       (array/push cmds ["LPUSH" (redis/prefixed (done-list (r :state)))
-                         (string (r :queue) ":" (r :id))]))
-     (redis/pipeline cmds)
-     (when finished (trim-finished! (r :state)))
-     (record/copy r))
+     # with a token to fence on, the record itself is rewritten by the
+     # script — atomically, and only while the token still owns the
+     # claim. 0 says a reaper gave the job away: nothing is written,
+     # nil is the answer
+     (def written
+       (if expected
+         (= 1 (settle-script [(jkey (r :id))]
+                             [(string expected) ;(record->hash r)]))
+         (do
+           (redis/pipeline
+             (array ["DEL" (redis/prefixed (jkey (r :id)))]
+                    ["HSET" (redis/prefixed (jkey (r :id))) ;(record->hash r)]))
+           true)))
+     (if (not written)
+       nil
+       (do
+         (def cmds (array ;(index-commands r)))
+         (when release-unique
+           (array/push cmds ["DEL" (redis/prefixed (unique-key (r :unique-key)))]))
+         (when finished
+           (array/push cmds ["LPUSH" (redis/prefixed (done-list (r :state)))
+                             (string (r :queue) ":" (r :id))]))
+         (redis/pipeline cmds)
+         (when finished (trim-finished! (r :state)))
+         (record/copy r))))
 
    :fetch (fn redis-fetch [id] (read-record id))
 
@@ -531,9 +580,15 @@
                      (map |(hash->record (fields->table $)) (or reply [])))))
 
    :touch!
-   (fn redis-touch [ids nowt]
-     (if (empty? ids)
-       0
+   (fn redis-touch [ids nowt &opt token]
+     (cond
+       (empty? ids) 0
+
+       token
+       (touch-script [(running-z)]
+                     [(jobs-prefix) (string nowt) (string token)
+                      ;(map string ids)])
+
        (do
          (redis/pipeline
            (array ;(mapcat

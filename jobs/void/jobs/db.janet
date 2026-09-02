@@ -79,6 +79,14 @@
    :keep-for (* 7 24 3600)
    :prune-batch 1000})
 
+(def lock-keep
+  ``How long an expired lease row in `<table>_locks` outlives its
+  `until` before the reaper deletes it. A schedule lease is taken and
+  never unlocked — a slot that fired must stay fired — so expiry plus
+  this grace is the only thing between the table and unbounded growth
+  ({:every 30} is 2880 rows a day otherwise).``
+  86400)
+
 # -- the schema ----------------------------------------------------------
 
 (def columns
@@ -280,7 +288,16 @@
          (if (and k (unique-holder k now))
            nil
            (do
-             (def [ok e] (protect (insert-row! (record->row r))))
+             # under a unique key the INSERT gets its own savepoint (a
+             # nested with-tx* is one): on Postgres a unique violation
+             # aborts the whole transaction (SQLSTATE 25P02), and
+             # without the savepoint the second unique-holder check
+             # below could never run
+             (def [ok e]
+               (protect
+                 (if k
+                   (db/with-tx* {} (fn insert-sp [] (insert-row! (record->row r))))
+                   (insert-row! (record->row r)))))
              (cond
                ok (record/copy r)
                # the partial unique index caught what the check could
@@ -350,7 +367,7 @@
      out)
 
    :settle!
-   (fn db-settle [r]
+   (fn db-settle [r &opt expected]
      (def now (get r :finished-at (os/clock :realtime)))
      (def row (record->row r))
      # a finished job releases its unique key unless a ttl says it is
@@ -367,8 +384,17 @@
        (unless (= :id k)
          (def v (get row k))
          (put sets k (if (nil? v) db/null v))))
-     (db/execute! {:update tbl :set sets :where {:id (r :id)}})
-     (record/copy r))
+     # `expected` is the fence reap! relies on: a claim that was
+     # re-tokened away must not be overwritten by its old holder — the
+     # reaped job ran again, and that run's settle is the one that
+     # counts. nil answers "the claim was lost", exactly like a claim
+     # that changed no row answers "the race was lost"
+     (def where @{:id (r :id)})
+     (when expected (put where :token expected))
+     (def n (db/execute! {:update tbl :set sets :where where}))
+     (if (and expected (zero? n))
+       nil
+       (record/copy r)))
 
    :fetch (fn db-fetch [id] (select-one tbl (string "id = " (ph 1)) [id]))
 
@@ -433,6 +459,12 @@
        (when (pos? (get n :count 0))
          (log/debug "pruned finished job records" :ns log-ns
                     :rows (get n :count 0) :keep-for keep-for)))
+     # the schedule leases ride along: fire! takes one per slot and
+     # never unlocks it, so rows whose lease expired past its grace are
+     # this pass's to delete — see lock-keep
+     (db/execute-sql
+       (string "DELETE FROM " locks " WHERE until < " (ph 1))
+       [(- now lock-keep)] {:kind :write})
      (def stale
        (map row->record
             (db/query-sql
@@ -456,14 +488,19 @@
      (tuple ;out))
 
    :touch!
-   (fn db-touch [ids now]
+   (fn db-touch [ids now &opt token]
      (if (empty? ids)
        0
-       (get (db/execute-sql
-              (string "UPDATE " tbl " SET claimed_at = " (ph 1)
-                      " WHERE state = 'running' AND id IN (" (phs 2 (length ids)) ")")
-              (array now ;ids) {:kind :write})
-            :count 0)))
+       # the token fences the heartbeat the way it fences the settle: a
+       # claim a reaper took away is not this worker's to keep alive
+       (let [fence (if token (string " AND token = " (ph 2)) "")
+             from (if token 3 2)]
+         (get (db/execute-sql
+                (string "UPDATE " tbl " SET claimed_at = " (ph 1)
+                        " WHERE state = 'running'" fence
+                        " AND id IN (" (phs from (length ids)) ")")
+                (array now ;(if token [token] []) ;ids) {:kind :write})
+              :count 0))))
 
    :release-parent!
    (fn db-release-parent [child]
@@ -501,12 +538,18 @@
                                     " WHERE name = " (ph 1)) [name]])))
          (cond
            (nil? cur)
-           (let [[ok e] (protect
-                          (db/execute-sql
-                            (string "INSERT INTO " locks " (name, token, until) VALUES ("
-                                    (phs 1 3) ")")
-                            [name token until] {:kind :write}))]
-             # the primary key caught the race the SELECT could not
+           # the INSERT gets its own savepoint: the primary key catches
+           # the race the SELECT could not, and on Postgres that
+           # violation would otherwise abort the transaction it shares
+           # (the 25P02 class push! documents)
+           (let [[ok _] (protect
+                          (db/with-tx*
+                            {}
+                            (fn lock-insert-sp []
+                              (db/execute-sql
+                                (string "INSERT INTO " locks " (name, token, until) VALUES ("
+                                        (phs 1 3) ")")
+                                [name token until] {:kind :write}))))]
              (truthy? ok))
 
            (or (= token (get cur :token)) (<= (get cur :until 0) now))
@@ -546,11 +589,16 @@
                          [(string queue) start]]))
                (max 0.001 (- (+ start duration) now))
 
+               # a savepoint for the same reason lock! takes one: the
+               # losing INSERT must not abort the transaction around it
                (let [[ok _] (protect
-                              (db/execute-sql
-                                (string "INSERT INTO " rates
-                                        " (queue, window_start, n) VALUES (" (phs 1 3) ")")
-                                [(string queue) start 1] {:kind :write}))]
+                              (db/with-tx*
+                                {}
+                                (fn rate-insert-sp []
+                                  (db/execute-sql
+                                    (string "INSERT INTO " rates
+                                            " (queue, window_start, n) VALUES (" (phs 1 3) ")")
+                                    [(string queue) start 1] {:kind :write}))))]
                  (if ok
                    0
                    # somebody inserted the window between our UPDATE and

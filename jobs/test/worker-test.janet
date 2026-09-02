@@ -205,6 +205,31 @@
   (assert (= 1 (get-in (state/counts) [:default :pending]))
           "a stopped worker claims nothing"))
 
+# -- shutdown is a drain, not a kill --------------------------------------
+#
+# The test above stops a worker whose jobs already finished, which any
+# stop! passes. The promise worth checking is the other one: a job
+# still running when stop! is called gets its :shutdown-timeout to
+# finish rather than being abandoned to the reaper.
+
+(job/defjob dawdles [] (ev/sleep 0.3) :eventually)
+
+(def drainq (queue))
+(with-queue drainq
+  (def dw (worker/make drainq {:concurrency 2 :poll-interval 0.02
+                               :shutdown-timeout 5}))
+  (worker/start! dw)
+  (state/enqueue :dawdles)
+  (var waited 0)
+  (while (and (< waited 100) (empty? (dw :running)))
+    (ev/sleep 0.01)
+    (++ waited))
+  (assert (= 1 (length (dw :running))) "the slow job is running when stop! is called")
+  (assert (zero? (worker/stop! dw)) "stop! drains it rather than giving up")
+  (def [r] (state/list-jobs {:limit 1}))
+  (assert (= :completed (r :state)) "the job finished, it was not left :running")
+  (assert (= :eventually (r :result)) "with its result settled"))
+
 # -- what a worker refuses to be built as --------------------------------
 
 (each [opts reason]

@@ -14,10 +14,17 @@
 ###   :claim!   (fn [opts] job-or-nil)  atomically take the next
 ###                                     runnable record and mark it
 ###                                     :running — see below
-###   :settle!  (fn [job] job)          write a record back in the
+###   :settle!  (fn [job &opt token] job-or-nil)
+###                                     write a record back in the
 ###                                     state the runtime put it in,
 ###                                     releasing the claim and the
-###                                     unique key when it is done
+###                                     unique key when it is done.
+###                                     Given the claim's token, the
+###                                     write lands only while the
+###                                     stored record still carries it;
+###                                     nil says a reaper gave the
+###                                     claim away and nothing was
+###                                     written
 ###   :fetch    (fn [id] job-or-nil)
 ###   :list     (fn [opts] [job ...])   {:queue :state :job :parent
 ###                                     :limit}
@@ -58,11 +65,15 @@
 ###                     in-process one: the limit then holds per worker
 ###                     process, not per fleet, and `capabilities` says
 ###                     so out loud
-###   :touch!           (fn [ids now] n) — refresh the claims a worker
-###                     is still working on, so that a job slower than
-###                     the claim ttl is not reaped out from under it.
-###                     Without it, [:jobs :claim-ttl] has to exceed
-###                     the slowest job, and the worker says so at boot
+###   :touch!           (fn [ids now &opt token] n) — refresh the
+###                     claims a worker is still working on, so that a
+###                     job slower than the claim ttl is not reaped out
+###                     from under it. Given the worker's token, only
+###                     the claims that token still holds are
+###                     refreshed — a reaped claim is not its old
+###                     holder's to keep alive. Without :touch!,
+###                     [:jobs :claim-ttl] has to exceed the slowest
+###                     job, and the worker says so at boot
 ###   :release-parent!  (fn [child] parent-or-nil) — flows. A backend
 ###                     without it refuses flows at enqueue rather than
 ###                     losing the parent
