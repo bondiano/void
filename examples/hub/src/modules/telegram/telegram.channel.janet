@@ -44,11 +44,24 @@
     (put cfg :token (config/reveal (get cfg :token))))
   cfg)
 
+(defn- without-blanks
+  ``Drop keys whose value is an empty string. A compose file cannot
+  leave a variable out conditionally — `${TELEGRAM_BOT_TOKEN:-}` sets it
+  to nothing — and a token that is the empty string would be a bot this
+  process reports as configured and cannot speak as. Absent and blank
+  are the same thing here.``
+  [cfg]
+  (def out (table/clone cfg))
+  (eachp [k v] cfg
+    (when (and (string? v) (empty? v)) (put out k nil)))
+  out)
+
 (defn configure!
   "Called from the application's :before-start hook (src/app.janet) —
   the bot token and the chat to fall back on."
   [slice]
-  (def cfg (reveal-token (merge defaults (or (get slice :telegram) {}))))
+  (def cfg (reveal-token
+             (without-blanks (merge defaults (or (get slice :telegram) {})))))
   (set settings cfg)
   (log/info "telegram channel ready" :ns log-ns
             # whether there is a token, never the token

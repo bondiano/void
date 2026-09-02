@@ -55,13 +55,17 @@
       (log/error "notification rejected" :ns log-ns
                  :channel channel
                  :id (get payload :id)
-                 :err (string result))
+                 :err (log/message-of result))
       # a completed job with the rejection in its result: the far end
       # has answered, and there is nothing a retry can change
       {:rejected true
        :channel channel
        :id (get payload :id)
-       :message (string result)})
+       # the far end's own words. A channel throws a value so that
+       # `permanent?` can read a status off it (ADR-0040), and this is
+       # the record somebody reads afterwards — `(string result)` put
+       # the struct's address here
+       :message (log/message-of result)})
     (error result)))
 
 (plugin/contribute! :void.core/hooks

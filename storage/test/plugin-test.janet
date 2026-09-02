@@ -4,6 +4,7 @@
 (import void/core/log :as log)
 (import void/storage :as storage)
 (import void/storage/state :as state)
+(import void/storage/s3 :as s3)
 
 (log/set-level! "void" :error)
 
@@ -153,6 +154,16 @@
         "and the refusal names what would be lost")
 (assert (string/find "storage-s3" (string ferr))
         "and what to compose instead (ADR-0030)")
+
+# -- what the bucket store needs open ------------------------------------
+#
+# Every request the S3 store makes is signed, and SigV4 is HMAC over
+# void/crypto. A CLI command starts what it declared in `:needs` plus
+# that closure, so a store that did not name the library was a `void
+# jobs work` (or a `void hub replay`) that fetched an object and failed
+# on libcrypto — with the store itself started and looking fine.
+(assert (index-of :crypto/lib (get s3/s3-component :deps []))
+        "the bucket store declares the library it signs with, so a partial bootstrap opens it")
 
 (rm-rf root)
 (printf "plugin-test: ok")

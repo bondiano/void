@@ -53,14 +53,30 @@
 
 # -- rss -----------------------------------------------------------------
 
+(def- vmrss-line
+  # `VmRSS:\t    5324 kB\n` — a tab, some spaces, the number, the unit
+  # the kernel always writes for VmXXX, and the newline `file/read
+  # :line` hands over. Matching the shape is the fix for a version of
+  # this that sliced fixed offsets off both ends and so read `5324 k`
+  # on every real /proc: `scan-number` said nil, the reader resolved to
+  # "this platform has no RSS meter", and `[:pressure :max-rss-bytes]`
+  # could not trip on Linux — which is to say, in every container.
+  (peg/compile ~(* "VmRSS:" :s+ (number :d+) :s* "kB")))
+
+(defn vmrss-bytes
+  ``The resident set size on one line of `/proc/self/status`, in bytes,
+  or nil when the line is not the VmRSS one. Public because it is the
+  half of the Linux meter that can be tested anywhere.``
+  [line]
+  (when-let [[kb] (peg/match vmrss-line line)]
+    (* 1024 kb)))
+
 (defn- linux-rss []
   (when-let [f (file/open "/proc/self/status" :r)]
     (defer (file/close f)
       (var out nil)
       (loop [line :iterate (file/read f :line) :until out]
-        (when (string/has-prefix? "VmRSS:" line)
-          (when-let [kb (scan-number (string/trim (string/slice line 6 -3)))]
-            (set out (* 1024 kb)))))
+        (set out (vmrss-bytes line)))
       out)))
 
 # MACH_TASK_BASIC_INFO and its count in 32-bit words: the flavor

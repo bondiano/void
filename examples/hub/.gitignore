@@ -8,3 +8,7 @@ tmp/
 
 # the dev store: delivery bodies under [:storage :local :root]
 storage/
+
+# the compose file reads secrets from here: the webhook secret, the bot
+# token, the signing key. It is this machine, not this repository
+.env

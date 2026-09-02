@@ -49,3 +49,4 @@ ADR фиксируют архитектурные решения проекта 
 | [0039](0039-hranilishe-fajlov-klyuch-kak-dannye.md) | `void/storage` — ключ как данные, отдача поверх static, SigV4 на `void/crypto`, диск как per-process хранилище | accepted |
 | [0040](0040-notifikacii-odno-sobytie-neskolko-kanalov.md) | `void/notify` — уведомление как данные, набор каналов как композиция; проекция там, где был запрос, доставка там, где сеть | accepted |
 | [0041](0041-htmx-4-zagolovok-vmesto-treh-pravil-nasledovanie-po-imeni.md) | htmx 4 — `HX-Request-Type` вместо трёх правил про layout, наследование по имени, один диалект без совместимости с 2.x | accepted |
+| [0042](0042-hub-prilozhenie-na-ustanovlennom-dereve.md) | `examples/hub` — приложение на установленном дереве: порядок приёма, тело как улика, правило как данные, форма развёртывания как проверка | accepted |

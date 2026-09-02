@@ -248,6 +248,24 @@
     the line `[:deploy :shape] :fleet` asks for, because a bucket is
     what every replica sees (ADR-0030)."
     :provides [:void/storage-store]
+    # Every request this store makes is signed, and SigV4 is HMAC over
+    # `void/crypto` — so the library has to be open before the store
+    # answers, not merely composed somewhere in the process. Saying it
+    # here is what makes a **partial** bootstrap correct: a CLI command
+    # starts what it declared in `:needs` plus that closure (`void jobs
+    # work`, `void hub replay`), and a command that asked for the store
+    # and got it unsigned failed on the first fetch with a message
+    # about libcrypto — the same shape as the `:needs [:tls/lib]` a
+    # notify channel declares (ADR-0040 §3).
+    #
+    # An https endpoint additionally needs `:tls/lib`, and that one is
+    # *not* here: it depends on the endpoint's scheme, which is config,
+    # and a hard dependency would force every http-only deployment to
+    # compose void/tls. `make` refuses at :start, by name, when the
+    # scheme asks for a stack the composition does not carry (ADR-0038)
+    # — and a command that touches an https bucket declares `:tls/lib`
+    # the way a job does.
+    :deps [:crypto/lib]
     :config {:key :storage-s3 :schema Config}
     :start
     (fn start [_ cfg]

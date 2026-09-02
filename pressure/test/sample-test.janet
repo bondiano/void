@@ -32,6 +32,26 @@
 (assert (not (avail :heap))
         "there is no heap meter — janet 1.41 has gccollect/gcinterval/gcsetinterval and no occupancy at all (see the module docstring)")
 
+# -- the Linux meter, on any platform ------------------------------------
+#
+# The parse is asserted here rather than through `sample/rss`, because
+# `sample/rss` is nil on the machines where it is not Linux — which is
+# exactly how a meter that read `5324 k` out of every real
+# /proc/self/status shipped: the branch below asserted nil and was
+# right to, and nobody was asserting the line.
+
+(assert (= (* 1024 5324) (sample/vmrss-bytes "VmRSS:\t    5324 kB\n"))
+        "the line as the kernel writes it — tab, padding, unit, and the newline file/read hands over")
+(assert (= (* 1024 5324) (sample/vmrss-bytes "VmRSS:\t    5324 kB"))
+        "and the same line without one")
+(assert (nil? (sample/vmrss-bytes "VmHWM:\t    6000 kB\n"))
+        "the high-water mark is a different line, and it never comes back down")
+(assert (nil? (sample/vmrss-bytes "Name:\tjanet\n")))
+
+(when (= :linux (os/which))
+  (assert (avail :rss)
+          "every Linux has /proc/self/status — a Linux that reports no RSS meter is a broken parse, not a platform"))
+
 (def r (sample/rss))
 (if (avail :rss)
   (do

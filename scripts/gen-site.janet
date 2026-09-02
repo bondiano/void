@@ -149,6 +149,8 @@
     {:src "docs/ROADMAP.md" :out "roadmap.html" :here "roadmap.html"}
     {:src "docs/CONTRACTS.md" :out "contracts.html" :here "contracts.html"}
     {:src "docs/DEPLOY.md" :out "deploy.html" :here "deploy.html"}
+    # the §9 metric, measured on examples/hub rather than asserted
+    {:src "docs/IDEA-TO-DEPLOY.md" :out "idea-to-deploy.html" :here "idea-to-deploy.html"}
     {:src "docs/BENCH-v0.1.md" :out "bench.html" :here "bench.html"}
     {:src "CONTRIBUTING.md" :out "contributing.html" :here nil}
     # itself a projection (scripts/gen-changelog.janet) — the site

@@ -20,6 +20,7 @@
    ["CLI" "cli.html"]
    ["ADR" "adr/index.html"]
    ["Deploy" "deploy.html"]
+   ["Idea → deploy" "idea-to-deploy.html"]
    ["Bench" "bench.html"]])
 
 (def github "https://github.com/bondiano/void")

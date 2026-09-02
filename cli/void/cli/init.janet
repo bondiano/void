@@ -24,6 +24,7 @@
 
 (import void)
 (import void/core/init :as core)
+(import void/core/log :as log)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/hooks :as hooks)
@@ -278,7 +279,10 @@
       (run-command boot command args))))
 
 (defn- fail [err]
-  (eprintf "void: %s" (if (string? err) err (describe err)))
+  # log/message-of rather than `describe`: a command that failed on a
+  # structured throw used to print `void: <struct 0xAAAA…>`, which is
+  # the address of the sentence rather than the sentence
+  (eprintf "void: %s" (log/message-of err))
   (os/exit 1))
 
 (defn main

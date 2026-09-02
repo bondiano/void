@@ -123,6 +123,50 @@
     (with-dyns [context-dyn ctx]
       (f ;args))))
 
+# -- what an error says --------------------------------------------------
+
+(def- error-message-keys
+  # `:message` is the convention every structured throw in void already
+  # follows — void/http/errors, the HTTP client, the server's reject,
+  # void/db-mysql, void/datastar — and an application's channel or job
+  # follows it because those did. `:msg` and `:error` are here because
+  # somebody will write them and being right about the key is not the
+  # point of the line that reports a failure.
+  [:message :msg :error])
+
+(defn message-of
+  ``What an error value *says*, as a string.
+
+  Errors in void are frequently values rather than strings — a status
+  and a message, so that the code deciding whether to retry can read
+  the status (ADR-0040 is one). `describe` renders such a value as
+  `<struct 0xAAAA…>`, and that address was, until this function
+  existed, what a failed job's record, a log line and `void: …` on the
+  terminal actually said. Which is to say: the framework's own
+  convention was being thrown away at every boundary where somebody was
+  reading.
+
+  A string is itself; a fiber is its last value; a dictionary with a
+  `:message` (or `:msg`, or `:error`) hands that over; any other value
+  is printed as data (`%q`) rather than as an address, because
+  `{:void.http/timeout true}` is a sentence and its pointer is not.
+  Long output is cut — a report nobody can read past is the thing being
+  fixed here.``
+  [e &opt limit]
+  (default limit 500)
+  (defn cut [s]
+    (if (> (length s) limit) (string (string/slice s 0 (- limit 3)) "...") s))
+  (cond
+    (or (string? e) (buffer? e)) (cut (string e))
+    (fiber? e) (message-of (fiber/last-value e) limit)
+    (dictionary? e)
+    (if-let [m (some |(let [v (get e $)] (when (or (string? v) (buffer? v)) v))
+                     error-message-keys)]
+      (cut (string m))
+      (cut (string/format "%q" e)))
+    (indexed? e) (cut (string/format "%q" e))
+    (cut (describe e))))
+
 # -- redaction and serializers -------------------------------------------
 
 (defn- redact [rec]
@@ -144,17 +188,17 @@
 
 (def err-serializer
   "The default :err serializer: an error value or a fiber ->
-  {:msg :stacktrace?}."
+  {:msg :stacktrace?}. The message is `message-of`'s, so a structured
+  throw logs what it says rather than where it lives."
   (fn err-ser [e]
     (cond
       (fiber? e)
-      {:msg (describe (fiber/last-value e))
+      {:msg (message-of (fiber/last-value e))
        :stacktrace (string/trim
                      (with-dyns [:err @""]
                        (debug/stacktrace e (fiber/last-value e) "")
                        (string (dyn :err))))}
-      (string? e) {:msg e}
-      {:msg (describe e)})))
+      {:msg (message-of e)})))
 
 # -- sinks ---------------------------------------------------------------
 

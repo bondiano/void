@@ -38,6 +38,8 @@
 # in is what void/pressure is for
 (import void/storage)
 (import void/storage/http)
+(import void/obs)
+(import void/obs/http)
 (import void/pressure)
 (import void/pressure/http)
 # and the sending end: a queue in the same database as the deliveries,
@@ -120,16 +122,29 @@
      # part of the composition and not an afterthought
      :void/mail :void/mail-auth
      # the raw body of every delivery, kept verbatim: a disk
-     # directory here, a bucket where there is more than one
-     # replica (ADR-0030, ADR-0039). void/storage-http is what
-     # hands those bytes back — under `[:storage :serve
-     # :signed] true`, so the prefix is private and a link
-     # ./admin.janet minted is the only way in
-     :void/storage :void/storage-http
-     ;(if (get opts :bucket) (bucket-plugins) [])
+     # directory on a laptop, a bucket where there is more than
+     # one replica (ADR-0030, ADR-0039)
+     :void/storage
+     # ...and the route that hands those bytes back is the disk
+     # store's half of the contract, so it is composed with it:
+     # void/storage-http serves the local root under `[:storage
+     # :serve :signed] true`, and with a bucket behind the
+     # contract the same link is S3's own query auth, minted by
+     # the store and pointed at the bucket (ADR-0039 §4-§5). A
+     # deployment on a bucket that also mounted this route would
+     # be publishing a directory it does not use
+     ;(if (get opts :bucket) (bucket-plugins) [:void/storage-http])
      # deliveries arrive in bursts — a push to a busy repository
      # is a dozen events in a second — and shedding is the
-     # difference between a slow hub and a dead one
+     # difference between a slow hub and a dead one.
+     #
+     # void/obs-http is here for the endpoint the other end of that
+     # sentence needs: /health is what an orchestrator asks, and
+     # void/pressure-http never sheds it — so the answer arrives
+     # *while* the process is refusing everything else, which is
+     # exactly when it is being asked (ADR-0019). /metrics comes
+     # with it, behind a token
+     :void/obs :void/obs-http
      :void/pressure :void/pressure-http
      # the queue lives in the same database as the deliveries,
      # which is what lets a delivery and the work it caused

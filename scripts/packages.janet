@@ -521,15 +521,22 @@
    # after it is a line in a diff and a candidate for a task.
    {:dir "examples/hub"
     :deps [:void/core :void/http :void/html :void/htmx
-           :void/db :void/db-sqlite
+           # both drivers are edges for the reason blog's and shop's
+           # are: main.janet requires exactly one of them at boot, and
+           # which one is an environment variable (sqlite on a laptop,
+           # postgres in docker-compose.yml)
+           :void/db :void/db-sqlite :void/db-postgres
            # the sign-in the scaffold generated: identity, the stores it
            # keeps people in, the CSRF token its forms carry, and the
            # deliverer a challenge refuses to live without (ADR-0023 §7)
            :void/crypto :void/auth :void/security :void/mail
            # the receiving end: the raw body of every delivery goes to a
            # store (ADR-0039) and the burst it arrives in is shed rather
-           # than queued in the kernel
-           :void/storage :void/pressure
+           # than queued in the kernel — except /health, which void/obs
+           # brings and void/pressure-http never sheds, because that is
+           # the endpoint an orchestrator asks exactly when the process
+           # is refusing everything else (ADR-0019)
+           :void/storage :void/obs :void/pressure
            # and the sending end: rules pick channels, void/notify fans
            # out over them, the queue (in the same database as the
            # deliveries) carries the delivery, and void/tls is what an

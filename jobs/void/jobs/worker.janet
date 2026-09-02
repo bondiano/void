@@ -178,8 +178,11 @@
 # -- settling ------------------------------------------------------------
 
 (defn- err-str [e]
-  (def s (if (string? e) e (describe e)))
-  (if (> (length s) 500) (string (string/slice s 0 497) "...") s))
+  # what the record keeps and the dashboard shows. log/message-of is
+  # what reads a structured throw's own message: a job that failed
+  # against `{:status 404 :message "..."}` used to record the struct's
+  # address, which is a failure nobody can act on
+  (log/message-of e 500))
 
 (defn- kill-parents!
   ``A dead child kills the flow it belongs to. The alternative — a

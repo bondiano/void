@@ -7,7 +7,9 @@ around ([ROADMAP 6.6](../../docs/ROADMAP.md)).
 
 Today it receives, verifies and keeps deliveries, decides where each one
 goes, sends it to a telegram chat through a queue, and gives an operator
-the two screens an incident needs. What is left is the deploy.
+the two screens an incident needs — and it deploys with `docker compose
+up`: a web tier of two replicas, a worker, Postgres, a bucket and the
+proxy that holds the TLS.
 
 ## Receiving a delivery
 
@@ -174,6 +176,109 @@ The command starts three components and no port — the database the row
 is in, the store the bytes are in, and the queue the notification goes
 on — which is the same argument the worker makes from the other end.
 
+## Deploying it
+
+```sh
+docker compose up --build      # https://localhost
+```
+
+Seven services, and the four ROADMAP 6.6 asked for are a web tier, a
+worker, a database and a bucket. The other three are the edge that holds
+the certificate, the one-shot that creates the bucket, and an inbox to
+catch the letters a sign-in sends.
+
+**The web tier is two replicas, and that is the point of the file.** One
+replica would pass every check while hiding the two things that break on
+the second one: a session in a process's heap, and a delivery body on a
+container's disk. `[:deploy :shape] :fleet` is what asks about both, and
+this deployment answers each with a line rather than a workaround —
+sessions in the database that already holds the queue, bodies in the
+bucket. Ask it yourself:
+
+```sh
+docker compose run --rm web janet main.janet deploy check
+```
+
+```
+shape   :fleet ([:deploy :shape] says so)
+  magic links and one-time codes :db        shared
+  API tokens                     :db        shared
+  sessions                       :db        shared
+  the job queue                  :db        shared
+  the metric registry            :process   by design    each replica exposes its own series…
+  the load sampler               :process   by design    RSS and event-loop lag are properties of one process…
+  uploaded files                 :s3        shared
+ready   yes — every store is shared
+```
+
+`config/prod.janet` is where that shape and its answers are written; the
+connection details are not there but in the environment, so the same
+image runs against this compose file's Postgres and against a managed
+one without a rebuild.
+
+**The worker is the same image running one command.** `janet main.janet
+jobs work` — the CLI inside the application (`cli/app-main`), so it runs
+against exactly this composition. It opens no port, on purpose: a
+worker's liveness is the depth of the queue, and that is the front page
+of the desk.
+
+**TLS is the proxy's.** void serves plain HTTP and Caddy holds the
+certificate (ADR-0010): on a laptop from its own internal CA, on a real
+host from Let's Encrypt — which matters because a GitHub webhook will
+not post to a certificate it cannot verify.
+
+### The environment
+
+Everything this hub is *for* is configuration, and none of it is in the
+image. A `.env` beside `docker-compose.yml`:
+
+```sh
+HUB_DOMAIN=hub.example.com          # the name GitHub will post to
+HUB_EMAIL=you@example.com           # where Let's Encrypt writes
+HUB_SECRET_KEY=…                    # `openssl rand -hex 32`
+GITHUB_WEBHOOK_SECRET=…             # the same string you type into GitHub
+TELEGRAM_BOT_TOKEN=123456:AA…
+TELEGRAM_CHAT_ID=-1001234567890
+HUB_OPERATORS=["you@example.com"]   # a janet value: the env layer parses JDN
+S3_ACCESS_KEY=…                     # minio's root user, or the bucket's key
+S3_SECRET_KEY=…
+```
+
+Then register at `https://<domain>/register` (the verification letter is
+in mailpit at `http://localhost:8025`, or in your relay), and point a
+repository's webhook at `https://<domain>/in/github` with content type
+`application/json` and that secret. The first delivery shows up on
+`/admin/deliveries`, and the job that carries it to telegram shows up on
+`/`.
+
+### The bucket has one name, and it is the browser's
+
+`VOID_STORAGE_S3__ENDPOINT` is `http://s3.<domain>` — a name Caddy
+proxies to minio — rather than `http://minio:9000`, and that is not
+decoration. A raw-body link is SigV4 query auth, and SigV4 signs the
+**host**: a link the application minted for `minio:9000` is a link no
+browser outside the compose network can resolve, and one that changed
+host on the way is a link minio refuses. So the application and the
+operator use the same name for the same bucket. A deployment on a real
+S3 or an R2 deletes the proxy's second site and puts the bucket's own
+public endpoint in that variable; the question disappears with the
+compose network it came from.
+
+### On a laptop it is sqlite and a directory
+
+Two environment variables are the whole difference (`main.janet`):
+
+```sh
+VOID_HUB_DB=postgres      # sqlite by default: a file, nothing to install
+VOID_HUB_STORAGE=s3       # a directory by default
+```
+
+The compose file sets both. Nothing else about the application changes
+between the two, which is the claim this example is here to make — and
+`[:deploy :shape]` is what stops it from being made carelessly: run the
+`:prod` profile on a disk and the process refuses to start, naming the
+store and what to compose instead.
+
 ## What makes it different from the other examples
 
 Every other example imports void through `test-support/paths.janet` —
@@ -276,6 +381,49 @@ One more thing came out of building this and was fixed rather than
 listed: `jpm build` could not link any application composing
 `void/html`, because the asset fingerprint held an abstract value in a
 `def` and `jpm build` marshals everything its entry point reaches.
+
+### And three more the deploy found
+
+The six above were found by writing the application. These three were
+found by **running** it in the shape it deploys in, which is the whole
+argument for the deploy having been a wave item rather than a footnote:
+none of them is visible to a suite that never leaves the process.
+
+7. **`[:pressure :max-rss-bytes]` could not trip on Linux.** The
+   `/proc/self/status` parser sliced fixed offsets off both ends of the
+   line and so read `5324 k` out of every real kernel's output —
+   `scan-number` returned nil, the reader resolved to "this platform has
+   no RSS meter", and the memory ceiling silently did nothing **in a
+   container**, which is the only place it is set. The suite was
+   asserting the wrong half: "where there is no meter the signal is nil"
+   is true and says nothing. *Fixed by matching the shape of the line;
+   the parse is now asserted on every platform, and on Linux the suite
+   demands that the meter exist.*
+
+8. **A structured error printed as an address.** `{:status 404 :message
+   "…"}` is the shape void's own throws use — `void/http/errors`, the
+   HTTP client, and the notify channel in ADR-0040 — so that the code
+   deciding whether to retry can read a status. At every boundary where
+   a *person* reads, the value went through `describe` and came out
+   `<struct 0xAAAA…>`: the failed job on the dashboard, the log line,
+   and `void: …` on the terminal. The first real telegram failure this
+   deployment produced said exactly that and nothing else. *Fixed:
+   `log/message-of` reads the convention the framework already had, and
+   the four boundaries read through it.*
+
+9. **The bucket store did not say what it needs open.** `void hub
+   replay` declares `:needs [:db/pool :storage/store :jobs/queue]` and
+   got exactly those — but every request an S3 store makes is signed,
+   and SigV4 is HMAC over `void/crypto`, whose library is opened by a
+   component nobody had named. On a disk store the command works; on a
+   bucket it fetched an object and died on libcrypto with the store
+   started and looking healthy. This is the same shape as finding 6, one
+   layer down: there the *work* knew what it needed, here the *store*
+   does. *Fixed: `:storage/s3` declares `:deps [:crypto/lib]`, so the
+   dependency closure a partial bootstrap starts includes it. `:tls/lib`
+   stays out of that list on purpose — it depends on the endpoint's
+   scheme, which is config, and a hard dependency would make every
+   http-only deployment compose void/tls.*
 
 ## Layout
 

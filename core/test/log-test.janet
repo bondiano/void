@@ -63,6 +63,30 @@
 (log/error "went wrong" :err "boom")
 (assert (= {:msg "boom"} (get (recs 1) :err)) "the :err serializer survives set-serializers!")
 
+# -- what an error says --------------------------------------------------
+#
+# Errors in void are often values rather than strings — a status the
+# retry logic reads and a message a person reads (void/http/errors, the
+# HTTP client, a notify channel). `describe` renders those as
+# `<struct 0xAAAA…>`, and that address was what a failed job's record,
+# a log line and `void: …` said until `message-of` existed.
+
+(assert (= "boom" (log/message-of "boom")))
+(assert (= "telegram answered 404"
+           (log/message-of {:hub/telegram true :status 404
+                            :message "telegram answered 404"}))
+        "a structured throw says what it says, not where it lives")
+(assert (= "later" (log/message-of {:msg "later"})) ":msg is read too")
+(assert (= "{:void.http/timeout true}" (log/message-of {:void.http/timeout true}))
+        "and a value with no message at all is printed as data — a pointer is not a sentence")
+(assert (= 40 (length (log/message-of (string/repeat "x" 400) 40)))
+        "long output is cut: a report nobody reads past is the thing being fixed")
+
+(array/clear recs)
+(log/error "job failed" :err {:status 404 :message "no such chat"})
+(assert (= {:msg "no such chat"} (get (recs 0) :err))
+        "which is what the :err serializer hands a sink")
+
 # -- pretty format snapshot ----------------------------------------------
 
 (def pretty (log/pretty-sink {:color false}))

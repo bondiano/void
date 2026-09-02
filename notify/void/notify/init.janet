@@ -156,12 +156,12 @@
     (each e (hooks/handlers reg sent-hook)
       (def [ok err] (protect ((e :fn) receipt)))
       (unless ok
-        (log/warn "notify handler failed" :ns log-ns :handler (e :name) :err (string err)))))
+        (log/warn "notify handler failed" :ns log-ns :handler (e :name) :err (log/message-of err)))))
   (each name (sorted (keys listeners))
     (when-let [f (get listeners name)]
       (def [ok err] (protect (f receipt)))
       (unless ok
-        (log/warn "notify listener failed" :ns log-ns :listener name :err (string err)))))
+        (log/warn "notify listener failed" :ns log-ns :listener name :err (log/message-of err)))))
   receipt)
 
 # -- the channels this package ships -------------------------------------
@@ -228,7 +228,7 @@
     (not ok)
     (do
       (log/error "a channel could not project a notification" :ns log-ns
-                 :channel name :id (note :id) :key (note :key) :err (string payload))
+                 :channel name :id (note :id) :key (note :key) :err (log/message-of payload))
       {:channel name :status :failed :stage :project :error (string payload)})
 
     (nil? payload)
@@ -243,7 +243,7 @@
         {:channel name :status :queued :job (get job :id)}
         (do
           (log/error "a notification could not be queued" :ns log-ns
-                     :channel name :id (note :id) :err (string job))
+                     :channel name :id (note :id) :err (log/message-of job))
           {:channel name :status :failed :stage :queue :error (string job)})))
 
     (let [[ok result] (protect (deliver! name payload))]
@@ -251,7 +251,7 @@
         {:channel name :status :sent :receipt result}
         (do
           (log/error "a notification channel failed" :ns log-ns
-                     :channel name :id (note :id) :key (note :key) :err (string result))
+                     :channel name :id (note :id) :key (note :key) :err (log/message-of result))
           {:channel name :status :failed :stage :deliver :error (string result)})))))
 
 (defn send

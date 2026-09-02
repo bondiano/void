@@ -1,8 +1,15 @@
-# Docker build context for examples/shop (its Dockerfile installs the
-# framework from this checkout, so the context is the repository root).
-# Everything here is either build output that must be rebuilt inside
-# the image or noise that would bust the layer cache.
+# Docker build context for examples/shop and examples/hub (both
+# Dockerfiles install the framework from this checkout, so the context
+# is the repository root). Everything here is either build output that
+# must be rebuilt inside the image or noise that would bust the layer
+# cache.
 .git
+# the tree scripts/install-tree.janet writes: 40 MB of the very same
+# packages the image installs for itself, one stage earlier
+.void-tree
+# delivery bodies the hub's dev store kept, and the letters its dev mail
+# transport wrote — one machine's data, never an image's
+examples/hub/storage
 .github
 .omc
 **/jpm_tree

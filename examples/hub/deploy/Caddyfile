@@ -1,0 +1,53 @@
+# The TLS this deployment does not terminate itself.
+#
+# void serves plain HTTP and a proxy in front of it holds the
+# certificate (ADR-0010): the hub's own listener is 8080 on the compose
+# network, and everything a repository or a browser reaches goes through
+# here. On a laptop `HUB_DOMAIN` is unset and Caddy issues a certificate
+# from its own internal CA for `localhost`; on a real host it is the
+# name GitHub will post to, and Caddy asks Let's Encrypt for a real one
+# — which is the whole of the difference, because a GitHub webhook will
+# not talk to a certificate it cannot verify.
+
+{
+	# where the ACME account's expiry notices go. Unset on a laptop,
+	# where nothing is issued by anybody but Caddy itself
+	email {$HUB_EMAIL:hub@example.invalid}
+}
+
+{$HUB_DOMAIN:localhost} {
+	encode zstd gzip
+
+	# /metrics is void/obs-http's, and it answers a bearer token — but
+	# an endpoint that lists a deployment's internals is a thing to
+	# refuse at the edge before it is a thing to authenticate. The
+	# scrape that wants it runs on the compose network, where web:8080
+	# answers it directly.
+	@internal path /metrics
+	respond @internal 404
+
+	# `web` is a name rather than an address, and the compose file
+	# gives it two replicas: Docker's DNS answers with both, Caddy
+	# dials the name per request, and a session written by one of them
+	# is readable by the other because sessions are in the database
+	# ([:http :session :store] :db, config/prod.janet).
+	reverse_proxy web:8080
+}
+
+# The bucket, for the browser.
+#
+# A raw-body link is SigV4 query auth, and SigV4 signs the **host** — so
+# the name the application mints the link with has to be the name the
+# operator's browser opens. That is one name for two networks, which is
+# what this site is for: the application PUTs and GETs through
+# `http://s3.<domain>` (this proxy, then minio) and the desk hands out
+# links to the same origin. A deployment on a real S3 or an R2 deletes
+# this block: the bucket already has one public name.
+#
+# `http://` in the address is deliberate — it turns off Caddy's
+# automatic HTTPS for this site, because the S3 client on the other side
+# is void's own and it is talking to a neighbour on the compose network,
+# not across the internet.
+http://s3.{$HUB_DOMAIN:localhost} {
+	reverse_proxy minio:9000
+}

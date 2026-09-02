@@ -1,0 +1,271 @@
+### void hub — the whole thing, running.
+###
+###     docker compose up --build       the hub on https://localhost
+###
+### Seven services, and the four that matter are the four ROADMAP 6.6
+### named: a web tier, a worker, a database and a bucket. The other
+### three are the edge that holds the TLS, the one-shot that creates the
+### bucket, and an inbox to catch the letters a sign-in sends.
+###
+###   caddy      the certificate and the only published ports. void
+###              serves plain HTTP and a proxy in front of it holds the
+###              TLS (ADR-0010) — on a laptop from Caddy's internal CA,
+###              on a real host from Let's Encrypt
+###   postgres   the deliveries, the queue, the sessions and the
+###              accounts — one database, because a delivery and the
+###              notification it caused commit together (ADR-0012)
+###   minio      the bucket every delivery's raw body goes into. Private,
+###              unlike the shop's: every object here is somebody else's
+###              payload, and the desk hands out five-minute links
+###   createbucket  a one-shot `mc mb` — the bucket is part of this
+###              deployment's schema, so it is created the way the tables
+###              are, and *not* made anonymously readable
+###   mailpit    an SMTP relay with a web inbox: the sign-in's
+###              verification and reset letters land in it. A deployment
+###              that is not a demo points VOID_MAIL__SMTP__HOST at a
+###              real relay and deletes this
+###   migrate    a one-shot `db migrate`
+###   web        two replicas, which is what makes [:deploy :shape]
+###              :fleet the truth rather than a setting
+###   worker     the same image running `jobs work` — the process that
+###              actually posts to telegram
+###
+### web and worker run **the same image and the same code**; what
+### differs is the command. That is the deployment shape void/jobs is
+### built for: the process that enqueues is not the process that
+### delivers.
+###
+### Secrets come from the environment (a `.env` beside this file is the
+### usual place). The defaults below are a laptop's, and every one of
+### them is wrong for anything else — see ../README.md.
+
+name: void-hub
+
+x-app: &app
+  # One image for the three services that are this application, named
+  # rather than left to compose: without it each service gets its own
+  # tag from the same Dockerfile, and `docker compose build web` then
+  # leaves the worker running last week's code — which is a debugging
+  # afternoon nobody should have to repeat.
+  image: void-hub
+  build:
+    context: ../..
+    dockerfile: examples/hub/Dockerfile
+  environment: &app-env
+    VOID_PROFILE: prod
+    # the two switches main.janet reads: the driver, and where delivery
+    # bodies live. Both are the same decision — a fleet's stores are
+    # shared or the fleet does not work (ADR-0030)
+    VOID_HUB_DB: postgres
+    VOID_HUB_STORAGE: s3
+    # config/prod.janet reads these as {:secret "…"} references, so the
+    # values live in the environment and the config tree holds an opaque
+    # box that does not print (ADR-0007 §5)
+    HUB_SECRET_KEY: ${HUB_SECRET_KEY:-development-signing-key-change-me}
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-hub}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:-hub-hub-hub}
+    # every connection detail is an env var rather than a line in
+    # config/prod.janet, which is what lets one image run against any
+    # database (VOID_DB_POSTGRES__URL -> [:db-postgres :url])
+    VOID_DB_POSTGRES__URL: postgres://hub:hub@postgres:5432/hub
+    # One name for two networks, and it is not an accident: a raw-body
+    # link is SigV4 query auth over the **host**, so what the
+    # application signs has to be what the operator's browser opens.
+    # deploy/Caddyfile proxies this name to minio; a real bucket has one
+    # public name and this line becomes its endpoint.
+    VOID_STORAGE_S3__ENDPOINT: http://s3.${HUB_DOMAIN:-localhost}
+    VOID_STORAGE_S3__BUCKET: hub
+    VOID_STORAGE_S3__REGION: us-east-1
+    VOID_MAIL__SMTP__HOST: mailpit
+    VOID_MAIL__SMTP__PORT: "1025"
+    VOID_MAIL__BASE_URL: https://${HUB_DOMAIN:-localhost}
+    # -- what this hub is for ------------------------------------------
+    #
+    # The source it receives from, the rules that say where a delivery
+    # goes, the bot it speaks as, and who may read what arrived. All
+    # four are [:hub], all four are configuration, and none of them is
+    # in the image: `void config explain :hub :rules` says which layer
+    # put a value there.
+    VOID_HUB__SOURCES__GITHUB__SIGNING_SECRET: ${GITHUB_WEBHOOK_SECRET:-set-this-to-the-secret-you-typed-into-github}
+    # a janet value, because the environment layer parses JDN: this one
+    # sends everything from github to the configured chat
+    VOID_HUB__RULES: '[{:when {:source "github"} :to [:telegram]}]'
+    VOID_HUB__TELEGRAM__TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    VOID_HUB__TELEGRAM__CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    VOID_HUB__OPERATORS: ${HUB_OPERATORS:-[]}
+    # /metrics answers this bearer token and nothing else — and the
+    # proxy refuses the path outright from outside (deploy/Caddyfile)
+    VOID_OBS_HTTP__TOKEN: ${HUB_METRICS_TOKEN:-prometheus-scrape-token}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    mailpit:
+      condition: service_started
+    createbucket:
+      condition: service_completed_successfully
+    # the application reaches the bucket *through* the proxy, because
+    # the name it signs a link with has to be the name a browser opens
+    # (VOID_STORAGE_S3__ENDPOINT above). So the edge starts first, and
+    # it does not wait for the web tier in return: Caddy dials its
+    # upstream per request, so an upstream that is not up yet is a 502
+    # for a second rather than a boot order
+    caddy:
+      condition: service_started
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hub
+      POSTGRES_PASSWORD: hub
+      POSTGRES_DB: hub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hub -d hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-hub}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-hub-hub-hub}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - miniodata:/data
+    ports:
+      # the console: http://localhost:9001, where the objects the intake
+      # wrote are visible as objects. The S3 API itself is *not*
+      # published — the application reaches it over the compose network
+      # and a browser reaches it through the proxy, both under the one
+      # name the signature is over
+      - "9001:9001"
+
+  # One shot, like `migrate` below and for the same reason: a bucket is
+  # part of the schema of this deployment. There is no `mc anonymous set
+  # download` here, and its absence is the design — the shop's bucket
+  # holds product pictures a browser loads by the hundred, this one
+  # holds webhook payloads, and the only way in is a link the desk
+  # signed for five minutes (ADR-0039 §5).
+  createbucket:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY:-hub} ${S3_SECRET_KEY:-hub-hub-hub} &&
+      mc mb --ignore-existing local/hub
+      "
+
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      # the inbox: http://localhost:8025 — the verification link an
+      # operator's account needs is in it
+      - "8025:8025"
+
+  # One shot, and it has to finish before anything serves. Four
+  # migrations: the accounts `void make auth` generated, the deliveries,
+  # the queue's tables and the session table — the last two out of DDL
+  # the plugins ship as data, on a timeline this application owns
+  # (ADR-0023 §2). Idempotent, so a redeploy runs it again for free.
+  migrate:
+    <<: *app
+    command: ["janet", "main.janet", "db", "migrate"]
+    restart: "no"
+
+  web:
+    <<: *app
+    deploy:
+      # **Two**, and that is the point of this file. One replica would
+      # pass every check while hiding the two that matter: a session in
+      # a process's heap, and a delivery body on a container's disk.
+      # `void deploy check` asks about both because there are two of
+      # these (ADR-0030)
+      replicas: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      createbucket:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      caddy:
+        condition: service_started
+
+  # The same image, running the command the README is about. `void jobs
+  # work` starts the union of what the jobs on its queues need — for
+  # this application `:tls/lib`, because a telegram delivery is https
+  # and the queue does not depend on the TLS stack (ADR-0040 §3). That
+  # union is the fix for the bug this example found; running the worker
+  # as its own command rather than as a flag on the web tier is what
+  # keeps it proven.
+  #
+  # No healthcheck, because this process opens no port — a worker's
+  # liveness is the queue's depth, and that is the front page of the
+  # desk. A deployment that wants /health on its worker too runs the
+  # application here instead, with VOID_JOBS__WORKER__ENABLED=true.
+  worker:
+    <<: *app
+    command: ["janet", "main.janet", "jobs", "work"]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      createbucket:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      caddy:
+        condition: service_started
+
+  # The edge: the certificate, and the only ports this deployment
+  # publishes. `HUB_DOMAIN` unset means localhost and Caddy's internal
+  # CA; set to the name a repository will post to, it means a real
+  # certificate — and a GitHub webhook will not talk to one it cannot
+  # verify.
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      HUB_DOMAIN: ${HUB_DOMAIN:-localhost}
+      HUB_EMAIL: ${HUB_EMAIL:-hub@example.invalid}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      default:
+        aliases:
+          # what the application resolves when it signs and fetches a
+          # delivery body: the same name the browser uses, which is what
+          # SigV4 requires (deploy/Caddyfile)
+          - s3.${HUB_DOMAIN:-localhost}
+    depends_on:
+      minio:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  miniodata:
+  caddydata:
+  caddyconfig:
