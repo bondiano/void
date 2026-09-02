@@ -17,7 +17,9 @@
 (import spork/json)
 (import spork/sh)
 (import ../main :as main)
-(import ../intake :as intake)
+(import ../src/modules/intake/intake.model :as model)
+(import ../src/modules/intake/intake.repository :as deliveries)
+(import ../src/modules/intake/intake.service :as intake)
 
 (def secret "not-the-real-one-but-the-real-shape")
 
@@ -96,7 +98,7 @@
           "accepted, because where this event goes is decided after the answer")
   (assert (= "received" ((json-of ok) :status)))
 
-  (def row (intake/find-by-delivery-id "ce4b1f00-0000-4000-8000-000000000001"))
+  (def row (deliveries/by-delivery-id "ce4b1f00-0000-4000-8000-000000000001"))
   (assert row "the delivery is a row")
   (assert (= "push" (row :event)))
   (assert (= "bondiano/void" (row :repo))
@@ -133,7 +135,7 @@
   (def again (test/inject c (delivery "ce4b1f00-0000-4000-8000-000000000001")))
   (assert (= 202 (again :status)) "a retry is not an error")
   (assert (= "duplicate" ((json-of again) :status)))
-  (assert (= 1 (db/count intake/Delivery
+  (assert (= 1 (db/count model/Delivery
                          {:where [:= :delivery-id
                                   "ce4b1f00-0000-4000-8000-000000000001"]}))
           "and it is still one delivery")
@@ -147,7 +149,7 @@
     (test/inject c (delivery "ce4b1f00-0000-4000-8000-000000000006"
                              {:headers {"x-github-event" "issues"}})))
   (assert (= 202 (unrouted :status)))
-  (assert (intake/find-by-delivery-id "ce4b1f00-0000-4000-8000-000000000006")
+  (assert (deliveries/by-delivery-id "ce4b1f00-0000-4000-8000-000000000006")
           "it is still a delivery, kept like every other")
   (assert (= before (length (notify/outbox)))
           "and nothing went out, because no rule said to")
@@ -158,7 +160,7 @@
                              {:headers {"x-hub-signature-256"
                                         (intake/signature-of "another-secret" body)}})))
   (assert (= 401 (forged :status)))
-  (assert (nil? (intake/find-by-delivery-id "ce4b1f00-0000-4000-8000-000000000002"))
+  (assert (nil? (deliveries/by-delivery-id "ce4b1f00-0000-4000-8000-000000000002"))
           "nothing is written before the signature is checked")
 
   # a body changed after signing is the same refusal — this is the case
@@ -185,7 +187,7 @@
   (def wild (test/inject c (delivery "../../etc/passwd")))
   (assert (= 400 (wild :status))
           "the key is data, so the data is checked rather than laundered")
-  (assert (nil? (intake/find-by-delivery-id "../../etc/passwd"))
+  (assert (nil? (deliveries/by-delivery-id "../../etc/passwd"))
           "and nothing was written under it")
   (assert (not (storage/valid-key? "github/../../etc/passwd.json"))
           "the store would have refused that key too — this refuses earlier, with a status")

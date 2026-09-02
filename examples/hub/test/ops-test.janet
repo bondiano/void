@@ -14,7 +14,9 @@
 (import void/notify :as notify)
 (import spork/sh)
 (import ../main :as main)
-(import ../intake :as intake)
+(import ../src/modules/intake/intake.model :as model)
+(import ../src/modules/intake/intake.repository :as deliveries)
+(import ../src/modules/intake/intake.service :as intake)
 
 (def secret "not-the-real-one-but-the-real-shape")
 
@@ -100,7 +102,7 @@
                               "x-hub-signature-256" (intake/signature-of secret body)}
                     :body body}))
   (assert (= 202 (received :status)))
-  (def row (intake/find-by-delivery-id delivery-id))
+  (def row (deliveries/by-delivery-id delivery-id))
   (assert row "the delivery is a row")
 
   # -- the front door is the queue ---------------------------------------
@@ -173,7 +175,7 @@
   (assert (= "bondiano/void — push by bondiano"
              (get (last (notify/outbox)) :title))
           "built from the bytes as they arrived, not from what the row remembers")
-  (assert (= 1 (db/count intake/Delivery))
+  (assert (= 1 (db/count model/Delivery))
           "replay routes again and never receives again: one delivery is one row")
 
   (assert (intake/find-delivery (string (row :id)))

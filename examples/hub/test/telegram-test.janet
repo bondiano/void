@@ -15,7 +15,7 @@
 (import spork/json)
 (import spork/sh)
 (import ../main :as main)
-(import ../telegram :as telegram)
+(import ../src/modules/telegram/telegram.channel :as telegram)
 
 (def token "111111:test-token")
 

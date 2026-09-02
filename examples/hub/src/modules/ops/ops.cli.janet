@@ -1,4 +1,4 @@
-### hub/ops — the command an operator runs.
+### ops/cli — the command an operator runs.
 ###
 ### There used to be a second one, and its absence is the more
 ### interesting half of this file.
@@ -14,32 +14,29 @@
 ### composed and unstarted in the very same process.
 ###
 ### The hub carried its own `void hub work` — the same worker with one
-### more line in `:needs` — until the framework learned the general
-### form of it: a job (and a notify channel) declares what its work
-### needs open, and `void jobs work` starts the union over the queues it
-### serves. The declaration is one line in ./telegram.janet now, which
-### is where the fact actually lives, and this file is one command
-### shorter.
+### more line in `:needs` — until the framework learned the general form
+### of it: a job (and a notify channel) declares what its work needs
+### open, and `void jobs work` starts the union over the queues it
+### serves. The declaration is one line in
+### ../telegram/telegram.channel.janet now, which is where the fact
+### actually lives, and this file is one command shorter.
+###
+### `void hub replay <delivery>` is the command that is left, and it is
+### the one that makes developing this application bearable. A webhook
+### needs a public hostname to arrive at, so the usual way to change one
+### line of ../routing is: a tunnel, a repository, and somebody to push
+### to it. Replay says the bytes are already here — one real delivery,
+### received once, routed again as many times as it takes
+### (../intake/intake.service.janet, `replay!`, for why it routes rather
+### than receives).
+###
+### It starts three components and not the port: the database the row is
+### in, the store the bytes are in, and the queue the notification goes
+### on. Delivering it is the worker's job, which is why `:tls/lib` is not
+### in this list — nothing here opens a socket to telegram.
 (import void/core/plugin :as plugin)
 (import void/jobs)
-(import ./intake)
-
-# -- replay --------------------------------------------------------------
-#
-# `void hub replay <delivery>` is the command that is left, and it is
-# the one that makes developing this application bearable. A webhook
-# needs a public hostname to arrive at, so the usual way to change one
-# line of ./route.janet is: a tunnel, a repository, and somebody to
-# push to it.
-# Replay says the bytes are already here — one real delivery, received
-# once, routed again as many times as it takes (./intake.janet,
-# `replay!`, for why it routes rather than receives).
-#
-# It starts three components and not the port: the database the row is
-# in, the store the bytes are in, and the queue the notification goes
-# on. Delivering it is the worker's job, which is why `:tls/lib` is not
-# in this list — nothing here opens a socket to telegram, and the
-# worker declares that need through the channel now (./telegram.janet).
+(import ../intake/intake.service :as intake)
 
 (defn- outcome-of
   ``The end of one channel's line: the job when there is one, and
@@ -83,8 +80,3 @@
                        (string (out :channel)) (string (out :status)) (outcome-of out)))
              (when (some |(= :queued ($ :status)) outs)
                (print "run `void jobs work` to deliver it")))))})
-
-(plugin/defplugin hub/ops
-  :doc "The operator's command: a replay that routes a kept delivery again from the bytes it arrived as, without receiving it again."
-  :version "0.1.0"
-  :requires {:void/jobs ">=0.0.1" :void/db ">=0.0.1" :void/storage ">=0.0.1"})

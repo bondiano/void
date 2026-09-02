@@ -66,7 +66,8 @@ rule whose channel is down should be that rule's failure and not the
 other rule's. Matching is a pure function of two values, which is why
 `test/route-test.janet` is a table of examples and boots nothing.
 
-Telegram is a channel this application wrote (`telegram.janet`), which
+Telegram is a channel this application wrote
+(`src/modules/telegram/telegram.channel.janet`), which
 is exactly what ADR-0040 says such a channel is: a contribution with two
 functions. `:project` runs on the request fiber and returns a chat and a
 string; `:deliver` runs on a worker and posts it. That split is why the
@@ -109,7 +110,8 @@ handler is `(ring/redirect (http/url-for :admin.page/jobs))`.
 
 **`/admin/deliveries` is the row the intake wrote, projected.**
 `defentity` already says what a delivery is (ADR-0029), so the
-declaration in `admin.janet` adds only what a schema cannot: the columns
+declaration in `intake/intake.admin.janet` adds only what a schema
+cannot: the columns
 an operator scans, the three fields they search by, the two they filter
 on. It is read-only, and not because a write would be hard — a fact
 about the past that can be edited from the page that displays it is not
@@ -145,7 +147,7 @@ for a value that has two rows in it and changes when somebody leaves.
 ## Replaying a delivery
 
 A webhook needs a public hostname to arrive at, so the usual way to
-change one line of `route.janet` is a tunnel, a repository and somebody
+change one line of `routing/` is a tunnel, a repository and somebody
 to push to it. The bytes are already here:
 
 ```sh
@@ -267,7 +269,7 @@ honest way to have picked them:
    which is true of the worker and false of the work. A telegram
    delivery is https, and https is `:tls/lib`. *Fixed: `defjob` takes
    `:needs`, a `:void.notify/channel` takes `:needs`, and `void jobs
-   work` starts the union over the queues it serves. `telegram.janet`
+   work` starts the union over the queues it serves. The channel
    says `:needs [:tls/lib]` and `void hub work` no longer exists.*
 
 One more thing came out of building this and was fixed rather than
@@ -277,24 +279,68 @@ listed: `jpm build` could not link any application composing
 
 ## Layout
 
+The layout is [examples/shop](../shop/README.md)'s, and deliberately:
+void has no module system of its own — no registry to enrol in, no
+loader that scans a directory — so an example that picks a convention
+and a second one that picks a different convention would be teaching
+that the question has no answer.
+
 ```
-main.janet          the composition, and the entrypoint that *is* the void
-                    CLI when given arguments (cli/app-main)
-auth.janet          register / sign in / reset / verify — `void make auth`
-intake.janet        the receiving end: the route, the signature, the store
-                    and the row — and `replay!`, which is the second half
-                    of it run again
-route.janet         where a delivery goes: rules as data, matching as a
-                    pure function
-telegram.janet      the notify channel this application wrote — project
-                    here, deliver on a worker
-admin.janet         the operator's half: who is an operator, deliveries as
-                    a declaration, the raw body behind a signed URL, and
-                    `/` as the jobs dashboard
-ops.janet           the command an operator runs: `void hub replay`
+main.janet          the composition, the two switches a deployment flips,
+                    and the entrypoint that *is* the void CLI when given
+                    arguments (cli/app-main)
 config/             default.janet, then <profile>.janet, then VOID_*, then
                     CLI overrides (`void config explain :mail :transport`)
-db/migrations/      migrations as data, DDL included
+db/migrations/      migrations as data, DDL included — including the tables
+                    void/jobs-db and void/db-http own, out of the DDL those
+                    plugins ship
+src/
+  app.janet         the plugin manifest: the module imports, one hook, the
+                    schema of [:hub] — and no code about a webhook hub
+  shared/values     the timestamp both tables write
+  web/layout.janet  the page frame, which is the one file that knows about
+                    more than one module
+  modules/
+    intake/         what arrives: the route, the signature, the store, the
+                    row — and the desk that reads them back
+    routing/        where it goes: rules as data, matching as a pure
+                    function, one notification per matching rule
+    telegram/       what carries it out: the notify channel this
+                    application wrote (ADR-0040)
+    auth/           the accounts `void make auth` generated, and the policy
+                    that decides which of them is an operator
+    ops/            the operator's surface: `/` is the jobs dashboard, and
+                    `void hub replay` is the one command
 test/               the suite `void make auth` generated, and the ones this
                     application wrote — `jpm test` (on the installed tree)
 ```
+
+**A module is a directory, and the suffix says which layer a file is** —
+the same table the shop's README prints, minus the layers this
+application has no use for and plus the one it needed:
+
+| suffix | may | may not |
+|---|---|---|
+| `*.model.janet` | `defentity`: the table and its columns | be anything but a declaration |
+| `*.dto.janet` | the schemas a form submits, and the value that crosses to another system | name a table |
+| `*.repository.janet` | every query about this module's tables | see a request, a session or an identity |
+| `*.service.janet` | the rules — what is verified, what is kept, what is sent | name a table, or see a request |
+| `*.controller.janet` | unpack the request, call the service, pick the view or the status | hold a rule, or write SQL |
+| `*.view.janet` | hiccup | know that HTTP exists |
+| `*.admin.janet` | `defresource-admin`: which columns a desk looks at | hold a handler, a template or a rule |
+| `*.policy.janet` `*.channel.janet` `*.cli.janet` | one adapter each: authorization, void/notify, the command line | — |
+
+`*.channel.janet` is the row this application added. A notify channel is
+a port with two ends — `project` where the request is, `deliver` where
+the network is — and that is one adapter, not two layers, which is why
+`telegram/` is a single file.
+
+**The accounts module is the generated one, re-laid.** `void make auth`
+wrote a single `auth.janet`: the entity, four form schemas, six views,
+twelve handlers and the routes, in that order and in one file — which is
+the right output for a generator that cannot know what a project's
+layout is. Splitting it along the lines above is the whole of the
+difference; the flows, the refusals and the comments are the
+generator's. It is also the reason the sentence "the first commit is
+exactly what the generators wrote" is still worth checking in the git
+history rather than in the tree.

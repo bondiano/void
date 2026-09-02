@@ -5,10 +5,13 @@
 ### the CSRF check, the strategy chain, the route table — without
 ### opening a socket, so what passes here is what a browser gets.
 ###
-### **The composition is written out** rather than read from
-### main.janet, so that this suite runs the moment it is generated —
-### before those plugins have been added there. Once they have, replace
-### the list with main.janet's and the suite follows the application.
+### **The composition is main.janet's**, which is the second half of the
+### instruction the generator wrote here: it emitted a list of its own so
+### that the suite would run the moment it was generated — before those
+### plugins had been added to the application — and said to replace it
+### with main.janet's once they had. So a plugin dropped from the
+### application is a failing test here rather than a page that quietly
+### stops working.
 ###
 ### **Delivery is a plugin of this file's own.** `auth/challenge!`
 ### refuses a challenge nobody delivered (ADR-0023 §7); in production
@@ -19,15 +22,12 @@
 (import void/core/log :as log)
 (import void/test :as test)
 (import void/db :as db)
-# importing a plugin's module is what registers its manifest, which is
-# what makes a keyword entry in :plugins below resolvable. The module
-# under test imports void/auth and void/auth-http itself; these four it
-# does not name, and they are in the composition all the same
-(import void/crypto)
-(import void/auth/db)
-(import void/security)
-(import void/db-sqlite)
-(import ../auth :as accounts)
+(import spork/sh)
+# main.janet is what registers every manifest this composition names:
+# importing a plugin's module is what makes its keyword resolvable, and
+# the application already imports all of them
+(import ../main :as main)
+(import ../src/modules/auth/auth.model :as accounts)
 
 # -- the deliverer -------------------------------------------------------
 
@@ -50,40 +50,34 @@
   (string (or (os/getenv "TMPDIR") "/tmp")
           "/hub-auth-test-" (os/time) ".sqlite3"))
 
+(def tmp (string (or (os/getenv "TMPDIR") "/tmp") "/hub-auth-" (os/time)))
+
 (def plugins
-  [:void/http :void/html
-   :void/db :void/db-sqlite
-   # every hash and every code comes from void/crypto (ADR-0022): this
-   # composition hashes nothing itself
-   :void/crypto :void/auth :void/auth-http :void/auth-db
-   # the CSRF token the forms below carry without asking (ADR-0025)
-   :void/security
-   capture
-   :hub/auth])
+  ``main.janet's composition plus this file's deliverer. The three
+  stores, the columns void/auth-db reads and where an unauthenticated
+  request is sent are config/default.janet's — the generator printed
+  that block and this application pasted it, so a suite that repeated it
+  would be asserting its own copy.``
+  [;(main/app :plugins) capture])
 
 (def config
   {:env @{}
    :cli {:db {:migrations {:dir "db/migrations"}}
          :db-sqlite {:path sqlite-path}
-         :http {:session {:enabled true}}
-         # three interfaces have two implementations each — the memory
-         # stores void/auth ships and the database ones void/auth-db
-         # does — and the kernel refuses to guess (ADR-0030)
-         :void/auth-user-store {:impl :auth.db/users}
-         :void/auth-token-store {:impl :auth.db/tokens}
-         :void/auth-challenge-store {:impl :auth.db/challenges}
-         :auth-db {:users {:table "users"
-                           :subject-kind "user"
-                           :email-column "email"
-                           :password-column "password_hash"
-                           # on the identity, so a page can greet
-                           # somebody without a second query
-                           :claims-columns ["email"]}}
-         :auth-http {:unauthenticated :redirect :login-path "/login"}
+         # the letters go nowhere: `capture` above is what this suite
+         # reads its links out of, and :memory is a transport that keeps
+         # what it was given rather than a directory that outlives the
+         # run
+         # :base-url is what a letter resolves `[:mail-auth :link-path]`
+         # against — void/mail-auth is in this composition now, and a
+         # link with no origin is a link nobody can follow
+         :mail {:transport :memory :base-url "http://localhost:8080"}
+         :storage {:local {:root (string tmp "/storage")}}
          # what the configured hasher costs is pinned in void/crypto;
          # this suite signs in a dozen times and does not need it
          :auth {:scrypt {:ln 10}}
-         :crypto {:kdf {:in-thread false}}}})
+         :crypto {:kdf {:in-thread false}}
+         :dev {:netrepl {:enabled false} :watch {:enabled false}}}})
 
 # -- helpers -------------------------------------------------------------
 
@@ -268,5 +262,6 @@
 
 (log/set-sinks! nil)
 (os/rm sqlite-path)
+(sh/rm tmp)
 
 (print "auth-test ok")

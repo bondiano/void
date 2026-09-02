@@ -18,7 +18,8 @@
 (import void/notify :as notify)
 (import spork/sh)
 (import ../main :as main)
-(import ../intake :as intake)
+(import ../src/modules/intake/intake.repository :as deliveries)
+(import ../src/modules/intake/intake.service :as intake)
 
 (def secret "not-the-real-one-but-the-real-shape")
 (def body (string (slurp "test/fixtures/github-push.json")))
@@ -88,7 +89,7 @@
 
   # the delivery is kept and the sender is answered — and nothing has
   # been delivered anywhere yet
-  (assert (intake/find-by-delivery-id "aa000000-0000-4000-8000-000000000001"))
+  (assert (deliveries/by-delivery-id "aa000000-0000-4000-8000-000000000001"))
   (assert (empty? (notify/outbox))
           "delivery happens on a worker, not on the request")
   (assert (= 2 (- (pending) before))
