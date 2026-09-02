@@ -264,19 +264,49 @@
       (set found [i v])))
   found)
 
+(defn- busy?
+  "Is this sqlite error SQLITE_BUSY — a lock somebody else holds?"
+  [e]
+  (def s (err-str e))
+  (or (string/find "database is locked" s)
+      (string/find "database table is locked" s)))
+
 (defn- run
-  ``One statement on one connection. sqlite's own error is what
-  propagates — the execution funnel in void/db/state logs the SQL and
-  the parameters alongside it — except for the opaque "invalid sql
-  value", which is worth turning into the parameter that caused it.``
-  [conn sql params]
-  (def [ok res] (protect (sqlite3/eval conn sql (or params []))))
-  (when ok (break res))
-  (when (string/find "invalid sql value" (err-str res))
-    (when-let [[i v] (unbindable params)]
-      (errorf "sqlite: parameter %d is %q, which has no SQL type — pass a number, string, buffer, boolean or nil"
-              (inc i) v)))
-  (error res))
+  ``One statement on one connection, with a *cooperative* busy wait:
+  sqlite's own busy handler spins inside the C call and blocks the
+  whole event loop for as long as it waits, so the connection carries
+  only a token in-C timeout and this loop does the real waiting with
+  `ev/sleep` between attempts — every other fiber keeps running, which
+  is what breaks the starvation spiral of several writers on one file
+  (a 5 s in-C wait per contender *is* 5 s of loop lag per contender).
+  Retrying the whole statement is sound: SQLITE_BUSY means it did not
+  execute. `budget` is milliseconds of total patience; past it the
+  busy error propagates as before.
+
+  sqlite's other errors propagate as they are — the execution funnel
+  in void/db/state logs the SQL and the parameters alongside them —
+  except the opaque "invalid sql value", which is worth turning into
+  the parameter that caused it.``
+  [conn sql params &opt budget]
+  (default budget 0)
+  (def deadline (+ (os/clock :monotonic) (/ budget 1000)))
+  (var pause 0.005)
+  (var res nil)
+  (var done false)
+  (while (not done)
+    (def [ok r] (protect (sqlite3/eval conn sql (or params []))))
+    (cond
+      ok (do (set res r) (set done true))
+      (and (busy? r) (< (os/clock :monotonic) deadline))
+      (do (ev/sleep pause)
+          (set pause (min 0.1 (* 2 pause))))
+      (do
+        (when (string/find "invalid sql value" (err-str r))
+          (when-let [[i v] (unbindable params)]
+            (errorf "sqlite: parameter %d is %q, which has no SQL type — pass a number, string, buffer, boolean or nil"
+                    (inc i) v)))
+        (error r))))
+  res)
 
 (defn- changed
   "Rows the last INSERT/UPDATE/DELETE on this connection touched."
@@ -286,8 +316,11 @@
 (defn make
   ``Build the :void/db-driver value. opts:
 
-    :path       what `sqlite3/open` receives
-    :pragmas    [[name value] ...] applied to every new connection
+    :path         what `sqlite3/open` receives
+    :pragmas      [[name value] ...] applied to every new connection
+    :busy-timeout ms of cooperative waiting on SQLITE_BUSY (see `run`;
+                  0 — fail immediately, the pre-wave-7 in-C wait is
+                  deliberately not offered because it blocks the loop)
     :tx-mode    default BEGIN flavour, see `tx-modes` (:immediate)
     :returning  does this sqlite have INSERT ... RETURNING
     :shared     one connection to hand to every checkout instead of
@@ -304,6 +337,7 @@
   (def path (get opts :path default-path))
   (def shared (get opts :shared))
   (def pragmas (get opts :pragmas []))
+  (def busy (get opts :busy-timeout 0))
   (def default-mode (get opts :tx-mode :immediate))
   (defn begin-sql [isolation]
     (def mode (or isolation default-mode))
@@ -327,7 +361,7 @@
 
     :execute
     (fn sqlite-execute [conn sql params &opt o]
-      (def rows (run conn sql params))
+      (def rows (run conn sql params busy))
       (if (= :select (get o :kind))
         {:rows rows :count (length rows)}
         # a write — or a raw statement that did not say, where the
@@ -339,11 +373,12 @@
     :insert-id (fn sqlite-insert-id [conn _] (sqlite3/last-insert-rowid conn))
 
     :begin (fn sqlite-begin [conn &opt isolation]
-             (run conn (begin-sql isolation) []))
-    :commit (fn sqlite-commit [conn] (run conn "COMMIT" []))
+             (run conn (begin-sql isolation) [] busy))
+    :commit (fn sqlite-commit [conn] (run conn "COMMIT" [] busy))
+    # a rollback releases locks rather than competing for them — no wait
     :rollback (fn sqlite-rollback [conn] (run conn "ROLLBACK" []))
     :savepoint (fn sqlite-savepoint [conn n]
-                 (run conn (string "SAVEPOINT " n) []))
+                 (run conn (string "SAVEPOINT " n) [] busy))
     :release-savepoint (fn sqlite-release [conn n]
                          (run conn (string "RELEASE SAVEPOINT " n) []))
     :rollback-to-savepoint (fn sqlite-rollback-to [conn n]

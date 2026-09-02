@@ -194,4 +194,64 @@
     (assert (= 7 ((first seen) :n))
             "and a checkin does not close the database out from under it")))
 
+# -- the cooperative busy wait -------------------------------------------
+#
+# sqlite's own busy handler waits *inside* the C call and blocks the
+# whole event loop for as long as it waits — several writers on one
+# file turn into loop lag measured in seconds (wave 7 found it by
+# clicking a register button). The driver waits in janet instead:
+# retry + ev/sleep, so every other fiber keeps running. The ticker is
+# the assertion that matters.
+
+(do
+  (def dir (string (or (os/getenv "TMPDIR") "/tmp") "/void-sqlite-busy-" (os/time)))
+  (os/mkdir dir)
+  (def path (string dir "/busy.sqlite3"))
+  (def drv (contract/normalize (sqlite/make {:path path :busy-timeout 3000})))
+  (def holder ((drv :connect)))
+  (def waiter ((drv :connect)))
+  (defer (do ((drv :close) holder) ((drv :close) waiter)
+             (each f (os/dir dir) (os/rm (string dir "/" f)))
+             (os/rmdir dir))
+    ((drv :execute) holder "CREATE TABLE t (n int)" [] {:kind :write})
+    ((drv :begin) holder)                       # the write lock is taken
+    ((drv :execute) holder "INSERT INTO t VALUES (1)" [] {:kind :write})
+
+    (var ticks 0)
+    (def ticker (ev/go (fn [] (repeat 40 (ev/sleep 0.01) (++ ticks)))))
+
+    (def released (ev/chan 1))
+    (ev/go (fn release-later []
+             (ev/sleep 0.15)
+             ((drv :commit) holder)
+             (ev/give released true)))
+
+    # this BEGIN meets SQLITE_BUSY and waits cooperatively until the
+    # holder commits — well inside the 3 s budget
+    (def before (os/clock :monotonic))
+    ((drv :begin) waiter)
+    ((drv :execute) waiter "INSERT INTO t VALUES (2)" [] {:kind :write})
+    ((drv :commit) waiter)
+    (def waited (- (os/clock :monotonic) before))
+
+    (ev/take released)
+    (assert (>= waited 0.1) "the second writer really waited for the lock")
+    (assert (>= ticks 8)
+            (string/format "the loop kept running while it waited (ticks=%d)" ticks))
+    (def seen (((drv :execute) waiter "SELECT count(*) AS c FROM t" []
+                               {:kind :select}) :rows))
+    (assert (= 2 ((first seen) :c)) "both writes landed, in lock order")
+
+    # past the budget the busy error propagates, and quickly
+    (def drv0 (contract/normalize (sqlite/make {:path path :busy-timeout 50})))
+    (def h ((drv0 :connect)))
+    (def w ((drv0 :connect)))
+    (defer (do ((drv0 :close) h) ((drv0 :close) w))
+      ((drv0 :begin) h)
+      ((drv0 :execute) h "INSERT INTO t VALUES (3)" [] {:kind :write})
+      (def [ok e] (protect ((drv0 :begin) w)))
+      ((drv0 :rollback) h)
+      (assert (not ok) "a budget of 50 ms is not forever")
+      (assert (string/find "locked" (string e)) "and the error names the lock"))))
+
 (print "driver-test: ok")

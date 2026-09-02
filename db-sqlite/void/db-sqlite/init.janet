@@ -120,7 +120,14 @@
   (defn add [pragma key]
     (def v (get cfg key))
     (unless (nil? v) (array/push out [pragma v])))
-  (add :busy_timeout :busy-timeout)
+  # the in-C busy handler blocks the whole event loop while it waits,
+  # so the connection carries only a token timeout — enough for the
+  # open-time pragmas below (journal_mode wants the file for a moment)
+  # — and the configured budget is waited out *cooperatively* in the
+  # driver (driver/run: retry + ev/sleep), where other fibers keep
+  # running
+  (when-let [bt (get cfg :busy-timeout)]
+    (array/push out [:busy_timeout (min bt 100)]))
   (add :foreign_keys :foreign-keys)
   (unless memory?
     (add :journal_mode :journal-mode)
@@ -165,6 +172,7 @@
                 :version ver :returning returning :pragmas (length prags))
       (merge (sqlite/make {:path path
                            :pragmas prags
+                           :busy-timeout (get cfg :busy-timeout 0)
                            :tx-mode (get cfg :tx-mode)
                            :returning returning
                            # in memory the keeper is the connection,
