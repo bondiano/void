@@ -121,7 +121,13 @@
   # a cookie a third-party page could make the browser send
   (GET "/auth/magic" magic-link
        {:name :session/magic-link :void.authz/policy :public})
+  # deliberately NOT :void.db/txn — a route transaction would open
+  # BEGIN IMMEDIATE before the handler and hold sqlite's one writer
+  # through the password KDF, a CPU-bound wait that belongs to no
+  # transaction (wave 7 measured what that does to a busy file). The
+  # register itself is one INSERT, atomic on its own; the concurrent
+  # duplicate is refused by the email's unique index, not by a lock
   (POST "/register" register
-        {:name :customers/register :void.db/txn true :void.authz/policy :public
+        {:name :customers/register :void.authz/policy :public
          :void.security/rate guess-limit})
   (POST "/sign-out" sign-out {:name :session/delete :void.authz/policy :public}))

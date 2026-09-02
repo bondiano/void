@@ -498,6 +498,9 @@
            # void/tls under it, because an https endpoint is a TLS
            # stack the composition has to carry (ADR-0038)
            :void/storage :void/tls
+           # the dev dashboard (ADR-0043): shop is the composition it
+           # is worth looking at — forty plugins on one page
+           :void/dash
            :void/dev :void/cli]
     :example true :jpm [:spork :sqlite3]}
 

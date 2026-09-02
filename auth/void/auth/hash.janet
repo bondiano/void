@@ -158,7 +158,15 @@
 (defn hash
   ``Hash a password into a PHC string with the configured hasher (or
   the one named in `opts`). Every call uses a fresh random salt, so
-  two identical passwords never collide in the database.``
+  two identical passwords never collide in the database.
+
+  Hash *before* opening a transaction. The KDF is a deliberately slow,
+  CPU-bound wait (off the event loop, but tens to hundreds of ms), and
+  a route under `:void.db/txn` has already taken its BEGIN — on sqlite
+  that is the database's one writer lock held for the whole derivation,
+  and every other writer queues behind a password. A register is one
+  INSERT: hash first, let the statement be its own transaction, and
+  leave the duplicate address to the unique index.``
   [password &opt opts]
   (default opts {})
   (def name (get opts :hasher (active-hasher)))
