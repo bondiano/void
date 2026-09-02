@@ -41,13 +41,16 @@
 ### Anything the sampler cannot measure — a database pool at its
 ### ceiling, a jobs queue growing faster than it drains — is a
 ### `:void.pressure/check` contribution: a thunk returning `{:ok
-### false :reason ...}` is one more reason to shed.
+### false :reason ...}` is one more reason to shed. The pool example
+### ships built-in (./checks): where this composition has a :db/pool,
+### its exhaustion is a check without anyone contributing it.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
 (import ./sample :as sample)
 (import ./state :as state)
+(import ./checks :as checks)
 
 (def log-ns
   "Log namespace — spelled out, since the file-derived default would
@@ -69,6 +72,8 @@
                 (put seen (c :name) true)))
   :reduce |(sorted-by |($ :name) $))
 
+(plugin/contribute! :void.pressure/check checks/db-pool-contribution)
+
 (plugin/contribute! :void.core/interface
   {:name :void/pressure
    :doc "The pressure state: the flag the shedding middleware reads, the thresholds behind it and the sampler that maintains them. Depend on the interface rather than the key to let a test stand a state in its place."
@@ -87,7 +92,10 @@
    :max-loop-lag [:optional [:number {:min 0}]]
    :max-rss-bytes [:optional [:number {:min 0}]]
    :recovery-ratio [:optional [:number {:min 0 :max 1}]]
-   :recovery-samples [:optional [:int {:min 1}]]})
+   :recovery-samples [:optional [:int {:min 1}]]
+   # the built-in :db/pool check (./checks)
+   :db-pool-max-waiting [:optional [:int {:min 0}]]
+   :db-pool-wait-grace [:optional [:number {:min 0}]]})
 
 (def defaults
   ``Defaults of the [:pressure] slice.
@@ -102,13 +110,21 @@
 
   `:max-rss-bytes` is 0 — off. A memory ceiling is the deployment's
   number (the container limit, minus headroom), and a default that
-  guesses it either never trips or sheds a healthy process.``
+  guesses it either never trips or sheds a healthy process.
+
+  The `:db-pool-*` pair belongs to the built-in `:db/pool` check
+  (./checks): shed once at least `:db-pool-max-waiting` fibers have
+  been parked on an exhausted pool for `:db-pool-wait-grace` seconds
+  without a break (0 waiting turns the check off). The defaults and
+  their argument live next to the check.``
   {:enabled true
    :sample-interval 1
    :max-loop-lag 100
    :max-rss-bytes 0
    :recovery-ratio 0.8
-   :recovery-samples 2})
+   :recovery-samples 2
+   :db-pool-max-waiting checks/default-max-waiting
+   :db-pool-wait-grace checks/default-wait-grace})
 
 (defn- slice [cfg]
   (merge defaults (or cfg {})))
@@ -133,6 +149,7 @@
 
 (def add-check! "See state/add-check! — register a custom check at runtime." state/add-check!)
 (def remove-check! "See state/remove-check!." state/remove-check!)
+(def make-db-pool-check "See checks/make-db-pool-check — a pool-exhaustion check over any pool/stats-shaped reader." checks/make-db-pool-check)
 
 (def loop-lag "See sample/lag — one event-loop lag sample, in seconds." sample/lag)
 (def rss "See sample/rss — resident set size in bytes, or nil." sample/rss)

@@ -59,8 +59,8 @@
 
 (def report (plugin/dry-run {:plugins plugins :profile :test :config (config {})}))
 (assert (report :ok) "the composition validates")
-(assert (= 1 (get-in report [:extensions :void.pressure/check :contributions]))
-        "and the check the app contributed is in the point")
+(assert (= 2 (get-in report [:extensions :void.pressure/check :contributions]))
+        "and the check the app contributed is in the point, next to the built-in :db/pool one")
 
 (def [bad] (protect (plugin/dry-run {:plugins plugins :profile :test
                                      :config (config {:pressure-http {:retry-after "soon"}})})))
@@ -79,7 +79,8 @@
   (def st (get-in boot [:system :instances :pressure/sampler]))
   (assert st "the sampler component started")
   (assert (= st (state/active)) "and it is what the middleware reaches for")
-  (assert (= 1 (length (st :checks))) "with the contributed check wired in")
+  (assert (= 2 (length (st :checks)))
+          "with the contributed check wired in next to the built-in :db/pool one")
 
   # -- what an exempt route pays ----------------------------------------
 

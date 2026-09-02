@@ -18,6 +18,8 @@
 (assert (index-of :pressure/sampler (report :components)))
 (assert (get-in report [:extensions :void.pressure/check])
         "and it owns the point ADR-0019 reserved for it")
+(assert (= 1 (get-in report [:extensions :void.pressure/check :contributions]))
+        "with the built-in :db/pool check already contributed — the motivating example of the module docstring, not left to prose")
 
 (each [slice reason]
   [[{:pressure {:sample-interval 0}} "a sampler that never samples"]
@@ -35,6 +37,10 @@
         "the default lag limit is two orders of magnitude over the §8.2 budget — a process there has already missed every latency budget it has")
 (assert (zero? (pressure/defaults :max-rss-bytes))
         "and the memory ceiling is off by default: it is the deployment's number, not a guess")
+(assert (= 1 (pressure/defaults :db-pool-max-waiting))
+        "one parked fiber already means every connection is checked out")
+(assert (= 2 (pressure/defaults :db-pool-wait-grace))
+        "and the check sheds before the pool's own 5 s :checkout-timeout starts timing those fibers out")
 
 # -- started -------------------------------------------------------------
 
@@ -52,6 +58,8 @@
 
 (def s (pressure/status))
 (assert (s :sampling))
+(assert (deep= [:void.db/pool] (s :checks))
+        "the built-in check is on the started state — and a composition without a :db/pool is simply never pressured by it")
 (assert (= 100 (get-in s [:limits :max-loop-lag])))
 (assert (nil? (get-in s [:limits :max-rss-bytes])) "an off limit reports as off, not as 0")
 (assert (get-in s [:available :loop-lag]))
