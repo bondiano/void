@@ -139,30 +139,41 @@
   lag)
 
 (defn start-sampler!
-  ``Start the lag sampler: a fiber that sleeps `interval` and records
-  how much longer than that the sleep took. One fiber, one number per
-  wake — the cost SPEC §8.4 asks for in exchange for the only signal
-  that sees a blocked loop.``
+  ``Start the lag sampler: a heartbeat thread stamps the clock every
+  `interval` and the fiber records how long each stamp waited to be
+  taken — the cost SPEC §8.4 asks for in exchange for the only signal
+  that sees a blocked loop. A heartbeat rather than an ev/sleep,
+  because janet resumes sleeping fibers only when the ready queue goes
+  quiet: an ev/sleep sampler under sustained traffic sleeps through
+  the busy period and then books all of it as one enormous "GC pause"
+  (void/pressure/sample.janet has the measurement).``
   [&opt interval]
   (default interval (state :interval))
   (unless (state :running)
     (put state :interval interval)
     (put state :running true)
+    (def hb (sample/start-heartbeat! interval))
+    (put state :heartbeat hb)
     (put state :fiber
          (ev/go
            (fn obs-loop-lag []
              (put state :started true)
              (protect
                (while (state :running)
-                 # the sleep is the measurement (void/pressure/sample)
-                 (def lag (sample/lag (state :interval)))
-                 (when (state :running) (observe! lag)))))))) 
+                 # the wait for the beat is the measurement
+                 (def lag (sample/beat hb))
+                 (when (nil? lag) (put state :running false) (break))
+                 (when (state :running) (observe! lag))))))))
   state)
 
 (defn stop-sampler!
-  "Stop the lag sampler."
+  "Stop the lag sampler: close the heartbeat (which wakes the fiber
+  and retires the thread), then cancel the fiber."
   []
   (put state :running false)
+  (when-let [hb (state :heartbeat)]
+    (protect (sample/stop-heartbeat! hb)))
+  (put state :heartbeat nil)
   (when-let [f (state :fiber)]
     (when (state :started) (protect (ev/cancel f "obs sampler stopped"))))
   (put state :fiber nil)

@@ -597,7 +597,8 @@
                        (tabseq [k :in [:host :port :max-header :max-body
                                        :read-timeout :idle-timeout
                                        :head-timeout :body-timeout
-                                       :drain-timeout :max-connections]
+                                       :drain-timeout :max-connections
+                                       :yield-budget]
                                 :when (not (nil? (get cfg k)))]
                          k (cfg k))
                        {:handler (ctx :handler)
@@ -761,6 +762,10 @@
    :body-timeout [:optional [:number {:min 0.001}]]
    :drain-timeout [:optional [:number {:min 0}]]
    :max-connections [:optional [:int {:min 1}]]
+   # seconds of synchronous work a connection fiber may do before it
+   # yields the loop one turn; 0 turns the fairness yield off
+   # (server.janet documents why it exists)
+   :yield-budget [:optional [:number {:min 0}]]
    :strict-meta [:optional :boolean]
    :dev-errors [:optional :boolean]
    :access-log [:optional :boolean]
@@ -797,5 +802,6 @@
                     :head-timeout 30
                     :body-timeout 300
                     :drain-timeout 15
-                    :max-connections 1024}
+                    :max-connections 1024
+                    :yield-budget 0.002}
   :components [kernel-component server-component])

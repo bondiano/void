@@ -39,7 +39,8 @@
    :head-timeout 30
    :body-timeout 300
    :drain-timeout 15
-   :max-connections 1024})
+   :max-connections 1024
+   :yield-budget 0.002})
 
 (defn- now [] (os/clock :monotonic))
 
@@ -368,8 +369,31 @@
            (protect (:close conn)))
     (def handler (opts :handler))
     (def limits-fn (opts :limits-fn))
+    (def yield-budget (get opts :yield-budget 0))
+    # Fairness against a primed socket. janet completes a net read or
+    # write synchronously when the OS buffer can satisfy it, so a
+    # keep-alive peer that always has the next request in flight keeps
+    # this fiber runnable through entire request cycles — it re-enters
+    # the ready queue instead of parking. The loop only polls when
+    # that queue empties, and *everything that wakes any other way* —
+    # ev/sleep timers, cross-thread channels, deadlines, accept of new
+    # connections — waits for the poll. Under a saturating client the
+    # queue stops emptying and those waits were measured in whole
+    # seconds (the pressure sampler read 7.6 s of "loop lag" while
+    # requests were answered in 8 ms). So a connection fiber that has
+    # run :yield-budget seconds of wall clock without parking parks
+    # itself for one loop turn (`ev/sleep 0`): every fiber does, the
+    # queue drains, the poll runs, and timers fire tens of
+    # milliseconds late instead of seconds. Costs ~5% of saturated
+    # throughput; an idle or slow connection parks in its reads, so the
+    # budget clock matters only while the peer keeps the socket primed.
+    # :yield-budget 0 turns the yield off.
+    (var t-yield (now))
     (var alive true)
     (while alive
+      (when (and (pos? yield-budget) (> (- (now) t-yield) yield-budget))
+        (ev/sleep 0)
+        (set t-yield (now)))
       (def [ok err]
         (protect
           (do
