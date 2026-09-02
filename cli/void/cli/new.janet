@@ -55,10 +55,6 @@
 (import void/dev)
 (import ./app)
 
-(def app
-  "Boot options — what (void/run! ...) starts and the void CLI reads."
-  {:plugins [:void/http :void/html :void/htmx :void/dev :{{name}}/app]})
-
 # void/dev is a dev-time plugin: it serves a repl and watches the tree,
 # and it builds that repl's environment with `require` — which a single
 # binary has no source tree to require from (docs/DEPLOY.md). So the
@@ -67,9 +63,17 @@
 (defn plugins
   "The composition for a profile."
   [profile]
+  (def all [:void/http :void/html :void/htmx :void/dev :{{name}}/app])
   (if (= :prod profile)
-    (filter |(not= :void/dev $) (app :plugins))
-    (app :plugins)))
+    (filter |(not= :void/dev $) all)
+    all))
+
+(def app
+  ``Boot options — what (void/run! ...) starts and the void CLI reads.
+  :plugins-for is the explicit contract both honor: the composition as
+  a function of the profile, so `void dev --profile prod` and
+  `VOID_PROFILE=prod janet main.janet` are the same application.``
+  {:plugins-for plugins})
 
 (defn main [& args]
   # The profile is read here rather than in `app` above: `jpm build`

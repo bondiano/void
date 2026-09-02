@@ -13,7 +13,7 @@
 (def version core/version)
 
 (def- allowed-run-opts
-  {:plugins true :profile true :config true
+  {:plugins true :plugins-for true :profile true :config true
    :signals true :shutdown-timeout true})
 
 (defn stop!
@@ -33,6 +33,12 @@
          :profile (keyword (or (os/getenv "VOID_PROFILE") "dev"))})
 
   Options: :plugins / :profile / :config as in plugin/bootstrap, plus
+    :plugins-for       (fn [profile] plugins) — the composition as a
+                       function of the profile. When present it wins
+                       over :plugins, and it is the contract the CLI
+                       honors too, so `void dev --profile prod` and
+                       `VOID_PROFILE=prod janet main.janet` are the
+                       same application by construction
     :signals           signals that trigger a graceful stop
                        (default [:term :int])
     :shutdown-timeout  per-component :stop deadline in seconds
@@ -60,12 +66,21 @@
   (def stop-chan (ev/chan 4))
   (each sig signals
     (os/sigaction sig (fn on-signal [&] (ev/give stop-chan sig)) true))
+  (def plugins
+    (if-let [f (get opts :plugins-for)]
+      (do
+        (unless (function? f)
+          (errorf "run!: :plugins-for must be (fn [profile] plugins), got %q" f))
+        (f (get opts :profile :dev)))
+      (get opts :plugins)))
+  (def boot-opts
+    {:plugins plugins :profile (get opts :profile) :config (get opts :config)})
   (defer (each sig signals (os/sigaction sig nil))
     (def boot
       (plugin/start!
         (tabseq [k :in [:plugins :profile :config]
-                 :when (not (nil? (get opts k)))]
-          k (opts k))))
+                 :when (not (nil? (get boot-opts k)))]
+          k (boot-opts k))))
     (put boot :stop-chan stop-chan)
     (def reason (ev/take stop-chan))
     (put boot :stop-chan nil)
