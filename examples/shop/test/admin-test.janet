@@ -426,7 +426,14 @@
 
     (def decl (first (filter |(= "void://admin/orders" ($ :uri)) (server :resources))))
     (assert decl "the declaration is published as a resource")
-    (def declared (json/decode ((decl :read)) true))
+    # the declaration is behind the same gate as the desk it describes
+    (assert (not (first (protect ((decl :read)))))
+            "no identity, no declaration")
+    (def declared
+      (with-dyns [authz/identity-dyn
+                  (auth/identity (string "customer:" (desk-row :id))
+                                 {:claims {:role "staff"}})]
+        (json/decode ((decl :read)) true)))
     (assert (= "admin.orders/ship" (get-in declared [:policies :ship]))
             "and the agent is handed the very policy names the routes carry")
     (note "the same declarations, the same policies, for an agent")

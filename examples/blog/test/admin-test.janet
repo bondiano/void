@@ -242,7 +242,14 @@
     (def decl-res (first (filter |(= "void://admin/articles" ($ :uri))
                                  (server :resources))))
     (assert decl-res "the declaration is published as a resource")
-    (def declared (json/decode ((decl-res :read)) true))
+    # the declaration names fields, actions and policies — it is behind
+    # the same gate as the pages it describes, so reading it anonymously
+    # is refused by :blog/staff like everything else
+    (assert (not (first (protect ((decl-res :read)))))
+            "no identity, no declaration")
+    (def declared
+      (with-dyns [authz/identity-dyn (auth/identity (string "author:" (ada :id)))]
+        (json/decode ((decl-res :read)) true)))
     (assert (= "admin.articles/destroy" (get-in declared [:policies :destroy]))
             "the agent is handed the very policy names the routes carry")
     (assert (deep= @["id" "title" "comment-count" "created-at"] (declared :list))

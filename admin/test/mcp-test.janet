@@ -43,6 +43,14 @@
 # the menu, and every bit of it still readable here (ADR-0029 §1)
 (admin/defresource-admin hidden Note :mount false :form [:title])
 
+# a scope that needs an identity the call may not carry — what a tenant
+# scope looks like to a stdio transport nobody signed in through
+(admin/defresource-admin mine Note
+  :mount false
+  :list [:id :title]
+  :form [:title]
+  :scope (fn [_req] (dyn :test/identity)))
+
 (authz/defpolicy :staff "Everybody, in this test." [_] true)
 
 (def db-path
@@ -105,11 +113,40 @@
   (assert (= "admin.notes/destroy" (get-in decl [:policies :destroy]))
           "the agent is told the very policy names the routes carry")
 
+  # ...and reading it passes the same two policies the index route
+  # carries — a declaration names fields, actions and policies, and it
+  # is not readable past the gate the pages answer to
+  (authz/register-policy! {:name :admin.notes/index :fn (fn [_] "not staff here")})
+  (def decl-res (first (filter |(= "void://admin/notes" ($ :uri)) (server :resources))))
+  (def [readable refusal] (protect ((decl-res :read))))
+  (assert (not readable) "the declaration resource is authorized like the index it describes")
+  (assert (string/find "forbidden" (string refusal)))
+  (authz/register-policy! {:name :admin.notes/index :fn (fn [_] true)})
+
   # -- and the tools run, through the same scope and the same policies ---
   (def list-tool (first (filter |(= "admin-notes-list" ($ :name)) (server :tools))))
+  (assert (= "void/admin-mcp" (string (list-tool :plugin)))
+          "a projected tool answers for its provenance with the projecting plugin")
   (def listed (json/decode (((list-tool :call) @{}) :text) true))
   (assert (= 2 (listed :total)) ":scope narrows for an agent exactly as it does for a person")
   (assert (deep= @["first" "second"] (sorted (map |($ :title) (listed :rows)))))
+  (assert (deep= @[:done :id :title] (sorted (keys (first (listed :rows)))))
+          (string "the list tool answers with the :list columns and nothing else — "
+                  ":detail (and, undeclared, :detail is every column) belongs to get"))
+
+  # an identity-dependent scope, on a call that carries no identity:
+  # the scope answers nil, and nil narrows to no rows rather than to
+  # the whole table
+  (def mine-list (first (filter |(= "admin-mine-list" ($ :name)) (server :tools))))
+  (def anon (json/decode (((mine-list :call) @{}) :text) true))
+  (assert (= 0 (anon :total)) "no identity, no rows — a nil scope fails shut")
+  (assert (empty? (anon :rows)))
+  (def mine-get (first (filter |(= "admin-mine-get" ($ :name)) (server :tools))))
+  (assert (((mine-get :call) @{:id 1}) :error?)
+          "and a single row behind a nil scope is not found, not handed over")
+  (with-dyns [:test/identity [:= :owner "ada"]]
+    (def owned (json/decode (((mine-list :call) @{}) :text) true))
+    (assert (= 2 (owned :total)) "with the identity, the same scope narrows as declared"))
 
   (def get-tool (first (filter |(= "admin-notes-get" ($ :name)) (server :tools))))
   (def outside ((get-tool :call) @{:id 3}))
@@ -167,6 +204,31 @@
   (assert (not (string/find "tenant mismatch" (get out :text)))
           "the *reason* is for the decision log, never for the caller (ADR-0024 §3)"))
 (authz/register-policy! {:name :admin.notes/show :fn (fn [_] true)})
+
+# -- the start-time warning about a derived projection -------------------
+#
+# A hash column added to an entity for the writes silently joins a
+# *derived* :list and :detail — and from there the show page and both
+# read tools. The heuristic warns; it never refuses to boot, and it
+# never second-guesses a projection somebody spelled out.
+
+(db/defentity Cred
+  {:id [:int {:db/pk true :db/type "integer"}]
+   :name [:string {:db/type "text"}]
+   :api-token [:optional [:string {:db/type "text"}]]}
+  :db/table "creds")
+
+(admin/defresource-admin creds Cred :mount false :form [:name])
+(def warned (admin/secret-projection-warnings))
+(assert (some |(and (= :creds ($ :resource)) (= :detail ($ :projection))) warned)
+        "a derived :detail over a secret-looking column is warned about")
+(assert (some |(and (= :creds ($ :resource)) (= :list ($ :projection))) warned)
+        "and so is a derived :list — the list tool reads it two hundred rows at a time")
+(admin/defresource-admin creds Cred :mount false :form [:name]
+  :list [:id :name] :detail [:id :name])
+(assert (not (some |(= :creds ($ :resource)) (admin/secret-projection-warnings)))
+        "a projection the declaration spelled out is trusted as written")
+(admin/deregister! :creds)
 
 (os/rm db-path)
 (print "admin mcp-test ok")

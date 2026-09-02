@@ -48,7 +48,11 @@
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
      [:title "void blog"]
      (when req (security/htmx-meta req))
-     [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
+     # pinned to the file, with its hash — the CDN serves this exact
+     # script or the browser refuses to run what it got instead
+     [:script {:src "https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js"
+               :integrity "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
+               :crossorigin "anonymous"}]]
     [:body (if req (security/htmx-attrs req) {})
      [:header [:a {:href "/"} [:h1 "void blog"]] (who-bar)]
      [:main content]]))

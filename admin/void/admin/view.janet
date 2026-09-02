@@ -157,6 +157,30 @@ form.admin-act { display:inline; }
   (when-let [b (get (ctx/setting :assets {}) half)]
     (ctx/at (string asset-prefix (b :file)))))
 
+(def htmx-src
+  ``The one script the admin takes from a CDN, pinned to the exact
+  file — the bare `htmx.org@4.0.0` URL answers with a redirect the
+  integrity attribute would still cover, but a pin that names the file
+  is a pin a reader can verify.``
+  "https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js")
+
+(def htmx-integrity
+  "sha384 of that file, so a CDN that serves anything else serves
+  nothing. It pairs with `htmx-src` and only with it: an operator who
+  points [:admin :htmx-src] elsewhere supplies [:admin :htmx-integrity]
+  alongside, or gets no integrity attribute at all — a hash for the
+  wrong file is a script that never loads."
+  "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc")
+
+(defn- htmx-tag []
+  (def src (ctx/setting :htmx-src htmx-src))
+  (def integrity (or (ctx/setting :htmx-integrity)
+                     (when (= src htmx-src) htmx-integrity)))
+  [:script (merge {:src src :defer true}
+                  (if integrity
+                    {:integrity integrity :crossorigin "anonymous"}
+                    {}))])
+
 (defn layout
   ``The default frame. Replaceable whole through [:admin :layout] — an
   application that already has a chrome should not have to live inside
@@ -172,8 +196,7 @@ form.admin-act { display:inline; }
        [:link {:rel "stylesheet" :href href}])
      (when-let [src (asset-url :script)]
        [:script {:src src :defer true}])
-     [:script {:src (ctx/setting :htmx-src "https://unpkg.com/htmx.org@4.0.0")
-               :defer true}]]
+     (htmx-tag)]
     [:body
      [:header {:class "admin-bar"}
       [:span {:class "admin-title"} (ctx/setting :title "Admin")]

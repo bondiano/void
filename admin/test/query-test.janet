@@ -102,6 +102,24 @@
 (assert (string/find ">=" text2) "a range filter is two comparisons")
 (assert (truthy? (index-of "%ha%" params2)))
 
+# a resource that declared a :scope and got nil out of it — the tenant
+# scope on a request that carries no tenant — reads no rows, not all of
+# them. Only a *declared* scope fails shut: a resource without one never
+# promised any narrowing
+(def tenant (res/resource :tenant Post
+                          :list [:id]
+                          :scope (fn [r] (when-let [w (get-in r [:query "who"])]
+                                           [:= :owner-id (scan-number w)]))))
+(def [shut _] (sql (q/where tenant (req {}) (q/state tenant (req {})))))
+(assert (string/find "1 = 0" shut)
+        "a :scope that answers nil narrows to nothing — deny by default")
+(def [open oparams] (sql (q/where tenant (req {"who" "7"}) (q/state tenant (req {})))))
+(assert (string/find "owner_id" open) "and with its answer, it narrows as declared")
+(assert (deep= [7] oparams))
+(def [srow _] (sql (q/scoped tenant (req {}) [:= :id 1])))
+(assert (string/find "1 = 0" srow)
+        "a single row reads through the same shut clause")
+
 # the ordering is the declared default until the URL names a sortable
 # column — and then it is that column, by *its* column name
 (assert (deep= [[:id :desc]] (q/order-by desc (q/state desc (req {})))))

@@ -169,6 +169,7 @@
    :stylesheet [:optional :string]
    :layout [:optional :function]
    :htmx-src [:optional :string]
+   :htmx-integrity [:optional :string]
    :bulk [:optional {:inline-limit [:optional [:int {:min 1}]]}]})
 
 (def defaults
@@ -227,6 +228,47 @@
         (array/push added pname))))
   added)
 
+# -- defence in depth: a derived projection holding a secret -------------
+
+(def- secretish-parts
+  ["password" "secret" "token" "digest" "hash"])
+
+(defn- secretish? [fname]
+  (def s (string fname))
+  (truthy? (some |(string/find $ s) secretish-parts)))
+
+(defn secret-projection-warnings
+  ``The resources whose *derived* `:list` or `:detail` — the fallback
+  to every column of the entity, not a projection anybody wrote — holds
+  a column named like a secret. A hash column added to an entity for
+  the writes silently joins a derived projection, and from there the
+  show page and both MCP read tools; a projection the declaration
+  spelled out is trusted as written and never warned about. A warning
+  and not an error, because "hash" in a name is a heuristic, and a
+  heuristic may not refuse to boot the application it guessed wrong
+  about.``
+  []
+  (def out @[])
+  (each rname (resources)
+    (def desc (lookup rname))
+    (each [projection derived? fields]
+        [[:list (desc :list-derived?) (map |($ :name) (desc :list))]
+         [:detail (desc :detail-derived?) (desc :detail)]]
+      (def hit (filter secretish? fields))
+      (when (and derived? (not (empty? hit)))
+        (array/push out {:resource rname :projection projection :fields (tuple ;hit)}))))
+  out)
+
+(defn- warn-secret-projections! []
+  (each w (secret-projection-warnings)
+    (log/warn (string "admin resource leaves its " (w :projection) " to be derived "
+                      "from the entity, and the entity has a column named like a secret — "
+                      "declare " (w :projection) " explicitly to say what may be shown")
+              :ns log-ns
+              :resource (w :resource)
+              :projection (w :projection)
+              :fields (w :fields))))
+
 # -- the context ---------------------------------------------------------
 
 (defn build-context
@@ -253,7 +295,10 @@
          :inline-limit (get-in cfg [:bulk :inline-limit] 500)
          :stylesheet (cfg :stylesheet)
          :layout (cfg :layout)
-         :htmx-src (get cfg :htmx-src "https://unpkg.com/htmx.org@4.0.0")
+         # the default src pairs with view/htmx-integrity; a custom src
+         # brings its own [:admin :htmx-integrity] or ships without one
+         :htmx-src (get cfg :htmx-src view/htmx-src)
+         :htmx-integrity (get cfg :htmx-integrity)
          :widgets widgets
          :pages (resolved :void.admin/page)
          :dashboard (resolved :void.admin/dashboard-widget)
@@ -264,6 +309,7 @@
          :resolved resolved-widgets
          :assets (view/asset-bundle (cfg :stylesheet) resolved-widgets)})
   (def added (register-action-policies!))
+  (warn-secret-projections!)
   (log/info "admin ready" :ns log-ns
             :prefix (cfg :prefix)
             :resources (resources)

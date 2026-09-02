@@ -206,17 +206,33 @@
 # the moment the manifest freezes. It is the same shape, and the same
 # reason, as :void.http/route-source taking a function.
 
+(defn- provenance
+  ``Which plugin contributed each entry of one point, by the entry's
+  :name — read off the contribution wrappers, because the resolved
+  values bootstrap hands on no longer say where they came from.``
+  [boot point]
+  (tabseq [c :in (get-in boot [:extensions point :contributions] [])]
+    (get-in c [:value :name]) (c :plugin)))
+
 (defn- expanded
-  "The contributions of one point, with every :expand applied."
+  "The contributions of one point, with every :expand applied, and each
+  entry carrying the plugin it came from."
   [boot point what]
+  (def who (provenance boot point))
   (def out @[])
   (each c (get-in boot [:extensions point :resolved] [])
     (if-let [f (get c :expand)]
       (let [[ok v] (protect (f boot))]
         (unless ok
           (errorf "%s %q: projecting its %ss failed: %s" what (c :name) what v))
-        (each e v (array/push out e)))
-      (array/push out c)))
+        # a projected entry answers for its provenance the same way a
+        # direct one does: by the plugin whose contribution it came from
+        (each e v (array/push out (if (get e :plugin)
+                                    e
+                                    (merge e {:plugin (get who (c :name))})))))
+      (array/push out (if (get c :plugin)
+                        c
+                        (merge c {:plugin (get who (c :name))})))))
   out)
 
 (defn contributed-tools
@@ -242,7 +258,15 @@
   is read-only (and `[:mcp :read-only]` is on), or when the operator
   named it in `[:mcp :tools]`; `[:mcp :hide]` wins over both, so a
   read-only command can still be withheld without touching the plugin
-  that declared it.``
+  that declared it.
+
+  **`:read-only? true` is the declaration's own claim, and nothing
+  verifies it.** Any plugin in the composition can mark a command
+  read-only and have it exposed to an agent without an operator naming
+  it — the gate keeps the *unclassified* out, not the misclassified.
+  Reviewing that claim when a plugin is added is part of the posture,
+  and `void mcp tools` prints each tool's contributing plugin so the
+  review has something to read.``
   [settings entry]
   (def name (entry :name))
   (and (not (hidden? settings name))
@@ -295,6 +319,9 @@
     :input-schema command-input-schema
     :annotations (annotations cmd title)
     :read-only? (true? (get cmd :read-only?))
+    # who contributed the command this tool runs — `void mcp tools`
+    # prints it, so the self-declared :read-only? has a reviewable source
+    :plugin (get cmd :plugin)
     :call (fn call-command [arguments &opt out]
             (run-command boot cmd arguments (merge opts {:out out})))})
 
@@ -310,6 +337,7 @@
                     @{"type" "object"})
     :annotations (annotations tool (get tool :title name))
     :read-only? (true? (get tool :read-only?))
+    :plugin (get tool :plugin)
     :call (fn call-tool [arguments &opt out]
             (run-tool boot tool arguments (merge opts {:out out})))})
 
@@ -319,10 +347,13 @@
   that do."
   [boot settings &opt opts]
   (default opts {})
+  (def who (provenance boot :void.core/cli))
   (def out @[])
   (each cmd (get-in boot [:extensions :void.core/cli :resolved] [])
     (when (exposed? settings cmd)
-      (array/push out (command-tool boot cmd opts))))
+      (def t (command-tool boot cmd opts))
+      (unless (t :plugin) (put t :plugin (get who (cmd :name))))
+      (array/push out t)))
   (each t (contributed-tools boot)
     (when (exposed? settings t)
       (array/push out (contributed-tool boot t opts))))

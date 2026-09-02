@@ -368,6 +368,12 @@
      :custom-actions custom
      :list (tuple ;(map |(list-column rname e $) (get opts :list (e :field-order))))
      :detail (tuple ;(map |(check-field rname e ":detail" $) (get opts :detail (e :field-order))))
+     # whether the projection above was declared or fell back to every
+     # column of the entity — a derived projection is the one that can
+     # pick up a column nobody meant to show (a password hash added to
+     # the entity for the writes), so ./init warns about it at start
+     :list-derived? (nil? (get opts :list))
+     :detail-derived? (nil? (get opts :detail))
      :form form-fields
      # the form's validation schema and the MCP tool's input schema are
      # this one value (ADR-0029 §1); the fields the declaration froze as

@@ -77,6 +77,10 @@
   # now (orders.model) — so there is nothing here anybody may edit
   :only [:index :show]
   :list [:id :order-id :sku :name :quantity :unit-price-cents]
+  # spelled out rather than derived: a derived :detail is every column
+  # the entity will ever grow, read by the show page and by
+  # `admin-order-items-get` alike
+  :detail [:id :order-id :product-id :sku :name :quantity :unit-price-cents]
   :filters [:order-id]
   :order-by [[:id :asc]])
 
@@ -85,6 +89,7 @@
   :mount false
   :only [:index :show]
   :list [:id :order-id :status :amount-cents :reference :attempts :updated-at]
+  :detail [:id :order-id :status :amount-cents :reference :attempts :updated-at]
   :filters [:order-id :status]
   :order-by [[:id :desc]])
 
