@@ -170,6 +170,11 @@
 
 (def- fence-peg (peg/compile ~(* "```" (capture (any (if-not "\n" 1))) -1)))
 (def- header-peg (peg/compile ~(* (capture (between 1 6 "#")) " " (capture (any 1)))))
+(def- custom-id-peg
+  # the {#anchor} extended syntax on a header ("## Title {#anchor}"),
+  # which the corpus uses where a stable anchor matters more than the
+  # title's own words (CONTRIBUTING's #deprecation)
+  (peg/compile ~(* (capture (to " {#")) " {#" (capture (some (if-not "}" 1))) "}" (any " ") -1)))
 (def- hr-peg (peg/compile ~(* (at-least 3 "-") -1)))
 (def- table-sep-peg
   # the leading set must not contain "-": `any` is greedy and PEGs do
@@ -366,10 +371,11 @@
       (peg/match header-peg line)
       (let [[hashes text] (peg/match header-peg line)
             level (length hashes)
-            spans (rewrite-links (inline text) rewrite)]
+            custom (peg/match custom-id-peg text)
+            spans (rewrite-links (inline (if custom (custom 0) text)) rewrite)]
         (array/push out
                     [(keyword (string "h" level))
-                     {:id (slug (strip-markup spans))}
+                     {:id (if custom (custom 1) (slug (strip-markup spans)))}
                      ;spans])
         (++ i))
 
@@ -419,6 +425,14 @@
   [src &opt opts]
   (default opts {})
   (blocks (string/split "\n" src) (get opts :rewrite-link)))
+
+(defn inline-markup
+  ``One line of prose as inline hiccup nodes — the inline half of the
+  parser on its own, for generated pages (the module reference) that
+  build their block structure directly but want `code spans`, links
+  and emphasis in docstring prose.``
+  [s]
+  (inline s))
 
 (defn title
   "The text of the document's first # header, or nil."
