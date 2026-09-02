@@ -44,9 +44,12 @@ void new hub && cd hub
 ```
 
 An application that runs: a composition in `main.janet`, a config
-layer, a migrations directory, a guestbook page, and a `test/` with a
-suite in it. `void dev` serves it on 8080 with a file watcher and a
-REPL into the running process.
+layer (a prod profile included), a guestbook page, a `test/` with a
+smoke suite in it, and a dev `docker-compose` for the services a real
+application asks for next. The migrations directory arrives with the
+first `void make resource` in step 2. `void dev` serves it on 8080 —
+the banner says where — with a file watcher and a REPL into the
+running process.
 
 **Cost: one command.** The hub's first commit is exactly this plus step
 2, with nothing touched — which is checkable, because it is a commit.
