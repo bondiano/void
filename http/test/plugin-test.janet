@@ -54,7 +54,13 @@
                                  :priority 10
                                  :fn (fn [err req ctx]
                                        (when (= 404 (ctx :status))
-                                         (ring/text 404 "custom 404")))}]}))
+                                         (ring/text 404 "custom 404")))}]
+     :void.http/body-codec [{:name :test/strict
+                             :content-type "application/vnd.test"
+                             :decode (fn [b]
+                                       (if (= "ok" (string b))
+                                         {:decoded true}
+                                         (error "does not decode")))}]}))
 
 # -- dry-run validates without starting ----------------------------------
 
@@ -78,7 +84,8 @@
               :cli {:http {:port 0
                            :read-timeout 1
                            :idle-timeout 1
-                           :session {:enabled true}}}}}))
+                           :session {:enabled true
+                                     :cookie-opts {:same-site :strict}}}}}}))
 
 (defer (plugin/shutdown! boot 3)
 
@@ -126,11 +133,26 @@
   (assert (= 201 (r3 :status)))
   (assert (= "created widget" (r3 :body)))
 
+  # a body the contributed codec cannot decode is the client's 400,
+  # not this process's 500 — the verdict rest and Connect already give
+  (def rbad (http/with-request {:method :post :uri "/orders"
+                                :headers {"content-type" "application/vnd.test"}
+                                :body "{oops"}))
+  (assert (= 400 (rbad :status)) "malformed codec body -> 400, not 500")
+  (def rgood (http/with-request {:method :post :uri "/orders"
+                                 :headers {"content-type" "application/vnd.test"}
+                                 :body "ok"}))
+  (assert (= 201 (rgood :status)) "a body that decodes still flows through")
+
   # sessions through with-request
   (def s1 (http/with-request {:uri "/whoami"}))
   (assert (= "seen 1" (s1 :body)))
   (def cookie (first (flatten [(get-in s1 [:headers "set-cookie"])])))
   (assert cookie "session cookie set")
+  (assert (string/find "SameSite=Strict" cookie)
+          "[:http :session :cookie-opts] reaches the cookie")
+  (assert (string/find "HttpOnly" cookie)
+          "and the defaults survive the merge underneath it")
   (def sid (first (peg/match '(* "void-session=" '(32 :h)) cookie)))
   (def s2 (http/with-request {:uri "/whoami"
                               :headers {"cookie" (string "void-session=" sid)}}))
@@ -225,5 +247,28 @@
           "and a 500 the panic guard rendered, because the edge is outside it")
   (assert (= "yes" (get-in blown [:headers "x-order"]))
           "lowest phase is outermost, so the phase-100 wrapper sees what the phase-9000 one did"))
+
+# -- the :prod profile defaults the session cookie to Secure -------------
+#
+# Production sits behind the TLS relay (ADR-0010), and a session cookie
+# a browser would also send over plain http is a session to steal. An
+# explicit :secure false in :cookie-opts still wins — the default is a
+# profile's, not a law.
+
+(def prod-boot
+  (plugin/start!
+    {:plugins ["void/http/init" app-manifest]
+     :profile :prod
+     :config {:env @{} :cli {:log {:level :error}
+                             :deploy {:shape :single}
+                             :http {:port 0 :access-log false
+                                    :session {:enabled true}}}}}))
+
+(defer (plugin/shutdown! prod-boot 3)
+  (def sp (http/with-request {:uri "/whoami"}))
+  (def prod-cookie (first (flatten [(get-in sp [:headers "set-cookie"])])))
+  (assert prod-cookie "session cookie set under :prod")
+  (assert (string/find "Secure" prod-cookie)
+          ":prod defaults the session cookie to Secure"))
 
 (print "plugin-test ok")

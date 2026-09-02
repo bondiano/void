@@ -51,7 +51,8 @@
    [{:ws {:overflow :sometimes}} "an overflow policy that is not one"]
    [{:ws {:max-frame 10}} "a frame limit below a control frame"]
    [{:ws {:max-connections 0}} "a server that accepts no connections"]
-   [{:ws {:ping-interval -1}} "a negative heartbeat"]]
+   [{:ws {:ping-interval -1}} "a negative heartbeat"]
+   [{:ws {:origins "https://app.example"}} "an origins list that is not a list"]]
   (def [ok] (protect (plugin/dry-run
                        {:plugins [:void/http :void/ws
                                   (app (router/routes {}
@@ -126,6 +127,48 @@
      ((get-in boot [:system :instances :http/kernel :make-request])
       {:uri "/plain"})))
   (assert (= 200 (plain-resp :status))))
+
+# -- :origins refuses a cross-site handshake before any upgrade ----------
+#
+# A page on another site opening `new WebSocket(...)` speaks with the
+# victim's cookies (CSWSH); when a list is configured, a missing or
+# foreign Origin is a 403 while the peer is still an HTTP client that
+# can read one. No list configured means the old behavior, untouched.
+
+(defn guarded [req] (ws/accept req {}))
+(defn spec-guarded [req] (ws/accept req {:origins ["https://spec.example"]}))
+
+(def origin-boot
+  (plugin/start!
+    {:plugins [:void/http :void/ws
+               (app (router/routes {}
+                      (router/GET "/live" 'guarded {:name :live :void.ws/socket true})
+                      (router/GET "/spec" 'spec-guarded {:name :spec :void.ws/socket true})))]
+     :profile :test
+     :config (config {:ws {:origins ["https://app.example"]}})}))
+
+(defer (plugin/shutdown! origin-boot 3)
+  (defn- shake [uri &opt origin]
+    (def headers @{"upgrade" "websocket"
+                   "connection" "Upgrade"
+                   "sec-websocket-version" "13"
+                   "sec-websocket-key" "dGhlIHNhbXBsZSBub25jZQ=="})
+    (when origin (put headers "origin" origin))
+    ((get-in origin-boot [:system :instances :http/kernel :handler])
+     ((get-in origin-boot [:system :instances :http/kernel :make-request])
+      {:uri uri :headers headers})))
+
+  (assert (= 403 ((shake "/live") :status))
+          "no Origin against a configured list -> 403")
+  (assert (= 403 ((shake "/live" "https://evil.example") :status))
+          "a foreign Origin -> 403")
+  (def accepted (shake "/live" "HTTPS://APP.EXAMPLE"))
+  (assert (= 101 (accepted :status))
+          "a listed Origin upgrades — case-insensitively, it is a scheme and a host")
+  (assert (accepted :void.http/upgrade) "and hands the socket over")
+  (assert (= 403 ((shake "/spec" "https://app.example") :status))
+          "a spec-level list overrides [:ws :origins]")
+  (assert (= 101 ((shake "/spec" "https://spec.example") :status))))
 
 # -- the registry, without any of the rest -------------------------------
 

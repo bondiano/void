@@ -77,7 +77,8 @@
    :ping-interval [:optional [:number {:min 0}]]
    :pong-timeout [:optional [:number {:min 0}]]
    :sweep-interval [:optional [:number {:min 0}]]
-   :max-connections [:optional [:int {:min 1}]]})
+   :max-connections [:optional [:int {:min 1}]]
+   :origins [:optional [:vector :string]]})
 
 (def defaults
   ``Defaults of the [:ws] slice — the per-connection limits of ./conn
@@ -126,14 +127,26 @@
 
 (def- spec-keys
   {:on-open true :on-message true :on-close true :protocols true
-   :rooms true :max-frame true :max-message true :send-queue true
-   :overflow true :close-timeout true})
+   :rooms true :origins true :max-frame true :max-message true
+   :send-queue true :overflow true :close-timeout true})
+
+(defn- origin-allowed?
+  ``Is the request's Origin on the allowed list (case-insensitive)? A
+  missing Origin fails a configured list too: a non-browser client can
+  forge anything, but the header's whole value is that a *browser*
+  cannot — and a browser always sends it on a cross-site handshake
+  (CSWSH is exactly a browser speaking with somebody else's cookies).``
+  [req origins]
+  (when-let [o (ring/request-header req "origin")]
+    (def v (string/ascii-lower (string o)))
+    (truthy? (some |(= v (string/ascii-lower (string $))) origins))))
 
 (defn accept
   ``Answer a websocket handshake from inside an ordinary route
   handler. Returns the response to return: the 101 that hands the
-  socket over, or the refusal the handshake earned (405/400/426, or
-  503 when the process is already at `[:ws :max-connections]`).
+  socket over, or the refusal the handshake earned (405/400/426, 403
+  when an :origins list is set and the request's Origin is not on it,
+  or 503 when the process is already at `[:ws :max-connections]`).
 
   The spec:
     :on-open     (fn [conn])                    after the upgrade
@@ -141,6 +154,12 @@
     :on-close    (fn [conn {:code :name :reason}])
     :protocols   subprotocols this route speaks, best first
     :rooms       rooms to join on open
+    :origins     allowed Origin values; overrides [:ws :origins]. When
+                 either is set, a handshake with a missing or foreign
+                 Origin is refused 403 before any upgrade — a page on
+                 another site opening `new WebSocket(...)` speaks with
+                 the victim's cookies (CSWSH), and the browser is the
+                 one peer that cannot lie about Origin
     plus per-connection overrides of the [:ws] limits (:max-frame,
     :max-message, :send-queue, :overflow, :close-timeout)
 
@@ -160,13 +179,22 @@
                     "deadline off a route that holds a connection open")
             (get-in req [:void/route :name] (req :path))))
   (def reg (registry))
-  (if (rooms/full? reg)
+  (def origins (get spec :origins (settings :origins)))
+  (cond
+    (and origins (not (origin-allowed? req origins)))
+    (do
+      (log/warn "refusing a websocket — origin not allowed" :ns log-ns
+                :origin (ring/request-header req "origin"))
+      (ring/text 403 "403 Forbidden — cross-origin websocket handshake refused"))
+
+    (rooms/full? reg)
     (do
       (log/warn "refusing a websocket — at the connection limit" :ns log-ns
                 :limit (get-in reg [:config :max-connections]))
       (ring/response 503 "503 Service Unavailable — too many websocket connections"
                      @{"content-type" "text/plain; charset=utf-8"
                        "retry-after" "10"}))
+
     (let [checked (handshake/check req (get spec :protocols))]
       (if (get checked :status)
         checked                                  # a refusal, as HTTP

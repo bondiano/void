@@ -239,7 +239,19 @@
 
                  (some (fn [c]
                          (when (string/has-prefix? (c :content-type) ct)
-                           (put req :parsed-body ((c :decode) (req :body)))))
+                           # a body that does not decode is the client's
+                           # error, not this process's — same verdict the
+                           # multipart branch above already gives. A codec
+                           # that raised a structured error already chose
+                           # its status and wording; only a raw decoder
+                           # error gets the generic 400
+                           (def [ok v] (protect ((c :decode) (req :body))))
+                           (unless ok
+                             (if (and (dictionary? v) (get v :http/status))
+                               (error v)
+                               (errors/abort 400 (string/format "malformed %s body"
+                                                                (c :content-type)))))
+                           (put req :parsed-body v)))
                        (get (context) :codecs []))))
              (handler req)))})
 
@@ -297,7 +309,7 @@
 
 # -- context build (:before-start hook) ----------------------------------
 
-(defn- build-session [cfg stores]
+(defn- build-session [cfg stores profile]
   (def scfg (get cfg :session))
   (when (and scfg (not= false (scfg :enabled)))
     (def store-name (get scfg :store :memory))
@@ -316,7 +328,13 @@
      :shared? (truthy? (get contrib :shared?))
      :replacement (get contrib :replacement)
      :ttl (get scfg :ttl 86400)
-     :cookie (get scfg :cookie "void-session")}))
+     :cookie (get scfg :cookie "void-session")
+     # [:http :session :cookie-opts] reaches wrap-session as-is, over
+     # one profile-shaped default: production is behind TLS (ADR-0010's
+     # relay), so its session cookie is Secure unless the config says
+     # otherwise
+     :cookie-opts (merge (if (= :prod profile) {:secure true} {})
+                         (get scfg :cookie-opts {}))}))
 
 (defn- access-log! [req resp]
   (def us
@@ -420,7 +438,8 @@
       :on-error-global (tuple ;(get global-hooks :on-error []))
       :on-timeout-global (tuple ;(get global-hooks :on-timeout []))
       :on-response-global (tuple ;(get global-hooks :on-response []))
-      :session (build-session cfg (or (resolved :void.http/session-store) @{}))})
+      :session (build-session cfg (or (resolved :void.http/session-store) @{})
+                              (boot :profile))})
   # the built-in middleware closures ((context)) must see this context
   # already while the table build evaluates their :when predicates
   (set current-context ctx)
@@ -577,6 +596,7 @@
                      (merge
                        (tabseq [k :in [:host :port :max-header :max-body
                                        :read-timeout :idle-timeout
+                                       :head-timeout :body-timeout
                                        :drain-timeout :max-connections]
                                 :when (not (nil? (get cfg k)))]
                          k (cfg k))
@@ -737,6 +757,8 @@
    :max-body [:optional [:int {:min 0}]]
    :read-timeout [:optional [:number {:min 0.001}]]
    :idle-timeout [:optional [:number {:min 0.001}]]
+   :head-timeout [:optional [:number {:min 0.001}]]
+   :body-timeout [:optional [:number {:min 0.001}]]
    :drain-timeout [:optional [:number {:min 0}]]
    :max-connections [:optional [:int {:min 1}]]
    :strict-meta [:optional :boolean]
@@ -746,7 +768,15 @@
    :session [:optional {:enabled [:optional :boolean]
                         :store [:optional :keyword]
                         :ttl [:optional [:number {:min 1}]]
-                        :cookie [:optional :string]}]
+                        :cookie [:optional :string]
+                        :cookie-opts [:optional
+                                      {:path [:optional :string]
+                                       :domain [:optional :string]
+                                       :max-age [:optional :int]
+                                       :expires [:optional :string]
+                                       :secure [:optional :boolean]
+                                       :http-only [:optional :boolean]
+                                       :same-site [:optional [:enum :strict :lax :none]]}]}]
    :static [:optional {:root :string
                        :prefix [:optional :string]
                        :index [:optional :string]}]})
@@ -764,6 +794,8 @@
                     :max-body 1048576
                     :read-timeout 30
                     :idle-timeout 75
+                    :head-timeout 30
+                    :body-timeout 300
                     :drain-timeout 15
                     :max-connections 1024}
   :components [kernel-component server-component])

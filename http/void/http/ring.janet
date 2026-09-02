@@ -122,6 +122,15 @@
 
 (def- same-site-values {:strict "Strict" :lax "Lax" :none "None"})
 
+(defn- cookie-token
+  "A cookie name or attribute value goes onto the wire unencoded, so a
+  control byte or a ; in one injects attributes or splits the header."
+  [what s]
+  (def str (string s))
+  (when (peg/find '(set "\r\n\0;") str)
+    (errorf "cookie %s %q carries CR, LF, NUL or ;" what str))
+  str)
+
 (defn cookie-str
   ``Format one set-cookie header value. Options:
     :path :domain :max-age :expires (an HTTP date string)
@@ -129,11 +138,12 @@
   [name value &opt opts]
   (default opts {})
   (def out @"")
-  (buffer/format out "%s=%s" (string name) (wire/url-encode (string value)))
-  (when-let [p (opts :path)] (buffer/format out "; Path=%s" p))
-  (when-let [d (opts :domain)] (buffer/format out "; Domain=%s" d))
+  (buffer/format out "%s=%s" (cookie-token "name" name)
+                 (wire/url-encode (string value)))
+  (when-let [p (opts :path)] (buffer/format out "; Path=%s" (cookie-token "path" p)))
+  (when-let [d (opts :domain)] (buffer/format out "; Domain=%s" (cookie-token "domain" d)))
   (when-let [a (opts :max-age)] (buffer/format out "; Max-Age=%d" a))
-  (when-let [e (opts :expires)] (buffer/format out "; Expires=%s" e))
+  (when-let [e (opts :expires)] (buffer/format out "; Expires=%s" (cookie-token "expires" e)))
   (when (opts :secure) (buffer/push out "; Secure"))
   (when (opts :http-only) (buffer/push out "; HttpOnly"))
   (when-let [s (opts :same-site)]
@@ -187,7 +197,13 @@
   [events &opt headers]
   (response 200
             (if (fiber? events)
-              (coro (each e events (yield (sse-event e))))
+              (coro
+                # the server cancels this wrapper when the client hangs
+                # up (wire/write-body); the cancellation must reach the
+                # producer, or a defer inside it never runs
+                (defer (when (= :pending (fiber/status events))
+                         (protect (cancel events :void.http/consumer-gone)))
+                  (each e events (yield (sse-event e)))))
               (map sse-event events))
             (merge @{"content-type" "text/event-stream"
                      "cache-control" "no-cache"}

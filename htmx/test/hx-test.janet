@@ -179,4 +179,23 @@
 (assert (nil? (htmx/request-type @{:headers @{}})))
 (assert (not (htmx/partial-request? @{:headers @{}})))
 
+# -- header injection dies at the wire, htmx builders included -----------
+#
+# redirect, push-url, retarget and the rest put their argument straight
+# into a response header; the wire writer refuses CR, LF and NUL, so a
+# user-supplied URL cannot split the response on its way out.
+
+(import void/http/wire :as wire)
+
+(def evil (htmx/redirect (ring/response 200) "/a\r\nSet-Cookie: admin=1"))
+(def [wok werr] (protect (wire/write-head @"" 200 (evil :headers))))
+(assert (not wok) "an hx-redirect carrying CRLF never reaches the wire")
+(assert (= "hx-redirect" (get werr :header)) "and the refusal names the header")
+
+(assert (string/find "hx-redirect: /safe\r\n"
+                     (string (wire/write-head @"" 200
+                                              ((htmx/redirect (ring/response 200) "/safe")
+                                               :headers))))
+        "an honest redirect still renders")
+
 (print "hx-test: ok")

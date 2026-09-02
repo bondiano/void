@@ -90,4 +90,46 @@
                                 ["text/html" "application/json"]))
         "negotiate reads the request table")
 
+# q is an RFC 9110 qvalue, not whatever scan-number will swallow: a
+# malformed weight falls back to 1 instead of becoming 16 (q=0x10)
+(each [header note]
+  [["text/html;q=0x10" "hex"]
+   ["text/html;q=1e-3" "exponent"]
+   ["text/html;q=+0.5" "signed"]]
+  (assert (= 1 (get-in (negotiate/parse-accept header) [0 :q]))
+          (string "a " note " q clamps to 1, it is not a number to obey")))
+(assert (= 0.9 (get-in (negotiate/parse-accept "text/html;q=0.9") [0 :q]))
+        "a well-formed q still weighs")
+(assert (nil? (negotiate/best "text/html;q=0.000" ["text/html"]))
+        "and a well-formed zero still excludes")
+
+# -- cookie attributes cannot smuggle attributes or split headers --------
+
+(each [opts what]
+  [[{:path "/x;\r\nSet-Cookie: admin=1"} "a CRLF path"]
+   [{:path "/x; Domain=evil.test"} "a ; in the path"]
+   [{:domain "evil\r\n.test"} "a CRLF domain"]
+   [{:expires "now;\r\nX: y"} "a CRLF expires"]]
+  (assert (not (first (protect (ring/cookie-str "s" "v" opts))))
+          (string what " is refused")))
+(assert (not (first (protect (ring/cookie-str "na\nme" "v"))))
+        "and so is a control byte in the cookie name")
+(assert (string/find "Path=/app" (ring/cookie-str "s" "v" {:path "/app"}))
+        "an honest path still renders")
+
+# -- cancelling the sse wrapper reaches the producer ---------------------
+#
+# The server cancels a response fiber when the client hangs up
+# (wire/write-body); ring/sse wraps the producer in a second fiber, so
+# the wrapper must forward the cancellation or a defer inside the
+# producer never runs.
+
+(do
+  (var released false)
+  (def producer (coro (defer (set released true) (forever (yield "tick")))))
+  (def wrapper ((ring/sse producer) :body))
+  (assert (string/find "data: tick" (resume wrapper)) "the stream flows")
+  (assert (not (first (protect (cancel wrapper :consumer-gone)))))
+  (assert released "the producer's defer ran through the wrapper"))
+
 (print "ring-test ok")

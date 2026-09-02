@@ -2,6 +2,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/http/init :as http)
+(import void/http/wire :as wire)
 (import void/http/router :as router)
 (import void/html/hiccup :as hiccup)
 (import void/datastar/init :as datastar)
@@ -64,6 +65,37 @@
   (assert (string/find "count: 3" (resume frames)))
 
   # a room nobody joined is a no-op, not an error
-  (datastar/poke! :ghost))
+  (datastar/poke! :ghost)
+
+  # -- a hung-up consumer releases the subscription ----------------------
+  #
+  # The write fails once the SSE client is gone; the server cancels the
+  # response fiber (wire/write-body), ring/sse forwards the cancellation
+  # to the stream, and the stream's defer leaves its rooms. Without that
+  # chain every dropped connection would sit in (reg :rooms) until the
+  # process died.
+
+  (def reg (get-in boot [:system :instances :datastar/registry]))
+  (defn- streams [] (sum (map length (values (reg :rooms)))))
+  (def before (streams))
+  (def resp2 (http/with-request {:uri "/live"
+                                 :headers {"datastar-request" "true"}}))
+  (def body (resp2 :body))
+  # a consumer that takes the initial morph and then breaks the pipe
+  (var writes 0)
+  (def dying @{:write (fn [_ _] (++ writes) (when (> writes 2) (error "broken pipe")))})
+  (def outcome (ev/chan 1))
+  (ev/go (fn broken-consumer []
+           (ev/give outcome (protect (wire/write-body dying @"" body)))))
+  (ev/sleep 0.05)
+  (assert (= (inc before) (streams))
+          "the stream joined its room and is parked on its channel")
+  (datastar/poke! :counter)   # wakes it; the re-render's write meets the break
+  (def [wrote _] (ev/take outcome))
+  (assert (not wrote) "the broken pipe surfaced")
+  (assert (not= :pending (fiber/status body))
+          "the stream fiber is not left parked")
+  (assert (= before (streams))
+          "and its room membership is released — no leak in the registry"))
 
 (print "stream-test: ok")
