@@ -43,13 +43,108 @@
 (defn lag
   ``One event-loop lag sample, in seconds: sleep `interval`, and
   return how much longer than `interval` the sleep actually took.
-  Blocks the calling fiber for `interval` — this is the measurement,
-  not a step before it.``
+  Blocks the calling fiber for `interval`.
+
+  **Do not run a sampler on this.** It is honest about a blocked loop
+  and it lies about a busy one: janet's scheduler serves timers only
+  when the ready queue goes quiet, so under sustained traffic a
+  sleeping fiber is not resumed until the first lull — and then the
+  whole busy period it slept through comes back as one giant "lag",
+  taken at the exact moment the process went idle. Measured on
+  examples/shop: wrk at 10 connections, request p99 under 40 ms, and
+  this sample read 7.6 *seconds*. A shedder fed by it refuses
+  thousands of requests the process was serving in single-digit
+  milliseconds, and fires one more episode right after the load stops.
+  The heartbeat below is the measurement that matches what a request
+  experiences; this function stays for what it is good at — a
+  spot-check of a loop you suspect is *blocked*, from a REPL or a
+  test.``
   [interval]
   (def before (os/clock :monotonic))
   (ev/sleep interval)
   (def drift (- (os/clock :monotonic) before interval))
   (if (< drift lag-floor) 0 drift))
+
+# -- the heartbeat -------------------------------------------------------
+#
+# The sampler's meter: a worker thread stamps the monotonic clock and
+# hands it to the loop through a thread channel, every :sample-interval.
+# The lag of one beat is how long that stamp waited to be *taken* — the
+# same path a request wakes the loop by (an event, not a timer), so the
+# number is the delay new work actually experiences:
+#
+#   loop busy but keeping up   the wake is served with the rest of the
+#                              IO — lag stays in the milliseconds that
+#                              requests are also seeing
+#   loop blocked (FFI, CPU     nothing is served; the stamp ages until
+#   loop, GC pause)            the block ends and the lag is the block,
+#                              measured from the moment it started
+#
+# where an ev/sleep sampler reports the first case as the *sum of the
+# busy period* (see `lag` above). The thread costs one os thread that
+# is asleep almost always; kdf already spends the same for one login.
+
+(defn heartbeat-work
+  ``The heartbeat thread's body: stamp, give, wait for the stop signal
+  with the interval as the deadline, forever. Takes plain data only
+  ([stamp-chan stop-chan interval]) — it crosses a VM boundary, the
+  same rule kdf's worker follows. The give blocks while the previous
+  stamp is still unread, which is what keeps a wedged loop from piling
+  up a backlog of stale stamps.
+
+  The pause between beats is a `take` on the stop channel under
+  `ev/with-deadline`, not an `ev/sleep`: a live janet thread holds the
+  whole process at exit, so the thread must notice a stop *during* its
+  pause — a test that samples every 600 s (rest-test does) would
+  otherwise pin the suite for ten minutes after its last assert. The
+  deadline expiring is the normal beat; anything arriving on the stop
+  channel — a value, or the nil of it closing — is the exit.``
+  [payload]
+  (def [ch stop interval] payload)
+  (protect
+    (forever
+      (ev/give ch (os/clock :monotonic))
+      (def [stopped _] (protect (ev/with-deadline interval (ev/take stop))))
+      (when stopped (break)))))
+
+(defn start-heartbeat!
+  "Start a heartbeat: one worker thread, beating every `interval`
+  seconds. Returns the handle `beat` and `stop-heartbeat!` take."
+  [interval]
+  (def ch (ev/thread-chan 1))
+  (def stop (ev/thread-chan 1))
+  (ev/thread heartbeat-work [ch stop interval] :n)
+  {:chan ch :stop stop :interval interval})
+
+(defn beat
+  ``Wait for the next beat and return its lag in seconds — how long
+  the stamp waited between the thread writing it and this fiber
+  running. Blocks the calling fiber for about the heartbeat's
+  interval; returns nil once the heartbeat is stopped. When a block
+  has let more than one stamp through (the buffered one, then the
+  give that was parked behind it), the stale ones are drained and the
+  freshest answers — one block is one bad sample, not a tail of
+  echoes.``
+  [hb]
+  (def ch (hb :chan))
+  (when-let [ts (ev/take ch)]
+    (var latest ts)
+    (var draining (pos? (ev/count ch)))
+    (while draining
+      (if-let [t (ev/take ch)]
+        (do (set latest t) (set draining (pos? (ev/count ch))))
+        (set draining false)))
+    (def waited (- (os/clock :monotonic) latest))
+    (if (< waited lag-floor) 0 waited)))
+
+(defn stop-heartbeat!
+  ``Stop a heartbeat: close both channels. The stop channel wakes the
+  thread out of its pause (or fails its next give) and it exits;
+  closing the stamp channel wakes a fiber parked in `beat` with nil.``
+  [hb]
+  (protect (ev/chan-close (hb :stop)))
+  (protect (ev/chan-close (hb :chan)))
+  nil)
 
 # -- rss -----------------------------------------------------------------
 

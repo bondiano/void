@@ -284,6 +284,15 @@
              (not= :supervisor mode)
              (pos? interval))
     (put st :sampling true)
+    # the meter is a heartbeat thread, not an ev/sleep in this fiber:
+    # a sleeping fiber is only resumed when the ready queue goes quiet,
+    # so under sustained traffic it sleeps through the whole busy
+    # period and then reports it as one giant lag — a shedder fed that
+    # way refuses requests the process was serving in milliseconds,
+    # and fires an episode right as the load *ends* (sample.janet has
+    # the numbers)
+    (def hb (sample/start-heartbeat! interval))
+    (put st :heartbeat hb)
     (put st :fiber
          (ev/go
            (fn pressure-sampler []
@@ -295,8 +304,10 @@
              (put st :started true)
              (protect
                (while (st :sampling)
-                 # the sleep *is* the loop-lag measurement (./sample)
-                 (def lag-ms (* 1000 (sample/lag interval)))
+                 # the wait for the beat *is* the loop-lag measurement
+                 (def lag-s (sample/beat hb))
+                 (when (nil? lag-s) (put st :sampling false) (break))
+                 (def lag-ms (* 1000 lag-s))
                  (when (st :sampling)
                    (def [ok err]
                      (protect (observe! st @{:loop-lag lag-ms :rss (sample/rss)})))
@@ -305,10 +316,15 @@
   st)
 
 (defn stop-sampler!
-  "Stop sampling. The fiber is woken rather than waited for, so a
-  shutdown never sits out a sample interval."
+  "Stop sampling. The heartbeat channel is closed (which both wakes a
+  fiber parked in `beat` and tells the thread to exit) and the fiber
+  is cancelled rather than waited for, so a shutdown never sits out a
+  sample interval."
   [st]
   (put st :sampling false)
+  (when-let [hb (st :heartbeat)]
+    (protect (sample/stop-heartbeat! hb)))
+  (put st :heartbeat nil)
   (when-let [f (st :fiber)]
     (when (st :started)
       (protect (ev/cancel f "pressure sampler stopped"))))
