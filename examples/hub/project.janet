@@ -1,17 +1,16 @@
 (declare-project
   :name "hub"
   :description "A void application."
-  # One dependency: void installs as a single bundle (ADR-0020), and
-  # everything it needs — spork, and the framework's own packages —
-  # comes with it. "jpm --local deps" pins this version in ./jpm_tree,
-  # which the void binary uses in preference to the tree it was
-  # installed into.
-  # janet-lang/sqlite3 is the second line because the bundle leaves it
-  # out on purpose (ADR-0011, ADR-0020): void/db-sqlite is a plugin an
-  # application lists, so the application that lists it installs the
-  # library. `void make auth` generates a suite that boots the driver
-  # and does not add this — the first hand edit this project needed,
-  # and one of the three ./README.md counts.
+  # One dependency: void installs as a single bundle, and everything it
+  # needs — spork, and the framework's own packages — comes with it. "jpm
+  # --local deps" pins this version in ./jpm_tree, which the void binary
+  # uses in preference to the tree it was installed into.
+  # janet-lang/sqlite3 is the second line because the bundle leaves it out
+  # on purpose: void/db-sqlite is a plugin an application lists, so the
+  # application that lists it installs the library. `void make auth`
+  # generates a suite that boots the driver and does not add this — the
+  # first hand edit this project needed, and one of the three ./README.md
+  # counts.
   :dependencies ["https://github.com/bondiano/void.git"
                  "https://github.com/janet-lang/sqlite3.git"])
 

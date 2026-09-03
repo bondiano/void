@@ -14,7 +14,7 @@ disclaimer.
 | | void | Rails | Phoenix | Laravel | Go net/http | redbean |
 |---|---|---|---|---|---|---|
 | On the server | one binary, 1.1–2.4 MB measured | Ruby + a gem tree | a BEAM release | PHP + `vendor/` | one binary | one binary (zip with Lua inside) |
-| Hello-app RSS | 24–49 MiB across runs (see BENCH §non-latency and its open question) | typically hundreds of MiB | tens to ~150 MiB | depends on FPM workers | small | very small |
+| Hello-app RSS | 24–49 MiB across runs (see the benchmarks and their open question) | typically hundreds of MiB | tens to ~150 MiB | depends on FPM workers | small | very small |
 | Startup to ready | ~21 ms measured | seconds | ~1 s | per-request (FPM) | ms | ms |
 | Migrations on the target | `./app db migrate` — the binary is also the CLI | `rails db:migrate` needs the whole runtime | in the release | `artisan migrate` needs PHP | you write it | you write it |
 
@@ -57,12 +57,12 @@ community package everyone uses; — absent / do it yourself.
 | OpenAPI | **in** — projected from the route table, cannot drift | *pkg* | *pkg* | *pkg* | *pkg* | — |
 | Mail, i18n, websockets, file storage, notifications | **in** | **in** | **in** (mail via lib) | **in** | *pkg* | — |
 
-Two cells in that table are the unusual ones. The admin and MCP rows
-are the same mechanism: `defresource-admin` registers one frozen
-declaration, and it is projected into pages for a person *and* tools
-for an agent — same fields, same policies, cannot drift apart
-(ADR-0029, ADR-0031). No other framework in the table treats "the
-application is also an MCP server" as a first-class projection today.
+Two cells in that table are the unusual ones. The admin and MCP rows are
+the same mechanism: `defresource-admin` registers one frozen
+declaration, and it is projected into pages for a person *and* tools for
+an agent — same fields, same policies, cannot drift apart . No other
+framework in the table treats "the application is also an MCP server" as
+a first-class projection today.
 
 ## Performance
 
@@ -79,14 +79,13 @@ single void worker, wrk/wrk2 with coordinated omission accounted for):
   ceiling.
 
 Read honestly: at the same offered rate void's latency is within
-~0.7–0.8× of the Go ceiling for this class (an interpreter doing
-parse + validate + serialize on every request), and its p99 tail is
-GC-bound — the document names mark-and-sweep on the JSON path as the
-enemy and records the budget it set because of it. Max throughput is a
-different story: one void worker tops out far below a multi-core Go
-service, which is why **>10k RPS per process is an explicit
-anti-case** — SPEC §8's answer is prefork workers, and past that,
-another language.
+~0.7–0.8× of the Go ceiling for this class (an interpreter doing parse
++ validate + serialize on every request), and its p99 tail is GC-bound
+— the document names mark-and-sweep on the JSON path as the enemy and
+records the budget it set because of it. Max throughput is a different
+story: one void worker tops out far below a multi-core Go service, which
+is why **>10k RPS per process is an explicit anti-case** — the answer is
+prefork workers, and past that, another language.
 
 Methodology caveats are recorded in the document itself and they cut
 both ways: absolute throughput numbers vary up to ±30% between

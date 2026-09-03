@@ -1,5 +1,4 @@
-### shop/audit/admin — the trail on the desk, and the desk on the
-### trail (ADR-0029 §8).
+### shop/audit/admin — the trail on the desk, and the desk on the trail.
 ###
 ### Two directions, and neither side knows the other exists.
 ###
@@ -48,7 +47,7 @@
   honest rather than defensive. A change made on a page rides
   `publish-tx!` — the admin's writing routes carry `:void.db/txn`, so
   the message and the row it announces commit together or not at all
-  (ADR-0012). A change made by a **bulk job** has no such transaction
+. A change made by a **bulk job** has no such transaction
   around it (`void/admin-jobs` runs the rows in a worker), and there
   publishing outside one is the truthful thing to do: the row is
   already committed, and an at-least-once message about it is what the

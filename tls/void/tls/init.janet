@@ -1,21 +1,20 @@
-### void/tls — outbound TLS from the system libssl through ffi
-### (SPEC §1 п. 4, ADR-0038).
+### void/tls — outbound TLS from the system libssl through ffi.
 ###
-### The plugin closes the bookmark ADR-0010 left open — "an ffi plugin
+### The plugin closes the bookmark the kernel left open — "an ffi plugin
 ### void/tls is possible later" — for the half where the reverse-proxy
 ### answer scales badly: *outbound* connections. Composing it makes
 ### `https://` a working scheme in `void/http/client`, `rediss://` a
 ### working scheme in `void/redis`, and STARTTLS/`:smtps` working
 ### modes in `void/mail`; `void/oauth` and `void/obs-otlp` start
 ### accepting https endpoints at their gates. Inbound TLS stays at the
-### proxy: ADR-0010 is not revisited.
+### proxy: that decision is not revisited.
 ###
-### The integration is a seam, not an edge (ADR-0038 §4): each
-### consumer holds a `(var tls-... nil)` and keeps its old
-### relay-naming error while it is nil; `install!` here puts this
-### package's connector into every seam, and the plugin does that on
-### load. Wave-1 packages therefore never import wave-5 code, and a
-### composition without :void/tls is byte-for-byte what it was.
+### The integration is a seam, not an edge: each consumer holds a `(var
+### tls-... nil)` and keeps its old relay-naming error while it is nil;
+### `install!` here puts this package's connector into every seam, and the
+### plugin does that on load. Wave-1 packages therefore never import
+### wave-5 code, and a composition without :void/tls is byte-for-byte what
+### it was.
 ###
 ### The library opens at :start (like libcrypto, like libpq): a
 ### missing libssl is a boot error naming every path tried, never an
@@ -27,9 +26,9 @@
 (import void/core/log :as log)
 (import ./lib :as lib)
 (import ./stream :as stream)
-# the consumer seams (ADR-0038 §4). Importing them is legal — wave 5
-# may depend on any earlier wave — and costs nothing at runtime: each
-# import is the module the composition was going to load anyway.
+# the consumer seams. Importing them is legal — wave 5 may depend on any
+# earlier wave — and costs nothing at runtime: each import is the module
+# the composition was going to load anyway.
 (import void/http/client :as http-client)
 (import void/redis/conn :as redis-conn)
 (import void/mail/smtp :as smtp)
@@ -72,7 +71,7 @@
 (def connect "See stream/connect — net/connect plus wrap." stream/connect)
 (def tls-version "See stream/tls-version — the negotiated protocol." stream/tls-version)
 
-# -- the seams (ADR-0038 §4) ---------------------------------------------
+# -- the seams -----------------------------------------------------------
 
 (defn install!
   ``Put this package's connector into every consumer seam:
@@ -187,7 +186,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/tls
-  :doc "Outbound TLS through the system libssl: https:// in the http client, rediss:// in redis, STARTTLS and smtps in mail, https endpoints at the oauth and OTLP gates. Memory-BIO pump on the ev loop — no thread, no native module — with verification and SNI on by construction; the library opens at :start. Inbound TLS stays at the reverse proxy (ADR-0010)."
+  :doc "Outbound TLS through the system libssl: https:// in the http client, rediss:// in redis, STARTTLS and smtps in mail, https endpoints at the oauth and OTLP gates. Memory-BIO pump on the ev loop — no thread, no native module — with verification and SNI on by construction; the library opens at :start. Inbound TLS stays at the reverse proxy."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/crypto ">=0.0.1"}
   :config-key :tls

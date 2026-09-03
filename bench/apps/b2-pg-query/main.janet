@@ -1,14 +1,14 @@
-### B2 — Postgres single query (SPEC.md §8.2, ADR-0014).
-### Budget: p50 < 3ms, p99 < 12ms, ≥ 3k RPS (1 worker, 1 vCPU).
+### B2 — Postgres single query. Budget: p50 < 3ms, p99 < 12ms, ≥ 3k RPS (1
+### worker, 1 vCPU).
 ###
 ### One indexed row per request, over the pool, through a prepared
 ### statement, on the ev loop — void/db-postgres driving libpq's
-### non-blocking API through void/fdwait, with no thread pool anywhere
-### (ADR-0011). The whole point of the row is what the number costs:
-### B2 − B0 is the query, the pool checkout and the round trip, and
-### nothing else, which is why the response is encoded by hand instead
-### of going through void/rest (that pipeline is what B1 measures, and
-### measuring it twice would hide the driver inside it).
+### non-blocking API through void/fdwait, with no thread pool anywhere.
+### The whole point of the row is what the number costs: B2 − B0 is the
+### query, the pool checkout and the round trip, and nothing else, which
+### is why the response is encoded by hand instead of going through
+### void/rest (that pipeline is what B1 measures, and measuring it twice
+### would hide the driver inside it).
 ###
 ### Needs a server: VOID_BENCH_PG (or VOID_TEST_PG). The table is
 ### created and seeded at :after-start, idempotently (see
@@ -79,9 +79,9 @@
    :config {:cli {:http {:host "127.0.0.1"
                          :port (or (scan-number (or (os/getenv "PORT") ""))
                                    8102)}
-                  # one worker, one vCPU (§8.2) — a pool bigger than a
-                  # handful of connections would only queue in Postgres
-                  # instead of queueing here
+                  # one worker, one vCPU — a pool bigger than a handful of
+                  # connections would only queue in Postgres instead of
+                  # queueing here
                   :db {:pool {:size 8}}
                   :db-postgres (pg/config)}}})
 

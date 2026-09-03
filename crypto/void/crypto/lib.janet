@@ -1,18 +1,17 @@
-### void/crypto/lib — the libcrypto surface void uses, and nothing more
-### (ADR-0022, SPEC.md §5.14, §5.16).
+### void/crypto/lib — the libcrypto surface void uses, and nothing more.
 ###
-### Everything here is `ffi/`, for the reason ADR-0022 spells out: a web
+### Everything here is `ffi/`, for one reason: a web
 ### framework has no business implementing SHA-2, HMAC or a memory-hard
 ### KDF, on Janet or in C. The primitives come from the library the
 ### operating system already ships and somebody else audits.
 ###
-### The bindings are `var`s installed by `load!` rather than
-### `ffi/defbind` definitions, and that is the same decision
-### `void/db-postgres/libpq` made (ADR-0011): the library path is
-### configuration ([:crypto :libcrypto]), not a compile-time constant,
-### and a plugin that merely gets *loaded* — `plugin/dry-run` in CI,
-### `void routes` on a laptop — must not explode on import. Until
-### `load!` runs, every binding is nil and `available?` says so.
+### The bindings are `var`s installed by `load!` rather than `ffi/defbind`
+### definitions, and that is the same decision `void/db-postgres/libpq`
+### made: the library path is configuration ([:crypto :libcrypto]), not a
+### compile-time constant, and a plugin that merely gets *loaded* —
+### `plugin/dry-run` in CI, `void routes` on a laptop — must not explode
+### on import. Until `load!` runs, every binding is nil and `available?`
+### says so.
 ###
 ### **The macOS trap, which is the reason this list is written out by
 ### platform.** On macOS 15 with Janet 1.41, both
@@ -266,7 +265,7 @@
             (string/join (map |(string/format "%q" $) (candidates)) ", ")))
   library-path)
 
-# -- what this library can do -------------------------------------------
+# -- what this library can do --------------------------------------------
 
 (defn version
   "The loaded library's version as [major minor patch], or nil before

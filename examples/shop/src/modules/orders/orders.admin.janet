@@ -1,4 +1,4 @@
-### shop/orders/admin — the desk (ADR-0029).
+### shop/orders/admin — the desk.
 ###
 ### The three things this file says are the three a projection of
 ### `defentity` cannot know, and each of them is one line.
@@ -63,12 +63,11 @@
 # -- the two tables an order is made of, for whoever reads rather than
 # -- clicks --------------------------------------------------------------
 #
-# `:mount false` is a declaration without a section (ADR-0029 §1): no
-# routes, no menu entry, and still a resource — so
-# `admin-order-items-list` and `admin-payments-list` are tools an agent
-# can call, under the same gate and the same per-action policies as
-# everything else, while the desk keeps one page per thing a person
-# does.
+# `:mount false` is a declaration without a section: no routes, no menu
+# entry, and still a resource — so `admin-order-items-list` and
+# `admin-payments-list` are tools an agent can call, under the same gate
+# and the same per-action policies as everything else, while the desk
+# keeps one page per thing a person does.
 
 (admin/defresource-admin order-items model/OrderItem
   :title "Order lines"

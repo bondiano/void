@@ -155,9 +155,9 @@
 
 # -- the spec is marshalable, which is the whole point -------------------
 #
-# It crosses into another VM (ADR-0033). Anything in it that could not
-# be marshalled would be a runtime failure on a worker thread, which is
-# the least debuggable place in this package.
+# It crosses into another VM. Anything in it that could not be marshalled
+# would be a runtime failure on a worker thread, which is the least
+# debuggable place in this package.
 
 (def spec (config/spec {:url "mysql://void:s3cret@db:3307/app?ssl-mode=required"
                         :time-zone "UTC" :json false}))

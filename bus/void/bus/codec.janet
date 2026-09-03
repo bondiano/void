@@ -1,5 +1,4 @@
-### void/bus/codec — how a message becomes bytes and back (SPEC.md
-### §5.22, extension point :void.bus/codec).
+### void/bus/codec — how a message becomes bytes and back (extension point :void.bus/codec).
 ###
 ### A backend that keeps messages anywhere but this process's heap
 ### keeps them as bytes, and which bytes is a contract between the

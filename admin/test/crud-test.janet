@@ -1,10 +1,8 @@
-### The admin, end to end, through the production stack (ADR-0017:
-### routing, lifecycle stages, middleware, the :void.db/txn wrapper,
-### CSRF, rendering, wire bytes — everything but the socket).
+### The admin, end to end, through the production stack: routing, lifecycle stages, middleware, the :void.db/txn wrapper, CSRF, rendering, wire bytes — everything but the socket).
 ###
 ### The suite runs the same CRUD **twice**: once with no HX-* header
 ### anywhere, and once with them. That is not thoroughness for its own
-### sake — ADR-0029 §9 claims that htmx makes the admin responsive and
+### sake — the claim is that htmx makes the admin responsive and
 ### never makes it *work*, and a claim like that is either checked or
 ### false. The plain pass is the one that would break first, so it goes
 ### first.
@@ -140,7 +138,7 @@
                                              (get spec :headers {}))}
                             (let [s (merge {} spec)] (put s :headers nil) s))))
 
-    # -- the list ---------------------------------------------------------
+    # -- the list --------------------------------------------------------
     (def listing (get* "/admin/notes"))
     (assert (= 200 (listing :status)) "the list answers")
     (def body (text listing))
@@ -174,7 +172,7 @@
     (assert (= 200 ((get* "/admin/notes?sort=owner&dir=asc") :status))
             "a column that is not :sortable is ignored, never injected")
 
-    # -- create -----------------------------------------------------------
+    # -- create ----------------------------------------------------------
     (def form (get* "/admin/notes/new" {:headers {}}))
     (assert (= 200 (form :status)))
     (def token (csrf-of form))
@@ -199,7 +197,7 @@
     (assert (not (string/find "fourth" (text (get* "/admin/notes"))))
             "a row outside the scope does not appear")
 
-    # -- read one ---------------------------------------------------------
+    # -- read one --------------------------------------------------------
     (assert (= 200 ((get* "/admin/notes/1") :status)))
     (assert (string/find "red" (text (get* "/admin/notes/1")))
             "the inline shows the child rows")
@@ -207,7 +205,7 @@
             "another owner's row is not found — the same answer as one that does not exist")
     (note "detail scoped, inline rendered")
 
-    # -- update -----------------------------------------------------------
+    # -- update ----------------------------------------------------------
     (def edit (get* "/admin/notes/1/edit" {:headers {}}))
     (def etoken (csrf-of edit))
     (def saved (post "/admin/notes/1" etoken {:form {:title "renamed" :done "true"}}))
@@ -220,8 +218,8 @@
     (assert (= "hers" ((db/find Note 4) :title)) "and it is untouched")
 
     # the second echelon: a policy of the action's own name, with the
-    # loaded row in :resource. This is what turns a *bug* in a scope
-    # into a 403 instead of somebody else's row (ADR-0029 §3)
+    # loaded row in :resource. This is what turns a *bug* in a scope into
+    # a 403 instead of somebody else's row
     (authz/register-policy!
       {:name :admin.notes/update
        :fn (fn [c] (or (= "renamed" (authz/attr c :resource/title))
@@ -234,7 +232,7 @@
     (authz/register-policy! {:name :admin.notes/update :fn (fn [_] true)})
     (note "update writes, inside the scope and past the row's own policy")
 
-    # -- a cell -----------------------------------------------------------
+    # -- a cell ----------------------------------------------------------
     (def cell (test/inject c {:method :patch :uri "/admin/notes/1/-/cell/title"
                               :headers {"x-csrf-token" etoken "hx-request" "true" "hx-request-type" "partial"}
                               :form {:title "celled"}}))
@@ -246,7 +244,7 @@
             "a column that is not :editable has no cell route to speak of")
     (note "cell edit")
 
-    # -- inlines ----------------------------------------------------------
+    # -- inlines ---------------------------------------------------------
     (def added (post "/admin/notes/1/-/inline/tags" etoken {:form {:label "blue"}}))
     (assert (< (added :status) 400) (string "inline create: " (added :status)))
     (def blue (db/one Tag {:where [:= :label "blue"]}))
@@ -261,7 +259,7 @@
     (assert (nil? (db/find Tag (blue :id))))
     (note "inline create and delete, parent from the URL")
 
-    # -- bulk ---------------------------------------------------------------
+    # -- bulk ------------------------------------------------------------
     (def confirm (get* "/admin/notes/-/bulk/destroy?ids=2,3" {:headers {}}))
     (assert (= 200 (confirm :status)))
     (assert (string/find ">2</span>" (text confirm))
@@ -290,7 +288,7 @@
     (assert (db/find Note 4) "another owner's row survives a forged selection")
     (note "a forged identifier selects nothing")
 
-    # -- delete one, the way a page without htmx does it -------------------
+    # -- delete one, the way a page without htmx does it -----------------
     (def dtoken (csrf-of (get* "/admin/notes/1/edit" {:headers {}})))
     (def dropped (test/inject c {:method :post :uri "/admin/notes/1?_method=delete"
                                  :headers (merge {"x-csrf-token" dtoken}
@@ -309,7 +307,7 @@
 (run-suite "plain" false)
 (run-suite "htmx" true)
 
-# -- the gate, from the outside -----------------------------------------
+# -- the gate, from the outside ------------------------------------------
 
 (def shut
   (test/start! (merge opts

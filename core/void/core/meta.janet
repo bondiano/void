@@ -1,4 +1,4 @@
-### void/core/meta — metadata merge semantics (SPEC.md part II §2, ADR-0005).
+### void/core/meta — metadata merge semantics.
 ###
 ### Route/handler metadata is an open map of namespaced keys — the main
 ### integration contract between plugins: authz, validation, OpenAPI,
@@ -65,7 +65,7 @@
 
 (defn namespaced?
   "True when a metadata key is namespaced: :void.http/timeout, :app/x.
-  Every key except :name must be (SPEC part II §2.3)."
+  Every key except :name must be."
   [k]
   (and (keyword? k) (not (nil? (string/find "/" (string k))))))
 
@@ -167,8 +167,8 @@
           inner (lift inner)
           outer (lift outer)]
     (cond
-      # {slot [items]} concats per slot — lifecycle hooks (ADR-0016):
-      # {:pre-handler [group-hook]} + {:pre-handler [route-hook]}
+      # {slot [items]} concats per slot — lifecycle hooks: {:pre-handler
+      # [group-hook]} + {:pre-handler [route-hook]}
       # -> {:pre-handler [group-hook route-hook]}
       (dictionary? inner)
       (if (and (not (nil? outer)) (not (dictionary? outer)))
@@ -225,8 +225,7 @@
     (put provenance k @[entry])))
 
 (defn merge-layers
-  ``Merge metadata layers, least specific first (global -> group ->
-  route; SPEC part II §2.4). Each layer is a metadata dictionary or a
+  ``Merge metadata layers, least specific first (global -> group -> route). Each layer is a metadata dictionary or a
   [source dictionary] pair — the source labels provenance and error
   messages (defaults to the layer index).
 

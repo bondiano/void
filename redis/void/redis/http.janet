@@ -1,5 +1,4 @@
-### void/redis-http — sessions in redis (SPEC.md §5.1 / §5.10,
-### CONTRACTS v1 point `:void.http/session-store`).
+### void/redis-http — sessions in redis (CONTRACTS v1 point `:void.http/session-store`).
 ###
 ### The one piece of void/redis that needs void/http, kept a separate
 ### plugin so a CLI or a worker process never drags the HTTP kernel in
@@ -11,13 +10,13 @@
 ###     {:http {:session {:store :redis :ttl 86400}}
 ###      :redis {:url "redis://cache.internal/0"}}
 ###
-### This is what makes a fleet and sessions coexist. An in-memory
-### store lives in one process's heap, so every prefork worker — and
-### every machine behind the balancer — has a different set of
-### sessions, and a user's requests land in whichever one accept() gave
-### them. `[:deploy :shape] :fleet` refuses that combination at start
-### rather than let it be discovered in production (ADR-0030,
-### ADR-0010). A shared store is the answer, and this is one.
+### This is what makes a fleet and sessions coexist. An in-memory store
+### lives in one process's heap, so every prefork worker — and every
+### machine behind the balancer — has a different set of sessions, and a
+### user's requests land in whichever one accept() gave them. `[:deploy
+### :shape] :fleet` refuses that combination at start rather than let it
+### be discovered in production. A shared store is the answer, and this is
+### one.
 ###
 ### Two decisions worth stating:
 ###
@@ -86,6 +85,6 @@
    :shared? true})
 
 (plugin/defplugin void/redis-http
-  :doc "Sessions in redis: the :redis session store for void/http, which is what lets sessions and prefork workers coexist (ADR-0010)."
+  :doc "Sessions in redis: the :redis session store for void/http, which is what lets sessions and prefork workers coexist."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/redis ">=0.0.1" :void/http ">=0.0.1"})

@@ -1,8 +1,7 @@
-### void/ws/sha1 — SHA-1, for the one thing RFC 6455 uses it for
-### (ADR-0028).
+### void/ws/sha1 — SHA-1, for the one thing RFC 6455 uses it for.
 ###
 ### **This is not cryptography, and void has not started writing its
-### own.** ADR-0022 says every cryptographic primitive comes from the
+### own.** Every cryptographic primitive comes from the
 ### system libcrypto, and that rule stands. The handshake hash of RFC
 ### 6455 §4.2.2 is outside it: the input is a header the client just
 ### sent in the clear, the salt is a GUID printed in the specification,

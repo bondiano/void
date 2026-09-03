@@ -1,5 +1,5 @@
-### The stdio transport: a line is a message, and the loop keeps
-### running while an agent thinks (ADR-0031).
+### The stdio transport: a line is a message, and the loop keeps running
+### while an agent thinks.
 ###
 ### The suite drives it over an os/pipe rather than over the process's
 ### own stdin — same stream type, same ev/read, and a test that owns

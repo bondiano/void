@@ -1,4 +1,4 @@
-### The projection into routes (ADR-0029 §2, §3) — and the gate.
+### The projection into routes — and the gate.
 ###
 ### The claim under test is that the admin is not a dispatcher: every
 ### action is an entry in the one route table, with its own name, its
@@ -55,8 +55,8 @@
 
 (defn- boot
   ``The kernel only: the route table is built by the :before-start
-  hooks either way (ADR-0017), so the whole projection is on the table
-  without a database anywhere near it.``
+  hooks either way, so the whole projection is on the table without a
+  database anywhere near it.``
   [&opt cfg]
   (test/start!
     {:plugins plugins
@@ -103,7 +103,7 @@
 
 (assert (deep= [:void.admin/access :admin.notes/destroy]
                (tuple ;(get-in (entry :admin.notes/destroy) [:meta :void.authz/policy])))
-        "the gate and the action's own policy — :concat already means AND (ADR-0024)")
+        "the gate and the action's own policy — :concat already means AND")
 
 # writers declare their transaction in metadata, not in a handler
 (each name [:admin.notes/create :admin.notes/update :admin.notes/destroy
@@ -177,11 +177,11 @@
 # -- the routes a widget asks for ----------------------------------------
 #
 # A belongs-to whose target declares a `:search` is drawn by the link
-# widget as an autocomplete, and an autocomplete needs a route to
-# complete against (ADR-0029 §4). It is mounted under the resource's
-# own `-/w/` namespace with the same gate — and it carries the one
-# metadata key this package declares, which is what makes it
-# distinguishable in `void routes` from an action of a resource.
+# widget as an autocomplete, and an autocomplete needs a route to complete
+# against. It is mounted under the resource's own `-/w/` namespace with
+# the same gate — and it carries the one metadata key this package
+# declares, which is what makes it distinguishable in `void routes` from
+# an action of a resource.
 (admin/defresource-admin note-tags Tag
   :list [:id :note-id :label]
   :form [:note-id :label])

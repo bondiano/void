@@ -1,7 +1,7 @@
-# The fleet gate as void/http meets it (ADR-0030). Memory sessions are
-# not an error any more — they are an error *under a deployment shape
-# that has a second replica*, and prefork is one way to be one, which
-# is what used to be the whole check.
+# The fleet gate as void/http meets it. Memory sessions are not an error
+# any more — they are an error *under a deployment shape that has a second
+# replica*, and prefork is one way to be one, which is what used to be the
+# whole check.
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
 (import void/core/deploy :as deploy)
@@ -45,7 +45,7 @@
                 :only [:http/kernel]
                 :config {:cli {:http (merge {:session {:enabled true}} http-cfg)}}}))
 
-# -- :single: sessions in a heap are fine, and always were ----------------
+# -- :single: sessions in a heap are fine, and always were ---------------
 
 (def single (start [http/manifest app] :dev {}))
 (assert (= :single (deploy/shape)))
@@ -55,7 +55,7 @@
 (assert (false? (entry :shared?)))
 (test/stop! single)
 
-# -- :fleet: they are not -------------------------------------------------
+# -- :fleet: they are not ------------------------------------------------
 
 (def [ok err] (protect (start [http/manifest app] :prod {})))
 (assert (not ok) "memory sessions do not survive a second replica, and :prod is a fleet")
@@ -66,7 +66,7 @@
 (assert (string/find "[:deploy :shape] :single" msg)
         "and the way out, for a deployment that really is one replica")
 
-# -- prefork is a fleet: the old :workers check is now a special case -----
+# -- prefork is a fleet: the old :workers check is now a special case ----
 
 (def [ok2 err2] (protect (start [http/manifest app] :dev {:workers 2})))
 (assert (not ok2) ":workers 2 still refuses memory sessions")
@@ -79,7 +79,7 @@
 (assert (= :single (deploy/shape)))
 (test/stop! one-worker)
 
-# -- a shared store starts under either shape -----------------------------
+# -- a shared store starts under either shape ----------------------------
 
 (def fleet (start [http/manifest app shared-sessions] :prod
                   {:session {:enabled true :store :test-shared}}))
@@ -91,7 +91,7 @@
         "a shared session store is what a fleet needs, and nothing else complains")
 (test/stop! fleet)
 
-# -- an application without sessions has nothing to answer for ------------
+# -- an application without sessions has nothing to answer for -----------
 
 (def sessionless
   (test/start! {:plugins [http/manifest app] :profile :prod :only [:http/kernel]}))

@@ -101,7 +101,7 @@
 (assert (not (mysql/library-available?))
         (string "and none of the above opened libmysqlclient in this VM — the "
                 "driver opens it inside a worker thread and nowhere else "
-                "(ADR-0033), which is what lets this file run on a machine "
+                ", which is what lets this file run on a machine "
                 "that has no MySQL at all"))
 
 # -- against a real server -----------------------------------------------

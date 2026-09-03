@@ -1,5 +1,5 @@
-// A service void/grpc refuses to mount: streaming is a v2 decision
-// (ADR-0013), and the refusal belongs at the declaration.
+// A service void/grpc refuses to mount: streaming is a v2 decision, and
+// the refusal belongs at the declaration.
 syntax = "proto3";
 
 package shop.feed;

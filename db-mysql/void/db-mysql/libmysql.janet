@@ -1,5 +1,5 @@
-### void/db-mysql/libmysql — the libmysqlclient surface this driver
-### uses, and nothing more (ADR-0033, SPEC.md §5.10).
+### void/db-mysql/libmysql — the libmysqlclient surface this driver uses,
+### and nothing more.
 ###
 ### The shape is void/db-postgres/libpq's, for the same two reasons:
 ### the library path is configuration ([:db-mysql :library]) rather
@@ -8,17 +8,16 @@
 ### — must not explode on import. Until `load!` runs, every binding is
 ### nil and `available?` says so.
 ###
-### What is NOT the same is where `load!` runs. libpq is opened once,
-### in the process's only VM, because libpq is asynchronous and the
-### driver lives on the ev loop. Every call here blocks, so a
-### connection lives on a worker thread of its own (ADR-0033), and the
-### bindings are installed *inside that thread* — a janet function
-### crossing into a new VM carries plain data only, and an ffi native
-### object is the definition of what cannot be marshalled. That is why
-### this module is `var`s plus `load!` rather than `ffi/defbind`
-### definitions: the worker calls `load!` on its own copy of the module
-### and gets its own bindings. `void/crypto/kdf` explains the same
-### constraint from the other end.
+### What is NOT the same is where `load!` runs. libpq is opened once, in
+### the process's only VM, because libpq is asynchronous and the driver
+### lives on the ev loop. Every call here blocks, so a connection lives on
+### a worker thread of its own, and the bindings are installed *inside
+### that thread* — a janet function crossing into a new VM carries plain
+### data only, and an ffi native object is the definition of what cannot
+### be marshalled. That is why this module is `var`s plus `load!` rather
+### than `ffi/defbind` definitions: the worker calls `load!` on its own
+### copy of the module and gets its own bindings. `void/crypto/kdf`
+### explains the same constraint from the other end.
 ###
 ### Three libmysqlclient facts are load-bearing below:
 ###
@@ -120,11 +119,11 @@
 (defmy mysql_get_host_info :string :ptr)
 (defmy mysql_thread_id :ulong :ptr)
 
-# statements — the text protocol (ADR-0033 explains why not mysql_stmt_*)
-# both take an explicit length and both are declared :ptr rather than
-# :string for the same reason: the bytes may contain a NUL — a blob
-# literal inside the statement, a blob value being escaped — and a
-# NUL-terminated argument would stop there
+# statements — the text protocol (explains why not mysql_stmt_*) both take
+# an explicit length and both are declared :ptr rather than :string for
+# the same reason: the bytes may contain a NUL — a blob literal inside the
+# statement, a blob value being escaped — and a NUL-terminated argument
+# would stop there
 (defmy mysql_real_query :int :ptr :ptr :ulong)
 (defmy mysql_real_escape_string :ulong :ptr :ptr :ptr :ulong)
 (defmy mysql_store_result :ptr :ptr)
@@ -355,7 +354,7 @@
 
 (defn available?
   "Have the bindings been opened in THIS VM? A worker thread has its
-  own answer, which is the point (ADR-0033)."
+  own answer, which is the point."
   []
   (not (nil? library-path)))
 

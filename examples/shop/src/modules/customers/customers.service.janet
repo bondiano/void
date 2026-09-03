@@ -43,7 +43,7 @@
 
   `auth/hash-password` produces a PHC string: the algorithm and its
   cost travel inside the value, so raising the cost later is a config
-  change rather than a migration nobody can write (ADR-0023 §4).``
+  change rather than a migration nobody can write.``
   [{:name name :email email :password password}]
   (def customer (repo/create! {:name name
                                :email email
@@ -71,7 +71,7 @@
 
   `auth/challenge!` mints a single-use code, stores its digest and
   hands it to the deliverers; void/mail-auth turns that into a letter
-  (ADR-0026 §6). Which is why there is no template, no URL and no
+. Which is why there is no template, no URL and no
   token in this application.``
   [email]
   (when-let [customer (repo/find-by-email email)]
@@ -82,8 +82,7 @@
 
 (defn redeem-link
   ``The link from the letter, as an identity or nil. `redeem!` takes
-  the challenge out of the store before it checks the code (ADR-0023
-  §7), so a link works once and a wrong one is spent.``
+  the challenge out of the store before it checks the code, so a link works once and a wrong one is spent.``
   [handle code]
   (auth/redeem! handle code))
 

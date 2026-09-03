@@ -1,10 +1,10 @@
-# The wave-1 example is also its smoke test (ROADMAP, сквозные
-# работы), and it tests the way void apps are meant to be tested
-# (ADR-0017): kernel-only start — no port — with test/inject driving
-# the full production stack: routing, lifecycle stages, middleware,
-# schema validation, rendering, wire serialization. The access-log
-# lands through void/core/log on the :on-response stage — the same
-# record a socket request would produce (wave-1 exit criterion 5).
+# The wave-1 example is also its smoke test, and it
+# tests the way void apps are meant to be tested: kernel-only start — no
+# port — with test/inject driving the full production stack: routing,
+# lifecycle stages, middleware, schema validation, rendering, wire
+# serialization. The access-log lands through void/core/log on the
+# :on-response stage — the same record a socket request would produce
+# (wave-1 exit criterion 5).
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)

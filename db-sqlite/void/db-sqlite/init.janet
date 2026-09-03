@@ -1,4 +1,4 @@
-### void/db-sqlite — the reference driver plugin (SPEC.md §5.10).
+### void/db-sqlite — the reference driver plugin.
 ###
 ### One component, `:db.sqlite/driver`, declaring
 ### :provides [:void/db-driver]: void/db's pool depends on the

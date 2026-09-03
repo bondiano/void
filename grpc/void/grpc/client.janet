@@ -1,14 +1,13 @@
-### void/grpc/client — the other end of a Connect call (SPEC.md §5.8,
-### ADR-0013).
+### void/grpc/client — the other end of a Connect call.
 ###
 ###     (def orders (grpc/client "http://127.0.0.1:8080"))
 ###     (grpc/call orders :shop.orders/OrderService :GetOrder {:id "A-1"})
 ###
 ### It is void/http/client with the protocol on top, which means it
 ### inherits that module's decisions rather than making its own: one
-### socket reused, no pool, no TLS (ADR-0010 — an `https://` URL is an
-### error naming the relay), and a timeout that cancels a task instead
-### of the caller's fiber.
+### socket reused, no pool, no TLS (an `https:, ` URL is an error naming
+### the relay), and a timeout that cancels a task instead of the caller's
+### fiber.
 ###
 ### **An error is raised, not returned.** This is the one place void
 ### does that on purpose: `send!` hands back a 500 because a status is
@@ -133,7 +132,7 @@
   (def [_ m] (method-of svc-name method-name))
   (when (or (m :client-streaming) (m :server-streaming))
     (errorf (string "void/grpc: %q.%s is a streaming method, and void speaks unary Connect "
-                    "(ADR-0013)")
+                    "")
             svc-name (m :proto-name)))
   (def codec (encodings (c :encoding)))
   (def timeout (or (opts :timeout) (c :timeout)))

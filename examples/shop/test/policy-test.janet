@@ -1,11 +1,11 @@
 ### The policies, as a table of cases — with no database, no HTTP and
 ### no system anywhere.
 ###
-### That is the whole argument for `defpolicy` (ADR-0024 §1): a policy
-### is a **pure function of a context**, so the interesting half of
-### authorization is tested the way arithmetic is. What the routes then
-### do with it (which policy, over which resource) is checked once, in
-### the suites that boot the application.
+### That is the whole argument for `defpolicy`: a policy is a **pure
+### function of a context**, so the interesting half of authorization is
+### tested the way arithmetic is. What the routes then do with it (which
+### policy, over which resource) is checked once, in the suites that boot
+### the application.
 ###
 ### Note what these cases never mention: a request, a session, a route,
 ### a plugin. `:subject/id` falls back to the id half of the subject
@@ -15,10 +15,10 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
 (import void/authz :as authz)
-# loaded for their effect: a policy is declared by the module it is
-# about, and these three files are the whole of this application's —
-# including the one that narrows an admin action, which is a policy
-# like any other and is tested like any other (ADR-0029 §3)
+# loaded for their effect: a policy is declared by the module it is about,
+# and these three files are the whole of this application's — including
+# the one that narrows an admin action, which is a policy like any other
+# and is tested like any other
 (import ../src/modules/customers/customers.policy)
 (import ../src/modules/customers/customers.admin)
 (import ../src/modules/orders/orders.policy)
@@ -63,7 +63,7 @@
             "a denial carries a reason, and it is the one the log and `void authz explain` print")))
 
 # the reason a policy gives is a string a person can read, and it never
-# reaches the response body (ADR-0024 §4)
+# reaches the response body
 (assert (= "not your order"
            ((authz/decide :orders/own {:subject mallory :resource order}) :reason)))
 

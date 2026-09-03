@@ -29,7 +29,7 @@
   ``What the policy on an order route decides about: the row itself.
   Route metadata carries a function rather than a symbol, because a
   route entry does not keep the environment of the module that
-  declared it (ADR-0024 §5).``
+  declared it.``
   [req]
   (repo/find-by-number (get-in req [:params :number])))
 

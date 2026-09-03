@@ -1,6 +1,6 @@
 (declare-project
   :name "void-bus"
-  :description "void/bus — messaging: a message is a plain table, a topic is a keyword, delivery guarantees are declared by the backend, and the transactional outbox is the one sanctioned way to publish what a transaction wrote (SPEC §5.22, ADR-0012)."
+  :description "void/bus — messaging: a message is a plain table, a topic is a keyword, delivery guarantees are declared by the backend, and the transactional outbox is the one sanctioned way to publish what a transaction wrote."
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
@@ -12,7 +12,7 @@
 # neither.
 #
 # What has to be on the module path is a projection of the package graph
-# (scripts/packages.janet, ADR-0020), not prose: see
+# (scripts/packages.janet), not prose: see
 # test-support/paths.janet.
 
 (declare-source

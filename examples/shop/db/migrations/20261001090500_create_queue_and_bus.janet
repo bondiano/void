@@ -15,8 +15,8 @@
 ###
 ### So config/prod.janet turns auto-create off, and this file is what
 ### `void db migrate` runs instead. It is the same bargain the wave-3
-### migration strikes with void/auth-db's tables: the DDL belongs to
-### the plugin, the timeline belongs to the application (ADR-0023 §2).
+### migration strikes with void/auth-db's tables: the DDL belongs to the
+### plugin, the timeline belongs to the application.
 ###
 ### The table names are the two plugins' defaults. A deployment that
 ### renames them ([:jobs-db :table], [:bus-db :table]) passes the same

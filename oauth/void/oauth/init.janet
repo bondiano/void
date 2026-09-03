@@ -1,5 +1,5 @@
 ### void/oauth — "sign in with a provider": the OAuth 2.1 / OIDC
-### **client** (ADR-0034), the half ADR-0032 deliberately did not
+### **client**, the half the resource server deliberately did not
 ### build.
 ###
 ### Two routes and one hook are the whole surface. `GET
@@ -7,32 +7,30 @@
 ### redirects the browser: code + PKCE (S256, no knob), an exact
 ### registered redirect URI (never derived from a Host header — RFC
 ### 9700), a nonce when openid is asked for. `GET
-### <mount>/:provider/callback` reads that record back *and deletes
-### it* in one motion, demands the state it issued (constant-time),
-### exchanges the code over `void/http/client`, verifies the id_token
-### against the issuer's JWKS with the same rules ADR-0032 applies to
-### access tokens — and then hands everything to the application's
-### `:void.oauth/sign-in` contribution, because the framework does not
-### know what a user is (ADR-0023). An identity comes back: it is
-### signed in through `auth-http/login!` (session-id rotation
-### included) and redirected. A response comes back: it goes out as
-### is. nil comes back: 403 — the application said no.
+### <mount>/:provider/callback` reads that record back *and deletes it* in
+### one motion, demands the state it issued (constant-time), exchanges the
+### code over `void/http/client`, verifies the id_token against the
+### issuer's JWKS with the same rules the resource server applies to access tokens —
+### and then hands everything to the application's `:void.oauth/sign-in`
+### contribution, because the framework does not know what a user is. An
+### identity comes back: it is signed in through `auth-http/login!`
+### (session-id rotation included) and redirected. A response comes back:
+### it goes out as is. nil comes back: 403 — the application said no.
 ###
 ### **Nothing is stored by this package.** The pending record lives in
 ### the session — under `[:deploy :shape] :fleet` the session store is
-### already shared (ADR-0030), so the flow survives a load balancer by
-### construction. Refresh tokens are handed to the hook as data; the
-### application that wants them later keeps them in its own column and
-### calls `oauth/refresh!`.
+### already shared, so the flow survives a load balancer by construction.
+### Refresh tokens are handed to the hook as data; the application that
+### wants them later keeps them in its own column and calls
+### `oauth/refresh!`.
 ###
 ### **TLS comes with the composition, and the boot check knows it**
-### (ADR-0010, ADR-0038): the authorization endpoint may always be
-### https — the *browser* goes there — while the metadata, token,
-### JWKS and userinfo endpoints are called by void's own client. With
-### `:void/tls` composed they may be https too, which is what talking
-### to a real IdP looks like; without it, https in any of them is a
-### boot error naming the ways out (the plugin, an internal issuer
-### over http, or an egress relay beside the process).
+### : the authorization endpoint may always be https — the *browser* goes
+### there — while the metadata, token, JWKS and userinfo endpoints are
+### called by void's own client. With `:void/tls` composed they may be
+### https too, which is what talking to a real IdP looks like; without it,
+### https in any of them is a boot error naming the ways out (the plugin,
+### an internal issuer over http, or an egress relay beside the process).
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -51,7 +49,7 @@
 # -- the application's half ----------------------------------------------
 
 (plugin/defextension-point :void.oauth/sign-in
-  :doc "The application's half of the flow (ADR-0034): {:name :fn}, where :fn is (fn [{:provider :claims :tokens :req}] ...) — return an identity to sign it in (login! with session-id rotation, then a redirect), a response table to answer yourself (onboarding, account linking), or nil to refuse (403). One per composition; it receives the provider name first. Mind the user store: under the default [:auth-http :session :load] :store the subject is re-read from it on every request, so either upsert the user in this hook or set :load :session"
+  :doc "The application's half of the flow: {:name :fn}, where :fn is (fn [{:provider :claims :tokens :req}] ...) — return an identity to sign it in (login! with session-id rotation, then a redirect), a response table to answer yourself (onboarding, account linking), or nil to refuse (403). One per composition; it receives the provider name first. Mind the user store: under the default [:auth-http :session :load] :store the subject is re-read from it on every request, so either upsert the user in this hook or set :load :session"
   :schema {:name :keyword
            :doc [:optional :string]
            :fn :function}
@@ -66,7 +64,7 @@
   {:hook :before-start
    :phase 450
    :name :oauth/capture-config
-   :doc "Read the [:oauth] slice, run ADR-0034's boot gates and capture the sign-in hook"
+   :doc "Read the [:oauth] slice, run the boot gates and capture the sign-in hook"
    :fn (fn capture [boot]
          (set provider/settings (provider/build-settings boot))
          (set sign-in-hook (get-in boot [:extensions :void.oauth/sign-in :resolved]))
@@ -80,14 +78,14 @@
                           "application, or set [:oauth :mount] false and drive the "
                           "flow from your own routes."))))})
 
-# -- the component --------------------------------------------------------
+# -- the component -------------------------------------------------------
 
 (def providers-component
   (system/component :oauth/providers
     :doc "One ring per configured provider: the issuer's metadata and
     its opened keys, fetched lazily (a process nobody signs into never
     calls its issuer) and freed at :stop — the one place a key's
-    lifetime ends (ADR-0022)."
+    lifetime ends."
     :deps [:crypto/lib]
     :start
     (fn start [_ _]
@@ -106,7 +104,7 @@
       {:status :up
        :providers (sorted (keys rings))})))
 
-# -- the routes -----------------------------------------------------------
+# -- the routes ----------------------------------------------------------
 
 (def- local-path?
   # the only :next accepted: a path on this application. The check
@@ -231,8 +229,7 @@
 
 (defn- own-routes
   # a function of boot, not a value: the mount point is configuration,
-  # which is not known when this manifest freezes (the ADR-0029 §12
-  # form)
+  # which is not known when this manifest freezes (the form)
   [_boot]
   (def cfg provider/settings)
   (if (cfg :mount)
@@ -243,7 +240,7 @@
                   {:name :void.oauth/callback}))
     (router/routes {})))
 
-# -- CLI ------------------------------------------------------------------
+# -- CLI -----------------------------------------------------------------
 
 (plugin/contribute! :void.core/cli
   {:name :oauth/check
@@ -276,7 +273,7 @@
                  (printf "  keys:          %d" n)
                  (printf "  keys:          UNAVAILABLE — %s" (if (string? n) n (describe n))))))))})
 
-# -- public surface -------------------------------------------------------
+# -- public surface ------------------------------------------------------
 
 (def resolve-provider "See provider/provider — one resolved provider by name." provider/provider)
 (def redirect-uri "See provider/redirect-uri." provider/redirect-uri)
@@ -290,7 +287,7 @@
 (def userinfo! "See flow/userinfo!." flow/userinfo!)
 
 (plugin/defplugin void/oauth
-  :doc "\"Sign in with a provider\": the OAuth 2.1 / OIDC client — authorization code + PKCE (S256, always), the pending flow in the session (shared under :fleet by ADR-0030), the code exchanged over void/http/client, the id_token verified against the issuer's JWKS with ADR-0032's rules, and the verified visitor handed to the application's :void.oauth/sign-in — which alone decides who may become an identity."
+  :doc "\"Sign in with a provider\": the OAuth 2.1 / OIDC client — authorization code + PKCE (S256, always), the pending flow in the session (shared under :fleet by), the code exchanged over void/http/client, the id_token verified against the issuer's JWKS with the resource server's rules, and the verified visitor handed to the application's :void.oauth/sign-in — which alone decides who may become an identity."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/crypto ">=0.0.1" :void/http ">=0.0.1"
              :void/auth ">=0.0.1" :void/auth-http ">=0.0.1"}

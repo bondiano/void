@@ -51,7 +51,7 @@
     (assert (= body (string/join (seq [c :in ((st :stream) key)] (string c))))
             "the stream hands over the whole object")
 
-    # -- what is not there ------------------------------------------------
+    # -- what is not there -----------------------------------------------
 
     (def missing (string prefix "products/none.png"))
     (assert (nil? ((st :get) missing)) "a missing key reads as nil, not as an error")
@@ -89,14 +89,14 @@
               "and its presigned URL opens")
       (assert ((st :delete!) spaced)))
 
-    # -- delete ------------------------------------------------------------
+    # -- delete ----------------------------------------------------------
 
     (assert ((st :delete!) key) "deleting what is there answers true")
     (assert (nil? ((st :get) key)))
 
-    # -- what it declares about replicas ----------------------------------
+    # -- what it declares about replicas ---------------------------------
 
-    (assert (store/shared? st) "a bucket is what every replica sees (ADR-0030)"))
+    (assert (store/shared? st) "a bucket is what every replica sees"))
 
   (printf "s3-test: ok (%s)" (s3env/endpoint)))
 

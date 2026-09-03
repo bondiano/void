@@ -1,6 +1,6 @@
-# The database session store against a real database (ADR-0030). The
-# fake driver in void/db pins the SQL this store makes; this pins that
-# the SQL means what it was meant to mean, on an engine.
+# The database session store against a real database. The fake driver in
+# void/db pins the SQL this store makes; this pins that the SQL means what
+# it was meant to mean, on an engine.
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)

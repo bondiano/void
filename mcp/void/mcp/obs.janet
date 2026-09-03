@@ -1,5 +1,4 @@
-### void/mcp-obs — this process's metrics as an MCP resource (SPEC.md
-### §5.18).
+### void/mcp-obs — this process's metrics as an MCP resource.
 ###
 ### The third plugin of the package, and the smallest: one
 ### contribution to `:void.mcp/resource`. It is separate because the
@@ -7,13 +6,12 @@
 ### should not be made to compose observability, and one that has both
 ### should not have to wire them together.
 ###
-### The exposition is the *same projection of the same snapshot* that
-### `GET /metrics` renders (ADR-0021): an agent asking what the
-### process is doing and a scraper asking the same question get the
-### same numbers, in the same text, with no second rendering to keep
-### in step. Which is also why this is a resource and not a tool:
-### reading metrics changes nothing, and a resource is what MCP calls
-### something you read.
+### The exposition is the *same projection of the same snapshot* that `GET
+### /metrics` renders: an agent asking what the process is doing and a
+### scraper asking the same question get the same numbers, in the same
+### text, with no second rendering to keep in step. Which is also why this
+### is a resource and not a tool: reading metrics changes nothing, and a
+### resource is what MCP calls something you read.
 
 (import void/core/plugin :as plugin)
 (import void/obs/metrics :as metrics)

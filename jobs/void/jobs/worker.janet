@@ -1,16 +1,15 @@
-### void/jobs/worker — the executor: fibers that claim, run and settle
-### (SPEC.md §5.12, ADR-0012).
+### void/jobs/worker — the executor: fibers that claim, run and settle.
 ###
-### A worker is `concurrency` fibers on the ev loop, each one running
-### the same three lines forever — claim a job, run it, write down what
+### A worker is `concurrency` fibers on the ev loop, each one running the
+### same three lines forever — claim a job, run it, write down what
 ### happened — plus two housekeeping fibers: a heartbeat that keeps the
-### claims of jobs still running from looking abandoned, and a reaper
-### that picks up the claims that genuinely are. Fibers, not threads:
-### a job that waits on a database, an HTTP call or a redis round trip
-### costs nothing while it waits, which is the whole reason `ev/` is
-### the concurrency model here (ADR-0010). A job that spends its time
-### in a tight numeric loop does block the others, and the answer is
-### the same as everywhere else in void: another process.
+### claims of jobs still running from looking abandoned, and a reaper that
+### picks up the claims that genuinely are. Fibers, not threads: a job
+### that waits on a database, an HTTP call or a redis round trip costs
+### nothing while it waits, which is the whole reason `ev/` is the
+### concurrency model here. A job that spends its time in a tight numeric
+### loop does block the others, and the answer is the same as everywhere
+### else in void: another process.
 ###
 ### Four limits act on the claim, and they are deliberately different
 ### mechanisms because they answer different questions:
@@ -36,10 +35,10 @@
 ###                        opens, so the next poll does not repeat the
 ###                        round trip
 ###
-### Timeouts run the handler as its own ev task with `ev/deadline` on
-### it, never `ev/with-deadline` around it: that cancels the *root*
-### task, and cancelling this loop mid-ev-operation is the upstream bug
-### class void/http already documented (ADR-0015).
+### Timeouts run the handler as its own ev task with `ev/deadline` on it,
+### never `ev/with-deadline` around it: that cancels the *root* task, and
+### cancelling this loop mid-ev-operation is the upstream bug class
+### void/http already documented.
 ###
 ### Shutdown is a drain, not a kill: `stop!` closes the stop channel,
 ### every napping fiber wakes at once, the ones holding a job are given
@@ -50,20 +49,20 @@
 ### no queue that survives restarts can promise otherwise.
 ###
 ### **Not spork/tasker, and this is the one place void departs from
-### ADR-0012's letter.** The ADR names tasker as the executor, written
-### before its source was read; tasker runs *subprocesses* — a task is
-### an argv of strings handed to `os/spawn`, and its records live as
-### `task.jdn` files in a directory. `defjob` is the opposite of that
-### by construction: a handler is an in-process Janet function reached
-### through a symbol so that redefining it in the REPL takes effect on
-### the next job (ADR-0002), and it closes over the components the
-### system started. There is no argv that expresses "call this function
-### in this process", and tasker's on-disk records are the very thing
-### `:void.jobs/backend` exists to replace — adopting it would mean
-### keeping two persistence layers, one of which cannot do SKIP LOCKED.
-### What the ADR actually asked for is an executor that does not block
-### the loop, and on `ev/` that is a fiber. spork/cron *is* used, for
-### `defschedule`, exactly as the ADR says (./schedule).
+### the letter of the design.** Tasker is the executor, written
+### before its source was read; tasker runs *subprocesses* — a task is an
+### argv of strings handed to `os/spawn`, and its records live as
+### `task.jdn` files in a directory. `defjob` is the opposite of that by
+### construction: a handler is an in-process Janet function reached
+### through a symbol so that redefining it in the REPL takes effect on the
+### next job, and it closes over the components the system started. There
+### is no argv that expresses "call this function in this process", and
+### tasker's on-disk records are the very thing `:void.jobs/backend`
+### exists to replace — adopting it would mean keeping two persistence
+### layers, one of which cannot do SKIP LOCKED. What the ADR actually
+### asked for is an executor that does not block the loop, and on `ev/`
+### that is a fiber. spork/cron *is* used, for `defschedule`, exactly as
+### the ADR says (./schedule).
 
 (import void/core/log :as log)
 (import ./backend :as backend)
@@ -277,7 +276,7 @@
   ``Run the handler, under its own deadline when the job has a
   :timeout. The deadline is put on a child task rather than on this
   fiber: `ev/with-deadline` cancels the root task, and this fiber is a
-  loop that must survive its jobs (ADR-0015, void/http/server).``
+  loop that must survive its jobs (void/http/server).``
   [d r]
   (def args (r :args))
   (def timeout (get r :timeout))

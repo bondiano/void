@@ -1,12 +1,12 @@
-### The operator's half: the desk, the raw body behind a signed URL,
-### and replay (ROADMAP 6.6).
+### The operator's half: the desk, the raw body behind a signed URL, and
+### replay.
 ###
-### Everything here is driven through the composition in ../main.janet
-### the way a browser drives it (ADR-0017) — including the sign-in,
-### because "who may read the deliveries" is the half of this that a
-### mistake makes catastrophic rather than merely broken. A hub holds
-### other people's payloads: a page that is one wrong config key away
-### from public is exactly what the assertions below are for.
+### Everything here is driven through the composition in ../main.janet the
+### way a browser drives it — including the sign-in, because "who may read
+### the deliveries" is the half of this that a mistake makes catastrophic
+### rather than merely broken. A hub holds other people's payloads: a page
+### that is one wrong config key away from public is exactly what the
+### assertions below are for.
 (import void/core/log :as log)
 (import void/test :as test)
 (import void/db :as db)
@@ -144,7 +144,7 @@
 
   (def href (or (raw-body-href page) (error "no link to the store on the page")))
   (assert (string/find "exp=" href) "the link carries an expiry")
-  (assert (string/find "sig=" href) "and a MAC over the key and that expiry (ADR-0039 §5)")
+  (assert (string/find "sig=" href) "and a MAC over the key and that expiry")
 
   (def bytes (test/inject c {:uri href}))
   (assert (= 200 (bytes :status)))

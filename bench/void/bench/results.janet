@@ -1,8 +1,8 @@
 ### void/bench/results — result files, environment capture and the 5%
-### regression comparison (ADR-0014).
+### regression comparison.
 ###
 ### A result set is plain data ({:env :settings :rows}) written as jdn;
-### компаранды are two such files — a recorded baseline vs the current
+### The comparands are two such files — a recorded baseline vs the current
 ### run locally, or the base-commit run vs the head run on the same CI
 ### runner (shared runners only support relative thresholds). Latency
 ### percentiles are only compared inside the :latency (wrk2) mode —
@@ -10,7 +10,7 @@
 ### :throughput.
 
 (def default-threshold
-  "Allowed degradation between commits (ADR-0014): 5%."
+  "Allowed degradation between commits: 5%."
   0.05)
 
 (def latency-floor-ms
@@ -36,7 +36,7 @@
   (when (and ok v (not (empty? v))) v))
 
 (defn environment
-  "The методика-mandated run context (SPEC §8.3): janet version, CPU,
+  "The run context the method asks for: janet version, CPU,
   frequency governor, plus os/commit/date for the record."
   []
   @{:janet janet/version
@@ -140,10 +140,9 @@
               (and (< (e :delta) (- threshold)) (> (- b c) latency-floor-ms))
               (array/push improvements e))))
         # the loop's own lag under target load — the signal that moves
-        # first when something starts blocking (§8.4). Same absolute
-        # floor as the latencies: these numbers live below a
-        # millisecond, and a 5% move on 0.05ms is noise with a
-        # percentage sign on it
+        # first when something starts blocking. Same absolute floor as the
+        # latencies: these numbers live below a millisecond, and a 5% move
+        # on 0.05ms is noise with a percentage sign on it
         (let [b (get-in brow [:runtime :loop-lag :p99])
               c (get-in crow [:runtime :loop-lag :p99])]
           (when (and (number? b) (number? c) (pos? b))
@@ -184,7 +183,7 @@
 # -- budgets -------------------------------------------------------------
 
 (defn- broadcast-notes
-  ``B4's budget (§8.2's last row): delivery under 50 ms to a thousand
+  ``B4's budget: delivery under 50 ms to a thousand
   connections at 10k messages a second. Nothing else applies to it —
   there is no request throughput and no request latency in a fan-out,
   and a check that reported them as unmeasured would be reporting the
@@ -215,7 +214,7 @@
           (note :miss (string/format "%d %s during the run" n k)))))))
 
 (defn budget-notes
-  ``Check one row against a §8.2 budget ({:p50 :p99 :rps} plus the
+  ``Check one row against a budget ({:p50 :p99 :rps} plus the
   optional runtime keys :loop-lag-p99 and :loop-lag-max). Latency and
   the runtime numbers come from the fixed-rate mode only; a missing
   measurement is reported as unchecked. A budget carrying
@@ -244,11 +243,11 @@
       (note (if (< v (budget k)) :ok :miss)
             (string/format "%s %.2fms (budget < %.1fms)" k v (budget k)))
       (note :skip (string/format "%s not measured under fixed rate (wrk2 missing)" k))))
-  # the two budgets only the process itself can see (§8.2, §8.4): the
-  # loop-lag p99 under target load, and the GC maximum — which rides on
-  # loop-lag max because a stop-the-world pause on a single-threaded
-  # loop *is* loop lag of at least its own length, and janet reports no
-  # pause of its own (void/bench/probe)
+  # the two budgets only the process itself can see: the loop-lag p99
+  # under target load, and the GC maximum — which rides on loop-lag max
+  # because a stop-the-world pause on a single-threaded loop *is* loop lag
+  # of at least its own length, and janet reports no pause of its own
+  # (void/bench/probe)
   (each [bkey pkey label] [[:loop-lag-p99 :p99 "loop-lag p99"]
                            [:loop-lag-max :max "loop-lag max (GC pause bound)"]]
     (when-let [limit (budget bkey)]

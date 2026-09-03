@@ -1,7 +1,6 @@
 # counter
 A [void](https://github.com/bondiano/void) application — the wave-5
-experiment ([ADR-0037](../../docs/adr/0037-datastar-stranica-kak-otvet-morph-cherez-sse.md)):
-a live counter on `void/datastar`, the Biff idiom.
+experiment: a live counter on `void/datastar`, the Biff idiom.
 
     void dev            # run the app (dev profile: watcher + netrepl)
     void routes         # print the route table
@@ -40,4 +39,4 @@ The stream registry is per process, and that is the design (`:shared?
 :by-design` — an SSE connection lives in the process holding its
 socket). This example is a single process; behind a load balancer,
 fan-out is a `void/bus` subscriber that calls `poke!` locally — three
-lines, shown in ADR-0037.
+lines.

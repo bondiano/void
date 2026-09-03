@@ -1,4 +1,4 @@
-### void/core/plugin — plugin API (SPEC.md §3.4, part II §1, ADR-0003).
+### void/core/plugin — plugin API.
 ###
 ### Plugin = a janet package exporting a manifest: a frozen struct with
 ### :void-api, :version, :requires (semver), :config-key/-schema,
@@ -132,7 +132,7 @@
 (def- cardinalities {:many true :single true :single-required true})
 
 (defn extension-point
-  ``Build a named extension-point contract (SPEC part II §1.4):
+  ``Build a named extension-point contract:
 
       (plugin/extension-point :void.http/middleware
         :doc "HTTP middleware registered by plugins"
@@ -150,8 +150,7 @@
                   contribution (:single, :single-required)
     :validate     (fn [contributions]) — optional cross-checks (name
                   conflicts etc.), failure = throw
-    :aliases      deprecated former names of this point (SPEC part II
-                  §1.5): contributions addressed to an alias fold into
+    :aliases      deprecated former names of this point: contributions addressed to an alias fold into
                   this point with a deprecation warning — renaming a
                   point is new-point + alias, never mutation
     :doc          docstring``
@@ -334,8 +333,7 @@
 
 (defn manifest
   ``Build and validate a plugin manifest — a frozen struct that can be
-  pp'd, diffed and serialized (ADR-0003). `defplugin` is the module
-  sugar over this.
+  pp'd, diffed and serialized. `defplugin` is the module sugar over this.
 
   Options:
     :void-api         plugin protocol version (default: the host's)
@@ -447,7 +445,7 @@
 
 (defmacro defplugin
   ``Define this module's plugin manifest and export it as `manifest`
-  (SPEC part II §1.1):
+:
 
       (defplugin void/redis
         :version "0.3.0"
@@ -479,11 +477,11 @@
       (put seen n true))))
 
 (def core-points
-  "Extension points owned by void/core itself (SPEC part II §1.4)."
+  "Extension points owned by void/core itself."
   (freeze
     {:void.core/cli
      (extension-point :void.core/cli
-       :doc "CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to \"does running this change anything?\" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it (ADR-0031), so silence means \"unknown\" and unknown is never offered"
+       :doc "CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to \"does running this change anything?\" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it, so silence means \"unknown\" and unknown is never offered"
        :schema {:name :keyword
                 :fn [:or :function :symbol]
                 :doc [:optional :string]
@@ -501,7 +499,7 @@
 
      :void.core/store
      (extension-point :void.core/store
-       :doc "Stores a second replica would have to see (ADR-0030): {:name :void.http/session :what \"sessions\" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port"
+       :doc "Stores a second replica would have to see: {:name :void.http/session :what \"sessions\" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port"
        :schema {:name :keyword
                 :what :string
                 :ask :function
@@ -512,14 +510,14 @@
 
      :void.core/log-sink
      (extension-point :void.core/log-sink
-       :doc "Log record sinks (ADR-0018): {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink"
+       :doc "Log record sinks: {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink"
        :schema {:name :keyword :fn :function :doc [:optional :string]}
        :validate (unique-names "log sink")
        :reduce |(sorted-by |($ :name) $))
 
      :void.core/log-serializer
      (extension-point :void.core/log-serializer
-       :doc "Log value serializers by record key (ADR-0018): {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer"
+       :doc "Log value serializers by record key: {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer"
        :schema {:key :keyword :fn :function :doc [:optional :string]}
        :validate (fn [contribs]
                    (def seen @{})
@@ -737,9 +735,9 @@
       (unless (in points name)
         (put inactive-owners name (m :name)))))
 
-  # deprecation aliases (SPEC part II §1.5): a renamed point keeps its
-  # old name as an :aliases entry; contributions addressed to the old
-  # name fold into the new point with a warning
+  # deprecation aliases: a renamed point keeps its old name as an :aliases
+  # entry; contributions addressed to the old name fold into the new point
+  # with a warning
   (def aliases @{})
   (each pname (sorted (keys points))
     (each a (get-in points [pname :point :aliases] [])
@@ -896,8 +894,7 @@
   (def cfg (load-boot-config ms opts errors))
   # the deployment is resolved with the config and travels on the boot:
   # `dry-run` and `void deploy check` need the shape without starting
-  # anything, and a bad [:deploy :shape] is a config error like any
-  # other (ADR-0030)
+  # anything, and a bad [:deploy :shape] is a config error like any other
   (def dep (deploy/resolve! (if cfg (cfg :values) {}) profile errors))
   (checked :config errors sources)
 
@@ -961,15 +958,15 @@
   receives the boot value), then survey the composition's stores
   against `[:deploy :shape]` — under `:fleet` a store living in one
   process's heap stops the boot with every violation in one error
-  (ADR-0030), and the survey is left on the boot as :stores. Accepts a
+, and the survey is left on the boot as :stores. Accepts a
   boot value from `bootstrap` or bootstrap options. Returns the boot
   value.``
   [boot-or-opts]
   (def boot (if (get boot-or-opts :system)
               boot-or-opts
               (bootstrap* boot-or-opts true)))
-  # the logger comes up first (ADR-0018): [:log] slice + profile pick
-  # the built-in sink, contributed sinks/serializers install alongside
+  # the logger comes up first: [:log] slice + profile pick the built-in
+  # sink, contributed sinks/serializers install alongside
   (def log-cfg (get-in boot [:config :values :log]))
   (when log-cfg
     (def check (schema/check log/Config log-cfg))
@@ -995,11 +992,11 @@
   (try
     (do
       (hooks/run! (boot :hooks) :after-start boot)
-      # last, because it asks the stores that are now resolved —
-      # including the ones a plugin resolves in an :after-start hook of
-      # its own (void/security's limiter). Under [:deploy :shape]
-      # :fleet a store living in one process's heap stops the boot
-      # here, with every violation in one error (ADR-0030)
+      # last, because it asks the stores that are now resolved — including
+      # the ones a plugin resolves in an :after-start hook of its own
+      # (void/security's limiter). Under [:deploy :shape] :fleet a store
+      # living in one process's heap stops the boot here, with every
+      # violation in one error
       (put boot :stores (deploy/check! boot)))
     ([e f]
       (try (system/stop (boot :system)) ([_]))
@@ -1023,16 +1020,16 @@
   (put boot :phase :stopped)
   (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
     (eprint e))
-  (log/close!)                    # stop async log writers (ADR-0018)
+  (log/close!)                    # stop async log writers
   boot)
 
 (defn dry-run
   ``Phases 1-5 without starting anything — the full validation of a
-  system configuration for CI (SPEC part II §1.6): :void-api and
-  :requires compatibility, config schemas, broken contributions,
-  cardinality and :provides conflicts, dependency cycles. Throws with
-  the batched error list on any failure; returns a summary report on
-  success. Options as in `bootstrap`.``
+  system configuration for CI: :void-api and :requires compatibility,
+  config schemas, broken contributions, cardinality and :provides
+  conflicts, dependency cycles. Throws with the batched error list on any
+  failure; returns a summary report on success. Options as in
+  `bootstrap`.``
   [opts]
   (def boot (bootstrap* opts false))
   {:ok true
@@ -1104,7 +1101,7 @@
    :components all})
 
 (defn inspect
-  ``Who registered what (SPEC part II §1.6).
+  ``Who registered what.
 
       (plugin/inspect)                    # plugin -> active? -> components -> contributions
       (plugin/inspect :void.core/cli)     # one point: owner, contributions with sources, resolved value

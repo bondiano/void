@@ -1,19 +1,19 @@
 ### void/http/router — routes as data, PEG dispatch, metadata merge
-### (SPEC.md §5.1 + part II §2, ADR-0002, ADR-0005).
+### (+).
 ###
 ### Routes are plain data: `route`/`GET`/`group`/`routes` are ordinary
 ### functions building tables; the one macro, `defroutes`, writes the
-### route-source contribution around them. `build-table` turns the
-### route sources into an immutable route table — patterns compiled to
-### PEGs, metadata merged (global -> group -> route) through
-### void/core/meta with provenance kept for explain, handler symbols
-### resolved to their module environments (late binding, ADR-0002: the
-### env table is looked up per call, so a REPL redefinition is live
-### without a rebuild), and the middleware chain composed per route —
-### nothing is decided on the hot path. Every validation failure across
-### every route is reported in one batch. The table itself is a frozen
-### value; the running server holds it through a one-slot `cell`, and
-### `swap!` replaces it atomically — there is no half-rebuilt routing.
+### route-source contribution around them. `build-table` turns the route
+### sources into an immutable route table — patterns compiled to PEGs,
+### metadata merged (global -> group -> route) through void/core/meta with
+### provenance kept for explain, handler symbols resolved to their module
+### environments (late binding, : the env table is looked up per call, so
+### a REPL redefinition is live without a rebuild), and the middleware
+### chain composed per route — nothing is decided on the hot path. Every
+### validation failure across every route is reported in one batch. The
+### table itself is a frozen value; the running server holds it through a
+### one-slot `cell`, and `swap!` replaces it atomically — there is no
+### half-rebuilt routing.
 
 (import void/core/plugin :as plugin)
 (import void/core/meta :as meta)
@@ -23,7 +23,7 @@
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
 
-# -- route declarations (data-first, ADR-0004) ---------------------------
+# -- route declarations (data-first) -------------------------------------
 
 (def- methods
   {:get true :head true :post true :put true :patch true
@@ -79,7 +79,7 @@
   [env]
   (fn wrapped-env [] env))
 
-# -- route source sugar (defroutes, ADR-0004) ----------------------------
+# -- route source sugar (defroutes) --------------------------------------
 #
 # The layer above stays functions over data; `defroutes` is the one
 # macro — it writes the contribution boilerplate every application
@@ -143,8 +143,7 @@
 
   Inside the body `GET` `HEAD` `POST` `PUT` `PATCH` `DELETE` `OPTIONS`
   `ANY` and `group` need no prefix; a bare handler symbol is quoted for
-  you (late binding, ADR-0002 — redefine it in the repl and the running
-  app picks it up) and names its route when :name is left out (`home`
+  you (late binding, — redefine it in the repl and the running app picks it up) and names its route when :name is left out (`home`
   -> :home). An optional leading dictionary is the global metadata
   layer, and any form that is not one of those constructors is
   evaluated as ordinary data and spliced in — `route`/`group`/`routes`
@@ -252,7 +251,7 @@
                                  source-name node))))
   (walk form "" []))
 
-# -- handler resolution (ADR-0002) ---------------------------------------
+# -- handler resolution --------------------------------------------------
 
 (defn- last-slash [s]
   (var i nil)
@@ -298,7 +297,7 @@
        :no-reload false})))
 
 (defn resolve-callable
-  "resolve-handler's variadic sibling for lifecycle hooks (ADR-0016):
+  "resolve-handler's variadic sibling for lifecycle hooks:
   fn-or-symbol -> (fn [& args]) with the same late-binding rule."
   [h &opt env what]
   (default what "lifecycle hook")
@@ -316,7 +315,7 @@
    :stage-hooks true})
 
 (defn- stage-hooks-for
-  ``Per-route lifecycle hooks (ADR-0016): combine the global stage
+  ``Per-route lifecycle hooks: combine the global stage
   hooks (`global` — stage -> tuple of resolved callables, from the
   :void.http/hook point) with the route's :void.http/hooks metadata
   (symbols resolved against the route's env; group hooks precede route
@@ -561,7 +560,7 @@
 
 (defn explain-route
   ``The routing verdict for a path — the matched entry plus the origin
-  of every metadata value by layer (ADR-0005):
+  of every metadata value by layer:
 
       (explain-route table "/admin/users")
       (explain-route table "/orders/42" :post)

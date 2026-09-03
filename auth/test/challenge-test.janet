@@ -76,10 +76,9 @@
 
 # -- issuing and delivering in one call ----------------------------------
 #
-# `challenge!` is the half that waited for a delivery to exist (3.5,
-# ADR-0026 §6). It reads the stores and the deliverers off the running
-# auth value, and the dyn is the seam that stands one in front of it
-# without booting anything.
+# `challenge!` is the half that waited for a delivery to exist. It
+# reads the stores and the deliverers off the running auth value, and the
+# dyn is the seam that stands one in front of it without booting anything.
 
 (import void/auth :as auth)
 (import void/auth/state :as state)

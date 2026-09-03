@@ -2,8 +2,8 @@
 
 A [void](https://github.com/bondiano/void) application: a webhook hub.
 GitHub deliveries come in, get kept, and go out to a chat — the niche
-SPEC §9 names out loud, and the wave-6 application the roadmap is built
-around ([ROADMAP 6.6](../../docs/ROADMAP.md)).
+void names out loud, and the wave-6 application the framework is built
+around.
 
 Today it receives, verifies and keeps deliveries, decides where each one
 goes, sends it to a telegram chat through a queue, and gives an operator
@@ -69,12 +69,12 @@ other rule's. Matching is a pure function of two values, which is why
 `test/route-test.janet` is a table of examples and boots nothing.
 
 Telegram is a channel this application wrote
-(`src/modules/telegram/telegram.channel.janet`), which
-is exactly what ADR-0040 says such a channel is: a contribution with two
-functions. `:project` runs on the request fiber and returns a chat and a
-string; `:deliver` runs on a worker and posts it. That split is why the
-queue fits between them and why a retry sends the message the request
-meant rather than one rebuilt later.
+(`src/modules/telegram/telegram.channel.janet`), which is exactly what
+such a channel is meant to be: a contribution with two functions.
+`:project` runs on the request fiber and returns a chat and a string;
+`:deliver` runs on a worker and posts it. That split is why the queue
+fits between them and why a retry sends the message the request meant
+rather than one rebuilt later.
 
 ```sh
 VOID_HUB__TELEGRAM__TOKEN=123456:AA... VOID_HUB__TELEGRAM__CHAT_ID=... void dev
@@ -111,9 +111,8 @@ a `:void.admin/page` contribution, so it has a route name, and the home
 handler is `(ring/redirect (http/url-for :admin.page/jobs))`.
 
 **`/admin/deliveries` is the row the intake wrote, projected.**
-`defentity` already says what a delivery is (ADR-0029), so the
-declaration in `intake/intake.admin.janet` adds only what a schema
-cannot: the columns
+`defentity` already says what a delivery is, so the declaration in
+`intake/intake.admin.janet` adds only what a schema cannot: the columns
 an operator scans, the three fields they search by, the two they filter
 on. It is read-only, and not because a write would be hard — a fact
 about the past that can be edited from the page that displays it is not
@@ -127,12 +126,12 @@ it gets a widget:
 storage/url key {:expires 300}      exp + sig, over the key and the expiry
 ```
 
-The bytes are the evidence and they are also somebody else's payload —
-a private branch name, a commit message. So the link **is** the
+The bytes are the evidence and they are also somebody else's payload — a
+private branch name, a commit message. So the link **is** the
 authorization, which is why it lasts five minutes: a URL pasted into a
 chat should stop working before the chat is read. Signing is the CSRF
-construction on the same keys (ADR-0039 §5), and the same path without
-the query is a 403.
+construction on the same keys, and the same path without the query is a
+403.
 
 **Who is an operator is a list.** `[:hub :operators]` names the
 addresses that get past `:hub/operator`, the policy `[:admin :access]`
@@ -182,10 +181,10 @@ on — which is the same argument the worker makes from the other end.
 docker compose up --build      # https://localhost
 ```
 
-Seven services, and the four ROADMAP 6.6 asked for are a web tier, a
-worker, a database and a bucket. The other three are the edge that holds
-the certificate, the one-shot that creates the bucket, and an inbox to
-catch the letters a sign-in sends.
+Seven services, and the four wave 6 asked for are a web tier, a worker,
+a database and a bucket. The other three are the edge that holds the
+certificate, the one-shot that creates the bucket, and an inbox to catch
+the letters a sign-in sends.
 
 **The web tier is two replicas, and that is the point of the file.** One
 replica would pass every check while hiding the two things that break on
@@ -223,9 +222,9 @@ worker's liveness is the depth of the queue, and that is the front page
 of the desk.
 
 **TLS is the proxy's.** void serves plain HTTP and Caddy holds the
-certificate (ADR-0010): on a laptop from its own internal CA, on a real
-host from Let's Encrypt — which matters because a GitHub webhook will
-not post to a certificate it cannot verify.
+certificate: on a laptop from its own internal CA, on a real host from
+Let's Encrypt — which matters because a GitHub webhook will not post to
+a certificate it cannot verify.
 
 ### The environment
 
@@ -321,14 +320,13 @@ they are kept here because "what a real application found" is the only
 honest way to have picked them:
 
 1. **`janet-lang/sqlite3` in `project.janet`.** The bundle leaves the
-   driver's library out on purpose (ADR-0011): `void/db-sqlite` is a
-   plugin an application lists, so the application installs it. But
-   `void make auth` generated a suite that boots that driver and said
-   nothing about the dependency, so the generated suite failed on a tree
-   that has only void — with the driver's (good) message, and no hint
-   that a generator had caused it. *Fixed: the generator names the
-   dependency, the file it goes in, and why the bundle does not carry
-   it.*
+driver's library out on purpose: `void/db-sqlite` is a plugin an
+application lists, so the application installs it. But `void make auth`
+generated a suite that boots that driver and said nothing about the
+dependency, so the generated suite failed on a tree that has only void —
+with the driver's (good) message, and no hint that a generator had
+caused it. *Fixed: the generator names the dependency, the file it goes
+in, and why the bundle does not carry it.*
 
 2. **The composition and the config block.** `void make auth` printed
    ten plugins and a config map and asked for them to be pasted into
@@ -401,15 +399,15 @@ none of them is visible to a suite that never leaves the process.
    demands that the meter exist.*
 
 8. **A structured error printed as an address.** `{:status 404 :message
-   "…"}` is the shape void's own throws use — `void/http/errors`, the
-   HTTP client, and the notify channel in ADR-0040 — so that the code
-   deciding whether to retry can read a status. At every boundary where
-   a *person* reads, the value went through `describe` and came out
-   `<struct 0xAAAA…>`: the failed job on the dashboard, the log line,
-   and `void: …` on the terminal. The first real telegram failure this
-   deployment produced said exactly that and nothing else. *Fixed:
-   `log/message-of` reads the convention the framework already had, and
-   the four boundaries read through it.*
+"…"}` is the shape void's own throws use — `void/http/errors`, the HTTP
+client, and the notify channel — so that the code deciding whether to
+retry can read a status. At every boundary where a *person* reads, the
+value went through `describe` and came out `<struct 0xAAAA…>`: the
+failed job on the dashboard, the log line, and `void: …` on the
+terminal. The first real telegram failure this deployment produced said
+exactly that and nothing else. *Fixed: `log/message-of` reads the
+convention the framework already had, and the four boundaries read
+through it.*
 
 9. **The bucket store did not say what it needs open.** `void hub
    replay` declares `:needs [:db/pool :storage/store :jobs/queue]` and
@@ -454,7 +452,7 @@ src/
     routing/        where it goes: rules as data, matching as a pure
                     function, one notification per matching rule
     telegram/       what carries it out: the notify channel this
-                    application wrote (ADR-0040)
+                    application wrote
     auth/           the accounts `void make auth` generated, and the policy
                     that decides which of them is an operator
     ops/            the operator's surface: `/` is the jobs dashboard, and

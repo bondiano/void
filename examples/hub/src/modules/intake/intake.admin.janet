@@ -2,21 +2,21 @@
 ###
 ### **A projection, not a page.** `defentity` in ./intake.model already
 ### says what a delivery is, so the declaration below adds only what a
-### schema cannot: which columns an operator scans, which they search
-### by, which they filter on (ADR-0029). The one thing that is genuinely
-### this application's is what to do with `body-key` — a column holding
-### a storage key, which nobody wants to read and everybody wants to
+### schema cannot: which columns an operator scans, which they search by,
+### which they filter on. The one thing that is genuinely this
+### application's is what to do with `body-key` — a column holding a
+### storage key, which nobody wants to read and everybody wants to
 ### *open*.
 ###
 ### **The raw body goes out over a signed URL.** The bytes are the
-### evidence (ADR-0039 §5, ./intake.service's whole argument), and they
-### are also somebody else's payload: a repository name, a commit
-### message, the address of a private branch. So `[:storage :serve
-### :signed]` is `true` in this application — the whole prefix is
-### private — and the link on the page carries `exp`/`sig` minted from
-### void/security's keys, good for five minutes. The link is the
-### authorization, which is why it is short-lived: a URL pasted into a
-### chat must stop working before the chat is read.
+### evidence (./intake.service's whole argument), and they are also
+### somebody else's payload: a repository name, a commit message, the
+### address of a private branch. So `[:storage :serve :signed]` is `true`
+### in this application — the whole prefix is private — and the link on
+### the page carries `exp`/`sig` minted from void/security's keys, good
+### for five minutes. The link is the authorization, which is why it is
+### short-lived: a URL pasted into a chat must stop working before the
+### chat is read.
 ###
 ### Who may open the page at all is ../auth/auth.policy.janet.
 (import void/admin :as admin)

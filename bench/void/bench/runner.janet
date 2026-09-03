@@ -1,7 +1,6 @@
-### void/bench/runner — one `void bench` invocation (SPEC.md §8.3,
-### ADR-0014).
+### void/bench/runner — one `void bench` invocation.
 ###
-### Методика, encoded once: start the target's server as a subprocess,
+### The method, encoded once: start the target's server as a subprocess,
 ### wait for the port, warmup, then N timed runs per mode and the
 ### median of the parsed results. Two modes per target — max
 ### throughput (wrk) and latency under wrk2's fixed rate; whichever
@@ -125,16 +124,15 @@
             (log-tail (server :log))))
   server)
 
-# -- the runtime probe (§8.2 loop-lag / GC budgets) ----------------------
+# -- the runtime probe (loop-lag / GC budgets) ---------------------------
 #
-# The app under load carries `bench/probe` and answers
-# targets/probe-path with the event-loop lag it has been experiencing.
-# The window is bracketed around the *fixed-rate* runs only: max
-# throughput saturates the loop on purpose, and "loop-lag p99 < 1 ms"
-# is a budget about target load (§8.2), not about saturation. An app
-# without the probe (VOID_BENCH_PROBE=0, a baseline written in Go)
-# answers 404 or nothing, and the runtime budgets go unmeasured rather
-# than unmet.
+# The app under load carries `bench/probe` and answers targets/probe-path
+# with the event-loop lag it has been experiencing. The window is
+# bracketed around the *fixed-rate* runs only: max throughput saturates
+# the loop on purpose, and "loop-lag p99 < 1 ms" is a budget about target
+# load, not about saturation. An app without the probe
+# (VOID_BENCH_PROBE=0, a baseline written in Go) answers 404 or nothing,
+# and the runtime budgets go unmeasured rather than unmet.
 
 (defn read-probe
   ``GET the probe endpoint on `port`; the decoded stats, or nil when
@@ -164,7 +162,7 @@
     (wrk/run opts)))
 
 (defn- run-broadcast-target
-  ``B4's методика: one generator run of its own, because
+  ``B4's method: one generator run of its own, because
   the load shape is a fan-out and wrk speaks HTTP. There is no second
   mode to average against and no median over runs — the run is already
   a fixed-rate one lasting `:duration` seconds, and the percentile it
@@ -198,7 +196,7 @@
     row))
 
 (defn run-target
-  ``The full методика for one target: spawn → ready → warmup → runs ×
+  ``The full method for one target: spawn → ready → warmup → runs ×
   duration per available mode → medians. `tools` is
   {:wrk <cmd-or-nil> :wrk2 <cmd-or-nil>}. Returns the result row.``
   [name spec settings tools]
@@ -252,7 +250,7 @@
 (defn- fmt-rps [v] (if (number? v) (string/format "%.0f" v) "—"))
 
 (defn print-report
-  "The result table plus §8.2 budget notes for the budgeted targets."
+  "The result table plus budget notes for the budgeted targets."
   [res]
   (def env (res :env))
   (def s (res :settings))
@@ -278,8 +276,8 @@
               "" (fmt-ms (l :p50)) (fmt-ms (l :p99))))
     (when-let [b (row :broadcast)]
       # :rps here is messages delivered to peers per second, and the
-      # percentiles are delivery time — the column headings mean what
-      # §8.2's B4 row means, not what its B0-B3 rows do
+      # percentiles are delivery time — the column headings mean what the
+      # B4 row means, not what the B0-B3 rows do
       (printf "%-18s %-10s %-16s %10s %10s %10s"
               tname (row :bench)
               (string "delivery/" (b :connections) "c")
@@ -304,7 +302,7 @@
   (print)
   (each tname (filter |(get-in res [:rows $]) targets/order)
     (when-let [bkey (get-in targets/targets [tname :budget])]
-      (printf "budget %s (§8.2, docs/BENCH-v0.1.md):" tname)
+      (printf "budget %s (docs/BENCH-v0.1.md):" tname)
       (each [status text] (results/budget-notes (get-in res [:rows tname])
                                                 (targets/budgets bkey))
         (printf "  %s %s"
@@ -315,7 +313,7 @@
 (def- usage
   ``usage: void bench [TARGETS|all|baselines] [flags]
        void bench compare BASE.jdn CURRENT.jdn [--threshold PCT]
-       void bench budgets [FILE]   # §8.2 check of a saved result set
+       void bench budgets [FILE]   # budget check of a saved result set
                                    # (default results/baseline.jdn)
        void bench list
 
@@ -330,7 +328,7 @@ flags:
                    any >5% regression
   --against FILE   baseline file for --check
   --threshold PCT  allowed degradation percent (default 5)
-  --budgets        also enforce the absolute §8.2 budgets on this run,
+  --budgets        also enforce the absolute budgets on this run,
                    exit 1 on any MISS or unmeasured budget
                    (docs/BENCH-v0.1.md: reference-environment check,
                    not for shared CI runners)
@@ -407,7 +405,7 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
   (/ (num-flag flags :threshold (* 100 results/default-threshold)) 100))
 
 (defn enforce-budgets
-  ``The absolute §8.2 gate: every budgeted target present in `res`
+  ``The absolute gate: every budgeted target present in `res`
   must measure and meet its budget — a MISS or an unmeasured budget
   (no wrk2, target not run) throws. Meant for the reference
   environment (docs/BENCH-v0.1.md), not for shared CI runners.``
@@ -427,8 +425,8 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
         (unless (= :ok status)
           (array/push failures (string/format "%s: %s" tname text))))))
   (if (empty? failures)
-    (print "budgets §8.2: all met")
-    (errorf "§8.2 budget check failed:\n  - %s"
+    (print "budgets: all met")
+    (errorf "budget check failed:\n  - %s"
             (string/join failures "\n  - "))))
 
 (defn- check-against [basefile current thr]
@@ -469,7 +467,7 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
       (unless (<= (length words) 2)
         (errorf "usage: void bench budgets [FILE]"))
       (def file (get words 1 (string root "/results/baseline.jdn")))
-      (printf "budgets §8.2 check of %s:" file)
+      (printf "budgets check of %s:" file)
       (enforce-budgets (results/read-file file)))
 
     (do

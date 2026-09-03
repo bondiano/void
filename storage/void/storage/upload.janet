@@ -1,5 +1,4 @@
-### void/storage/upload — the seam between multipart and a store
-### (ADR-0039 §6).
+### void/storage/upload — the seam between multipart and a store.
 ###
 ### void/http parses `multipart/form-data` into parts; a store keeps
 ### bytes under keys. What was missing between them is this file: take
@@ -9,7 +8,7 @@
 ### the key string — what a text column holds and what `storage/url`
 ### takes; the filename and the rest of the metadata are returned to
 ### whoever wants to keep them, because a column for them is the
-### application's decision (ADR-0039 §2).
+### application's decision.
 ###
 ### The refusals throw with readable text and land as the 4xx of
 ### whoever called — the admin widget aborts with 422, a controller

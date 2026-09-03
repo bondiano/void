@@ -11,8 +11,8 @@
 (assert (deep= [:always] (tuple ;(policy/policies))))
 (assert (= "yes" ((policy/lookup :always) :doc)))
 
-# registering the same name again replaces it — that is what makes a
-# REPL redefinition take effect without a restart (ADR-0002)
+# registering the same name again replaces it — that is what makes a REPL
+# redefinition take effect without a restart
 (policy/register! {:name :always :fn (fn [_] false)})
 (assert (not (((policy/lookup :always) :fn) {})))
 (assert (= 1 (length (policy/policies))))

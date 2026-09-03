@@ -1,4 +1,4 @@
-### void/security/secret — the signing keys (ADR-0025 §2).
+### void/security/secret — the signing keys.
 ###
 ### Everything this package signs — the CSRF token today, whatever
 ### needs a MAC later — is signed with the first key in a list and
@@ -7,8 +7,8 @@
 ### token has expired, then drop it. Two deploys, no invalidation.
 ###
 ### **In production a missing key is a boot error, not a warning.** A
-### framework that quietly invents a key at startup gives every worker
-### in a prefork setup (ADR-0010) and every machine in a fleet a
+### framework that quietly invents a key at startup gives every worker in
+### a prefork setup and every machine in a fleet a
 ### *different* one, so a token issued by one is rejected by the next
 ### and the failure looks like anything but its cause. In dev the key
 ### is generated with a warning, because `void new` has to work before
@@ -16,8 +16,7 @@
 ###
 ### The key belongs in the environment, and the config layer already
 ### spells that: `{:security {:signing-key {:secret "VOID_SECRET"}}}` is
-### an env-var reference (ADR-0007), and a resolved secret box is
-### unwrapped here.
+### an env-var reference, and a resolved secret box is unwrapped here.
 ###
 ### **Why the config key is `:signing-key` and not `:secret`.** A
 ### dictionary shaped `{:secret "NAME"}` *is* the env reference, so

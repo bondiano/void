@@ -1,4 +1,4 @@
-### void/notify-mail — the notification as a letter (ADR-0040 §4).
+### void/notify-mail — the notification as a letter.
 ###
 ### The channel `void/notify` promises out of the box, and the one that
 ### shows what the `:project` / `:deliver` split is for. **The letter is
@@ -6,7 +6,7 @@
 ### its locale, its identity and `[:mail :base-url]` in reach — and what
 ### travels onward is the octets `void/mail` built. The worker delivers
 ### *that*, so a retry sends the same letter with the same Message-ID,
-### which is exactly the argument ADR-0026 §5 makes about queueing a
+### which is exactly the argument void/mail makes about queueing a
 ### rendered mail rather than the arguments that would render one.
 ###
 ### **The delivery goes back through `mail/send-delivery`**, not
@@ -53,8 +53,8 @@
 
 (defn link
   ``The absolute URL a notification's `:url` becomes in a letter. A
-  mail has no origin (ADR-0026 §4), so this is `mail/url` and nothing
-  else — a relative link is an error at render, where it is visible.``
+  mail has no origin, so this is `mail/url` and nothing else — a relative
+  link is an error at render, where it is visible.``
   [note]
   (when-let [u (get note :url)] (mail/url u)))
 
@@ -125,7 +125,7 @@
    :project project
    :deliver deliver
    # a 5xx is the server's final answer: a rejected mailbox is recorded
-   # rather than retried five times with backoff (ADR-0026 §3)
+   # rather than retried five times with backoff
    :permanent? mail/permanent-failure?})
 
 (plugin/contribute! :void.core/hooks

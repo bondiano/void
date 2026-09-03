@@ -1,4 +1,4 @@
-### void/authz/rbac — roles as sugar over ABAC (ADR-0024 §7).
+### void/authz/rbac — roles as sugar over ABAC.
 ###
 ### There is no second enforcement path here and no second kind of
 ### policy. A role is an **attribute of the subject** and a permission

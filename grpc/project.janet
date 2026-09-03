@@ -1,6 +1,6 @@
 (declare-project
   :name "void-grpc"
-  :description "void/grpc — Connect-RPC over the void/http kernel: unary methods on HTTP/1.1 as ordinary routes, JSON and protobuf codecs, `defservice` over a .proto (SPEC §5.8, ADR-0013)."
+  :description "void/grpc — Connect-RPC over the void/http kernel: unary methods on HTTP/1.1 as ordinary routes, JSON and protobuf codecs, `defservice` over a .proto."
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
@@ -11,7 +11,7 @@
 # already protects a route protects an RPC method.
 #
 # What has to be on the module path is a projection of the package graph
-# (scripts/packages.janet, ADR-0020), not prose: see
+# (scripts/packages.janet), not prose: see
 # test-support/paths.janet.
 
 (declare-source

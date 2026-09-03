@@ -101,7 +101,7 @@
 #
 # The survey printed before the deploy rather than during it: it starts
 # the components the store declarations name and nothing else, so it is
-# safe on a machine that is already serving (ADR-0030).
+# safe on a machine that is already serving.
 
 (array/clear log)
 

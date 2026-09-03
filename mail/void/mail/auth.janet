@@ -1,11 +1,10 @@
-### void/mail-auth — the letter a magic link travels in (ADR-0026 §6).
+### void/mail-auth — the letter a magic link travels in.
 ###
 ### `void/auth` issues magic links and one-time codes and deliberately
-### does not deliver them (ADR-0023 §7): delivery is the
-### `:void.auth/deliver` point, so that an application which texts its
-### codes never has a mailer in the composition. This plugin is the
-### contribution void promised there — the one line that closes the
-### loop between 3.2 and 3.5:
+### does not deliver them: delivery is the `:void.auth/deliver` point, so
+### that an application which texts its codes never has a mailer in the
+### composition. This plugin is the contribution void promised there — the
+### one line that closes the loop between 3.2 and 3.5:
 ###
 ###     (void/run! {:plugins [:void/mail :void/mail-auth :void/auth ...]})
 ###     (auth/challenge! (string "user:" (user :id)) {:to (user :email)})

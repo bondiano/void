@@ -1,6 +1,5 @@
-### B1 — JSON echo 1KB: parse + validate + serialize (SPEC.md §8.2,
-### ADR-0014). Budget: p50 < 2.5ms, p99 < 10ms, ≥ 8k RPS (1 worker,
-### 1 vCPU).
+### B1 — JSON echo 1KB: parse + validate + serialize. Budget: p50 < 2.5ms,
+### p99 < 10ms, ≥ 8k RPS (1 worker, 1 vCPU).
 ###
 ### The void/rest pipeline end to end: the JSON body codec decodes
 ### payloads/b1-order.json, the validation middleware checks it
@@ -9,12 +8,12 @@
 ### overrides the listen port (default 8101).
 ###
 ### The app carries `bench/probe` (void/bench/probe): a fiber sampling
-### this process's own event-loop lag, which is the only place §8.2's
+### this process's own event-loop lag, which is the only place the
 ### loop-lag and GC budgets can be measured from. `VOID_BENCH_PROBE=0`
 ### leaves it out — that is how its own cost gets measured.
 ###
 ### `VOID_BENCH_OBS=1` adds void/obs + void/obs-http, which is the
-### `b1-obs` target: SPEC §8.2 budgets the instrumentation overhead at
+### `b1-obs` target: the instrumentation overhead is budgeted at
 ### ≤ 7% throughput, and that budget is this app run twice. Everything
 ### obs does on a request is on: the root span at the default sampling
 ### rate of 1, the RED counters and histograms, the queue-time
@@ -23,7 +22,7 @@
 ### cheaper obs than the one an application gets by composing it.
 ###
 ### `VOID_BENCH_PRESSURE=1` adds void/pressure + void/pressure-http,
-### which is the `b1-pressure` target: SPEC §8.5 asks every plugin that
+### which is the `b1-pressure` target: every plugin that
 ### contributes middleware for the row "B1 with my middleware = −X%",
 ### and that row is this app run twice. The thresholds are configured
 ### off (`:max-loop-lag 0`) with the sampler *on*, because the question
@@ -84,11 +83,11 @@
   :requires {:void/http ">=0.0.1" :void/rest ">=0.0.1"})
 
 (def pressure?
-  "Is this the b1-pressure run (SPEC §8.5)?"
+  "Is this the b1-pressure run?"
   (= "1" (os/getenv "VOID_BENCH_PRESSURE")))
 
 (def obs?
-  "Is this the b1-obs run (SPEC §8.2's ≤ 7% instrumentation budget)?"
+  "Is this the b1-obs run (the ≤ 7% instrumentation budget)?"
   (= "1" (os/getenv "VOID_BENCH_OBS")))
 
 (def app

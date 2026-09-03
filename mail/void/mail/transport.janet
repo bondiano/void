@@ -1,4 +1,4 @@
-### void/mail/transport — what a delivery is handed to (ADR-0026 §2).
+### void/mail/transport — what a delivery is handed to.
 ###
 ### A transport is a **contribution**, not a component: `{:name :send
 ### (fn [delivery] receipt)}` on the `:void.mail/transport` point, and
@@ -59,7 +59,7 @@
     (errorf "transport %q has no :send function" (get t :name)))
   (merge {:doc nil :health nil} t))
 
-# -- :memory — the outbox a test reads ----------------------------------
+# -- :memory — the outbox a test reads -----------------------------------
 
 (var outbox
   ``Deliveries the :memory transport kept, newest last. A test asserts
@@ -92,7 +92,7 @@
              (set outbox (array/slice outbox (- (length outbox) keep-count))))
            (receipt :memory delivery))})
 
-# -- :file — one .eml per message ---------------------------------------
+# -- :file — one .eml per message ----------------------------------------
 
 (defn- ensure-dir [path]
   (def parts (filter |(not (empty? $)) (string/split "/" path)))
@@ -124,7 +124,7 @@
                      :path path :to (get-in delivery [:message :recipients]))
            (receipt :file delivery {:path path}))})
 
-# -- :log — the message in the log, and nowhere else --------------------
+# -- :log — the message in the log, and nowhere else ---------------------
 
 (defn log-transport
   "The transport that logs a message instead of sending it."

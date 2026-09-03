@@ -1,19 +1,17 @@
 ### CI gate: dry-run the full in-repo plugin composition — void/http +
 ### void/html + void/htmx + void/rest + void/openapi + void/db +
-### void/db-sqlite + void/db-postgres + void/db-mysql + void/db-http + void/redis +
-### void/redis-http + void/cache + void/jobs + void/pressure + void/obs (+ -http, -otlp) +
-### void/crypto + void/auth + void/auth-http + void/auth-db + void/oauth +
-### void/bus + void/bus-db + void/bus-jobs + void/kafka + void/kafka-bus +
-### void/ws + void/ws-htmx +
-### void/proto + void/grpc +
-### void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
-### void/storage (+ -http, -s3, -admin) +
-### void/notify (+ -mail, -inapp, -webhook, -jobs) +
-### void/dev + void/bench (+ its runtime probe) + the demo plugin on top of
-### the core extension points.
-### The plugin list below is the composition; the module path under it
-### is a projection of scripts/packages.janet, so a package added to the
-### graph is on the path here without a second edit (ADR-0020).
+### void/db-sqlite + void/db-postgres + void/db-mysql + void/db-http +
+### void/redis + void/redis-http + void/cache + void/jobs + void/pressure
+### + void/obs (+ -http, -otlp) + void/crypto + void/auth + void/auth-http
+### + void/auth-db + void/oauth + void/bus + void/bus-db + void/bus-jobs +
+### void/kafka + void/kafka-bus + void/ws + void/ws-htmx + void/proto +
+### void/grpc + void/mcp (+ -http, -obs) + void/admin (+ -jobs, -mcp) +
+### void/storage (+ -http, -s3, -admin) + void/notify (+ -mail, -inapp,
+### -webhook, -jobs) + void/dev + void/bench (+ its runtime probe) + the
+### demo plugin on top of the core extension points. The plugin list below
+### is the composition; the module path under it is a projection of
+### scripts/packages.janet, so a package added to the graph is on the path
+### here without a second edit.
 ###
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
@@ -23,9 +21,9 @@
 
 (import ./packages :as packages)
 
-# Every package in the graph, on the module path — the composition gate
-# is the one place that loads all of them at once (ADR-0020). void/fdwait
-# is among them, so its native module has to be built first
+# Every package in the graph, on the module path — the composition gate is
+# the one place that loads all of them at once. void/fdwait is among them,
+# so its native module has to be built first
 # (janet scripts/bootstrap.janet, or cd fdwait && jpm build).
 (packages/add-paths (packages/packages))
 

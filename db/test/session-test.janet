@@ -1,6 +1,6 @@
-# Sessions in the database (ADR-0030): the store void/db-http
-# contributes, and the composition it makes possible — a fleet with
-# sessions and no redis, which until now could not be expressed.
+# Sessions in the database: the store void/db-http contributes, and the
+# composition it makes possible — a fleet with sessions and no redis,
+# which until now could not be expressed.
 (import ../test-support/paths)
 (import ../test-support/fake-driver :as fake)
 (import void/core/plugin :as plugin)
@@ -13,7 +13,7 @@
 
 (log/set-level! "void.db" :error)
 
-# -- the DDL is what it says ----------------------------------------------
+# -- the DDL is what it says ---------------------------------------------
 
 (def ddl (db-http/session-ddl "sess"))
 (assert (= 2 (length ddl)))
@@ -23,7 +23,7 @@
 (assert (string/find "sess_expires_idx" (ddl 1))
         "the sweep has an index to walk")
 
-# -- the driver ------------------------------------------------------------
+# -- the driver ----------------------------------------------------------
 
 (var rows @[])
 (def [driver-value fake-state]
@@ -52,7 +52,7 @@
                 :log {:level :error}}
                extra)})
 
-# -- the store, as the composition resolves it -----------------------------
+# -- the store, as the composition resolves it ---------------------------
 
 (def boot (plugin/start! {:plugins plugins :profile :prod :config (config {})}))
 

@@ -1,6 +1,5 @@
-### JWK -> PEM (ADR-0032): checked against PEM that OpenSSL wrote for
-### the same two keys, because an encoder that agrees with itself
-### proves nothing.
+### JWK -> PEM: checked against PEM that OpenSSL wrote for the same two
+### keys, because an encoder that agrees with itself proves nothing.
 
 (import ../test-support/paths)
 (import ../test-support/jwks :as fixture)

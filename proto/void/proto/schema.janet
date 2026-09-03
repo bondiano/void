@@ -1,7 +1,6 @@
-### void/proto/schema — the schema layer, both directions (SPEC.md
-### §3.3 and §5.7, ADR-0008, ADR-0013).
+### void/proto/schema — the schema layer, both directions.
 ###
-### SPEC §3.3 lists "protobuf descriptor" among the projections of the
+### "Protobuf descriptor" is one of the projections of the
 ### schema layer, next to JSON Schema and form hints. This is that
 ### projection — and its inverse, which turns out to be the half that
 ### earns the package its keep:
@@ -103,7 +102,7 @@
         (errorf "proto schema: no schema for %q" (entry :type)))))
 
 (defn schema-of
-  ``A message descriptor as a void schema (SPEC §3.3). Repeated
+  ``A message descriptor as a void schema. Repeated
   becomes `[:vector ...]`, a map becomes `[:map-of ...]`, a message
   field and an `optional` one become `[:optional ...]` — because those
   are the fields the codec may leave out, and everything else it fills
@@ -144,9 +143,8 @@
 
 (defn annotations
   ``The `:proto/*` props of a schema, the way `schema/db-annotations`
-  reads the `:db/*` ones (ADR-0008): they are stored on the nodes and
-  never consulted by validation. Returns {:schema {...} :fields {key
-  {...}}}.``
+  reads the `:db/*` ones: they are stored on the nodes and never consulted
+  by validation. Returns {:schema {...} :fields {key {...}}}.``
   [sch]
   (defn proto-props [props]
     (freeze (tabseq [[k v] :pairs props

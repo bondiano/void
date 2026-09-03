@@ -11,7 +11,7 @@
 # (logs, history samples, tapped values) and a sampler fiber.
 #
 # What has to be on the module path is a projection of the package graph
-# (scripts/packages.janet, ADR-0020), not prose: see
+# (scripts/packages.janet), not prose: see
 # test-support/paths.janet.
 
 (declare-source

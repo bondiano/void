@@ -1,6 +1,5 @@
-### The widget contract (ADR-0029 §4): one required function, five
-### optional ones, and a resolution order that is printed rather than
-### guessed at.
+### The widget contract: one required function, five optional ones, and a
+### resolution order that is printed rather than guessed at.
 ###
 ### The first half is pure — resolution is a function of a declaration,
 ### a field and a list of contributions, and it must be testable
@@ -142,7 +141,7 @@
 (assert (= 1 (length (widget/assets (widget/resolve-all two-int [styled]))))
         "one entry per widget name, however many fields it draws")
 
-# -- :routes: the seam FK autocompletion is the first user of -----------
+# -- :routes: the seam FK autocompletion is the first user of ------------
 
 (db/defentity Note {:id [:int {:db/pk true}] :title :string} :db/table "notes")
 
@@ -205,12 +204,12 @@
   (assert (string/has-prefix? "private" (get-in sheet [:headers "cache-control"]))
           "...and it is behind the admin's gate, so no shared cache keeps it")
 
-  # -- the link widget picks its shape from the size of the target ------
+  # -- the link widget picks its shape from the size of the target -------
   #
   # A belongs-to is drawn by one widget, and while the target is small
   # that shape is a select with the target's rows in it — labelled by
-  # `label-of`, because a picker showing primary keys is a picker
-  # nobody can use (ADR-0029 §5).
+  # `label-of`, because a picker showing primary keys is a picker nobody
+  # can use.
   (db/execute-sql "CREATE TABLE brands (id integer primary key autoincrement, name text not null)"
                   [] {:kind :write :prepared false})
   (db/execute-sql (string "CREATE TABLE items (id integer primary key autoincrement, "

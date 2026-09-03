@@ -1,4 +1,4 @@
-### void/core/config — layered configuration (SPEC.md §3.2, ADR-0007).
+### void/core/config — layered configuration.
 ###
 ### Layers in priority order: plugin defaults <- config files
 ### (config/default.janet|jdn, then config/<profile>.janet|jdn) <-
@@ -235,7 +235,7 @@
                 (string/format ":defaults must be a dictionary or a list of per-plugin entries, got %q" defaults))))
 
 (defn load
-  ``Build the application config from layered sources (ADR-0007).
+  ``Build the application config from layered sources.
 
   Layers in priority order (later wins):
     1. plugin defaults        (:defaults option)
@@ -395,10 +395,9 @@
 
 (defn validate
   ``Validate config slices against per-plugin specs — all of them, not
-  first-fail (ADR-0007). specs is indexed of
-  {:key <config-key> :schema <callable> :plugin <kw, optional>};
-  a schema fails by returning false or throwing. Returns an array of
-  error strings, empty when everything is valid.``
+  first-fail. specs is indexed of {:key <config-key> :schema <callable>
+  :plugin <kw, optional>}; a schema fails by returning false or throwing.
+  Returns an array of error strings, empty when everything is valid.``
   [cfg specs]
   (def errors @[])
   (each spec specs

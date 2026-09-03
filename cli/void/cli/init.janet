@@ -1,4 +1,4 @@
-### void/cli — the `void` binary (SPEC.md §5.17).
+### void/cli — the `void` binary.
 ###
 ### Commands are an extension point, not a switch statement: everything
 ### beyond the built-ins (new/repl/help/version) comes from the
@@ -15,12 +15,12 @@
 ### Command naming: a plain keyword :routes is `void routes`; a
 ### namespaced :openapi/export is `void openapi export`.
 ###
-### Four commands are built in rather than contributed, and for one
-### reason each: `new` and `make` run *before* there is a composition
-### to ask (./new, ./make), `repl` has to reach a process this one is
-### not (./repl), and `deploy check` and `plugins lock` read what
-### void/core owns — the deployment shape and the manifests — and
-### void/core is not a plugin (ADR-0030, ADR-0003).
+### Four commands are built in rather than contributed, and for one reason
+### each: `new` and `make` run *before* there is a composition to ask
+### (./new, ./make), `repl` has to reach a process this one is not
+### (./repl), and `deploy check` and `plugins lock` read what void/core
+### owns — the deployment shape and the manifests — and void/core is not a
+### plugin.
 
 (import void)
 (import void/core/init :as core)
@@ -171,7 +171,7 @@
   listening socket — and stops them again. Exits 1 when a `:fleet`
   composition holds a store that lives in one process's heap, which is
   the verdict `plugin/start!` would reach anyway, printed before the
-  deploy rather than during it (ADR-0030).``
+  deploy rather than during it.``
   [boot]
   (def sys (boot :system))
   (def wanted (deploy/needs boot))
@@ -292,15 +292,15 @@
             # `void dev` and `janet main.janet` cannot drift
             (void/run! (merge (the-app) {:profile prof})))
     # a built-in rather than a contribution, because void/core owns
-    # [:deploy :shape] and void/core is not a plugin (ADR-0030)
+    # [:deploy :shape] and void/core is not a plugin
     "deploy" (do
                (unless (= ["check"] (tuple ;(drop 1 words)))
                  (errorf "unknown command %q — the only one is `void deploy check`"
                          (string/join words " ")))
                (deploy-check (bootstrap-app (the-app) profile)))
-    # likewise a built-in: the manifests are void/core's, and a lock
-    # file that only some compositions could write would be a lock
-    # file nobody trusts (ADR-0003)
+    # likewise a built-in: the manifests are void/core's, and a lock file
+    # that only some compositions could write would be a lock file nobody
+    # trusts
     "plugins" (let [boot (bootstrap-app (the-app) profile)
                     r (lock/dispatch boot (tuple ;(drop 1 words)))]
                 # `plugins check` answers false; CI reads exit codes

@@ -1,4 +1,4 @@
-### void/auth-db — the three stores, over void/db (ADR-0023 §2).
+### void/auth-db — the three stores, over void/db.
 ###
 ### The half of void/auth that needs a database, kept a separate plugin
 ### so an application with its own user table — or with five operators
@@ -24,8 +24,8 @@
 ###
 ### **The two tables that *are* void's** — API tokens and one-time codes
 ### — come as DDL data rather than as a migration file, because a
-### migration timeline belongs to the application (ADR-0009's argument
-### about migrations being self-contained). One file in `db/migrations`:
+### migration timeline belongs to the application (the argument about
+### migrations being self-contained). One file in `db/migrations`:
 ###
 ###     (import void/auth/db :as auth-db)
 ###     (defn up [] (auth-db/tables))
@@ -102,7 +102,7 @@
   (def challenges (get-in c [:challenges :table]))
   [{:create-table tokens
     :columns [[:id :text {:primary-key true}]
-              # the digest of the secret, never the secret (ADR-0023 §5)
+              # the digest of the secret, never the secret
               [:digest :text {:null false}]
               [:subject :text {:null false}]
               [:name :text]
@@ -218,7 +218,7 @@
   {:name :db
    :table table
    # rows in the application's database: every replica reads the same
-   # tokens, which is the whole reason this plugin exists (ADR-0030)
+   # tokens, which is the whole reason this plugin exists
    :shared? true
    :find (fn db-token-find [id]
            (row->record (db/one-row {:select [:*] :from table :where {:id id} :limit 1})))
@@ -327,7 +327,7 @@
   (system/component :auth.db/challenges
     :doc "Magic links and one-time codes in the database, so a code
     issued by one worker can be redeemed at another — which an
-    in-process store cannot do under prefork (ADR-0010) or a fleet."
+    in-process store cannot do under prefork or a fleet."
     :deps [:db/pool]
     :provides [:void/auth-challenge-store]
     :config {:key :auth-db :schema Config}

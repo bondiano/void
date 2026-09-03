@@ -1,4 +1,4 @@
-### void/crypto/sign — asymmetric signatures for JWS (ADR-0022 §1).
+### void/crypto/sign — asymmetric signatures for JWS.
 ###
 ### RS256/384/512 (RSASSA-PKCS1-v1_5) and ES256/384/512 (ECDSA on the
 ### P-curves) over `EVP_DigestSign`/`EVP_DigestVerify`. They are here
@@ -17,12 +17,12 @@
 ### is a hundred microseconds of the same work on the hot path.
 ###
 ### **ECDSA signatures are converted.** OpenSSL produces the DER
-### encoding of `SEQUENCE { INTEGER r, INTEGER s }`; JWS (RFC 7515
-### §3.4) wants the raw fixed-width `r || s`. The two conversions below
-### are the whole difference, and getting them wrong is the classic
-### interop bug: a DER integer carries a leading zero byte when its top
-### bit is set, and drops leading zeroes otherwise, so both padding and
-### stripping have to happen.
+### encoding of `SEQUENCE { INTEGER r, INTEGER s }`; JWS (RFC 7515) wants
+### the raw fixed-width `r || s`. The two conversions below are the whole
+### difference, and getting them wrong is the classic interop bug: a DER
+### integer carries a leading zero byte when its top bit is set, and drops
+### leading zeroes otherwise, so both padding and stripping have to
+### happen.
 
 (import ./lib :as lib)
 

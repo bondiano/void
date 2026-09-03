@@ -431,7 +431,7 @@
 (assert (= [:test/dp] (dp-report :active))
         "keyword :plugins entries resolve through the registry")
 
-# -- deprecation aliases (SPEC part II §1.5) -----------------------------
+# -- deprecation aliases -------------------------------------------------
 
 (expect-error "self-alias" "alias itself"
   |(plugin/extension-point :x/p :aliases [:x/p]))

@@ -1,4 +1,4 @@
-### void/notify/channel — what a notification is handed to (ADR-0040 §2).
+### void/notify/channel — what a notification is handed to.
 ###
 ### A channel is a **contribution**, not a component — the shape
 ### `void/mail` gives transports and `void/html` gives view engines, for
@@ -20,7 +20,7 @@
 ### rendered exactly once — and produces *data*. Delivery takes that
 ### data and does the network. Which means the payload can be put in a
 ### queue between them, and the retry delivers **the same value** that
-### the request meant: the argument ADR-0026 §5 makes for queueing a
+### the request meant: the argument void/mail makes for queueing a
 ### rendered letter rather than the arguments that would render one,
 ### generalized to every channel.
 ###
@@ -71,12 +71,12 @@
   (unless (or (nil? (get c :address)) (keyword? (get c :address)))
     (errorf "channel %q: :address names a key of :to and must be a keyword, got %q"
             (get c :name) (get c :address)))
-  # what `:deliver` needs open where it runs. The split is the reason
-  # the key exists: `:project` runs on the request fiber, inside an
+  # what `:deliver` needs open where it runs. The split is the reason the
+  # key exists: `:project` runs on the request fiber, inside an
   # application whose components are all up, and `:deliver` runs on a
   # worker started by a command that opened exactly what it named. A
   # channel that posts over https needs `:tls/lib` there, and only the
-  # channel knows that (ADR-0040 §3)
+  # channel knows that
   (unless (or (nil? (get c :needs))
               (and (indexed? (get c :needs)) (all keyword? (get c :needs))))
     (errorf "channel %q: :needs is a list of component keys, got %q"

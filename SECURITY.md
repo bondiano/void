@@ -18,9 +18,9 @@ releases; the report is credited in the changelog unless you ask otherwise.
 ## Scope
 
 Everything in this repository: the framework packages, the CLI, the
-generators, and the published examples. The deployment story assumes inbound
-TLS terminates at a reverse proxy (ADR-0010) — reports about running the bare
-server on the public internet without one are out of scope.
+generators, and the published examples. The deployment story assumes
+inbound TLS terminates at a reverse proxy — reports about running the
+bare server on the public internet without one are out of scope.
 
 ## Supported versions
 

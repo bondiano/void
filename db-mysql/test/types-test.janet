@@ -4,7 +4,7 @@
 
 # No client library and no server: this file is about the two halves of
 # the text protocol that are pure janet, and one of them is the reason
-# ADR-0033 needed writing. A parameter here is rendered INTO the
+# the text protocol needed writing down. A parameter here is rendered INTO the
 # statement, so "which `?` is a placeholder" and "what does this value
 # become" are not conveniences — they are the driver's whole safety
 # story, and they are testable without a database.

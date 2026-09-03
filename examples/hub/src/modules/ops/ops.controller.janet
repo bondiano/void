@@ -12,8 +12,7 @@
 ### its name, and this is the one line that follows. The target is
 ### reverse-routed rather than written out because `[:admin :prefix]` is
 ### config, and a string here would be a second place to change it
-### (ADR-0029 §2 — every action is a real route, so every route has a
-### name).
+###  (every action is a real route, so every route has a name).
 (import void/http)
 (import void/http/ring :as ring)
 (import void/http/router :as router)

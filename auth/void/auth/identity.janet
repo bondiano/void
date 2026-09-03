@@ -1,4 +1,4 @@
-### void/auth/identity — who the request is, as data (ADR-0023 §1).
+### void/auth/identity — who the request is, as data.
 ###
 ### An identity is a plain struct, not a user object:
 ###
@@ -11,17 +11,17 @@
 ###
 ### void does not know what a user is. It cannot: the subject may be a
 ### person, a service token, a background job or an RPC call from the
-### service next door, and the only thing the framework is entitled to
-### say is that the request carried a verifiable claim to be somebody.
+### service next door, and the only thing the framework is entitled to say
+### is that the request carried a verifiable claim to be somebody.
 ### Everything an application knows about that somebody reaches
-### authorization as *attributes* (ADR-0024 §2), pulled when a policy
-### asks for them, rather than as fields nailed onto this struct.
+### authorization as *attributes*, pulled when a policy asks for them,
+### rather than as fields nailed onto this struct.
 ###
 ### `:cookie` is the one field that exists for another package.
 ### `void/security` decides whether to demand a CSRF token by asking
-### whether the credential was carried by a cookie (ADR-0025 §1) — a
-### `Authorization: Bearer` request is not subject to CSRF, and only
-### the strategy that read the credential knows which it was.
+### whether the credential was carried by a cookie — a `Authorization:
+### Bearer` request is not subject to CSRF, and only the strategy that
+### read the credential knows which it was.
 ###
 ### The current identity lives in a dyn, per fiber, so it is inherited
 ### by whatever the handler spawns and isolated between concurrent
@@ -32,8 +32,8 @@
 
 (def dyn-key
   ``The dyn the current identity lives in. Named rather than passed:
-  `void/authz` reads this key without importing void/auth (ADR-0024),
-  and so may anything else.``
+  `void/authz` reads this key without importing void/auth, and so may
+  anything else.``
   :void.auth/identity)
 
 (defn make

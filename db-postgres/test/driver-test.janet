@@ -192,7 +192,7 @@
 
   # -- concurrency ---------------------------------------------------------
 
-  # the claim of ADR-0011, measured: N queries that each sleep on the
+  # the claim of the FFI driver, measured: N queries that each sleep on the
   # server, from one OS thread, take one sleep and not N
   (def sleepers 4)
   (def nap 0.4)

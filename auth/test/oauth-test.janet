@@ -1,6 +1,6 @@
-### void/auth-oauth: the resource-server half of OAuth (ADR-0032),
-### against an authorization server that is a real socket — discovery,
-### JWKS, introspection and the refusals, which are the point.
+### void/auth-oauth: the resource-server half of OAuth, against an
+### authorization server that is a real socket — discovery, JWKS,
+### introspection and the refusals, which are the point.
 ###
 ### The tokens are signed here with the private keys of
 ### test-support/keys, so what the suite verifies is what a real issuer
@@ -85,7 +85,7 @@
 
 # the keys are opened before the composition starts, so libcrypto is
 # opened by hand here — `void/crypto`'s component does it for the
-# application (ADR-0022)
+# application
 (crypto/load!)
 (def rsa-key (sign/private-key keys/rsa-private))
 (def ec-key (sign/private-key keys/ec-private))
@@ -179,7 +179,7 @@
 (assert (= "user:42" (person :subject)) "a verified token becomes an identity")
 (assert (= :oauth (person :via)) "that says how it was established")
 (assert (not (person :cookie))
-        "and that it was not cookie-borne — void/security asks that before it demands a CSRF token (ADR-0025)")
+        "and that it was not cookie-borne — void/security asks that before it demands a CSRF token")
 (assert (deep= ["mcp:tools"] (oauth/scopes person)) "carrying the scopes of the token")
 
 # a machine-to-machine token has no `sub`: the client *is* the subject,

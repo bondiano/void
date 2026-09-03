@@ -39,7 +39,7 @@
 (with-dyns [context/identity-dyn id]
   (def implicit (context/make {}))
   (assert (= "user:42" (context/subject-string implicit))
-          "the current identity is read from :void.auth/identity — a key, not an import (ADR-0024)"))
+          "the current identity is read from :void.auth/identity — a key, not an import"))
 
 # -- providers -----------------------------------------------------------
 

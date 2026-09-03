@@ -1,5 +1,5 @@
 ### void/db-sqlite/driver — the :void/db-driver contract over
-### janet-lang/sqlite3 (SPEC.md §5.10).
+### janet-lang/sqlite3.
 ###
 ### This is the reference implementation of the driver contract (see
 ### void/db/driver): a plain dictionary of :dialect/:connect/:close/
@@ -31,7 +31,7 @@
 ###     whatever the previous write touched.
 ###   * Every call is synchronous C: a query blocks the whole ev loop
 ###     until sqlite returns. That is the deal with an embedded
-###     database and it is why `void/db-postgres` (2.2) exists; it
+###     database and it is why `void/db-postgres` exists; it
 ###     also means two fibers are never inside sqlite at once, so the
 ###     only real concurrency is between statements.
 ###   * URI filenames are off (SQLITE_USE_URI is a compile-time
@@ -41,11 +41,11 @@
 ###     checkout — see `make` and the size check in ../init.
 
 ### janet-lang/sqlite3 is resolved on first use, not imported: the void
-### bundle deliberately does not depend on it (ADR-0020). An application
-### that never lists :void/db-sqlite in its :plugins never reaches this
-### file; one that does opens the keeper connection at :start, so a
-### missing binding is a boot error with a line to copy — exactly where
-### libpq's is (ADR-0011). Importing it here would instead break the
+### bundle deliberately does not depend on it. An application that never
+### lists :void/db-sqlite in its :plugins never reaches this file; one
+### that does opens the keeper connection at :start, so a missing binding
+### is a boot error with a line to copy — exactly where libpq's is.
+### Importing it here would instead break the
 ### *installation* of every application, sqlite or not.
 
 (var module
@@ -65,7 +65,7 @@
 
   Everywhere else it stays nil and the `require` below runs, which is
   what keeps janet-lang/sqlite3 out of the bundle's dependencies
-  (ADR-0020).``
+.``
   nil)
 
 (defn- lib

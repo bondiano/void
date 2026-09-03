@@ -1,9 +1,8 @@
-### void/i18n/dict — the shipped dictionaries (ADR-0036): the fifteen
-### schema error codes in :en (reproducing the core default-messages
-### output byte for byte) and :ru. Contributed to :void.i18n/messages
-### at :precedence 0 — an application's dictionary (default 100)
-### overrides any key without naming a number, and `void plugins
-### check` shows who contributed what.
+### void/i18n/dict — the shipped dictionaries: the fifteen schema error
+### codes in :en (reproducing the core default-messages output byte for
+### byte) and :ru. Contributed to :void.i18n/messages at :precedence 0 —
+### an application's dictionary (default 100) overrides any key without
+### naming a number, and `void plugins check` shows who contributed what.
 
 (def en
   "Schema error texts, matching void/core/schema `default-messages`."

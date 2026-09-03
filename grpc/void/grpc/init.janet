@@ -1,7 +1,6 @@
-### void/grpc — Connect-RPC over the void/http kernel (SPEC.md §5.8,
-### ADR-0013).
+### void/grpc — Connect-RPC over the void/http kernel.
 ###
-### gRPC compatibility without HTTP/2, which is the trade ADR-0013
+### gRPC compatibility without HTTP/2, which is the trade this package
 ### made and the reason this package is M rather than XL. A unary call
 ### is one POST with the encoded message as the body; the ecosystem
 ### reaches it through Connect clients directly, or through a
@@ -43,7 +42,7 @@
 ###
 ### **What it does not do.** No streaming — Connect's streaming
 ### variants need a transport that keeps two directions open, and
-### ADR-0013 puts that in v2 with its own decision; a `.proto` that
+### That waits for v2 and a decision of its own; a `.proto` that
 ### declares one is refused at `defservice`. No gRPC or gRPC-Web
 ### framing: those are length-prefixed envelopes and, for gRPC proper,
 ### HTTP/2 trailers — the ecosystem's answer to a Connect server is a
@@ -100,7 +99,7 @@
   []
   (mount/describe))
 
-# -- the other end --------------------------------------------------------
+# -- the other end -------------------------------------------------------
 
 (defn client
   ``A Connect client against a base URL — see client/client:
@@ -133,7 +132,7 @@
   [name & body]
   (service/defservice-form name body))
 
-# -- codecs ---------------------------------------------------------------
+# -- codecs --------------------------------------------------------------
 
 (plugin/defextension-point :void.grpc/codec
   :doc "Connect codecs: {:name :void.grpc/proto :content-type \"application/proto\" :aliases [...]? :encoding \"proto\" :encode (fn [message value] bytes) :decode (fn [message bytes] value)}. `:encoding` is the name Connect's GET form uses in ?encoding=; the first codec whose content type matches a request serves it. void/grpc ships the two the protocol defines, and the point exists because a fleet that speaks a third one internally should not need a second server"
@@ -183,7 +182,7 @@
              # over the *names* a peer sent
              (proto/decode-json message (string bytes) (json-options)))})
 
-# -- error details --------------------------------------------------------
+# -- error details -------------------------------------------------------
 
 (defn- encode-detail
   ``One `details` entry of a Connect error. `{:type "shop.orders.BadField"
@@ -203,7 +202,7 @@
   (when-let [debug (get detail :debug)] (put out "debug" debug))
   out)
 
-# -- route metadata -------------------------------------------------------
+# -- route metadata ------------------------------------------------------
 
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.grpc/service
@@ -234,7 +233,7 @@
                                   "the server failed to answer this call"))]
              (connect/error-response failure encode-detail))))})
 
-# -- config ---------------------------------------------------------------
+# -- config --------------------------------------------------------------
 
 (def Config
   "Schema of the [:grpc] config slice."
@@ -277,14 +276,14 @@
          (set mount/detail-encoder encode-detail)
          (set mount/codecs-ref (get-in boot [:extensions :void.grpc/codec :resolved] [])))})
 
-# -- the route source -----------------------------------------------------
+# -- the route source ----------------------------------------------------
 
 (defn- own-routes [_boot]
   (if (get settings :mount true)
     (mount/routes)
     (router/routes {})))
 
-# -- CLI ------------------------------------------------------------------
+# -- CLI -----------------------------------------------------------------
 
 (plugin/contribute! :void.core/cli
   {:name :grpc/services
@@ -303,7 +302,7 @@
                      (pdesc/proto-name (r :input))
                      (pdesc/proto-name (r :output))))))})
 
-# -- manifest -------------------------------------------------------------
+# -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/grpc
   :doc "Connect-RPC over the void/http kernel: unary methods on HTTP/1.1, protobuf and proto3-JSON codecs, `defservice` bound to a service a .proto already declared, and every method projected into the one route table — so route metadata, authz, transactions, obs and pressure work on an RPC method exactly as on a page."

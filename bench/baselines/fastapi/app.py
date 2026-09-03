@@ -1,5 +1,5 @@
-# FastAPI+uvicorn calibration baseline (SPEC §8.3, ADR-0014) — the
-# Python interpreter class void competes in. Serves both bench shapes:
+# FastAPI+uvicorn calibration baseline — the Python interpreter class
+# void competes in. Serves both bench shapes:
 # GET / plaintext and POST /echo JSON echo through pydantic models —
 # the closest analogue of B1's parse+validate+serialize.
 #

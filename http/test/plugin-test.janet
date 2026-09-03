@@ -71,7 +71,7 @@
                             :cli {:http {:port 0 :session {:enabled true}}}}}))
 (assert (report :ok))
 (assert (deep= [:http/kernel :http/server] (freeze (report :components)))
-        "kernel + server components (ADR-0017)")
+        "kernel + server components")
 (assert (= :void/http (get-in report [:extensions :void.http/middleware :owner])))
 
 # -- full boot -----------------------------------------------------------
@@ -111,9 +111,9 @@
   (assert (= 404 (r404 :status)))
   (assert (= "custom 404" (r404 :body)) "contributed renderer wins by priority")
 
-  # the same renderers, reached by calling instead of by throwing —
-  # what middleware that decides on a status rather than failing at one
-  # uses (load shedding, ADR-0019)
+  # the same renderers, reached by calling instead of by throwing — what
+  # middleware that decides on a status rather than failing at one uses
+  # (load shedding)
   (def called (http/render-error {:http/status 404} (http/make-request {:uri "/x"})))
   (assert (= 404 (called :status)))
   (assert (= "custom 404" (called :body))
@@ -192,11 +192,11 @@
                                           (string (get-in boot [:system :instances :http/server :server :port]))))))
         "listener closed by shutdown")
 
-# -- :void.http/edge: outside routing, outside the panic guard ----------
+# -- :void.http/edge: outside routing, outside the panic guard -----------
 #
 # Middleware wraps one route's chain, so a 404 and a rendered 500 never
 # reach it. An edge wrapper does — which is the whole reason the point
-# exists (void/security's headers, ADR-0025 §3).
+# exists (void/security's headers).
 
 (defn- boom [req] (error "handler blew up"))
 
@@ -250,10 +250,10 @@
 
 # -- the :prod profile defaults the session cookie to Secure -------------
 #
-# Production sits behind the TLS relay (ADR-0010), and a session cookie
-# a browser would also send over plain http is a session to steal. An
-# explicit :secure false in :cookie-opts still wins — the default is a
-# profile's, not a law.
+# Production sits behind the TLS relay, and a session cookie a browser
+# would also send over plain http is a session to steal. An explicit
+# :secure false in :cookie-opts still wins — the default is a profile's,
+# not a law.
 
 (def prod-boot
   (plugin/start!

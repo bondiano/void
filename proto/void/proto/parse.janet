@@ -1,5 +1,4 @@
-### void/proto/parse — `.proto` source, as a PEG (SPEC.md §5.7,
-### ADR-0013).
+### void/proto/parse — `.proto` source, as a PEG.
 ###
 ### One grammar, one tree, one pass that turns the tree into
 ### descriptors. The grammar is proto3's, and where the language has

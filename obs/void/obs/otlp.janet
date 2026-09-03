@@ -1,5 +1,4 @@
-### void/obs-otlp — OTLP export of spans and metrics (SPEC.md §5.13,
-### ADR-0021, ADR-0027).
+### void/obs-otlp — OTLP export of spans and metrics.
 ###
 ### The third plugin of the obs package, and the one that takes what
 ### this process measured somewhere else: finished sampled spans to
@@ -8,7 +7,7 @@
 ### scrapes `/metrics` and reads spans out of the log never starts a
 ### fiber of it.
 ###
-### **JSON by default, protobuf by configuration** (ADR-0027). The
+### **JSON by default, protobuf by configuration**. The
 ### exporter shipped on OTLP/JSON before `void/proto` existed, because
 ### the collector accepts that encoding out of the box — and the seam
 ### it left, `[:obs-otlp :encoding]`, now has its second legal value.
@@ -24,14 +23,13 @@
 ### slot. Everything else happens in a fiber of its own.
 ###
 ### **Two projections of what obs already holds, and no third model.**
-### A span goes out as the span table the tracer built; a metric goes
-### out of `metrics/snapshot`, the same value `prometheus/render`
-### reads (ADR-0021 promised the OTLP exporter would be a second
-### projection of that snapshot, and this is it). The metric *names*
-### are the Prometheus ones — `void_http_requests_total`, through
-### `prometheus/metric-name` — because a series that is called one
-### thing when it is scraped and another when it is pushed is two
-### series to everybody downstream.
+### A span goes out as the span table the tracer built; a metric goes out
+### of `metrics/snapshot`, the same value `prometheus/render` reads
+### (promised the OTLP exporter would be a second projection of that
+### snapshot, and this is it). The metric *names* are the Prometheus ones
+### — `void_http_requests_total`, through `prometheus/metric-name` —
+### because a series that is called one thing when it is scraped and
+### another when it is pushed is two series to everybody downstream.
 ###
 ### **Cumulative temporality, because that is what the registry is.**
 ### A counter in `./metrics` only goes up and is never reset between
@@ -43,7 +41,7 @@
 ### collectors are for.
 ###
 ### **Bounded queue, bounded batch, and losses are counted.** The
-### shape ADR-0018 chose for the log's async sink and the one the
+### shape the logger chose for its async sink and the one the
 ### OpenTelemetry SDKs converge on: 2048 spans queued, 512 to a
 ### request, five seconds between flushes, and a full queue *drops*
 ### rather than back-pressures the request fiber that finished the
@@ -51,25 +49,24 @@
 ### is a worse outage than no telemetry.
 ###
 ### **Prefork is the one deployment shape this makes easier.** With
-### `[:http :workers] > 1` (ADR-0010) every worker holds its own
-### registry, and a `/metrics` scrape reaches whichever worker the
-### kernel handed the connection to — the reason void/obs-http's
-### docstring tells operators to run one process per scrape target.
-### A push has no such problem: every worker exports its own
-### resource, `process.pid` says which one it is, and the collector
-### adds them up. The trade is the mirror image of the scrape's.
+### `[:http :workers] > 1` every worker holds its own registry, and a
+### `/metrics` scrape reaches whichever worker the kernel handed the
+### connection to — the reason void/obs-http's docstring tells operators
+### to run one process per scrape target. A push has no such problem:
+### every worker exports its own resource, `process.pid` says which one it
+### is, and the collector adds them up. The trade is the mirror image of
+### the scrape's.
 ###
 ### **The collector is next door, or the channel is encrypted**
-### (ADR-0010, ADR-0038). Credentials — `[:obs-otlp :headers]` — over
-### a plaintext non-loopback endpoint are refused *at start*: a
-### bearer token in the clear is the same defect void/mail refuses
-### for SMTP AUTH, and a start-time error is the only place to catch
-### it before it is a habit. With `:void/tls` composed, an
-### `https://` endpoint is a working answer — a hosted collector with
-### a token becomes one config line; without the plugin the client
-### itself refuses https with both ways out named. The default
-### deployment shape stays an agent or a sidecar on loopback, which
-### is also where OTLP's own defaults point (`http://127.0.0.1:4318`).
+### . Credentials — `[:obs-otlp :headers]` — over a plaintext non-loopback
+### endpoint are refused *at start*: a bearer token in the clear is the
+### same defect void/mail refuses for SMTP AUTH, and a start-time error is
+### the only place to catch it before it is a habit. With `:void/tls`
+### composed, an `https://` endpoint is a working answer — a hosted
+### collector with a token becomes one config line; without the plugin the
+### client itself refuses https with both ways out named. The default
+### deployment shape stays an agent or a sidecar on loopback, which is
+### also where OTLP's own defaults point (`http://127.0.0.1:4318`).
 
 (import spork/json)
 (import void/core/plugin :as plugin)
@@ -237,9 +234,9 @@
 
 (defn metric-unit
   ``The UCUM unit of a metric, read off its name. void measures in
-  Prometheus base units everywhere (ADR-0021), so the suffix a metric
-  already carries for the scraper is the unit for OTLP too — and a
-  metric that carries none exports none rather than a guess.``
+  Prometheus base units everywhere, so the suffix a metric already carries
+  for the scraper is the unit for OTLP too — and a metric that carries
+  none exports none rather than a guess.``
   [name]
   (def s (string name))
   (cond
@@ -303,7 +300,7 @@
 
 (defn metrics-request
   ``A `metrics/snapshot` as an `ExportMetricsServiceRequest`. The
-  second projection ADR-0021 promised of the same snapshot the text
+  second projection promised of the same snapshot the text
   exposition renders — same values, same names, same units.
 
   `start` is when this process started collecting (cumulative points
@@ -408,8 +405,8 @@
 
   `:endpoint` is OTLP's own default port on loopback: the deployment
   shape this plugin assumes is a collector or an agent next to the
-  process (there is no TLS — ADR-0010), and that is also where every
-  OpenTelemetry SDK looks first.
+  process (there is no TLS), and that is also where every OpenTelemetry
+  SDK looks first.
 
   The batching numbers are the OpenTelemetry defaults — 2048 queued,
   512 to a request, five seconds between flushes — not because they
@@ -711,13 +708,13 @@
   (def u (client/parse-url endpoint))
   (def headers (get cfg :headers {}))
   # an https endpoint (possible when :void/tls is composed — parse-url
-  # gates that itself, ADR-0038) is an encrypted channel: credentials
-  # on it are fine, and so is leaving the host
+  # gates that itself) is an encrypted channel: credentials on it are
+  # fine, and so is leaving the host
   (def encrypted? (= "https" (u :scheme)))
   (when (and (not (empty? headers)) (not (loopback? (u :host))) (not encrypted?))
     (errorf (string "obs otlp: [:obs-otlp :headers] carries credentials and %s is "
                     "neither loopback nor https — they would go out in the clear. "
-                    "Use an https endpoint (:void/tls composed, ADR-0038), or point "
+                    "Use an https endpoint (:void/tls composed), or point "
                     "the endpoint at a collector or agent on this host and let it "
                     "hold the credentials.")
             (display-endpoint endpoint)))

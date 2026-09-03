@@ -1,5 +1,4 @@
-### void/auth/challenge — magic links and one-time codes
-### (ADR-0023 §7).
+### void/auth/challenge — magic links and one-time codes.
 ###
 ### One flow, two spellings:
 ###
@@ -11,7 +10,7 @@
 ###
 ### **Delivery is not this module's business.** It generates, stores a
 ### digest and redeems; getting the code to the person is a
-### `:void.auth/deliver` contribution, which `void/mail` (3.5) will be
+### `:void.auth/deliver` contribution, which `void/mail` will be
 ### one of. Without that, 3.2 would have been blocked on 3.5 for no
 ### architectural reason at all — and an application that sends its own
 ### SMS never wants void's mailer anyway.

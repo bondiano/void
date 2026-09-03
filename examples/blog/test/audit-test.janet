@@ -1,5 +1,5 @@
 ### The 3.6 half of the demo, and exit criterion 1 of wave 3: **audit
-### через bus**.
+### through the bus**.
 ###
 ### What is being demonstrated is not that a row gets written — any
 ### `db/insert!` in a handler would do that. It is the shape:

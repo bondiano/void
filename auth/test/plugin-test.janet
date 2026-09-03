@@ -30,7 +30,7 @@
 (def without-crypto (protect (plugin/dry-run {:plugins ["void/auth/init"] :profile :test
                                               :config (config {})})))
 (assert (not (first without-crypto))
-        "and without void/crypto it does not compose at all — every primitive comes from there (ADR-0022)")
+        "and without void/crypto it does not compose at all — every primitive comes from there")
 
 (each [slice reason]
   [[{:auth {:hasher "scrypt"}} "a hasher that is not a keyword"]

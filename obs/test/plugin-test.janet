@@ -1,5 +1,5 @@
 # The void/obs plugin: it composes on core alone, it owns the two
-# points SPEC part II §1.4 reserved for it, its config fails fast, and
+# points reserved for it, its config fails fast, and
 # what a started process actually holds.
 
 (import ../test-support/paths)
@@ -24,7 +24,7 @@
 (assert (index-of :obs/registry (report :components)))
 (assert (index-of :obs/tracer (report :components)))
 (assert (get-in report [:extensions :void.obs/exporter])
-        "it owns the exporter point void/obs-otlp contributes to (ADR-0027) — and owns it whether or not that plugin is composed")
+        "it owns the exporter point void/obs-otlp contributes to — and owns it whether or not that plugin is composed")
 (assert (get-in report [:extensions :void.obs/instrument]))
 (assert (pos? (get-in report [:extensions :void.obs/instrument :contributions]))
         "and ships the instrumentations of the wave-2 data plugins itself")

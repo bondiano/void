@@ -1,5 +1,4 @@
-### void/bus/cqrs — commands and events, with the shape declared once
-### (SPEC.md §5.22, ADR-0012).
+### void/bus/cqrs — commands and events, with the shape declared once.
 ###
 ### An optional layer, and a thin one: it adds no transport and no
 ### second registry of handlers. What it adds is a **name with a
@@ -121,8 +120,8 @@
 
 (defn emit-tx!
   ``The same as `emit!`, through the transactional outbox — the
-  spelling an event about money uses (ADR-0012): the message is
-  written in the transaction that made the change it announces.``
+  spelling an event about money uses: the message is written in the
+  transaction that made the change it announces.``
   [name payload &opt opts]
   (def d (event name))
   (state/publish-tx! (d :topic) (checked d payload "event") opts))

@@ -1,6 +1,6 @@
 ### telegram/channel — the channel this application writes itself.
 ###
-### ADR-0040 says telegram is "an application's or a package's, on
+### Telegram is "an application's or a package's channel, on
 ### demand", and this is that sentence being kept: a channel is a
 ### contribution with two functions, and neither of them is privileged.
 ###
@@ -89,7 +89,7 @@
 (defn project
   ``The chat and the text, or nil when this notification names no chat
   and none is configured — the shape a channel says "not my business" in
-  (ADR-0040 §2).``
+.``
   [note]
   (def chat (or (notification/address-for note {:address :telegram})
                 (get settings :chat-id)))
@@ -158,13 +158,12 @@
    :deliver deliver
    :permanent? permanent?
    # `:project` runs on the request fiber, where every component of the
-   # application is already up; `:deliver` runs on a worker, and a
-   # worker is a CLI command that starts what it declared and nothing
-   # else. `https://api.telegram.org` is `:tls/lib`, which the queue
-   # does not depend on — so the first live delivery failed five times
-   # against a very clear message about libssl while void/tls sat
-   # composed and unstarted in the same process. This line is that bug,
-   # fixed where it is knowable: void/notify-jobs hands the union of the
-   # active channels' :needs to the delivery job, and `void jobs work`
-   # opens them (ADR-0040 §3)
+   # application is already up; `:deliver` runs on a worker, and a worker
+   # is a CLI command that starts what it declared and nothing else.
+   # `https://api.telegram.org` is `:tls/lib`, which the queue does not
+   # depend on — so the first live delivery failed five times against a
+   # very clear message about libssl while void/tls sat composed and
+   # unstarted in the same process. This line is that bug, fixed where it
+   # is knowable: void/notify-jobs hands the union of the active channels'
+   # :needs to the delivery job, and `void jobs work` opens them
    :needs [:tls/lib]})

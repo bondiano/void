@@ -1,4 +1,4 @@
-### void/htmx/hx — hx-attribute helpers (SPEC.md §5.5, ADR-0041).
+### void/htmx/hx — hx-attribute helpers.
 ###
 ### Builders for htmx attributes as plain hiccup attribute tables:
 ### keywords become hx-* names, swap styles are written the way htmx

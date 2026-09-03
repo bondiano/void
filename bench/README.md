@@ -1,14 +1,14 @@
 # void bench-suite
 
-Performance is a CI contract, not a hope (SPEC §8, ADR-0014). This
-package holds the B\* benchmark mini-apps, the load-generation
-методика, the calibration baselines and the 5% regression thresholds.
+Performance is a CI contract, not a hope. This package holds the B\*
+benchmark mini-apps, the load-generation method, the calibration
+baselines and the 5% regression thresholds.
 
 ## Quick start
 
 ```sh
 cd bench
-janet main.janet                 # B0 + B1, full методика (≈8 min)
+janet main.janet                 # B0 + B1, the full method (≈8 min)
 janet main.janet b0 --quick      # smoke profile: warmup 3s, 2×5s
 janet main.janet all             # + Go and FastAPI baselines
 janet main.janet list            # what exists
@@ -33,7 +33,7 @@ docker run --rm --network host -v "$PWD:/bench" \
 
 (`--network host` is Linux-only; on macOS target `host.docker.internal`.)
 
-## Методика (SPEC §8.3)
+## The method
 
 Encoded in `void/bench/runner.janet`, per target:
 
@@ -45,8 +45,8 @@ Encoded in `void/bench/runner.janet`, per target:
    frequency governor, commit.
 
 Modes: max throughput (`wrk -t4 -c64`) and latency under wrk2's fixed
-`-R` rate set at 80% of the §8.2 throughput floor — latency at
-saturation is meaningless. Results land in `results/last.jdn`.
+`-R` rate set at 80% of the throughput floor — latency at saturation is
+meaningless. Results land in `results/last.jdn`.
 
 `b4` is the exception to all of the above, and says so in its own
 tables: wrk speaks HTTP and a broadcast is a fan-out measured at the
@@ -60,7 +60,7 @@ connections it opens (`ulimit -n`); the report says how many it
 actually held, so a limit that capped the run is visible rather than
 folded into the numbers.
 
-## Benchmarks and budgets (§8.2, 1 worker / 1 vCPU)
+## Benchmarks and budgets (1 worker / 1 vCPU)
 
 | Target | What it measures | Budget p50 | Budget p99 | Floor |
 |---|---|---|---|---|
@@ -70,39 +70,38 @@ folded into the numbers.
 | `b3` | Postgres + hiccup SSR ~15KB — the shape a void app actually is | < 5 ms | < 20 ms | ≥ 1.5k RPS |
 | `b4` | WebSocket broadcast to 1000 connections in one room | — | delivery p99 < 50 ms | ≥ 10k msg/s |
 
-`b4` has a column layout of its own because §8.2 gives it metrics of
-its own: no request latency and no request throughput, only how long a
-broadcast takes to reach its peers and how many messages a second the
-fan-out delivers.
+`b4` has a column layout of its own because it has metrics of its own:
+no request latency and no request throughput, only how long a broadcast
+takes to reach its peers and how many messages a second the fan-out
+delivers.
 
 Every budgeted target except `b4` also carries the two budgets nothing
-outside the process can see: **loop-lag p99 < 1 ms** under target load (§8.2, §8.4
-— "the main health indicator of an ev system"), and, on `b3`, **GC max
-pause < 10 ms**. Both come from `void/bench/probe`, a fiber inside the
-app sampling the lag it is actually experiencing, read off
+outside the process can see: **loop-lag p99 < 1 ms** under target load —
+the main health indicator of an ev system — and, on `b3`, **GC max pause
+< 10 ms**. Both come from `void/bench/probe`, a fiber inside the app
+sampling the lag it is actually experiencing, read off
 `/void/bench/probe` around the fixed-rate runs. The GC number rides on
 loop-lag's *maximum* on purpose: janet 1.41 reports no GC pause of its
 own, but a stop-the-world collection on a single-threaded loop **is**
 loop lag of at least its own length, so the maximum is a sound upper
-bound. §8.2's other GC half ("under 2% of total time") has no such
-bound and stays unmeasured. `VOID_BENCH_PROBE=0` runs an app without
-the probe — which is how the probe's own cost gets measured.
+bound. The other GC half ("under 2% of total time") has no such bound
+and stays unmeasured. `VOID_BENCH_PROBE=0` runs an app without the probe
+— which is how the probe's own cost gets measured.
 
 `b4` deliberately carries no loop-lag budget, and that is an argument
-rather than an omission: §8.4's number is about a loop *waiting*
-between units of work, while a fan-out's target load is one burst of a
-thousand writes per tick — the lag during a tick **is** the fan-out.
-What that budget is a proxy for (is the loop keeping up?) is measured
-directly by the delivery percentile. The loop-lag numbers are still
-read and printed with the row. See ADR-0028.
+rather than an omission: that number is about a loop *waiting* between
+units of work, while a fan-out's target load is one burst of a thousand
+writes per tick — the lag during a tick **is** the fan-out. What that
+budget is a proxy for (is the loop keeping up?) is measured directly by
+the delivery percentile. The loop-lag numbers are still read and printed
+with the row.
 
-The B0/B1 budgets were
-verified against the recorded reference environment at v0.1 —
-measurements, the b0 p50 adjustment and its reasons live in
-[docs/BENCH-v0.1.md](../docs/BENCH-v0.1.md); B2/B3 are §8.2 hypotheses
-until the same is done for them. Enforce budgets with `void bench
-budgets` (a saved result set) or `--budgets` (after a run); regression
-thresholds guard everything else.
+The B0/B1 budgets were verified against the recorded reference
+environment at v0.1 — measurements, the b0 p50 adjustment and its
+reasons live in [docs/BENCH-v0.1.md](../docs/BENCH-v0.1.md); B2/B3 are
+hypotheses until the same is done for them. Enforce budgets with `void
+bench budgets` (a saved result set) or `--budgets` (after a run);
+regression thresholds guard everything else.
 
 ## B2 and B3 need a database
 
@@ -135,7 +134,7 @@ janet main.janet baselines       # go + fastapi targets
 
 FastAPI needs `python3 -m pip install -r baselines/fastapi/requirements.txt`.
 
-## Regression thresholds: 5% (ADR-0014)
+## Regression thresholds: 5%
 
 ```sh
 janet main.janet b0 b1 --record            # freeze results/baseline.jdn
@@ -153,7 +152,7 @@ absolute numbers: it measures the merge-base and the head **on the
 same runner in the same job** and applies the 5% thresholds to that
 pair. A dedicated runner can later switch CI to the committed baseline.
 
-## Rules for plugin authors (SPEC §8.5)
+## Rules for plugin authors
 
 Every plugin that contributes middleware owes a row in the bench
 table: «B1 with my middleware = −X%». Run `b1` with and without your

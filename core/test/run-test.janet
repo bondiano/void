@@ -1,24 +1,24 @@
 # void/run! integration: the entrypoint blocks until SIGTERM and shuts
-# down gracefully (SPEC.md §3.6). Runs the fixture app as a subprocess
-# and drives it with a real signal.
+# down gracefully. Runs the fixture app as a subprocess and drives it with
+# a real signal.
 (import ../void/init :as void)
 (import ../void/core/plugin :as plugin)
 (import ../void/core/system :as system)
 
-# -- option validation ----------------------------------------------------
+# -- option validation ---------------------------------------------------
 
 (def [ok err] (protect (void/run! {:plugin []})))
 (assert (not ok))
 (assert (string/find "unknown option" (string err)))
 
-# -- stop! rejects a boot that is not parked in run! ----------------------
+# -- stop! rejects a boot that is not parked in run! ---------------------
 
 (def boot (plugin/bootstrap {:plugins []} true))
 (def [ok2 err2] (protect (void/stop! boot)))
 (assert (not ok2))
 (assert (string/find "run!" (string err2)))
 
-# -- subprocess: SIGTERM -> graceful stop in reverse order ----------------
+# -- subprocess: SIGTERM -> graceful stop in reverse order ---------------
 
 (def proc (os/spawn @("janet" "test-support/run-app.janet") :p {:out :pipe :err :pipe}))
 (def out (proc :out))

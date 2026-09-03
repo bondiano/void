@@ -1,5 +1,5 @@
 /* void/fdwait — "park this fiber until a foreign file descriptor is
- * ready" (ADR-0011, SPEC.md Appendix A).
+ * ready".
  *
  * Janet's ev loop can wait on its own streams, but nothing in `ev/`
  * waits on a descriptor somebody else owns. That is exactly what a

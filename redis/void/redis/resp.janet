@@ -1,5 +1,4 @@
-### void/redis/resp — the RESP wire format, RESP2 and RESP3 (SPEC.md
-### §5.10).
+### void/redis/resp — the RESP wire format, RESP2 and RESP3.
 ###
 ### Two halves, and the split is the one void/http/wire already makes
 ### for HTTP: a cheap scanner that finds where a frame ends, and a PEG

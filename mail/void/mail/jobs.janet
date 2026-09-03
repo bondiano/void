@@ -1,4 +1,4 @@
-### void/mail-jobs — delivery off the request path (ADR-0026 §5).
+### void/mail-jobs — delivery off the request path.
 ###
 ### Composing this plugin is the whole of "send mail through a queue".
 ### It installs one function on `mail/enqueue`, and from that moment

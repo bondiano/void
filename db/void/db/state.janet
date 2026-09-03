@@ -1,14 +1,13 @@
 ### void/db/state — the runtime: current pool, dyn-scoped connections,
-### statement execution and transactions (SPEC.md §5.9, ADR-0009).
+### statement execution and transactions.
 ###
 ### A checkout lives in a dyn (:void.db/conn), so every call inside
 ### `with-conn` — repository, builder statements, raw SQL — shares one
-### connection and the checkout is returned when the scope exits, on
-### the error path too. `with-tx` is the same idea with explicit
-### boundaries: the outermost scope drives BEGIN/COMMIT/ROLLBACK, an
-### inner one takes a SAVEPOINT (nesting is real, not silently merged),
-### and nothing flushes behind your back — there is no Unit of Work
-### (ADR-0009).
+### connection and the checkout is returned when the scope exits, on the
+### error path too. `with-tx` is the same idea with explicit boundaries:
+### the outermost scope drives BEGIN/COMMIT/ROLLBACK, an inner one takes a
+### SAVEPOINT (nesting is real, not silently merged), and nothing flushes
+### behind your back — there is no Unit of Work.
 ###
 ### Execution is the single funnel every statement passes through:
 ### format-by-dialect, prepared-statement reuse where the driver has
@@ -300,7 +299,7 @@
 
 (defmacro with-tx
   ``Run the body in a transaction — the only transaction boundary in
-  void/db (ADR-0009: no Unit of Work, nothing flushes implicitly):
+  void/db — no Unit of Work, nothing flushes implicitly:
 
       (db/with-tx
         (db/insert! Order attrs)

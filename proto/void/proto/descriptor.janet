@@ -1,13 +1,11 @@
-### void/proto/descriptor — a protobuf message as a value (SPEC.md
-### §5.7, ADR-0013).
+### void/proto/descriptor — a protobuf message as a value.
 ###
-### The middle of the package, and the only thing the other modules
-### agree on. A descriptor is plain data (ADR-0004), and it has three
-### authors who never meet: `defmessage` writes one by hand, ./parse
-### reads one out of a `.proto` file, and ./schema projects one from a
-### schema the application already declared for validation. All three
-### produce the same value, so ./codec and ./json know about only one
-### of them.
+### The middle of the package, and the only thing the other modules agree
+### on. A descriptor is plain data, and it has three authors who never
+### meet: `defmessage` writes one by hand, ./parse reads one out of a
+### `.proto` file, and ./schema projects one from a schema the application
+### already declared for validation. All three produce the same value, so
+### ./codec and ./json know about only one of them.
 ###
 ### **Two vocabularies, one seam.** A descriptor speaks protobuf's
 ### words — `:repeated`, `:optional`, `:map`, `:sint64` — because that

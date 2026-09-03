@@ -45,7 +45,7 @@
   ``The cart, and the one control that matters. `db/rel` is a table
   lookup here because ./cart.repository preloaded the products; without
   the preload this page would be an N+1 that only shows up when
-  somebody fills a basket (ADR-0009).``
+  somebody fills a basket.``
   [lines summary &opt state]
   (default state {})
   [:div {:id "cart"}

@@ -4,12 +4,12 @@
 ### under the same policies.
 ###
 ### What is being tested is mostly *absence*. ./admin.janet has no
-### handlers and no templates, and this suite drives a full CRUD
-### through pages that nobody in this repository wrote for the blog:
-### they are a projection of `defentity` (ADR-0029). The pieces that
-### did have to be written are one policy, one `:scope` and one
-### function turning `:void.admin/changed` into a bus message — and the
-### last of those is why the admin's edits land in the audit trail wave
+### handlers and no templates, and this suite drives a full CRUD through
+### pages that nobody in this repository wrote for the blog: they are a
+### projection of `defentity`. The pieces that did have to be written are
+### one policy, one `:scope` and one function turning
+### `:void.admin/changed` into a bus message — and the last of those is
+### why the admin's edits land in the audit trail wave
 ### 3.6 built, next to the edits the application's own routes make.
 
 (import ../test-support/paths)
@@ -102,7 +102,7 @@
             ":only [:index :show] is a declaration, and it is the route table that shows it")
     (note "every action is a route, and the ones nobody declared are not there")
 
-    # -- shut, until somebody signs in ------------------------------------
+    # -- shut, until somebody signs in -----------------------------------
 
     (assert (= 403 ((test/inject c {:uri "/admin"}) :status))
             "the gate is a policy, and a visitor does not pass it")
@@ -116,7 +116,7 @@
             "...and a signed-in author does")
     (note "the gate opens for staff and for nobody else")
 
-    # -- the list is scoped, and so is its count --------------------------
+    # -- the list is scoped, and so is its count -------------------------
 
     (def home (test/inject c {:uri "/"}))
     (def token (token-of home))
@@ -146,7 +146,7 @@
     (assert (string/find "ada two" (text searched)))
     (assert (string/find "1 row" (text searched)))
 
-    # -- editing through pages nobody wrote -------------------------------
+    # -- editing through pages nobody wrote ------------------------------
 
     (def mine (db/one e/Article {:where [:= :title "ada one"]}))
     (def form (test/inject c {:uri (string "/admin/articles/" (mine :id) "/edit")}))
@@ -169,7 +169,7 @@
     (assert (= "hers" ((db/find e/Article (hers :id)) :title)))
     (note "CRUD through a projection, inside the scope")
 
-    # -- the comments of an article, on the article's page ----------------
+    # -- the comments of an article, on the article's page ---------------
 
     (def detail (test/inject c {:uri (string "/admin/articles/" (mine :id))}))
     (assert (string/find "Comments" (text detail)) "the inline is on the detail page")
@@ -187,7 +187,7 @@
             "the link to the article came from the URL — the form never carried it")
     (note "inline comments, with the foreign key out of reach of a forged POST")
 
-    # -- the trail this application already kept --------------------------
+    # -- the trail this application already kept -------------------------
 
     (settle)
     (def trail (audit/trail {:limit 50}))
@@ -204,7 +204,7 @@
             "next to the lines the application's own routes wrote")
     (note "changes announced, not written: the trail is the application's")
 
-    # -- deleting says how many, before it does anything ------------------
+    # -- deleting says how many, before it does anything -----------------
 
     (def confirm (test/inject c {:uri (string "/admin/articles/-/bulk/destroy?ids=" (mine :id))}))
     (assert (= 200 (confirm :status)))
@@ -222,7 +222,7 @@
     (assert (db/find e/Article (hers :id)) "and only that one")
     (note "a confirmation page with a server-side count")
 
-    # -- and the same declarations, read by an agent ----------------------
+    # -- and the same declarations, read by an agent ---------------------
     #
     # Wave 4's first exit criterion: the
     # back office and the agent are two projections of one registry, so

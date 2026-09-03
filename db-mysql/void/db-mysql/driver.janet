@@ -1,5 +1,5 @@
 ### void/db-mysql/driver — the :void/db-driver contract over
-### libmysqlclient (ADR-0033, SPEC.md §5.10).
+### libmysqlclient.
 ###
 ### The contract itself is void/db/driver: a dictionary of
 ### :dialect/:connect/:close/:execute plus the optional keys a database
@@ -16,7 +16,7 @@
 ###                      engines different databases), so :returning is
 ###                      false and :insert-id is how void/db's entity
 ###                      layer finds the row it just wrote
-###   prepared statements NO — see ADR-0033. Reaching `mysql_stmt_*`
+###   prepared statements NO. Reaching `mysql_stmt_*`
 ###                      means laying out MYSQL_BIND, whose tail MySQL
 ###                      and MariaDB have diverged on, and a wrong
 ###                      struct layout is a segfault rather than an

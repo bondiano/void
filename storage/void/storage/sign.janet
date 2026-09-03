@@ -1,4 +1,4 @@
-### void/storage/sign — temporary URLs for the local store (ADR-0039 §5).
+### void/storage/sign — temporary URLs for the local store.
 ###
 ### The same construction as void/security's CSRF token, on the same
 ### keys: the MAC is `secret/sign` over a versioned payload of the key

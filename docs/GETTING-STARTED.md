@@ -2,10 +2,10 @@
 
 From `jpm install` to a deployable binary in about fifteen minutes.
 Every command below is real: the outputs shown are what the CLI prints
-today, and the same path runs on a clean machine as a CI job rather
-than as a paragraph here (ADR-0020). If something on this page
-disagrees with your terminal, the terminal is right and this page has
-a bug — [please say so](https://github.com/bondiano/void/issues).
+today, and the same path runs on a clean machine as a CI job rather than
+as a paragraph here. If something on this page disagrees with your
+terminal, the terminal is right and this page has a bug — [please say
+so](https://github.com/bondiano/void/issues).
 
 What you need first: [Janet](https://janet-lang.org/) ≥ 1.41, jpm and
 a C compiler (spork builds nine native modules of its own, and void
@@ -148,9 +148,9 @@ It printed the two edits instead. Make them — in `main.janet`:
 ```
 
 The sqlite driver resolves the `janet-lang/sqlite3` binding at first
-use, and the void bundle leaves that binding out on purpose
-(ADR-0011): the application that opts into the driver declares it. Add
-it to `:dependencies` in `project.janet` and fetch:
+use, and the void bundle leaves that binding out on purpose : the
+application that opts into the driver declares it. Add it to
+`:dependencies` in `project.janet` and fetch:
 
 ```janet
 :dependencies ["https://github.com/bondiano/void.git"
@@ -250,5 +250,3 @@ the TLS.
 - [IDEA-TO-DEPLOY.md](IDEA-TO-DEPLOY.md) — the same path as this
   page, continued all the way to a deployed application, with the cost
   of every step written down.
-- [SPEC.md](SPEC.md) — the full specification, if you want to know
-  why rather than how.

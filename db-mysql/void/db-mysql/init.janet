@@ -1,12 +1,11 @@
-### void/db-mysql — MySQL as the :void/db-driver (ADR-0033,
-### SPEC.md §5.10).
+### void/db-mysql — MySQL as the :void/db-driver.
 ###
 ### MySQL and MariaDB over libmysqlclient, which is synchronous all
 ### the way down: there is no non-blocking API to park on the way
 ### void/db-postgres parks on libpq's. So a connection lives on a
 ### worker thread of its own and the ev loop talks to it over a
 ### channel — a query parks the calling fiber and stops nobody else.
-### ADR-0033 is that decision; what each piece does:
+### That is the decision; what each piece does:
 ###
 ###   ./libmysql  the ffi surface, opened inside each worker thread
 ###   ./config    [:db-mysql] -> the plain-data connection spec
@@ -49,7 +48,7 @@
 ### TLS costs nothing here: the client library does the handshake, so
 ### :ssl-mode and the certificate paths are ordinary connection
 ### parameters and there is no TLS code in this plugin at all
-### (ADR-0010 — TLS stays out of the kernel).
+### (TLS stays out of the kernel).
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -154,10 +153,9 @@
 (def driver-component
   (system/component :db.mysql/driver
     :doc "The :void/db-driver void/db's pool runs on: libmysqlclient on
-    a worker thread per connection (ADR-0033), with real isolation
-    levels and savepoints. Holds a keeper connection so a wrong host or
-    a missing client library fails the boot rather than the first
-    request."
+    a worker thread per connection, with real isolation levels and
+    savepoints. Holds a keeper connection so a wrong host or a missing
+    client library fails the boot rather than the first request."
     :provides [:void/db-driver]
     :config {:key :db-mysql :schema Config}
     :start
@@ -180,7 +178,7 @@
       (def size (pool-size))
       (when (>= size thread-warning-at)
         (log/warn (string "[:db :pool :size] is " size ", and this driver runs "
-                          "one OS thread per pooled connection (ADR-0033) — "
+                          "one OS thread per pooled connection — "
                           "size the pool for the server's max_connections, "
                           "which is the smaller number")
                   :ns log-ns :size size))
@@ -230,7 +228,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/db-mysql
-  :doc "MySQL and MariaDB as the :void/db-driver: libmysqlclient on a worker thread per connection (ADR-0033) — the blocking client API kept off the ev loop, with real isolation levels, savepoints, insert ids in place of RETURNING, and TLS because the client library does it."
+  :doc "MySQL and MariaDB as the :void/db-driver: libmysqlclient on a worker thread per connection — the blocking client API kept off the ev loop, with real isolation levels, savepoints, insert ids in place of RETURNING, and TLS because the client library does it."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/db ">=0.0.1"}
   :config-key :db-mysql

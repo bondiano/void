@@ -101,10 +101,9 @@ jobs:
           cd /tmp/jpm && sudo janet bootstrap.janet
 
       - name: Install dependencies
-        # the list is the package graph's, not this file's (ADR-0020):
-        # spork for most of the tree, janet-lang/sqlite3 for
-        # void/db-sqlite's suite and for the dry-run and contract gates,
-        # which load the driver
+        # the list is the package graph's, not this file's: spork for most
+        # of the tree, janet-lang/sqlite3 for void/db-sqlite's suite and
+        # for the dry-run and contract gates, which load the driver
         run: |
           for url in $(janet scripts/packages.janet dev-deps); do
             sudo jpm install "$url"
@@ -112,9 +111,9 @@ jobs:
           # libpq and libmysqlclient are both opened at runtime through
           # ffi/, so the client libraries are all void/db-postgres and
           # void/db-mysql need — no headers. libmariadb3 is MariaDB
-          # Connector/C: it exports the same mysql_* API, and it is what
-          # a Debian-family image actually has (ADR-0033)
-          # librdkafka1 is void/kafka's, for the same reason (ADR-0035)
+          # Connector/C: it exports the same mysql_* API, and it is what a
+          # Debian-family image actually has librdkafka1 is void/kafka's,
+          # for the same reason
           sudo apt-get update && sudo apt-get install -y libpq5 libmariadb3 librdkafka1
           # void/redis needs no client library at all (a connection is a
           # net/ stream)
@@ -123,7 +122,7 @@ jobs:
         # Not a service container: `minio server /data` is a *command*,
         # and a GitHub service cannot override one. It is here for the
         # half AWS's published vectors cannot check — that a signature
-        # this code produces is one a real server accepts (ADR-0039).
+        # this code produces is one a real server accepts.
         run: |
           docker run -d --name void-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=void -e MINIO_ROOT_PASSWORD=void-void-void \
@@ -137,11 +136,11 @@ jobs:
              mc mb --ignore-existing ci/void-test"
 
       - name: Build void/fdwait
-        # the monorepo's one native module (ADR-0011). void/db-postgres
-        # and void/kafka import it, so the dry-run and contract gates
-        # need it built before they can load either plugin at all — and
-        # so does void/jobs's SKIP LOCKED suite, which reaches Postgres
-        # through the same driver.
+        # the monorepo's one native module. void/db-postgres and
+        # void/kafka import it, so the dry-run and contract gates need it
+        # built before they can load either plugin at all — and so does
+        # void/jobs's SKIP LOCKED suite, which reaches Postgres through
+        # the same driver.
         run: cd fdwait && jpm build
 
       - name: The package graph agrees with the tree on disk
@@ -150,7 +149,7 @@ jobs:
       - name: Test every package
         # the steps are a projection of scripts/packages.janet, in
         # topological order, with the examples last — a package added to
-        # the graph is tested here without touching this file (ADR-0020)
+        # the graph is tested here without touching this file
         run: |
           while IFS=$'\t' read -r name dir; do
             echo "::group::jpm test $name ($dir)"
@@ -175,9 +174,9 @@ jobs:
 
   # The user's path, which nothing above touches: `jpm test` runs against
   # the live sources in the checkout, so an installation that does not
-  # work is invisible to it. Here the bundle is installed into a tree
-  # with nothing else in it, and the README's Quick start is executed
-  # rather than described (ADR-0020).
+  # work is invisible to it. Here the bundle is installed into a tree with
+  # nothing else in it, and the README's Quick start is executed rather
+  # than described.
   install:
     name: Clean machine — install the bundle, scaffold and smoke a project
     runs-on: ubuntu-latest
@@ -207,13 +206,13 @@ jobs:
           echo "$HOME/void-tree/bin" >> "$GITHUB_PATH"
 
       - name: The driver library an application opts into
-        # janet-lang/sqlite3 is deliberately not in the bundle
-        # (ADR-0011, ADR-0020): void/db-sqlite is a plugin an
-        # application lists, and a missing library is a readable error
-        # at :start rather than a dependency everybody installs. So the
-        # applications in this job install it, which is what an
-        # application does — `void make auth` generates a suite that
-        # boots the driver, and examples/hub keeps its data in it.
+        # janet-lang/sqlite3 is deliberately not in the bundle:
+        # void/db-sqlite is a plugin an application lists, and a missing
+        # library is a readable error at :start rather than a dependency
+        # everybody installs. So the applications in this job install it,
+        # which is what an application does — `void make auth` generates a
+        # suite that boots the driver, and examples/hub keeps its data in
+        # it.
         run: |
           for url in $(janet scripts/packages.janet installed-deps); do
             jpm --tree="$HOME/void-tree" install "$url"
@@ -253,7 +252,7 @@ jobs:
 
       - name: A project-local jpm_tree wins over the installed one
         # the launcher swaps syspath before importing the CLI, so both
-        # halves of the process come from the same tree (ADR-0020)
+        # halves of the process come from the same tree
         run: |
           cd "$(mktemp -d)"
           void new pinned
@@ -263,9 +262,9 @@ jobs:
           void routes | grep -q ':entries/create'
 
       - name: void make resource, and the suite it generates
-        # the four generated files are four projections of one
-        # declaration (ROADMAP 4.5); the generated suite is what asserts
-        # they still agree, and it needs no database to do it
+        # the four generated files are four projections of one declaration
+        #; the generated suite is what asserts they still agree, and
+        # it needs no database to do it
         run: |
           cd "$(mktemp -d)"
           void new scaffold
@@ -277,9 +276,9 @@ jobs:
           janet test/products-test.janet | grep -q 'products-test ok'
 
       - name: void make auth, and the suite it generates
-        # the scaffold is checked by what it itself generates (ROADMAP
-        # 6.2): the generated suite boots the generated plugin on sqlite
-        # and drives register, verify, sign in, CSRF and the reset
+        # the scaffold is checked by what it itself generates: the
+        # generated suite boots the generated plugin on sqlite and drives
+        # register, verify, sign in, CSRF and the reset
         run: |
           cd "$(mktemp -d)"
           void new accounts
@@ -308,7 +307,7 @@ jobs:
           grep -q ':void/pressure is new' /tmp/check.txt
 
       - name: jpm build, and the single binary that comes out
-        # SPEC §9 and docs/DEPLOY.md: no janet, no jpm, no module tree on
+        # docs/DEPLOY.md: no janet, no jpm, no module tree on
         # the target, and the binary is also the CLI (cli/app-main)
         run: |
           cd "$(mktemp -d)"
@@ -338,7 +337,7 @@ jobs:
         # application that stays — and the one in the repository with no
         # test-support/paths.janet, so it imports void/... from the tree
         # installed at the top of this job and from nowhere else
-        # (ROADMAP 6.6, scripts/install-tree.janet). The list is the
+        # (6.6, scripts/install-tree.janet). The list is the
         # package graph's, like every other list here.
         run: |
           while IFS=$'\t' read -r name dir; do
@@ -348,10 +347,10 @@ jobs:
           done < <(janet scripts/packages.janet ci-installed)
 
   # void/crypto is ffi to a library the machine provides, so what it can
-  # do is a property of the machine (ADR-0022): the argon2id KDF needs
-  # OpenSSL 3.2, and the candidate list is platform-specific because on
-  # macOS loading libcrypto by soname *aborts the process*. Neither fact
-  # can be checked by reasoning, so both legs run the suite:
+  # do is a property of the machine: the argon2id KDF needs OpenSSL 3.2,
+  # and the candidate list is platform-specific because on macOS loading
+  # libcrypto by soname *aborts the process*. Neither fact can be checked
+  # by reasoning, so both legs run the suite:
   #
   #   ubuntu-latest   OpenSSL 3.0  — argon2id absent, the skip path
   #   macos-latest    Homebrew 3.x — argon2id present, and the one

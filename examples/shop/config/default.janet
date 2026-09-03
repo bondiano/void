@@ -12,12 +12,12 @@
 
  # A cart belongs to a browser before it belongs to an account, and the
  # session is where the browser keeps its handle on one. In-process is
- # right for one process and wrong for anything past it — a second
- # prefork worker and a second machine break it identically, which is
- # why the check is on the deployment shape rather than on [:http
- # :workers] (ADR-0030). config/prod.janet is where this deployment
- # says it is a fleet and names the shared store for every one of
- # these. The [:http] slice itself is below, next to the static files.
+ # right for one process and wrong for anything past it — a second prefork
+ # worker and a second machine break it identically, which is why the
+ # check is on the deployment shape rather than on [:http :workers].
+ # config/prod.janet is where this deployment says it is a fleet and names
+ # the shared store for every one of these. The [:http] slice itself is
+ # below, next to the static files.
 
  :db {:migrations {:dir "db/migrations"}}
 
@@ -35,12 +35,11 @@
  # -- product pictures ---------------------------------------------------
  #
  # A directory next to the checkout, served by void/storage-http under
- # /uploads with the same ETag and Range handling the stylesheet gets
- # (ADR-0039). This is the right store for one process and the wrong
- # one for anything past it, exactly like the in-memory session store
- # above: config/prod.janet moves it into the minio bucket, and a
- # deployment that forgets does not start ([:deploy :shape] :fleet,
- # ADR-0030).
+ # /uploads with the same ETag and Range handling the stylesheet gets.
+ # This is the right store for one process and the wrong one for anything
+ # past it, exactly like the in-memory session store above:
+ # config/prod.janet moves it into the minio bucket, and a deployment that
+ # forgets does not start ([:deploy :shape] :fleet).
  #
  # The prefix is public: a product picture is on a page anybody can
  # open. `[:storage :serve :signed] true` would make every URL a
@@ -87,27 +86,26 @@
  # controllers under src/modules/ and there is no exception, `:public`
  # included.
  #
- # It is `:allow` here anyway, and that is a fact about the
- # composition rather than about the posture. Under `[:authz :default
- # :deny]` a route with no `:void.authz/policy` fails the boot
- # (ADR-0024 §6) — and this process serves five routes it did not
- # write: `/metrics`, `/health`, `/ready` from void/obs-http and
- # `/openapi.json`, `/docs` from void/openapi. Route metadata can only
- # be set by whoever declares the route, so there is no line an
- # application can write to mark somebody else's route public, and
+ # It is `:allow` here anyway, and that is a fact about the composition
+ # rather than about the posture. Under `[:authz :default :deny]` a route
+ # with no `:void.authz/policy` fails the boot — and this process serves
+ # five routes it did not write: `/metrics`, `/health`, `/ready` from
+ # void/obs-http and `/openapi.json`, `/docs` from void/openapi. Route
+ # metadata can only be set by whoever declares the route, so there is no
+ # line an application can write to mark somebody else's route public, and
  # `:deny` would refuse to start over routes that are open by design.
- # examples/blog, which composes neither plugin, takes the `:deny`
- # posture and is where that gate is demonstrated.
+ # examples/blog, which composes neither plugin, takes the `:deny` posture
+ # and is where that gate is demonstrated.
  :authz {:default :allow}
 
  # -- mail ---------------------------------------------------------------
  #
- # In development every letter is written into tmp/mail as a .eml —
- # open one and it renders in a mail client. In production this has to
- # be :smtp (or a transport the application contributes): a transport
- # that keeps mail rather than sending it is a boot error in the :prod
- # profile, because a deployment that silently mails nothing looks
- # exactly like one that works (ADR-0026 §2).
+ # In development every letter is written into tmp/mail as a .eml — open
+ # one and it renders in a mail client. In production this has to be :smtp
+ # (or a transport the application contributes): a transport that keeps
+ # mail rather than sending it is a boot error in the :prod profile,
+ # because a deployment that silently mails nothing looks exactly like one
+ # that works.
  #
  # :base-url is not optional decoration — a letter has no origin, so
  # the link in it must be absolute, and a relative one is an error at
@@ -126,12 +124,11 @@
  # -- the bus ------------------------------------------------------------
  #
  # The bus lives in the same database as the data, which is the whole
- # reason `bus/publish-tx!` is possible: `order/placed` and the order
- # row commit in one transaction (ADR-0012). Nothing outside this
- # process consumes these messages, so :codec :jdn rather than the
- # default :json — jdn round-trips a keyword. An application whose
- # events are read by a second service leaves the default alone, which
- # is why it is the default.
+ # reason `bus/publish-tx!` is possible: `order/placed` and the order row
+ # commit in one transaction. Nothing outside this process consumes these
+ # messages, so :codec :jdn rather than the default :json — jdn
+ # round-trips a keyword. An application whose events are read by a second
+ # service leaves the default alone, which is why it is the default.
  :bus {:backend :db :group :shop :codec :jdn}
 
  # -- what a browser is allowed to do ------------------------------------
@@ -173,9 +170,8 @@
  # the policy that decides who is an operator, and the shop already had
  # one — `:staff`, over the `role` column on customers
  # (modules/customers/customers.policy). No second authentication, no
- # separate session, no admin user table: a member of staff is a
- # customer with a role, and this line is the whole of saying so
- # (ADR-0029 §3).
+ # separate session, no admin user table: a member of staff is a customer
+ # with a role, and this line is the whole of saying so.
  :admin {:access :staff
          :title "void shop — the desk"
          # every route void/admin projects carries these. The document

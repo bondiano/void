@@ -1,5 +1,5 @@
 ### The composition: what validates, what refuses, and what a second
-### replica would have to share (ADR-0031, ADR-0030).
+### replica would have to share.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
@@ -92,14 +92,14 @@
 # -- nothing here is a store a second replica would have to see ----------
 #
 # The HTTP transport issues no session id and holds no stream between
-# requests, so a fleet composition has nothing to fix: ADR-0030's
-# survey passes without void/mcp declaring anything (ADR-0031 §5).
+# requests, so a fleet composition has nothing to fix: the shared-store survey
+# passes without void/mcp declaring anything.
 
 (def fleet
   (test/start! {:plugins [:void/http :void/mcp :void/mcp-http]
                 :only [:http/kernel]
                 # sessions off: void/http's cookie sessions are a store
-                # of their own and ADR-0030 has already asked them the
+                # of their own and the survey has already asked them the
                 # question — this composition is here to show that
                 # void/mcp adds no second one
                 :config (config {:deploy {:shape :fleet}

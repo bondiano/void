@@ -1,4 +1,4 @@
-### void/http/ring — the Ring model helpers (SPEC.md §5.1).
+### void/http/ring — the Ring model helpers.
 ###
 ### Request and response are plain tables, nothing more: a handler is
 ### (fn [request] response), middleware wraps handlers. Response shape:
@@ -163,7 +163,7 @@
   (set-cookie resp name ""
               (merge {:max-age 0} (or opts {}))))
 
-# -- server-sent events (SPEC §5.1: SSE is part of the contract) ---------
+# -- server-sent events (SSE is part of the contract) --------------------
 
 (defn sse-event
   ``Format one SSE event:

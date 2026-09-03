@@ -1,4 +1,4 @@
-### The `void` bundle (ADR-0020).
+### The `void` bundle.
 ###
 ### jpm resolves a dependency to a *git repository with a project.janet
 ### in its root* — there is no notion of a subdirectory. So the monorepo
@@ -15,13 +15,13 @@
 
 (declare-project
   :name "void"
-  :description ``void — a batteries-included web framework for Janet: HTTP kernel, SSR + htmx, REST + OpenAPI, database, cache, jobs, load shedding, and the `void` CLI (SPEC §9, ADR-0020).``
+  :description ``void — a batteries-included web framework for Janet: HTTP kernel, SSR + htmx, REST + OpenAPI, database, cache, jobs, load shedding, and the `void` CLI.``
   :version "0.1.0"
   :url "https://github.com/bondiano/void"
   :repo "git+https://github.com/bondiano/void.git"
-  # janet-lang/sqlite3 is deliberately absent: void/db-sqlite is a
-  # plugin an application opts into, and a missing library is an error
-  # at :start with a readable text, the way libpq is (ADR-0011).
+  # janet-lang/sqlite3 is deliberately absent: void/db-sqlite is a plugin
+  # an application opts into, and a missing library is an error at :start
+  # with a readable text, the way libpq is.
   :dependencies (tuple ;(packages/jpm-dependencies)))
 
 # Every package's `void/` tree, in topological order. `cp -rf` merges
@@ -29,9 +29,9 @@
 (declare-source
   :source (packages/source-trees))
 
-# void/fdwait — ~60 lines of C (ADR-0011). An HTMX application pays no
-# extra price for it: void/core depends on spork, and spork builds nine
-# native modules of its own, so a C compiler is already in the baseline.
+# void/fdwait — ~60 lines of C. An HTMX application pays no extra price
+# for it: void/core depends on spork, and spork builds nine native modules
+# of its own, so a C compiler is already in the baseline.
 (declare-native
   :name "void/fdwait/native"
   :source ["fdwait/src/fdwait.c"])

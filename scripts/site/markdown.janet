@@ -1,7 +1,7 @@
 ### scripts/site/markdown — the subset of Markdown this repository's
 ### documents actually use, parsed into void/html hiccup.
 ###
-### Not CommonMark, on purpose: the corpus is docs/*.md, docs/adr/*.md,
+### Not CommonMark, on purpose: the corpus is docs/*.md, docs/cookbook/*.md,
 ### README.md and CONTRIBUTING.md, and the constructs below are the
 ### constructs they contain — ATX headers, paragraphs, fenced code,
 ### pipe tables, nested bullet/ordered lists with task checkboxes,
@@ -352,6 +352,38 @@
           ;(if (= "janet" lang) (highlight-janet text) [text])]]
    (min (length lines) (inc j))])
 
+(def- code-indent 4)
+
+(defn- indented-code?
+  ``An indented code block starts here: four spaces on a line that
+  stands on its own after a blank one. CommonMark's rule that matters for
+  this corpus is the second half — a code block cannot interrupt a
+  paragraph, so an indented continuation line stays prose. The documents
+  use these for the transcripts printed under a command
+  («created demo/project.janet…»), which a paragraph would run
+  together into one line.``
+  [lines i]
+  (and (string/has-prefix? "    " (lines i))
+       (or (zero? i) (empty? (string/trim (get lines (dec i) ""))))))
+
+(defn- parse-indented-code [lines i]
+  (def body @[])
+  (var j i)
+  (var last i)
+  (var stop false)
+  (while (and (< j (length lines)) (not stop))
+    (def l (lines j))
+    (cond
+      (empty? (string/trim l)) (array/push body "")
+      (string/has-prefix? "    " l)
+      (do (array/push body (string/slice l code-indent)) (set last j))
+      (set stop true))
+    (unless stop (++ j)))
+  # trailing blank lines belong to the document, not to the block
+  (def kept (array/slice body 0 (inc (- last i))))
+  [[:pre [:code (string (string/join kept "\n") "\n")]]
+   (inc last)])
+
 (varfn blocks
   "Lines to an array of block-level hiccup."
   [lines rewrite]
@@ -391,6 +423,12 @@
            (string/has-prefix? "|" (string/trim (get lines (inc i) "")))
            (peg/match table-sep-peg (string/trim (get lines (inc i) ""))))
       (let [[node next] (parse-table lines i rewrite)]
+        (array/push out node) (set i next))
+
+      # before the list: a nested item is parse-list's business, so a
+      # four-space line reaching this far is code
+      (indented-code? lines i)
+      (let [[node next] (parse-indented-code lines i)]
         (array/push out node) (set i next))
 
       (peg/match item-peg line)

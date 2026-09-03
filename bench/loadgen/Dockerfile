@@ -1,4 +1,4 @@
-# The load generators in a container next to the apps (SPEC §8.3):
+# The load generators in a container next to the apps:
 # wrk (max throughput) + wrk2 (latency under fixed rate — the only
 # honest latency, wrk suffers coordinated omission).
 #

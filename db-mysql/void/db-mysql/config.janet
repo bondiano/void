@@ -1,6 +1,5 @@
 ### void/db-mysql/config — from the [:db-mysql] config slice to the
-### plain-data spec a worker thread connects with (ADR-0033,
-### SPEC.md §5.10).
+### plain-data spec a worker thread connects with.
 ###
 ### void/db-postgres/config has to build a *string*, because libpq
 ### parses one. libmysqlclient does not: `mysql_real_connect` takes
@@ -41,7 +40,7 @@
    :password [:optional :string]
 
    # TLS is the client library's own — the driver adds nothing to it
-   # (ADR-0010)
+   #
    :ssl-mode [:optional [:enum :disabled :preferred :required
                          :verify-ca :verify-identity]]
    :ssl-ca [:optional :string]

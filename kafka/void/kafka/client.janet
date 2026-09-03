@@ -1,5 +1,5 @@
-### void/kafka/client — one librdkafka handle and the pump that turns
-### its events into calls (ADR-0035, SPEC.md §5.11).
+### void/kafka/client — one librdkafka handle and the pump that turns its
+### events into calls.
 ###
 ### The whole integration is here, and it is short: the library parks
 ### its news (delivery reports, fetched messages, errors) on a queue,
@@ -194,7 +194,7 @@
 (defn destroy!
   ``Release everything after the pump is down. `rd_kafka_destroy`
   joins the library's threads — the one deliberately blocking call
-  (ADR-0035), made at :stop where a bounded block is the shutdown
+, made at :stop where a bounded block is the shutdown
   bargain.``
   [c]
   (rk/rd_kafka_queue_destroy (c :queue))

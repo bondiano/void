@@ -1,12 +1,12 @@
-### void/test — test support (SPEC.md §4).
+### void/test — test support.
 ###
-### Fixtures are components: bring up just the subset of the system a
-### test needs (:only — the listed components plus their transitive
-### deps) and swap real components for stubs by re-registering the
-### same :key (:components override). Factories come straight from the
-### schema layer through the :generator projection — one declaration
-### feeds validation, docs and test data alike (ADR-0008). `snapshot`
-### stores golden renderings under test/snapshots (hiccup views).
+### Fixtures are components: bring up just the subset of the system a test
+### needs (:only — the listed components plus their transitive deps) and
+### swap real components for stubs by re-registering the same :key
+### (:components override). Factories come straight from the schema layer
+### through the :generator projection — one declaration feeds validation,
+### docs and test data alike. `snapshot` stores golden renderings under
+### test/snapshots (hiccup views).
 
 (import spork/json)
 (import void/core/system :as system)
@@ -66,19 +66,18 @@
     (def needed (deps-closure sub only))
     (set sub (system/init (filter |(in needed ($ :key)) (values comps)) cfg)))
   (put boot :system sub)
-  # the full lifecycle, like plugin/start! — :before-start is where
-  # route tables and contexts build (ADR-0017: the inject path must be
-  # the production wiring, not a shortcut)
+  # the full lifecycle, like plugin/start! — :before-start is where route
+  # tables and contexts build (the inject path must be the production
+  # wiring, not a shortcut)
   (hooks/run! (boot :hooks) :config-loaded boot)
   (hooks/run! (boot :hooks) :before-start boot)
   (system/start sub)
   (put boot :phase :ready)
   (hooks/run! (boot :hooks) :after-start boot)
-  # and the store survey, for the same reason as everything above it:
-  # a composition that would not start in production must not start
-  # here either (ADR-0017, ADR-0030). Under the :test profile the
-  # shape is :single and this is inert — a test that wants the gate
-  # asks for it with [:deploy :shape] :fleet.
+  # and the store survey, for the same reason as everything above it: a
+  # composition that would not start in production must not start here
+  # either. Under the :test profile the shape is :single and this is inert
+  # — a test that wants the gate asks for it with [:deploy :shape] :fleet.
   (put boot :stores (deploy/check! boot))
   boot)
 
@@ -169,7 +168,7 @@
       (merge-into (if (table? base) base (merge-into @{} base))
                   (table ;kvs)))))
 
-# -- the inject client (ADR-0017) ----------------------------------------
+# -- the inject client ---------------------------------------------------
 #
 # Fastify-style app.inject: drive the full HTTP stack in memory —
 # routing, lifecycle stages, middleware, rendering, wire serialization
@@ -214,7 +213,7 @@
                  "; ")))
 
 (defn inject
-  ``One in-memory request through the whole stack (ADR-0017):
+  ``One in-memory request through the whole stack:
 
       (test/inject c {:uri "/orders"})
       (test/inject c {:method :post :uri "/login"
@@ -298,7 +297,7 @@
 
 (defmacro with-http
   ``Start the app kernel-only (no port), hand the body an inject
-  client, stop in defer (ADR-0017):
+  client, stop in defer:
 
       (test/with-http [c {:plugins [:void/http my-app/plugin]}]
         (def resp (test/inject c {:uri "/"}))

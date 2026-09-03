@@ -1,5 +1,4 @@
-### void/html/form — form helpers from the schema layer (SPEC.md §5.4,
-### ADR-0008).
+### void/html/form — form helpers from the schema layer.
 ###
 ### One map schema drives validation, docs and now markup: field-specs
 ### projects the schema's fields into plain control descriptions
@@ -74,10 +73,10 @@
              :type (get format-input-types (props :format) "text")
              :attrs {:minlength (props :min)
                      :maxlength (props :max)}}
-    # the upload seam (ADR-0039): a :file field stores a storage key,
-    # the browser submits bytes — void/storage's save-upload! (or the
-    # admin widget) bridges the two. :storage/accept is an annotation
-    # this projection reads and validation never does (ADR-0008)
+    # the upload seam: a :file field stores a storage key, the browser
+    # submits bytes — void/storage's save-upload! (or the admin widget)
+    # bridges the two. :storage/accept is an annotation this projection
+    # reads and validation never does
     :file {:control :file
            :attrs {:accept (when-let [a (props :storage/accept)]
                              (string/join (map string a) ","))}}

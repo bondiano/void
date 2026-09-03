@@ -1,14 +1,13 @@
 ### hub :prod profile — the deployment in docker-compose.yml.
 ###
-### Everything here is either a fact about that deployment (that there
-### is more than one replica, that a proxy holds the TLS, that the
-### bucket is where bodies go) or a posture the :dev profile has no
-### business taking. Connection details themselves are **not** here:
-### they arrive as VOID_* environment variables, which is the layer
-### above this file (ADR-0007), so one image runs against any database
-### and any bucket without a rebuild.
+### Everything here is either a fact about that deployment (that there is
+### more than one replica, that a proxy holds the TLS, that the bucket is
+### where bodies go) or a posture the :dev profile has no business taking.
+### Connection details themselves are **not** here: they arrive as VOID_*
+### environment variables, which is the layer above this file, so one
+### image runs against any database and any bucket without a rebuild.
 
-{# What this is deployed as, said out loud (ADR-0030). :fleet is already
+{# What this is deployed as, said out loud. :fleet is already
  # the :prod default — it is written here because everything below is
  # the answer to it, and because `void deploy check` prints the reason
  # it was given: "the compose file runs a web tier that scales and a
@@ -37,9 +36,8 @@
  # the CSRF token, the session cookie and every signature void/security
  # mints stand on this. It is a secret reference: the value lives in the
  # environment and the config tree holds an opaque box that does not
- # print (ADR-0007 §5). Without it the process refuses to start in
- # :prod — an ephemeral key would sign tokens the next deployment
- # rejects.
+ # print. Without it the process refuses to start in :prod — an ephemeral
+ # key would sign tokens the next deployment rejects.
  #
  # `:trusted-proxies` is the other half of running behind Caddy: the
  # client address is computed from the forwarded chain, and only for
@@ -49,11 +47,11 @@
  # that one instead.
  #
  # There is no `:rate` here, and that is a decision rather than an
- # omission: a rate limiter shared by two replicas counts in a cache,
- # and the only shared cache void has is redis (ADR-0030) — the server
- # this deployment does not run. What a hub is actually flooded with is
- # deliveries, and those are shed by void/pressure below, which measures
- # this process rather than counting for the fleet.
+ # omission: a rate limiter shared by two replicas counts in a cache, and
+ # the only shared cache void has is redis — the server this deployment
+ # does not run. What a hub is actually flooded with is deliveries, and
+ # those are shed by void/pressure below, which measures this process
+ # rather than counting for the fleet.
  :security {:signing-key {:secret "HUB_SECRET_KEY"}
             :trusted-proxies ["172.16.0.0/12" "10.0.0.0/8" "192.168.0.0/16"]}
 
@@ -64,7 +62,7 @@
  # refuses to guess. The disk store is what `void deploy check` refuses
  # here: a body written to one replica's disk is a 404 for the operator
  # who came to read it on another, and the container that gets replaced
- # takes the evidence with it (ADR-0030, ADR-0039).
+ # takes the evidence with it.
  #
  # The endpoint, the bucket and the region arrive as VOID_STORAGE_S3__*
  # variables, so the same image runs against minio in the compose file
@@ -74,20 +72,20 @@
  # good for five minutes.
  :void/storage-store {:impl :storage/s3}
 
- # The credentials are the one part of the connection written here
- # rather than passed as a plain VOID_* variable, for the reason
- # HUB_SECRET_KEY is: a secret reference resolves out of the environment
- # into a box that does not print, so a credential cannot reach a log
- # line or a `void config explain` (ADR-0007 §5). The key is spelled
- # :secret-key and not :secret — a slice key called :secret *is* the
- # env-reference form, and the literal would be read as one.
+ # The credentials are the one part of the connection written here rather
+ # than passed as a plain VOID_* variable, for the reason HUB_SECRET_KEY
+ # is: a secret reference resolves out of the environment into a box that
+ # does not print, so a credential cannot reach a log line or a `void
+ # config explain`. The key is spelled :secret-key and not :secret — a
+ # slice key called :secret *is* the env-reference form, and the literal
+ # would be read as one.
  :storage-s3 {:access-key {:secret "S3_ACCESS_KEY"}
               :secret-key {:secret "S3_SECRET_KEY"}}
 
- # a relay next to the application holds the TLS (ADR-0010); this client
- # speaks to it in the clear over the container network. The address is
- # VOID_MAIL__SMTP__HOST, and a deployment that is not a demo points it
- # at a real relay rather than at the compose file's inbox
+ # a relay next to the application holds the TLS; this client speaks to it
+ # in the clear over the container network. The address is
+ # VOID_MAIL__SMTP__HOST, and a deployment that is not a demo points it at
+ # a real relay rather than at the compose file's inbox
  :mail {:transport :smtp}
 
  # the web tier serves and enqueues; the worker is the same image with
@@ -96,17 +94,17 @@
  :jobs {:worker {:enabled false}}
 
  # /health and /ready are what the compose file's healthcheck and the
- # proxy read, and void/pressure-http exempts them from shedding, so
- # they answer while the process is refusing deliveries (ADR-0019).
- # /metrics answers a bearer token and nothing else; the token arrives
- # as VOID_OBS_HTTP__TOKEN rather than being written here — a token in a
- # file in the image is a token in the image
+ # proxy read, and void/pressure-http exempts them from shedding, so they
+ # answer while the process is refusing deliveries. /metrics answers a
+ # bearer token and nothing else; the token arrives as
+ # VOID_OBS_HTTP__TOKEN rather than being written here — a token in a file
+ # in the image is a token in the image
  :obs-http {:endpoints true}
 
  # a container has a memory limit, which is the one number void/pressure
- # cannot guess (ADR-0019): 384 MB of the 512 the compose file gives
- # each service, so the process starts shedding deliveries before the
- # kernel starts killing it. A push to a busy repository is a dozen
- # deliveries in a second and each one may be 25 MiB, which is the whole
- # reason this plugin is in the composition
+ # cannot guess: 384 MB of the 512 the compose file gives each service, so
+ # the process starts shedding deliveries before the kernel starts killing
+ # it. A push to a busy repository is a dozen deliveries in a second and
+ # each one may be 25 MiB, which is the whole reason this plugin is in the
+ # composition
  :pressure {:max-rss-bytes 402653184}}

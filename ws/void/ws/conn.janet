@@ -1,4 +1,4 @@
-### void/ws/conn — one websocket connection (SPEC §5.6, ADR-0028).
+### void/ws/conn — one websocket connection.
 ###
 ### **Two fibers and one socket.** The reader is the connection fiber
 ### the HTTP server already had: `ring/upgrade` hands it over and it
@@ -390,9 +390,9 @@
           ci
           (do
             (put conn :state :closing)
-            # echo the peer's code back, except when it sent none —
-            # 1005 is a code no endpoint may put on the wire (§7.4.1),
-            # so an empty close is answered with an empty close
+            # echo the peer's code back, except when it sent none — 1005
+            # is a code no endpoint may put on the wire, so an empty close
+            # is answered with an empty close
             (send-frame! conn :close
                          (if (= 1005 (ci :code))
                            ""

@@ -1,4 +1,4 @@
-### void/storage/schema — the :file schema type (ADR-0039 §6).
+### void/storage/schema — the :file schema type.
 ###
 ### What a file field *stores* is a key, so that is what the type
 ### validates — in a form, in an entity, in an API document. The upload
@@ -15,7 +15,7 @@
 ### twice is a replace, which is what the schema layer's registries do
 ### by design.
 ###
-### The `:storage/*` props are annotations in the ADR-0008 sense —
+### The `:storage/*` props are annotations in the schema-layer sense —
 ### parsed and stored on the node, never consulted by validation,
 ### read by the projections that act on them:
 ###
@@ -38,7 +38,7 @@
 (defn annotations
   ``The `:storage/*` props of a schema node, as a struct — what the
   form projection and the admin widget read. `db-annotations` is the
-  same idea for `:db/*` (ADR-0008).``
+  same idea for `:db/*`.``
   [node]
   (freeze
     (tabseq [[k v] :pairs (get node :props {})

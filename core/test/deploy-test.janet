@@ -1,11 +1,11 @@
-# The deployment shape and the store survey (ADR-0030): [:deploy :shape]
-# resolution, one error naming every per-process store, and the three
-# answers a store may give.
+# The deployment shape and the store survey: [:deploy :shape] resolution,
+# one error naming every per-process store, and the three answers a store
+# may give.
 (import ../void/core/plugin :as plugin)
 (import ../void/core/system :as system)
 (import ../void/core/deploy :as deploy)
 
-# -- the shape ------------------------------------------------------------
+# -- the shape -----------------------------------------------------------
 
 (assert (= :single (get (deploy/resolve! {} :dev) :shape))
         "dev is one process until it says otherwise")
@@ -39,7 +39,7 @@
 (deploy/resolve! {:http {:workers 3}} :dev)
 (assert (string/find ":workers" (get (deploy/deployment) :reason)))
 
-# -- a composition that declares stores -----------------------------------
+# -- a composition that declares stores ----------------------------------
 
 (defn- store-plugin [name what shared? &opt extra]
   (default extra {})
@@ -103,7 +103,7 @@
 (assert (empty? (deploy/per-process (fleet :stores))))
 (plugin/shutdown! fleet)
 
-# -- the report -----------------------------------------------------------
+# -- the report ----------------------------------------------------------
 
 (def boot (plugin/bootstrap {:plugins [sessions queue rooms] :profile :prod} true))
 (def lines (deploy/report boot))
@@ -118,7 +118,7 @@
 (assert (string/find "not asked" (string/join (deploy/report boot) "\n"))
         "under :single the report says the question was not put")
 
-# -- :needs ---------------------------------------------------------------
+# -- :needs --------------------------------------------------------------
 
 (def with-needs
   (plugin/manifest :test/needy

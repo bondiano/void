@@ -1,13 +1,13 @@
 ### shop :prod profile — the deployment in docker-compose.yml.
 ###
 ### Everything here is either a fact about that deployment (where the
-### database is, that there is a relay next to the process) or a
-### posture the :dev profile has no business taking. Connection details
-### themselves are **not** here: they arrive as VOID_* environment
-### variables, which is the layer above this file (ADR-0007), so one
-### image runs against any database without a rebuild.
+### database is, that there is a relay next to the process) or a posture
+### the :dev profile has no business taking. Connection details themselves
+### are **not** here: they arrive as VOID_* environment variables, which
+### is the layer above this file, so one image runs against any database
+### without a rebuild.
 
-{# What this is deployed as, said out loud (ADR-0030). :fleet is
+{# What this is deployed as, said out loud. :fleet is
  # already the :prod default — it is written here because everything
  # below is the answer to it, and because `void deploy check` prints
  # the reason it gives, and "the compose file runs web and worker, and
@@ -27,12 +27,11 @@
         # answer, for a deployment that would rather not run a redis
         :session {:store :redis :ttl 86400}}
 
- # the CSRF token, the session cookie and every signature in
- # void/security stand on this. It is a secret reference: the value
- # lives in the environment, and the config tree holds an opaque box
- # that does not print (ADR-0007 §5). Without it the process refuses to
- # start in :prod — an ephemeral key would sign tokens the next
- # deployment rejects
+ # the CSRF token, the session cookie and every signature in void/security
+ # stand on this. It is a secret reference: the value lives in the
+ # environment, and the config tree holds an opaque box that does not
+ # print. Without it the process refuses to start in :prod — an ephemeral
+ # key would sign tokens the next deployment rejects
  # -- product pictures, in a bucket --------------------------------------
  #
  # Two components provide :void/storage-store once void/storage-s3 is
@@ -40,7 +39,7 @@
  # [:void/cache-store] has three lines down. The disk store is what
  # `void deploy check` would refuse here: a picture uploaded to one
  # replica is a 404 on the next, and the container that gets replaced
- # takes the uploads with it (ADR-0030, ADR-0039).
+ # takes the uploads with it.
  #
  # The endpoint, the bucket and the credentials are **not** here: they
  # arrive as VOID_STORAGE_S3__* environment variables, so one image
@@ -52,12 +51,12 @@
  # (VOID_SECURITY__CSP__POLICY__IMG_SRC).
  :void/storage-store {:impl :storage/s3}
 
- # The credentials are the one part of the connection that is written
- # here rather than passed as a plain VOID_* variable, and for the
- # reason SHOP_SECRET_KEY is: a secret reference resolves out of the
- # environment into a box that does not print, so a credential cannot
- # reach a log line or a `void config explain` (ADR-0007 §5). The key
- # is spelled :secret-key and not :secret — a slice key called :secret
+ # The credentials are the one part of the connection that is written here
+ # rather than passed as a plain VOID_* variable, and for the reason
+ # SHOP_SECRET_KEY is: a secret reference resolves out of the environment
+ # into a box that does not print, so a credential cannot reach a log line
+ # or a `void config explain`. The key is spelled :secret-key and not
+ # :secret — a slice key called :secret
  # *is* the env-reference form, and the literal would be read as one.
  :storage-s3 {:access-key {:secret "MINIO_ACCESS_KEY"}
               :secret-key {:secret "MINIO_SECRET_KEY"}}
@@ -77,8 +76,8 @@
  # refuses to guess which — the same shape [:void/jobs-backend] has
  :void/cache-store {:impl :cache/redis}
 
- # a relay next to the application holds the TLS (ADR-0010); this
- # client speaks to it in the clear over the container network
+ # a relay next to the application holds the TLS; this client speaks to it
+ # in the clear over the container network
  :mail {:transport :smtp}
 
  # the web tier serves and enqueues; the worker deployment is the same
@@ -94,19 +93,18 @@
  :jobs-db {:auto-create false}
  :bus-db {:auto-create false}
 
- # a container has a memory limit, which is the one number
- # void/pressure cannot guess (ADR-0019): 384 MB of the 512 the compose
- # file gives this service, so the process starts refusing before the
- # kernel starts killing
+ # a container has a memory limit, which is the one number void/pressure
+ # cannot guess: 384 MB of the 512 the compose file gives this service, so
+ # the process starts refusing before the kernel starts killing
  :pressure {:max-rss-bytes 402653184}
 
  # void/dev is composed here too, and the two halves of it are not the
  # same decision. The file watcher polls the source tree twice a second
  # and nothing in a container ever changes on disk, so it is off. The
- # netrepl stays **on**: it listens on a unix socket inside the
- # container (`.void/repl.sock`), so reaching it means being able to
- # exec into the container already — and a REPL inside the running
- # process is one of the things void is for (SPEC §4).
+ # netrepl stays **on**: it listens on a unix socket inside the container
+ # (`.void/repl.sock`), so reaching it means being able to exec into the
+ # container already — and a REPL inside the running process is one of the
+ # things void is for.
  #
  #     docker compose exec web void repl
  :dev {:watch {:enabled false}

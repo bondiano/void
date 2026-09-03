@@ -1,5 +1,4 @@
-### void/admin/mount — the registry, projected into real routes
-### (ADR-0029 §1, §2, §3).
+### void/admin/mount — the registry, projected into real routes.
 ###
 ### This is the projection the whole ADR turns on. Nothing here is a
 ### dispatcher: every action of every resource becomes an entry in the
@@ -34,7 +33,7 @@
 (import ./widget :as widget)
 
 (def access-policy
-  "The gate every admin route carries (ADR-0029 §3)."
+  "The gate every admin route carries."
   :void.admin/access)
 
 (defn- meta-for
@@ -58,7 +57,7 @@
   ``The routes a widget asked for, mounted under `<resource>/-/w/<field>`
   with the same gate as everything else. FK autocompletion is the first
   user of this seam rather than a special case of the core — which is
-  the whole reason the seam is in the contract (ADR-0029 §4).``
+  the whole reason the seam is in the contract.``
   [desc entries]
   (def out @[])
   (each fname (sorted (keys entries))
@@ -140,7 +139,7 @@
                                   (merge txn {:name (keyword "admin." (desc :name) "/inline-destroy")})))))
   out)
 
-# An inline route is guarded by all three policies of ADR-0029 §5. Two
+# An inline route is guarded by all three policies. Two
 # of them are on the route above — the gate and the parent's `:show`.
 # The third is the child's own action policy, and it is enforced in the
 # handler (`action/ensure-child!`) rather than here, because it decides

@@ -1,4 +1,4 @@
-### void/obs/instrument — auto-instrumentation (SPEC.md §5.13).
+### void/obs/instrument — auto-instrumentation.
 ###
 ### An instrumentation is a contribution to `:void.obs/instrument`:
 ###
@@ -8,28 +8,27 @@
 ###      :doc     "..."}
 ###
 ### It is applied at `:after-start`, when the components it names are
-### running, and its teardown runs at `:before-stop`. The instances it
-### is handed are the ones running *then*; an instrumentation whose
-### numbers must survive a `system/restart` (the dev reload path,
-### ADR-0002) should resolve the component when it reads instead of
-### capturing it — the built-ins below do, and `reader` is where that
-### happens. A named component that is not in this composition means
-### the instrumentation is *skipped*, quietly: "observe the database if
-### there is one" is the whole point of an auto-instrumentation, and a
-### boot that fails because obs is present and Postgres is not would
-### be an anti-feature.
+### running, and its teardown runs at `:before-stop`. The instances it is
+### handed are the ones running *then*; an instrumentation whose numbers
+### must survive a `system/restart` (the dev reload path) should resolve
+### the component when it reads instead of capturing it — the built-ins
+### below do, and `reader` is where that happens. A named component that
+### is not in this composition means the instrumentation is *skipped*,
+### quietly: "observe the database if there is one" is the whole point of
+### an auto-instrumentation, and a boot that fails because obs is present
+### and Postgres is not would be an anti-feature.
 ###
 ### **Why the built-in instrumentations live here and not in the
-### packages they observe.** SPEC §5.13 sketches every plugin
-### registering its own (`:void.obs/instrument [redis-instrumentation]`
-### in void/redis's manifest), and that is right for a plugin written
-### after obs exists. It cannot be right for the wave-2 packages: a
-### contribution to a point *no active plugin owns* is a boot error by
-### design (SPEC part II §1.2 — contributions may not dangle), so
-### void/db contributing to an obs point would break every application
-### that does not run obs. The dependency cannot go the other way
-### either: `import void/db` in obs would drag a database into a
-### process that only wanted a /metrics endpoint.
+### packages they observe.** The obvious design has every plugin registering
+### its own (`:void.obs/instrument [redis-instrumentation]` in
+### void/redis's manifest), and that is right for a plugin written after
+### obs exists. It cannot be right for the wave-2 packages: a contribution
+### to a point *no active plugin owns* is a boot error by design
+### (contributions may not dangle), so void/db contributing to an obs
+### point would break every application that does not run obs. The
+### dependency cannot go the other way either: `import void/db` in obs
+### would drag a database into a process that only wanted a /metrics
+### endpoint.
 ###
 ### So obs reaches the other way round — through the component
 ### instance the system already has, and through the *public* stats
@@ -76,10 +75,10 @@
   read.
 
   The component is resolved **at collect time**, not captured at
-  install time: `system/restart` (the dev reload path, ADR-0002)
-  replaces the instance, and a collector holding the old one would go
-  on reporting a pool that has been closed. A resolution per metric
-  per scrape is a table lookup every fifteen seconds.
+  install time: `system/restart` (the dev reload path) replaces the
+  instance, and a collector holding the old one would go on reporting a
+  pool that has been closed. A resolution per metric per scrape is a table
+  lookup every fifteen seconds.
 
   A stats call that throws yields no series rather than a failed
   scrape — an instrumented pool that starts misbehaving must not take

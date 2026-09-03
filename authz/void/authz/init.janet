@@ -1,5 +1,5 @@
-### void/authz — ABAC: policies as pure functions, attributes on
-### demand, decisions as values (SPEC.md §5.15, ADR-0024).
+### void/authz — ABAC: policies as pure functions, attributes on demand,
+### decisions as values.
 ###
 ### RBAC breaks on the first real back-office requirement — "a manager
 ### sees orders of their own brand", "an author edits their own post" —
@@ -52,7 +52,7 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.authz/provider
-  :doc "Attribute providers (ADR-0024): {:name :orders/brand :for :subject|:resource|:env :keys [:subject/brand-id]? :fn (fn [ctx] attrs) :needs [component-keys]?}; called when a policy first asks for one of its keys, and memoized for the rest of that decision"
+  :doc "Attribute providers: {:name :orders/brand :for :subject|:resource|:env :keys [:subject/brand-id]? :fn (fn [ctx] attrs) :needs [component-keys]?}; called when a policy first asks for one of its keys, and memoized for the rest of that decision"
   :schema {:name :keyword
            :for [:enum :subject :resource :env]
            :keys [:optional [:vector :keyword]]
@@ -68,7 +68,7 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.authz/policy
-  :doc "Policies contributed by a plugin (ADR-0024): {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own"
+  :doc "Policies contributed by a plugin: {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own"
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
@@ -179,8 +179,8 @@
 
 (var contributions
   ``What the extension points resolved to, captured at :before-start —
-  `plugin/current-boot` is not set on the inject path (ADR-0017), so a
-  component that read it would register nothing under a test.``
+  `plugin/current-boot` is not set on the inject path, so a component that
+  read it would register nothing under a test.``
   @{})
 
 (plugin/contribute! :void.core/hooks

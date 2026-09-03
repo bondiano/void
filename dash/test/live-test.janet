@@ -1,14 +1,14 @@
 ### The Datastar mode (M3): the page as state, morphed over SSE.
 ###
 ### Claims. With :void/datastar composed the overview carries the
-### data-on:load attribute that opens its stream, /dash/live answers
-### morph events (<title> + <body> — ADR-0037's two cuts), a poke
-### re-renders the stream's own page, and the logs stream shows a
-### record emitted after connect — the ring sink pokes the room, so a
-### log line reaches an open page without the page asking. Without
-### datastar (pages-test) the same URLs refuse by name and the pages
-### poll; here the htmx poll attribute is still present, because the
-### fallback must not wait for the experiment to fail.
+### data-on:load attribute that opens its stream, /dash/live answers morph
+### events (<title> + <body> — the two cuts), a poke re-renders the
+### stream's own page, and the logs stream shows a record emitted after
+### connect — the ring sink pokes the room, so a log line reaches an open
+### page without the page asking. Without datastar (pages-test) the same
+### URLs refuse by name and the pages poll; here the htmx poll attribute
+### is still present, because the fallback must not wait for the
+### experiment to fail.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)

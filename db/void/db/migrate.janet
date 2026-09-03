@@ -1,4 +1,4 @@
-### void/db/migrate — migrations as janet files (SPEC.md §5.9).
+### void/db/migrate — migrations as janet files.
 ###
 ### A migration is a file named <version>_<name>.janet defining `up`
 ### and (optionally) `down`:

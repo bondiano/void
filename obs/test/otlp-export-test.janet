@@ -212,7 +212,7 @@
 (assert (not (otlp/state :running)))
 (assert (nil? (otlp/state :client)) "and the connection to the collector is closed")
 
-# -- the second encoding --------------------------------------------------
+# -- the second encoding -------------------------------------------------
 #
 # The same payload, the seam's other value: the collector sees
 # application/x-protobuf, and the bytes decode against the vendored
@@ -257,7 +257,7 @@
 
 (def [ok2 err2] (protect (otlp/start! {:endpoint "https://collector.example:4318"} "shop")))
 (assert (not ok2) "an https endpoint without :void/tls fails at start rather than at the first flush")
-(assert (string/find ":void/tls" (string err2)) "naming the plugin as a way in (ADR-0038)")
+(assert (string/find ":void/tls" (string err2)) "naming the plugin as a way in")
 (otlp/stop!)
 
 # with the TLS seam closed (what :void/tls does on load), an https

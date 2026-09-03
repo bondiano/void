@@ -1,6 +1,6 @@
-### The half of the composition the other suites deliberately switch
-### off: with void/notify-jobs composed, a notification is **projected**
-### on the request fiber and **delivered** on a worker (ADR-0040 §3).
+### The half of the composition the other suites deliberately switch off:
+### with void/notify-jobs composed, a notification is **projected** on the
+### request fiber and **delivered** on a worker.
 ###
 ### What that buys is the whole argument for two functions instead of
 ### one, and it is asserted here: after the sender has its 202 there is
@@ -93,7 +93,7 @@
   (assert (empty? (notify/outbox))
           "delivery happens on a worker, not on the request")
   (assert (= 2 (- (pending) before))
-          "two rules, two channels, two jobs — a job per channel (ADR-0040 §3)")
+          "two rules, two channels, two jobs — a job per channel")
 
   # now be the worker. The queue is named — void/notify-jobs puts its
   # jobs on :notify — and a drain claims from the queues it is told

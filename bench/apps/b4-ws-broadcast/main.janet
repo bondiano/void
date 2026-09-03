@@ -1,16 +1,16 @@
-### B4 — WebSocket broadcast (SPEC.md §8.2, ADR-0014).
-### Budget: delivery < 50 ms to 1000 connections, 10k messages a
-### second. There is no p50/p99 *request* latency here and no
-### throughput floor in requests: B4 measures a fan-out, and the number
-### that matters is how long a message takes to reach the peers.
+### B4 — WebSocket broadcast. Budget: delivery < 50 ms to 1000
+### connections, 10k messages a second. There is no p50/p99 *request*
+### latency here and no throughput floor in requests: B4 measures a
+### fan-out, and the number that matters is how long a message takes to
+### reach the peers.
 ###
 ### The shape: every connection joins one room, and a fiber broadcasts
-### into it at a fixed rate (BENCH_BROADCAST_RATE, default 10/s — with
-### the generator's 1000 connections that is §8.2's 10k msg/s). Each
-### message carries the monotonic clock reading at the moment it was
-### framed; the generator subtracts it from its own reading when the
-### message arrives, which works because CLOCK_MONOTONIC is the
-### machine's, not the process's.
+### into it at a fixed rate (BENCH_BROADCAST_RATE, default 10/s — with the
+### generator's 1000 connections that is the budgeted 10k msg/s). Each
+### carries the monotonic clock reading at the moment it was framed; the
+### generator subtracts it from its own reading when the message arrives,
+### which works because CLOCK_MONOTONIC is the machine's, not the
+### process's.
 ###
 ### **What this measures, precisely**: one encode and N enqueues in the
 ### broadcaster's fiber (void/ws/rooms), then N writer fibers getting
@@ -90,13 +90,12 @@
       (def interval (/ 1 rate))
       (ev/go
         (fn broadcast-loop []
-          # a fixed schedule rather than `sleep interval` between
-          # ticks: sleeping the interval sleeps *at least* it, and the
-          # fan-out's own cost is then added to every period, so the
-          # rate drifts below the configured one and the benchmark
-          # quietly measures a slower broadcast than it asked for.
-          # This is wrk2's argument about coordinated omission, on the
-          # sending side (ADR-0014)
+          # a fixed schedule rather than `sleep interval` between ticks:
+          # sleeping the interval sleeps *at least* it, and the fan-out's
+          # own cost is then added to every period, so the rate drifts
+          # below the configured one and the benchmark quietly measures a
+          # slower broadcast than it asked for. This is wrk2's argument
+          # about coordinated omission, on the sending side
           (var next-at (+ (os/clock :monotonic) interval))
           (while broadcasting
             (def wait (- next-at (os/clock :monotonic)))

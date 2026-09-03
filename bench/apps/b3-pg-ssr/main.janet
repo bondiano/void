@@ -1,4 +1,4 @@
-### B3 — Postgres + hiccup SSR ~15KB (SPEC.md §8.2, ADR-0014). Budget: p50 < 5ms, p99 < 20ms, ≥ 1.5k RPS
+### B3 — Postgres + hiccup SSR ~15KB. Budget: p50 < 5ms, p99 < 20ms, ≥ 1.5k RPS
 ### (1 worker, 1 vCPU).
 ###
 ### The shape a void application actually is: a query, a page of
@@ -7,7 +7,7 @@
 ### rendering and nothing else — a different query in each would make
 ### the delta unreadable.
 ###
-### This is also the profile §8.2 states the GC budget against ("max
+### This is also the profile the GC budget is stated against ("max
 ### pause < 10 ms on the B3 profile"), and for good reason: 15KB of
 ### markup per request is where a stop-the-world collector shows up.
 ### It has nowhere to hide — a GC pause on a single-threaded loop *is*
@@ -34,7 +34,7 @@
 
 (def page-size
   "Rows per page. Sized so the rendered document lands near the 15KB
-  §8.2 names — see the app test, which pins it."
+  the budget names — see the app test, which pins it."
   65)
 
 (def- select-page
@@ -69,7 +69,7 @@
   [req]
   # the listener opens in system/start and the seeding runs at
   # :after-start: until the table is full this page is short, and a
-  # short page is a smaller document than the ~15KB §8.2 budgets. 503
+  # short page is a smaller document than the ~15KB budgeted. 503
   # rather than a quietly cheaper benchmark — runner/wait-ready waits
   # this out (targets :ready).
   (if (seed/seeded?)

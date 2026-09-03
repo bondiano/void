@@ -1,5 +1,5 @@
-### The wire format: what a frame may be, and what a refusal looks
-### like when it cannot be one (ADR-0031).
+### The wire format: what a frame may be, and what a refusal looks like
+### when it cannot be one.
 
 (import ../test-support/paths)
 (import void/mcp/jsonrpc :as rpc)

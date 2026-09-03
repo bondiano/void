@@ -1,4 +1,4 @@
-### void/core/hooks — lifecycle hooks + in-process pub/sub (SPEC.md §3.5).
+### void/core/hooks — lifecycle hooks + in-process pub/sub.
 ###
 ### Two mechanisms, one module. Lifecycle hooks are synchronous and
 ### ordered: handlers are registered per hook name (:config-loaded,

@@ -1,4 +1,4 @@
-### The heavy half of a bulk (ADR-0029 §7, §10).
+### The heavy half of a bulk.
 ###
 ### Three claims. An action declared with `:job` — or a selection over
 ### `[:admin :bulk :inline-limit]` — does not run in the request. The

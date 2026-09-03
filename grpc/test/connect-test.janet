@@ -7,11 +7,11 @@
 (import void/grpc :as grpc)
 (require "void/http/init")
 
-### The protocol, end to end, through the whole kernel (ADR-0017): the
-### requests below take the same path a socket's would — routing, the
-### phase chain, the error renderers — because that is the claim
-### ADR-0013 makes about Connect on void, and a test that called the
-### handler directly would not check it.
+### The protocol, end to end, through the whole kernel: the requests below
+### take the same path a socket's would — routing, the phase chain, the
+### error renderers — because that is the claim this package makes about
+### Connect on void, and a test that called the handler directly would not
+### check it.
 
 (proto/load-file! "test/protos/orders.proto")
 
@@ -82,7 +82,7 @@
                              :cli {:log {:level :error}
                                    :http {:strict-meta true :access-log false}}}}]
 
-  # -- a call is one POST, and the body is the message --------------------
+  # -- a call is one POST, and the body is the message -------------------
 
   (def resp (proto-call c "GetOrder" {:id "A-1"}))
   (assert (= 200 (resp :status)))
@@ -102,7 +102,7 @@
   (assert (= "990" (jorder "totalCents")) "and it obeys the proto3 JSON mapping, 64 bits and all")
   (assert (= "1970-01-12T13:46:40Z" (jorder "placedAt")))
 
-  # -- a failure is a status and a body that names its code ---------------
+  # -- a failure is a status and a body that names its code --------------
 
   (def missing (proto-call c "GetOrder" {:id "A-9"}))
   (assert (= 404 (missing :status)) "not_found is a 404, which is the protocol's own table")
@@ -121,7 +121,7 @@
              ((proto/decode :shop.orders/BadField (base64/decode (detail "value"))) :field))
           "a detail is the encoded message, base64 — which is what a generated client decodes")
 
-  # -- what a handler must not leak ---------------------------------------
+  # -- what a handler must not leak --------------------------------------
 
   (def boom (proto-call c "Explode" {} {:input :shop.orders/CountRequest}))
   (assert (= 500 (boom :status)))
@@ -129,7 +129,7 @@
   (assert (string/find "secret" ((error-of boom) "message"))
           "in :test the message is the error, because a developer is reading it")
 
-  # -- the GET form, for a method whose .proto said it is safe ------------
+  # -- the GET form, for a method whose .proto said it is safe -----------
 
   (def message (base64/encode (string (proto/encode :shop.orders/GetOrderRequest {:id "A-1"}))))
   (def urlsafe (string/replace-all "=" "" (string/replace-all "/" "_"
@@ -159,13 +159,13 @@
   (assert (= 415 (no-ct :status))
           "a POST with no Content-Type names no codec, and that is the same refusal")
 
-  # -- trailers ------------------------------------------------------------
+  # -- trailers ----------------------------------------------------------
 
   (def counted (proto-call c "CountOrders" {} {:input :shop.orders/CountRequest}))
   (assert (= "memory" (get-in counted [:headers "trailer-x-source"]))
           "a unary call's trailers ride as Trailer-prefixed headers, which is Connect's own rule")
 
-  # -- what the transport refuses ------------------------------------------
+  # -- what the transport refuses ----------------------------------------
 
   (def wrong-codec (call c "GetOrder" "" {:content-type "application/xml"}))
   (assert (= 415 (wrong-codec :status))
@@ -202,7 +202,7 @@
   (assert (= 404 ((test/inject c {:method :post :uri (string path "Nonexistent")}) :status))
           "a method nobody declared has no route, and a 404 is what that is")
 
-  # -- the client's deadline ------------------------------------------------
+  # -- the client's deadline ---------------------------------------------
 
   (def timed-out (call c "Slow" (string (proto/encode :shop.orders/CountRequest {}))
                        {:request {:headers @{"content-type" "application/proto"

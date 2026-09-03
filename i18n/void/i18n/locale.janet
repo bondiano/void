@@ -1,4 +1,4 @@
-### void/i18n/locale — locale tags and Accept-Language (ADR-0036).
+### void/i18n/locale — locale tags and Accept-Language.
 ###
 ### Pure functions. A locale is a lowercase keyword (:en, :ru, :en-us);
 ### `normalize` folds whatever a header, a cookie or a hook produced

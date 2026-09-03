@@ -1,5 +1,5 @@
-// Go net/http calibration baseline (SPEC §8.3, ADR-0014) — the
-// ceiling of the class, not a competitor. Serves both bench shapes:
+// Go net/http calibration baseline — the ceiling of the class, not a
+// competitor. Serves both bench shapes:
 // GET / plaintext and POST /echo JSON echo (decode into a typed
 // struct + encode back, the closest analogue of B1's
 // parse+validate+serialize). The runner sets GOMAXPROCS=1 — budgets

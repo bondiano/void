@@ -1,8 +1,8 @@
-### void/mcp — the application as an MCP server (SPEC.md §5.18,
-### ADR-0031).
+### void/mcp — the application as an MCP server.
 ###
-### The promise of §5.18 is one sentence: "админка из коробки — это
-### AI-агент". What makes it cheap is that the application has already
+### The promise is one sentence: the application is an MCP server, and
+### an agent is a first-class caller. What makes it cheap is that the
+### application has already
 ### said everything an agent needs. Its operational verbs are
 ### `:void.core/cli` commands, its data shapes are registered schemas,
 ### its liveness is the health report the core folds for `GET /health`.
@@ -19,7 +19,7 @@
 ### name says whether running it is safe, and guessing on behalf of an
 ### agent is how `db rollback` becomes a tool. Everything else waits
 ### to be named in `[:mcp :tools]` by the operator who wants it —
-### which is the allowlist SPEC asks for, made of the same keywords
+### which is the allowlist this design asks for, made of the same keywords
 ### `void <command>` uses.
 ###
 ### **What lives where.** ./jsonrpc is the wire format, ./server is
@@ -35,7 +35,7 @@
 ### **What it is not.** No sampling, no elicitation, no roots, no
 ### prompts: every one of those needs the server to ask the client
 ### something, which needs a session pinned to a process, which is the
-### state ADR-0031 refuses to keep so that two replicas behind a load
+### state this plugin refuses to keep so that two replicas behind a load
 ### balancer answer the same way. And no config resource, redacted or
 ### otherwise — a secret that leaks through a redaction bug is not
 ### worth the convenience of reading `[:db :host]` from a chat window.

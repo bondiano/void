@@ -44,7 +44,7 @@
 (def [reserved err2]
   (protect (config/properties {:properties {"dr_msg_cb" "boom"}})))
 (assert (not reserved) "a reserved property is refused")
-(assert (string/find "ADR-0035" err2) "naming the decision that owns it")
+(assert (string/find "event machinery" err2) "naming what owns it")
 
 (assert (= 30000 (config/message-timeout-ms {})) "30 s, not the library's 300")
 (assert (= 2500 (config/message-timeout-ms {:message-timeout 2.5})) "seconds in, milliseconds out")
@@ -70,7 +70,7 @@
 
 (def [dotted err3] (protect (bus/kafka-topic "" :user.created)))
 (assert (not dotted) "a literal dot is refused — it would collide with the mapping")
-(assert (string/find "ADR-0035" err3))
+(assert (string/find "reserves" err3) "and says what the dot is reserved for")
 
 (assert (deep= ["shop.a.b" "shop.c"]
                (bus/subscription "shop." [:a/b :c] [:a/b :c]))
@@ -83,10 +83,10 @@
 
 # -- the layouts the ffi writes ------------------------------------------
 #
-# The constants the header promises (ADR-0035): the vu union starts at
-# 8 and is padded to 64, so the stride is 72 — same number as the
-# documented rd_kafka_message_t. A change here is a change to the
-# library's ABI promise, not a refactor.
+# The constants the header promises: the vu union starts at 8 and is
+# padded to 64, so the stride is 72 — same number as the documented
+# rd_kafka_message_t. A change here is a change to the library's ABI
+# promise, not a refactor.
 
 (assert (= 72 rk/vu-size) "rd_kafka_vu_t: 4 vtype + 4 pad + 64 union")
 (assert (= 64 (get rk/message-offsets :private))

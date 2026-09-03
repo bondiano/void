@@ -1,36 +1,33 @@
-### void/obs/trace — spans, and the context that travels with them
-### (SPEC.md §5.13).
+### void/obs/trace — spans, and the context that travels with them.
 ###
 ### **A span lives in a dyn, and that is the whole propagation
-### mechanism.** ev fibers are the unit of a request in void (ADR-0010),
-### dyns are per-fiber, and a fiber's children inherit them — so
-### "the current span" needs no thread-local trickery, no context
-### argument threaded through every signature, and no leak between two
-### requests that happen to be in flight at once. Handing work to
-### `ev/go` is the one case dyns do not cover (a task fiber starts with
-### a fresh dyn table), and `trace/carrying` is the same answer
-### `log/carrying` gives for the log context.
+### mechanism.** ev fibers are the unit of a request in void, dyns are
+### per-fiber, and a fiber's children inherit them — so "the current span"
+### needs no thread-local trickery, no context argument threaded through
+### every signature, and no leak between two requests that happen to be in
+### flight at once. Handing work to `ev/go` is the one case dyns do not
+### cover (a task fiber starts with a fresh dyn table), and
+### `trace/carrying` is the same answer `log/carrying` gives for the log
+### context.
 ###
 ### **Ids are minted, not randomised per span.** A trace id is 16
 ### bytes and a span id is 8, as W3C requires, but generating them from
-### `os/cryptorand` per request would put a syscall on the hot path for
-### an identifier that only has to be unique, never unguessable. So
-### each is a per-process random prefix plus a counter — fastify's
-### genReqId model, which void/http already uses for the request id —
-### and the prefix is what keeps two workers (ADR-0010) or two hosts
-### from minting the same id.
+### `os/cryptorand` per request would put a syscall on the hot path for an
+### identifier that only has to be unique, never unguessable. So each is a
+### per-process random prefix plus a counter — fastify's genReqId model,
+### which void/http already uses for the request id — and the prefix is
+### what keeps two workers or two hosts from minting the same id.
 ###
 ### **A span is created when something will consume it.** For the
 ### request root that means: an exporter is configured, an inbound
-### `traceparent` says a caller is already tracing this request, or
-### `[:obs :trace :always]` asks for one regardless. A process that
-### exports nothing and is called by nobody who traces would otherwise
-### build a span table, two ids and an attribute map per request for a
-### value no code ever reads — the single largest item in what
-### instrumentation costs a request (SPEC §8.2 budgets the whole of
-### obs at ≤ 7% of throughput). Spans started by hand — `with-span`
-### around a query, a job, a cache round trip — are always created:
-### asking for one is the consumer.
+### `traceparent` says a caller is already tracing this request, or `[:obs
+### :trace :always]` asks for one regardless. A process that exports
+### nothing and is called by nobody who traces would otherwise build a
+### span table, two ids and an attribute map per request for a value no
+### code ever reads — the single largest item in what instrumentation
+### costs a request (budgets the whole of obs at ≤ 7% of throughput).
+### Spans started by hand — `with-span` around a query, a job, a cache
+### round trip — are always created: asking for one is the consumer.
 ###
 ### **Sampling is a head decision, taken once, and inherited.** The
 ### root span of a request decides: an incoming `traceparent` that says
@@ -44,10 +41,10 @@
 ### reaches an exporter.
 ###
 ### **Where spans go is not this module's business.** `:void.obs/exporter`
-### contributions receive every finished sampled span; void/obs ships
-### the log exporter and void/obs-otlp (./otlp, ADR-0027) ships the
-### OTLP one — which landed as one more contribution and not as a
-### change to anything here, which is what the point was for.
+### contributions receive every finished sampled span; void/obs ships the
+### log exporter and void/obs-otlp (./otlp) ships the OTLP one — which
+### landed as one more contribution and not as a change to anything here,
+### which is what the point was for.
 
 (import void/core/log :as log)
 (import ./metrics :as metrics)
@@ -196,8 +193,8 @@
 (defn context
   ``The correlation ids of the current span, as the log context wants
   them: {:trace-id ... :span-id ...}, or {} outside a span. This is
-  the seam ADR-0021 asks for in the logs line — void/core/log
-  (ADR-0018) already binds a context per fiber, and obs puts the trace
+  the seam the logs line asks for — void/core/log
+ already binds a context per fiber, and obs puts the trace
   ids into it.``
   [&opt span]
   (default span (current))
@@ -358,9 +355,9 @@
 
       (trace/inject! @{"content-type" "application/json"})
 
-  This is the "traceparent out" half of ADR-0021 — the half that
+  This is the "traceparent out" half — the half that
   does not need an HTTP client of our own — and now that void has one
-  (`void/http/client`, ADR-0027) it is still the caller who injects:
+  (`void/http/client`) it is still the caller who injects:
   whatever makes the call, from void/redis to the client, propagates
   the context with one call.``
   [headers &opt span]

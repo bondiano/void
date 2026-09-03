@@ -1,11 +1,11 @@
 ### shop/orders/events — what happens *because* something happened.
 ###
-### ./orders.service writes an order and announces it. It does not send
-### a letter, and it does not know that one is sent: `bus/publish-tx!`
-### puts `:order/placed` in the outbox, and the handlers below
-### subscribe. Delete this file and the shop still takes orders and
-### charges cards — it just goes quiet, which is exactly the amount of
-### coupling a notification deserves (ADR-0012).
+### ./orders.service writes an order and announces it. It does not send a
+### letter, and it does not know that one is sent: `bus/publish-tx!` puts
+### `:order/placed` in the outbox, and the handlers below subscribe.
+### Delete this file and the shop still takes orders and charges cards —
+### it just goes quiet, which is exactly the amount of coupling a
+### notification deserves.
 ###
 ### **The letters go out through the queue without a word here.**
 ### `mail/send` renders the message on this fiber and hands it to
@@ -15,7 +15,7 @@
 ### simply be whatever `[:mail :transport]` names, on this fiber.
 ###
 ### **A consumer of an at-least-once bus can be handed a message
-### twice** (ADR-0012). For an audit row the answer is a unique index
+### twice**. For an audit row the answer is a unique index
 ### (the audit module); for a letter it is a judgement call, and this
 ### shop's is that a duplicated receipt is a nuisance while a missing
 ### one is a support ticket. The alternative — recording every sent

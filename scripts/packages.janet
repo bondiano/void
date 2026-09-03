@@ -1,4 +1,4 @@
-### The package graph of the monorepo, as data (ADR-0020).
+### The package graph of the monorepo, as data.
 ###
 ### It used to be written three times and read by nothing: sixteen
 ### copies of `*/test-support/paths.janet`, prose in every
@@ -68,24 +68,24 @@
    {:dir "core" :deps [] :jpm [:spork]}
 
    :void/fdwait
-   # The one native module (ADR-0011). Depends on nothing — what Janet
-   # cannot express, and nothing else.
+   # The one native module. Depends on nothing — what Janet cannot
+   # express, and nothing else.
    {:dir "fdwait" :deps [] :native true}
 
    :void/crypto
    # Every cryptographic primitive void has, from the system libcrypto
-   # through ffi/ (ADR-0022): nothing is compiled and no jpm dependency
-   # pulls the library in — it is opened at :start from a configured
-   # path, the way void/db-postgres opens libpq (ADR-0011). spork is
-   # here for base64, which is an alphabet rather than cryptography.
+   # through ffi/: nothing is compiled and no jpm dependency pulls the
+   # library in — it is opened at :start from a configured path, the way
+   # void/db-postgres opens libpq. spork is here for base64, which is an
+   # alphabet rather than cryptography.
    {:dir "crypto" :deps [:void/core] :jpm [:spork]}
 
    :void/dev
    {:dir "dev" :deps [:void/core] :jpm [:spork]}
 
    :void/http
-   # void/dev only in tests: the suite drives test/inject (ADR-0017)
-   # against this package's own kernel.
+   # void/dev only in tests: the suite drives test/inject against this
+   # package's own kernel.
    {:dir "http" :deps [:void/core] :test-deps [:void/dev]}
 
    :void/html
@@ -110,12 +110,12 @@
    # output declares an entity, so void/db loads there too.
    #
    # `void make auth` is why the second half of that list is here. Its
-   # generated suite is the scaffold's own proof (ROADMAP 6.2): it
-   # boots the generated plugin on a real database and drives register,
-   # sign in, reset and verify through test/inject — so everything the
-   # generated composition names has to be importable here. The
-   # examples are deliberately not what checks this; the scaffold is
-   # checked by what it itself generates.
+   # generated suite is the scaffold's own proof: it boots the
+   # generated plugin on a real database and drives register, sign in,
+   # reset and verify through test/inject — so everything the generated
+   # composition names has to be importable here. The examples are
+   # deliberately not what checks this; the scaffold is checked by what it
+   # itself generates.
    {:dir "cli" :deps [:void/core]
     :test-deps [:void/http :void/html :void/htmx :void/dev :void/db
                 :void/db-sqlite :void/crypto :void/auth :void/security]
@@ -130,21 +130,20 @@
    # janet-lang/sqlite3 is :jpm-optional, not :jpm — db-sqlite's own
    # project.janet declares it (the contributor path), the bundle does
    # not: an application that never lists :void/db-sqlite in :plugins
-   # never imports the driver, and a missing library is an error at
-   # :start with a readable text, the way libpq is (ADR-0011, ADR-0020).
+   # never imports the driver, and a missing library is an error at :start
+   # with a readable text, the way libpq is.
    {:dir "db-sqlite" :deps [:void/core :void/db] :jpm-optional [:sqlite3]}
 
    :void/db-postgres
    # libpq is opened at runtime through ffi/, so it is not a jpm
-   # dependency; void/fdwait is, and it has to be built (ADR-0011).
+   # dependency; void/fdwait is, and it has to be built.
    {:dir "db-postgres" :deps [:void/core :void/db :void/fdwait]}
 
    :void/db-mysql
-   # libmysqlclient is opened at runtime through ffi/, so it is not a
-   # jpm dependency — and unlike void/db-postgres there is no native
-   # module either: this driver parks on a channel to a worker thread
-   # rather than on a descriptor, so void/fdwait is not an edge
-   # (ADR-0033).
+   # libmysqlclient is opened at runtime through ffi/, so it is not a jpm
+   # dependency — and unlike void/db-postgres there is no native module
+   # either: this driver parks on a channel to a worker thread rather than
+   # on a descriptor, so void/fdwait is not an edge.
    {:dir "db-mysql" :deps [:void/core :void/db]}
 
    :void/redis
@@ -178,67 +177,63 @@
    # thereby start shedding. void/http is two plugins' in this package
    # (the void/cache — void/cache-http split): void/obs-http's server
    # side, and void/obs-otlp's client — the OTLP exporter POSTs to a
-   # collector through void/http/client (ADR-0027). void/proto is the
-   # exporter's second encoding: void/obs/otlp-proto bakes the vendored
-   # OTLP .proto files into descriptors, and only a composition that
-   # configures [:obs-otlp :encoding] :protobuf ever loads it.
-   # void/dev and void/cache are the suite's: inject for the endpoints,
-   # a real component for the instrumentation. void/rest is
-   # test-support/overhead-probe.janet's, which measures what obs costs
-   # a request on the B1 shape (§8.2's ≤ 7%). void/db and void/db-sqlite
-   # are the suite's as well: instrument-test proves the :void.db/pool
-   # gauges against a live pool (in-memory sqlite) — the sources reach
+   # collector through void/http/client. void/proto is the exporter's
+   # second encoding: void/obs/otlp-proto bakes the vendored OTLP .proto
+   # files into descriptors, and only a composition that configures
+   # [:obs-otlp :encoding] :protobuf ever loads it. void/dev and
+   # void/cache are the suite's: inject for the endpoints, a real
+   # component for the instrumentation. void/rest is
+   # test-support/overhead-probe.janet's, which measures what obs costs a
+   # request on the B1 shape (the ≤ 7% budget). void/db and void/db-sqlite
+   # suite's as well: instrument-test proves the :void.db/pool gauges
+   # against a live pool (in-memory sqlite) — the sources reach
    # void/db/pool only through a protected `require`, never an import.
    {:dir "obs" :deps [:void/core :void/http :void/pressure :void/proto]
     :test-deps [:void/dev :void/cache :void/rest :void/db :void/db-sqlite]
     :jpm [:spork]}
 
    :void/auth
-   # Every primitive comes from void/crypto (ADR-0022, ADR-0023): this
-   # package hashes nothing itself. void/http is void/auth-http's and
-   # void/db is void/auth-db's — separate plugins in this package, the
-   # void/cache — void/cache-redis split. void/auth-oauth is a fourth
-   # (ADR-0032) and needs no new edge: it verifies JWS with
-   # void/crypto/sign and talks to the issuer with void/http/client,
-   # both already here. The suite reaches void/dev for inject
-   # (ADR-0017) and void/db-sqlite for a real store under void/auth-db.
+   # Every primitive comes from void/crypto: this package hashes nothing
+   # itself. void/http is void/auth-http's and void/db is void/auth-db's —
+   # separate plugins in this package, the void/cache — void/cache-redis
+   # split. void/auth-oauth is a fourth and needs no new edge: it verifies
+   # JWS with void/crypto/sign and talks to the issuer with
+   # void/http/client, both already here. The suite reaches void/dev for
+   # inject and void/db-sqlite for a real store under void/auth-db.
    {:dir "auth" :deps [:void/core :void/crypto :void/http :void/db]
     :test-deps [:void/dev :void/db-sqlite] :jpm [:spork]}
 
    :void/oauth
-   # The OAuth client half (ADR-0034), now that ADR-0032 built the
-   # resource server: void/auth for the jwk/jwt modules (the id_token
-   # is verified by the same code that verifies an access token) and
-   # for auth-http/login!, void/http for the two routes and the
-   # back-channel client, void/crypto for PKCE and state. The suite
-   # reaches void/dev for inject (ADR-0017) — the fake authorization
-   # server stands on a socket of its own, the way the auth suite's
-   # does.
+   # The OAuth client half, now that void/auth has the resource server:
+   # void/auth for the jwk/jwt modules (the id_token is verified by the
+   # same code that verifies an access token) and for auth-http/login!,
+   # void/http for the two routes and the back-channel client, void/crypto
+   # for PKCE and state. The suite reaches void/dev for inject — the fake
+   # authorization server stands on a socket of its own, the way the auth
+   # suite's does.
    {:dir "oauth" :deps [:void/core :void/crypto :void/http :void/auth]
     :test-deps [:void/dev] :jpm [:spork]}
 
    :void/i18n
-   # Dictionaries as contributions, the locale as a dyn (ADR-0036).
-   # void/http is the one runtime edge: the middleware that resolves
-   # the locale and binds it together with the :void.schema/messages
-   # seam void/core/schema has carried since wave 0. No edge to
-   # void/html, and that is the design — a template reaches `t`
-   # through the dyn, because the render middleware runs inside the
-   # chain. The suite reaches void/html to prove exactly that (a
-   # hiccup view and a form error rendered in Russian through a full
-   # boot) and void/dev for the test scaffolding.
+   # Dictionaries as contributions, the locale as a dyn. void/http is the
+   # one runtime edge: the middleware that resolves the locale and binds
+   # it together with the :void.schema/messages seam void/core/schema has
+   # carried since wave 0. No edge to void/html, and that is the design —
+   # a template reaches `t` through the dyn, because the render middleware
+   # runs inside the chain. The suite reaches void/html to prove exactly
+   # that (a hiccup view and a form error rendered in Russian through a
+   # full boot) and void/dev for the test scaffolding.
    {:dir "i18n" :deps [:void/core :void/http]
     :test-deps [:void/dev :void/html]}
 
    :void/datastar
-   # The Datastar experiment (ADR-0037): SSE patch events, data-*
-   # builders, and the Biff idiom — the morph middleware slices the
-   # page void/html already rendered, so the edge to void/html is
-   # real (hiccup rendering inside morph-stream), and the SSE framing
-   # is void/http's ring/sse from wave 0. No edge to void/htmx: the
-   # two are alternative idioms an application picks between, not
-   # layers. The suite reaches void/dev for inject (ADR-0017) — the
-   # SSE frames are parsed out of :raw by test/sse-events.
+   # The Datastar experiment: SSE patch events, data-* builders, and the
+   # Biff idiom — the morph middleware slices the page void/html already
+   # rendered, so the edge to void/html is real (hiccup rendering inside
+   # morph-stream), and the SSE framing is void/http's ring/sse from wave
+   # 0. No edge to void/htmx: the two are alternative idioms an
+   # application picks between, not layers. The suite reaches void/dev for
+   # inject — the SSE frames are parsed out of :raw by test/sse-events.
    {:dir "datastar" :deps [:void/core :void/http :void/html]
     :test-deps [:void/dev] :jpm [:spork]}
 
@@ -258,50 +253,49 @@
     :test-deps [:void/dev]}
 
    :void/authz
-   # No edge to void/auth, and that is the design (ADR-0024): the
-   # identity is read from the dyn key void/auth publishes, so an
-   # application with its own authentication gets the same
-   # authorization. void/http is void/authz-http's, a separate plugin
-   # in this package. The suite reaches void/auth (and void/crypto
-   # under it) to prove the seam works from both ends.
+   # No edge to void/auth, and that is the design: the identity is read
+   # from the dyn key void/auth publishes, so an application with its own
+   # authentication gets the same authorization. void/http is
+   # void/authz-http's, a separate plugin in this package. The suite
+   # reaches void/auth (and void/crypto under it) to prove the seam works
+   # from both ends.
    {:dir "authz" :deps [:void/core :void/http]
     :test-deps [:void/dev :void/auth :void/crypto]}
 
    :void/security
-   # void/crypto because every CSRF token is signed (ADR-0022 §6, the
-   # decision to have one token rather than two). No edge to void/auth
-   # or void/authz: the identity is a dyn key and the rate limiter keys
-   # on whatever it finds. The suite reaches html and htmx for the form
-   # slot and the meta tag, rest for the problem+json shape of a 429,
-   # cache for the shared-counter path and auth for the cookie-borne
-   # rule that decides when CSRF applies at all.
+   # void/crypto because every CSRF token is signed (the decision to have
+   # one token rather than two). No edge to void/auth or void/authz: the
+   # identity is a dyn key and the rate limiter keys on whatever it finds.
+   # The suite reaches html and htmx for the form slot and the meta tag,
+   # rest for the problem+json shape of a 429, cache for the
+   # shared-counter path and auth for the cookie-borne rule that decides
+   # when CSRF applies at all.
    {:dir "security" :deps [:void/core :void/http :void/crypto]
     :test-deps [:void/dev :void/html :void/htmx :void/rest :void/cache :void/auth]}
 
    :void/mail
    # A mail body is rendered through void/html's engine point, so it is
    # written the way a page is and temple works for both — that edge is
-   # what "templates through void/html" (SPEC §5.19) means, and it is
-   # the only one the mailer itself has. void/jobs is void/mail-jobs'
-   # and void/auth is void/mail-auth's: two more plugins in this
-   # package, the void/cache — void/cache-http split again, so an
-   # application without a queue or without logins composes neither.
-   # The suite reaches void/dev for the inject client under the
-   # magic-link route and void/crypto because void/auth mints the code
-   # with it.
+   # what "templates through void/html" means, and it is the only one the
+   # mailer itself has. void/jobs is void/mail-jobs' and void/auth is
+   # void/mail-auth's: two more plugins in this package, the void/cache —
+   # void/cache-http split again, so an application without a queue or
+   # without logins composes neither. The suite reaches void/dev for the
+   # inject client under the magic-link route and void/crypto because
+   # void/auth mints the code with it.
    {:dir "mail" :deps [:void/core :void/html :void/jobs :void/auth]
     :test-deps [:void/dev :void/crypto] :jpm [:spork]}
 
    :void/bus
-   # The messaging layer (ADR-0012). void/db is void/bus-db's — the
-   # message log, the cursors and the transactional outbox are rows,
-   # and they are rows in the application's own database on purpose;
-   # void/jobs is void/bus-jobs', which forwards the queue's lifecycle
-   # events onto the bus. Both are separate plugins in this package,
-   # the void/cache — void/cache-redis split, so an application whose
-   # messages never leave the process composes neither. The suite
-   # reaches void/db-sqlite for a real log to consume from,
-   # void/db-postgres for the LISTEN/NOTIFY and SKIP LOCKED paths
+   # The messaging layer. void/db is void/bus-db's — the message log, the
+   # cursors and the transactional outbox are rows, and they are rows in
+   # the application's own database on purpose; void/jobs is
+   # void/bus-jobs', which forwards the queue's lifecycle events onto the
+   # bus. Both are separate plugins in this package, the void/cache —
+   # void/cache-redis split, so an application whose messages never leave
+   # the process composes neither. The suite reaches void/db-sqlite for a
+   # real log to consume from, void/db-postgres for the LISTEN/NOTIFY and
+   # SKIP LOCKED paths
    # (resolved with `require` only when VOID_TEST_PG names a server)
    # void/obs to prove the trace continues out of a request and into a
    # consumer — bus imports none of the three — and void/dev for
@@ -314,126 +308,120 @@
    :void/kafka
    # librdkafka is opened at runtime through ffi/, so it is not a jpm
    # dependency; void/fdwait IS an edge — the integration is a fiber
-   # parked on the fd the library rings (ADR-0035). void/bus is
-   # void/kafka-bus's, a separate plugin in this package (the
-   # void/cache — void/cache-redis split): the :kafka backend factory
-   # and the envelope spelling live there. The suite runs its
-   # integration half only when VOID_TEST_KAFKA names a cluster.
+   # parked on the fd the library rings. void/bus is void/kafka-bus's, a
+   # separate plugin in this package (the void/cache — void/cache-redis
+   # split): the :kafka backend factory and the envelope spelling live
+   # there. The suite runs its integration half only when VOID_TEST_KAFKA
+   # names a cluster.
    {:dir "kafka" :deps [:void/core :void/fdwait :void/bus]}
 
    :void/tls
-   # Outbound TLS from the system libssl (ADR-0038). libssl is opened
-   # at runtime through ffi/, so it is not a jpm dependency;
-   # void/crypto IS an edge — BIO and the X509 error strings live in
-   # libcrypto, and they are bound off crypto's open handle so the
-   # process holds one crypto stack. The edges to http, redis and
-   # mail point *backward* on purpose: each of those holds a seam
-   # `(var tls-... nil)` (the void/mail-jobs pose), and this package's
-   # :on-load installs the connector into every one — wave 1 never
-   # imports wave 5. The suite reaches void/dev for the boot half.
+   # Outbound TLS from the system libssl. libssl is opened at runtime
+   # through ffi/, so it is not a jpm dependency; void/crypto IS an edge —
+   # BIO and the X509 error strings live in libcrypto, and they are bound
+   # off crypto's open handle so the process holds one crypto stack. The
+   # edges to http, redis and mail point *backward* on purpose: each of
+   # those holds a seam `(var tls-... nil)` (the void/mail-jobs pose), and
+   # this package's :on-load installs the connector into every one — wave
+   # 1 never imports wave 5. The suite reaches void/dev for the boot half.
    {:dir "tls" :deps [:void/core :void/crypto :void/http :void/redis :void/mail]
     :test-deps [:void/dev]}
 
    :void/storage
-   # Files and uploads (ADR-0039). Four plugins in one package, the
-   # void/cache — void/cache-http split: the kernel and the :local
-   # store are plain Janet over the filesystem, so the real edges are
-   # the other three's. void/http is void/storage-http's (the serve
-   # route through the static machinery) and the s3 store's transport
-   # (http/client — and void/tls closes the https seam at runtime,
-   # never an edge, ADR-0038); void/crypto is SigV4's; void/security
-   # is a *module* edge for temporary URLs (./sign reads the signing
-   # keys the way void/obs reads void/pressure's sampler — composing
-   # :void/security is what arms it); void/admin is
-   # void/storage-admin's, the upload widget. The suite reaches
-   # void/dev for test/start! (ADR-0017) and void/db-sqlite for a real
-   # database under the admin resource whose form carries an upload.
+   # Files and uploads. Four plugins in one package, the void/cache —
+   # void/cache-http split: the kernel and the :local store are plain
+   # Janet over the filesystem, so the real edges are the other three's.
+   # void/http is void/storage-http's (the serve route through the static
+   # machinery) and the s3 store's transport
+   #  (http/client — and void/tls closes the https seam at runtime, never an edge); void/crypto is SigV4's; void/security is a
+   # *module* edge for temporary URLs (./sign reads the signing keys the
+   # way void/obs reads void/pressure's sampler — composing :void/security
+   # is what arms it); void/admin is void/storage-admin's, the upload
+   # widget. The suite reaches void/dev for test/start! and void/db-sqlite
+   # for a real database under the admin resource whose form carries an
+   # upload.
    {:dir "storage" :deps [:void/core :void/crypto :void/http :void/security :void/admin]
     :test-deps [:void/dev :void/db-sqlite]}
 
    :void/notify
-   # Unified notifications (ADR-0040). Five plugins in one package, the
-   # void/cache — void/cache-http split: the kernel is core-only, and
-   # every edge here belongs to one channel. void/mail is
-   # void/notify-mail's (the letter is built by the mailer and goes
-   # back out through mail/send-delivery, so [:mail :queue] keeps
-   # meaning what it means); void/db, void/http and void/html are
-   # void/notify-inapp's — the table the bell reads, the four routes
-   # that draw it and the fragments they answer with; void/http is also
-   # the webhook's transport (http/client — and void/tls closes the
-   # https seam at runtime, never an edge, ADR-0038), with void/crypto
-   # a *module* edge for its signature, the void/storage/sign pose:
+   # Unified notifications. Five plugins in one package, the void/cache —
+   # void/cache-http split: the kernel is core-only, and every edge here
+   # belongs to one channel. void/mail is void/notify-mail's (the letter
+   # is built by the mailer and goes back out through mail/send-delivery,
+   # so [:mail :queue] keeps meaning what it means); void/db, void/http
+   # and void/html are void/notify-inapp's — the table the bell reads, the
+   # four routes that draw it and the fragments they answer with;
+   # void/http is also the webhook's transport (http/client — and void/tls
+   # closes the https seam at runtime, never an edge), with void/crypto a
+   # *module* edge for its signature, the void/storage/sign pose:
    # composing :void/crypto is what arms it. void/jobs is
-   # void/notify-jobs'. No edge to void/auth and that is the design
-   # (ADR-0024): the bell reads the identity off the dyn key, so an
-   # application with its own authentication gets the same widget. The
-   # suite reaches void/dev for test/start! (ADR-0017), void/db-sqlite
-   # for a real table under the in-app channel and void/auth to prove
-   # the dyn seam works from both ends.
+   # void/notify-jobs'. No edge to void/auth and that is the design: the
+   # bell reads the identity off the dyn key, so an application with its
+   # own authentication gets the same widget. The suite reaches void/dev
+   # for test/start!, void/db-sqlite for a real table under the in-app
+   # channel and void/auth to prove the dyn seam works from both ends.
    {:dir "notify" :deps [:void/core :void/crypto :void/http :void/html
                          :void/db :void/jobs :void/mail]
     :test-deps [:void/dev :void/db-sqlite :void/auth] :jpm [:spork]}
 
    :void/ws
-   # WebSocket over the HTTP kernel (ADR-0028): the handshake is
-   # answered from an ordinary route handler, so the only edge is
-   # void/http — everything that protects a route already protects a
-   # socket. spork is here for base64, an alphabet rather than
-   # cryptography (the same reason void/crypto declares it), and there
-   # is deliberately no edge to void/crypto: see ws/void/ws/sha1.janet.
-   # void/html and void/htmx are void/ws-htmx's, a separate plugin in
-   # this package — the void/cache — void/cache-http split again.
+   # WebSocket over the HTTP kernel: the handshake is answered from an
+   # ordinary route handler, so the only edge is void/http — everything
+   # that protects a route already protects a socket. spork is here for
+   # base64, an alphabet rather than cryptography (the same reason
+   # void/crypto declares it), and there is deliberately no edge to
+   # void/crypto: see ws/void/ws/sha1.janet. void/html and void/htmx are
+   # void/ws-htmx's, a separate plugin in this package — the void/cache —
+   # void/cache-http split again.
    {:dir "ws" :deps [:void/core :void/http :void/html :void/htmx]
     :test-deps [:void/dev] :jpm [:spork]}
 
    :void/proto
-   # protobuf, and no transport (ADR-0013): the codec, the `.proto`
-   # parser and the JSON mapping are pure Janet over void/core's schema
-   # layer, which is the one edge — void/proto/schema registers two
-   # custom types and the :proto projection SPEC §3.3 reserved for it.
-   # void/grpc is where a socket appears. The suite reaches void/dev for
-   # nothing at all and says so by not listing it.
+   # protobuf, and no transport: the codec, the `.proto` parser and the
+   # JSON mapping are pure Janet over void/core's schema layer, which is
+   # the one edge — void/proto/schema registers two custom types and the
+   # :proto projection reserved for it. void/grpc is where a
+   # socket appears. The suite reaches void/dev for nothing at all and
+   # says so by not listing it.
    {:dir "proto" :deps [:void/core] :jpm [:spork]}
 
    :void/grpc
-   # Connect-RPC over the HTTP kernel (ADR-0013): a method is a route,
-   # so void/http is the only transport edge and every policy that
-   # protects a route — void/authz, void/security, void/obs — protects
-   # an RPC method without knowing one exists. void/proto is the codec
-   # on both sides of it. The suite reaches void/dev for inject
-   # (ADR-0017), void/rest because the problem+json renderer and the
-   # Connect error renderer have to coexist in one composition, and
-   # void/authz to prove a policy on an RPC method is the same policy.
+   # Connect-RPC over the HTTP kernel: a method is a route, so void/http
+   # is the only transport edge and every policy that protects a route —
+   # void/authz, void/security, void/obs — protects an RPC method without
+   # knowing one exists. void/proto is the codec on both sides of it. The
+   # suite reaches void/dev for inject, void/rest because the
+   # problem+json renderer and the Connect error renderer have to coexist
+   # in one composition, and void/authz to prove a policy on an RPC method
+   # is the same policy.
    {:dir "grpc" :deps [:void/core :void/http :void/proto]
     :test-deps [:void/dev :void/rest :void/authz] :jpm [:spork]}
 
    :void/mcp
-   # The application as an MCP server (ADR-0031). void/openapi is a
+   # The application as an MCP server. void/openapi is a
    # *module* edge and not a plugin one: ./registry projects a
-   # registered schema into JSON Schema with void/openapi/jsonschema,
-   # the way void/obs takes void/pressure's loop-lag meter without
-   # composing the shedder. void/http is void/mcp-http's and void/obs
-   # is void/mcp-obs's — two more plugins in this package, the
-   # void/cache — void/cache-http split, so an agent talking to a jobs
-   # worker over stdio composes neither. The suite reaches void/dev for
-   # inject (ADR-0017) under the HTTP transport.
+   # registered schema into JSON Schema with void/openapi/jsonschema, the
+   # way void/obs takes void/pressure's loop-lag meter without composing
+   # the shedder. void/http is void/mcp-http's and void/obs is
+   # void/mcp-obs's — two more plugins in this package, the void/cache —
+   # void/cache-http split, so an agent talking to a jobs worker over
+   # stdio composes neither. The suite reaches void/dev for inject under
+   # the HTTP transport.
    {:dir "mcp" :deps [:void/core :void/http :void/openapi :void/obs]
     :test-deps [:void/dev] :jpm [:spork]}
 
    :void/admin
    # The back office as a projection of what the application already
-   # declared (ADR-0029). Every edge here is one the projection reads
-   # from: void/db for the entity descriptor and the repository,
-   # void/html for the form projection and the view responses,
-   # void/htmx for the fragment half of the same route, void/authz for
-   # the gate and the per-action policies. void/jobs is
-   # void/admin-jobs' and void/mcp is void/admin-mcp's — two more
-   # plugins in this package, the void/cache — void/cache-http split,
+   # declared. Every edge here is one the projection reads from: void/db
+   # for the entity descriptor and the repository, void/html for the form
+   # projection and the view responses, void/htmx for the fragment half of
+   # the same route, void/authz for the gate and the per-action policies.
+   # void/jobs is void/admin-jobs' and void/mcp is void/admin-mcp's — two
+   # more plugins in this package, the void/cache — void/cache-http split,
    # so an admin with no heavy actions composes no queue and an
-   # application with no agent composes no MCP server. The suite
-   # reaches void/dev for inject (ADR-0017), void/db-sqlite for a real
-   # database to CRUD against and void/security for the CSRF slot the
-   # forms carry.
+   # application with no agent composes no MCP server. The suite reaches
+   # void/dev for inject, void/db-sqlite for a real database to CRUD
+   # against and void/security for the CSRF slot the forms carry.
    {:dir "admin" :deps [:void/core :void/http :void/html :void/htmx
                         :void/db :void/authz :void/jobs :void/mcp]
     :test-deps [:void/dev :void/db-sqlite :void/security]
@@ -442,7 +430,7 @@
    :void/bench
    # The B* mini-apps run as subprocesses and reach further than the
    # runner does — html for B3's SSR, rest for B1, db + db-postgres for
-   # B2/B3, obs for the b1-obs row that measures §8.2's ≤ 7%
+   # B2/B3, obs for the b1-obs row that measures the ≤ 7%
    # instrumentation budget, ws for B4's broadcast (see
    # bench/apps/prelude.janet, which asks for this same set).
    {:dir "bench" :deps [:void/core :void/http :void/db :void/pressure]
@@ -464,11 +452,11 @@
     :example true :jpm [:spork]}
 
    :example/counter
-   # The wave-5 experiment's example (ADR-0037): the Biff idiom on
-   # void/datastar — a live counter where every action returns the
-   # full page, Datastar morphs the live DOM, and morph-stream + poke!
-   # keep every open tab converging on the same count. void/cli for
-   # the same reason as guestbook's: the entrypoint calls cli/app-main.
+   # The wave-5 experiment's example: the Biff idiom on void/datastar — a
+   # live counter where every action returns the full page, Datastar
+   # morphs the live DOM, and morph-stream + poke! keep every open tab
+   # converging on the same count. void/cli for the same reason as
+   # guestbook's: the entrypoint calls cli/app-main.
    {:dir "examples/counter"
     :deps [:void/core :void/http :void/html :void/datastar :void/dev :void/cli]
     :example true :jpm [:spork]}
@@ -493,13 +481,13 @@
            :void/obs :void/pressure
            :void/crypto :void/auth :void/authz :void/security
            :void/mail :void/bus :void/mcp :void/admin
-           # product pictures (ADR-0039): the contract and the disk
-           # store on a laptop, the bucket in the compose file — and
-           # void/tls under it, because an https endpoint is a TLS
-           # stack the composition has to carry (ADR-0038)
+           # product pictures: the contract and the disk store on a
+           # laptop, the bucket in the compose file — and void/tls under
+           # it, because an https endpoint is a TLS stack the composition
+           # has to carry
            :void/storage :void/tls
-           # the dev dashboard (ADR-0043): shop is the composition it
-           # is worth looking at — forty plugins on one page
+           # the dev dashboard: shop is the composition it is worth
+           # looking at — forty plugins on one page
            :void/dash
            :void/dev :void/cli]
     :example true :jpm [:spork :sqlite3]}
@@ -532,8 +520,8 @@
     :example true :jpm [:spork :sqlite3]}
 
    :example/hub
-   # The wave-6 application (ROADMAP 6.6): a webhook hub — GitHub
-   # deliveries in, telegram out — and the one example that runs off an
+   # The wave-6 application: a webhook hub — GitHub deliveries in,
+   # telegram out — and the one example that runs off an
    # *installed* void rather than off the checkout. It has no
    # test-support/paths.janet on purpose: `scripts/install-tree.janet`
    # puts the bundle in a tree, and from there the hub imports
@@ -554,19 +542,19 @@
            :void/db :void/db-sqlite :void/db-postgres
            # the sign-in the scaffold generated: identity, the stores it
            # keeps people in, the CSRF token its forms carry, and the
-           # deliverer a challenge refuses to live without (ADR-0023 §7)
+           # deliverer a challenge refuses to live without
            :void/crypto :void/auth :void/security :void/mail
            # the receiving end: the raw body of every delivery goes to a
-           # store (ADR-0039) and the burst it arrives in is shed rather
-           # than queued in the kernel — except /health, which void/obs
-           # brings and void/pressure-http never sheds, because that is
-           # the endpoint an orchestrator asks exactly when the process
-           # is refusing everything else (ADR-0019)
+           # store and the burst it arrives in is shed rather than queued
+           # in the kernel — except /health, which void/obs brings and
+           # void/pressure-http never sheds, because that is the endpoint
+           # an orchestrator asks exactly when the process is refusing
+           # everything else
            :void/storage :void/obs :void/pressure
            # and the sending end: rules pick channels, void/notify fans
            # out over them, the queue (in the same database as the
            # deliveries) carries the delivery, and void/tls is what an
-           # https bot API needs (ADR-0040, ADR-0038)
+           # https bot API needs
            :void/jobs :void/notify :void/tls
            :void/dev :void/cli]
     :example true :installed true :jpm [:spork :sqlite3]}})
@@ -668,8 +656,8 @@
   Without `optional?` this is the bundle's :dependencies list, which
   leaves janet-lang/sqlite3 out on purpose: void/db-sqlite is a plugin
   an application opts into, and a missing library is an error at :start,
-  not at install (ADR-0011, ADR-0020). With it, this is what a checkout
-  needs before `jpm test` — a suite does not get to opt out.``
+  not at install. With it, this is what a checkout needs before `jpm test`
+  — a suite does not get to opt out.``
   [&opt optional?]
   (def urls @[])
   (each name (install-order)
@@ -684,8 +672,8 @@
   the installed examples to run: the external dependencies they declare
   and the bundle does not carry. janet-lang/sqlite3 is the whole of the
   list today, and it is here for the reason it is *not* in the bundle —
-  the driver is an application's opt-in (ADR-0011, ADR-0020), so the
-  application that opts in installs it, which is what this is.``
+  the driver is an application's opt-in, so the application that opts in
+  installs it, which is what this is.``
   []
   (def bundled (jpm-dependencies))
   (def urls @[])

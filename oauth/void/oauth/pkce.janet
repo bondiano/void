@@ -7,11 +7,10 @@
 ### authorization server does not support it" is a reason to upgrade
 ### the server, not to hand out the downgrade in configuration.
 ###
-### The verifier is 32 bytes of OS randomness in the base64url
-### alphabet — 43 characters, inside RFC 7636 §4.1's 43..128 window.
-### The challenge is base64url(SHA-256(verifier)), computed with
-### void/crypto (ADR-0022): nothing cryptographic is written here,
-### only an encoding.
+### The verifier is 32 bytes of OS randomness in the base64url alphabet —
+### 43 characters, inside RFC 7636 §4.1's 43..128 window. The challenge is
+### base64url(SHA-256(verifier)), computed with void/crypto: nothing
+### cryptographic is written here, only an encoding.
 
 (import void/crypto :as crypto)
 

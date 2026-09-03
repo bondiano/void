@@ -26,10 +26,10 @@
 ###
 ### **https belongs to the composition.** The download is a
 ### `http/client` request like any other, so it needs `:void/tls`
-### composed (ADR-0038). Without it the error names both ways out —
-### compose the plugin, or put the binary where `locate` looks —
-### because "this process can speak TLS" is a fact about the
-### composition and not something to work around here.
+### composed. Without it the error names both ways out — compose the
+### plugin, or put the binary where `locate` looks — because "this process
+### can speak TLS" is a fact about the composition and not something to
+### work around here.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -316,7 +316,7 @@
 
 (def- no-tls
   (string "an https download needs TLS, and this composition has none: "
-          "add :void/tls to :plugins (ADR-0038), or download the "
+          "add :void/tls to :plugins, or download the "
           "compiler yourself and point [:html :assets :tailwind :bin] at it"))
 
 (defn- urls-of [resp]

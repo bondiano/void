@@ -1,7 +1,7 @@
-# void/security end to end over test/inject (ADR-0017): headers on the
-# responses no route produced, the CSRF rule that follows the credential
-# rather than the method, a CORS preflight to a path with no route, and
-# a rate limit that answers 429 with the headers a client can obey.
+# void/security end to end over test/inject: headers on the responses no
+# route produced, the CSRF rule that follows the credential rather than
+# the method, a CORS preflight to a path with no route, and a rate limit
+# that answers 429 with the headers a client can obey.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
@@ -61,9 +61,9 @@
             :security {:signing-key (string/repeat "k" 32)}}
           extra)})
 
-# `with-http` starts the kernel and its dependencies (ADR-0017); the
-# crypto component is not one of them, and every CSRF token is signed —
-# so the subset has to name it, the way a real boot starts everything
+# `with-http` starts the kernel and its dependencies; the crypto component
+# is not one of them, and every CSRF token is signed — so the subset has
+# to name it, the way a real boot starts everything
 (def only [:http/kernel :crypto/lib])
 
 # -- the composition -----------------------------------------------------
@@ -111,7 +111,7 @@
   (def missing (test/inject c {:uri "/nowhere"}))
   (assert (= 404 (missing :status)))
   (assert (= "nosniff" (get-in missing [:headers "x-content-type-options"]))
-          "a 404 is produced outside every route chain, and still carries the headers (ADR-0025 §3)")
+          "a 404 is produced outside every route chain, and still carries the headers")
 
   (def blown (test/inject c {:uri "/boom"}))
   (assert (= 500 (blown :status)))
@@ -169,7 +169,7 @@
 # a client that carries no cookie at all is not subject to CSRF
 (test/with-http [c {:plugins plugins :only only :config (config {})}]
   (assert (= 200 ((test/inject c {:method :post :uri "/api/hook" :json {:event "x"}}) :status))
-          "an API call with no cookie cannot be forged by another origin — demanding a token there breaks every JSON client (ADR-0025 §1)")
+          "an API call with no cookie cannot be forged by another origin — demanding a token there breaks every JSON client")
   (assert (= 403 ((test/inject c {:method :post :uri "/api/always" :json {:event "x"}}) :status))
           "unless the route says :void.security/csrf true, which is the tightening the frozen merge allows"))
 

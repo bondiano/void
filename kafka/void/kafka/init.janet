@@ -1,5 +1,4 @@
-### void/kafka — Kafka through librdkafka's event API (ADR-0035,
-### SPEC.md §5.11).
+### void/kafka — Kafka through librdkafka's event API.
 ###
 ### librdkafka runs its own threads either way; what this package
 ### adds is the integration that keeps them out of Janet: the library
@@ -24,7 +23,7 @@
 ### order between :kafka/client and :bus/broker, and a handle shared
 ### across an order nobody promised is a bug on some Tuesday. Two
 ### handles is the stated price, and each is a few OS threads — said
-### here the way ADR-0033 says what a pool costs.
+### here the way void/db-mysql says what a pool costs.
 ###
 ###     (void/run! {:plugins [:void/bus :void/kafka :void/kafka-bus ...]})
 ###     # config/prod.janet
@@ -175,7 +174,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/kafka
-  :doc "Kafka through librdkafka's event API: the library's news arrives on an fd one fiber sleeps on (void/fdwait, ADR-0035), produce is confirmed by the broker's delivery report, and a consumer's offset moves only behind its handler. The raw client — the bus over it is void/kafka-bus."
+  :doc "Kafka through librdkafka's event API: the library's news arrives on an fd one fiber sleeps on (void/fdwait), produce is confirmed by the broker's delivery report, and a consumer's offset moves only behind its handler. The raw client — the bus over it is void/kafka-bus."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
   :config-key :kafka

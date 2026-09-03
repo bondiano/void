@@ -1,6 +1,6 @@
 # Smoke the bench mini-apps through the runner's own lifecycle helpers:
 # spawn, wait for the port, raw HTTP round-trip, graceful stop. No load
-# generator involved — the методика runs are CI's bench workflow, this
+# generator involved — the method runs are CI's bench workflow, this
 # only proves the apps and the orchestration work.
 (import ../test-support/paths)
 (import spork/json)
@@ -33,13 +33,13 @@
   (assert (string/has-prefix? "HTTP/1.1 200" resp) "b0 answers 200")
   (assert (string/find "Hello, World!" resp) "b0 body is the plaintext hello")
 
-  # -- the runtime probe (§8.2 loop-lag / GC budgets) -------------------
+  # -- the runtime probe (loop-lag / GC budgets) -------------------------
 
   (def stats (runner/read-probe 8190 true))
   (assert stats "an app carrying bench/probe answers the runner's probe read")
   (assert (pos? (stats :samples)) "with samples it took while it was up")
   (assert (number? (get-in stats [:loop-lag :p99]))
-          "and a loop-lag distribution — the only place §8.2's loop-lag and GC budgets can be read from")
+          "and a loop-lag distribution — the only place the loop-lag and GC budgets can be read from")
   (def after-reset (runner/read-probe 8190))
   (assert (< (after-reset :samples) (stats :samples))
           "?reset=1 opens a fresh window, which is how the runner brackets the fixed-rate runs"))
@@ -78,7 +78,7 @@
 
 # -- B4 the broadcast benchmark ------------------------------------------
 #
-# A handful of connections rather than the thousand the методика uses:
+# A handful of connections rather than the thousand the method uses:
 # the smoke test proves the app fans out and the generator's report
 # parses, not that the budget is met (that is `void bench b4`).
 
@@ -172,9 +172,9 @@
       (assert (string/find "text/html" resp) "with server-rendered HTML")
       (def body (string/slice resp (+ 4 (string/find "\r\n\r\n" resp))))
       (assert (string/has-prefix? "<!DOCTYPE html>" body))
-      # §8.2 names ~15KB, and a payload that quietly halves would make
+      # the budget names ~15KB, and a payload that quietly halves would make
       # the B3 budget a budget for a different benchmark
       (assert (< 14000 (length body) 17000)
-              (string/format "b3 renders ~15KB (§8.2), got %d bytes" (length body))))))
+              (string/format "b3 renders ~15KB, got %d bytes" (length body))))))
 
 (print "apps-test (db) ok")

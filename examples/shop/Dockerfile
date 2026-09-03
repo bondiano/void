@@ -8,14 +8,14 @@
 ### (docker-compose.yml does that for you.) An application outside this
 ### repository replaces the two `jpm` lines below with one dependency
 ### in its own project.janet — `https://github.com/bondiano/void.git`,
-### the whole framework as one bundle (ADR-0020).
+### the whole framework as one bundle.
 ###
 ### Two stages, and the split is the point: everything that needs a
 ### compiler happens in the first — janet itself, jpm, spork's nine
 ### native modules, janet-lang/sqlite3 and void/fdwait's ~60 lines of C
 ### — and the second carries a janet runtime, the installed tree, two
 ### shared libraries and the application. void's target is "a single
-### binary under 5 MB and an RSS under 50 MB" (SPEC §8), and the image
+### binary under 5 MB and an RSS under 50 MB", and the image
 ### it ships in should not be 900 MB of build tools.
 
 # ---------------------------------------------------------------- build
@@ -41,7 +41,7 @@ RUN git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm \
 # The framework, out of the checkout: one `jpm install` of the
 # repository root installs every package's void/ tree into one merged
 # module path, builds void/fdwait's native module and puts the `void`
-# binary on PATH (ADR-0020). janet-lang/sqlite3 is separate on purpose
+# binary on PATH. janet-lang/sqlite3 is separate on purpose
 # — void/db-sqlite is a plugin an application opts into, so the bundle
 # does not depend on it, and this image carries it because the shop
 # runs on either engine.
@@ -62,8 +62,8 @@ RUN cd /src && jpm install
 # -------------------------------------------------------------- runtime
 FROM debian:bookworm-slim
 
-# libpq5   — void/db-postgres opens it through ffi/ at :start (ADR-0011)
-# libssl3  — void/crypto opens libcrypto.so.3 the same way (ADR-0022);
+# libpq5   — void/db-postgres opens it through ffi/ at :start
+# libssl3  — void/crypto opens libcrypto.so.3 the same way;
 #            bookworm ships OpenSSL 3.0, so scrypt is there and argon2id
 #            (which needs 3.2) is not, which is why the default hasher
 #            is scrypt and `[:crypto :require]` is not set
@@ -87,7 +87,7 @@ COPY --chown=shop:shop examples/shop /app
 # .eml files the :file mail transport writes in :dev, and the netrepl's
 # unix socket (.void/repl.sock) — `docker compose exec web void repl`
 # is a REPL inside the running process, which is a thing void offers
-# on purpose (SPEC §4)
+# on purpose
 RUN mkdir -p /app/tmp/mail && chown -R shop:shop /app /app/tmp
 USER shop
 
@@ -101,7 +101,7 @@ EXPOSE 8080
 
 # /health is an operator endpoint: void/pressure-http never sheds it,
 # so it answers *while* the process is refusing everything else — which
-# is exactly when an orchestrator is asking (ADR-0019)
+# is exactly when an orchestrator is asking
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
   CMD curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1
 

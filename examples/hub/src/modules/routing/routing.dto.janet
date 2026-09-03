@@ -1,11 +1,11 @@
 ### routing/dto — the notification one rule makes out of one delivery.
 ###
 ### This is the value that crosses the boundary: from here it goes to
-### `notify/send`, and every channel in the composition projects it
-### again into whatever it speaks (ADR-0040). Nothing below touches the
-### network or the database — it reads a row and somebody else's JSON
-### and returns data, which is why ../../test/route-test.janet is a
-### table of examples that boots nothing.
+### `notify/send`, and every channel in the composition projects it again
+### into whatever it speaks. Nothing below touches the network or the
+### database — it reads a row and somebody else's JSON and returns data,
+### which is why ../../test/route-test.janet is a table of examples that
+### boots nothing.
 
 (defn- commit-line [payload]
   (def head (get payload :head_commit))
@@ -51,9 +51,8 @@
 
 (defn note-for
   ``The notification one rule makes out of one delivery. Addresses are
-  keyed by what an address *is* (ADR-0040): `:telegram` is a chat, and a
-  rule that does not name one leaves the channel to its configured
-  default.``
+  keyed by what an address *is*: `:telegram` is a chat, and a rule that
+  does not name one leaves the channel to its configured default.``
   [rule delivery payload]
   (def to (if-let [chat (get rule :chat-id)] {:telegram chat} {}))
   {:key :hub/delivery

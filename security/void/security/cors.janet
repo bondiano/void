@@ -1,5 +1,4 @@
-### void/security/cors — cross-origin requests, answered at the edge
-### (ADR-0025 §3).
+### void/security/cors — cross-origin requests, answered at the edge.
 ###
 ### CORS lives with the security headers for one structural reason: a
 ### **preflight** is an `OPTIONS` request to a path that usually has no

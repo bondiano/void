@@ -1,7 +1,7 @@
-# End-to-end prefork (ADR-0010): a real void/run! application with
-# :workers 2 — the master supervises, both workers bind the same port
-# through SO_REUSEPORT and serve requests; SIGTERM drains the whole
-# tree. Skipped nothing: prefork is exercised in full, not stubbed.
+# End-to-end prefork: a real void/run! application with :workers 2 — the
+# master supervises, both workers bind the same port through SO_REUSEPORT
+# and serve requests; SIGTERM drains the whole tree. Skipped nothing:
+# prefork is exercised in full, not stubbed.
 
 (import ../test-support/paths)
 (import void/http/wire :as wire)

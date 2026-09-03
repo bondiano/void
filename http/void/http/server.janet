@@ -1,5 +1,4 @@
-### void/http/server — the HTTP/1.1 connection loop (ADR-0015,
-### ADR-0010).
+### void/http/server — the HTTP/1.1 connection loop.
 ###
 ### One fiber per connection on the ev loop; the loop is: read head
 ### (idle timeout while waiting between keep-alive requests, read
@@ -29,7 +28,7 @@
 (import ./wire :as wire)
 
 (def default-config
-  "Server limits and timeouts (config slice :http, SPEC §5.1)."
+  "Server limits and timeouts (config slice :http)."
   {:host "127.0.0.1"
    :port 8080
    :max-header 8192
@@ -105,8 +104,8 @@
 
 (defn serialize-response
   ``The exact bytes write-response would put on the socket, into a
-  buffer — the inject path's fidelity contract (ADR-0017). Fiber
-  bodies (chunked/SSE) are drained into the buffer as their frames.``
+  buffer — the inject path's fidelity contract. Fiber bodies (chunked/SSE)
+  are drained into the buffer as their frames.``
   [req resp &opt close?]
   (def out @"")
   (def sink @{:write (fn [_ data] (buffer/push out data) nil)})
@@ -166,11 +165,10 @@
   It also stamps `:arrived` on the connection info: the moment this
   request's first bytes were in the process's hands — already there
   for a pipelined one, the return of the first read for the rest. It
-  is what void/obs measures its queue time from (SPEC §8.4's
-  accept->handler), and it deliberately does not start at accept: a
-  client that opens a connection and sends a second later (every
-  browser preconnect) would otherwise report that second as this
-  process's backlog.``
+  is what void/obs measures its queue time from (the accept->handler), and
+  it deliberately does not start at accept: a client that opens a
+  connection and sends a second later (every browser preconnect) would
+  otherwise report that second as this process's backlog.``
   [conn buf info opts]
   (var head nil)
   (var scanned 0)
@@ -337,7 +335,7 @@
   so the deadline cancels the handler, never the connection fiber —
   ev/with-deadline cancels the *root task*, and cancelling a long-lived
   loop fiber mid-ev-operation is exactly the upstream bug class of
-  janet-lang/janet#1337/#1707 (see ADR-0015)."
+  janet-lang/janet#1337/#1707."
   [handler req timeout &opt on-timeout]
   (if (nil? timeout)
     (handler req)
@@ -351,8 +349,8 @@
         (= :ok sig) value
         (and (string? value) (string/find "deadline" value))
         (do
-          # the :on-timeout lifecycle stage (ADR-0016): the handler
-          # task was cancelled by its :void.http/timeout
+          # the :on-timeout lifecycle stage: the handler task was
+          # cancelled by its :void.http/timeout
           (when on-timeout (protect (on-timeout req)))
           {:status 503
            :headers @{"content-type" "text/plain; charset=utf-8"}
@@ -420,12 +418,11 @@
             (def upgrade (get resp :void.http/upgrade))
             (def keep (and (nil? upgrade) (keep-alive? head resp state)))
             (write-response conn wbuf req resp (and (not keep) (nil? upgrade)))
-            # :on-response (ADR-0016): after the bytes hit the socket.
-            # An upgrade is notified here too, and deliberately before
-            # the handover: the access log line is about the *request*
-            # that was answered 101, and it should be written when that
-            # answer went out rather than hours later when the socket
-            # closes.
+            # :on-response: after the bytes hit the socket. An upgrade is
+            # notified here too, and deliberately before the handover: the
+            # access log line is about the *request* that was answered
+            # 101, and it should be written when that answer went out
+            # rather than hours later when the socket closes.
             (when-let [notify (opts :on-response)]
               (protect (notify req resp)))
             (consume! buf consumed)
@@ -494,7 +491,7 @@
           (unless ok (break))
           # janet 1.41 quirk: a closing listener wakes the parked accept
           # with a nil "connection" first — only the NEXT accept errors
-          # with "stream is closed". Skip the nil (see ADR-0015 and
+          # with "stream is closed". Skip the nil (see and
           # scripts/janet-repro/accept-spurious-nil.janet)
           (when conn
             (if (>= (length (state :conns)) (opts :max-connections))
@@ -519,7 +516,7 @@
   (get-in inst [:state :draining]))
 
 (defn stop
-  ``Graceful drain (ADR-0015): close the listener so nothing new is
+  ``Graceful drain: close the listener so nothing new is
   accepted, drop idle keep-alive connections, give in-flight requests
   up to :drain-timeout seconds (their responses already carry
   "connection: close" because :draining flips first), then cut the

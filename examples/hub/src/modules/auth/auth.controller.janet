@@ -7,8 +7,8 @@
 ### that the service does not is the session: `login!` and `logout!`
 ### take the request, because a session is a thing a browser has.
 ###
-### Handlers are registered as symbols, so redefining one in the repl —
-### or saving this file with `void dev` running — is live (ADR-0002).
+### Handlers are registered as symbols, so redefining one in the repl — or
+### saving this file with `void dev` running — is live.
 (import void/auth/http :as auth-http)
 (import void/http/ring :as ring)
 (import void/http/router :as router)
@@ -159,9 +159,9 @@
 # Every route says what access it needs rather than leaning on
 # [:auth-http :default]: the default is :public, an application that
 # flips it to :required has taken a deny-by-default posture on purpose,
-# and these twelve routes have to keep meaning the same thing under
-# both. The names are also what a policy asks about (ADR-0029) — one
-# name, read by more than one thing.
+# and these twelve routes have to keep meaning the same thing under both.
+# The names are also what a policy asks about — one name, read by more
+# than one thing.
 
 (router/defroutes :hub/auth-routes
   (GET "/register" register-form {:name :auth/register-form

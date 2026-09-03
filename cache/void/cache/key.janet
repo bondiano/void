@@ -1,4 +1,4 @@
-### void/cache/key — what a cache key is (SPEC.md §5.11).
+### void/cache/key — what a cache key is.
 ###
 ### A cache key has to be two things at once, and they pull in
 ### different directions. It has to be *readable*, because the key is

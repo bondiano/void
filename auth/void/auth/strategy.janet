@@ -1,5 +1,4 @@
-### void/auth/strategy — the :void.auth/strategy extension point
-### (ADR-0023 §3).
+### void/auth/strategy — the :void.auth/strategy extension point.
 ###
 ### A strategy is a dictionary with up to three halves, and a strategy
 ### that has only one is normal:
@@ -13,15 +12,14 @@
 ###
 ### `:session`, `:bearer` and `:jwt` have the first; `:password`, and
 ### `:otp` have the second. That split is not tidiness: the first half
-### runs on **every** request and must be cheap, and the second is
-### allowed to spend 25 ms on a KDF because it happens once per login
-### (ADR-0022 §5). A strategy with no `:authenticate` is never in the
-### per-request chain at all.
+### runs on **every** request and must be cheap, and the second is allowed
+### to spend 25 ms on a KDF because it happens once per login. A strategy
+### with no `:authenticate` is never in the per-request chain at all.
 ###
-### `:cookie` says whether `:authenticate` reads a cookie. It exists
-### for `void/security`, which demands a CSRF token exactly when the
-### credential was cookie-borne (ADR-0025 §1) — the strategy is the
-### only thing that knows.
+### `:cookie` says whether `:authenticate` reads a cookie. It exists for
+### `void/security`, which demands a CSRF token exactly when the
+### credential was cookie-borne — the strategy is the only thing that
+### knows.
 ###
 ### **Errors are not "no identity".** A strategy turns a malformed
 ### token, a wrong password or an unknown session into nil; if it

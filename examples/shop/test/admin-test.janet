@@ -1,6 +1,6 @@
-### The desk (ADR-0029) — a back office over the entities
-### this application already had, and the same declarations reachable
-### by an agent under the same policies.
+### The desk — a back office over the entities this application already
+### had, and the same declarations reachable by an agent under the same
+### policies.
 ###
 ### What is under test is mostly *absence*. `src/modules/*/*.admin.janet`
 ### hold no handler, no template and no route, and this suite drives a
@@ -114,7 +114,7 @@
                                          :bus/broker :bus.db/schema
                                          # the desk uploads a product
                                          # picture, so the store it goes
-                                         # into is up (ADR-0039)
+                                         # into is up
                                          :storage/store]})]
 
     (drop-tables! app-tables)
@@ -129,11 +129,10 @@
 
     # -- the desk is in the one route table ------------------------------
     #
-    # Not a dispatcher behind one route: every action of every resource
-    # is a named entry in the same table the storefront is in, which is
-    # what makes `void routes`, `:void.db/txn`, CSRF, the policies and
-    # the 403 renderers work here without anybody teaching them about
-    # an admin (ADR-0029 §2).
+    # Not a dispatcher behind one route: every action of every resource is
+    # a named entry in the same table the storefront is in, which is what
+    # makes `void routes`, `:void.db/txn`, CSRF, the policies and the 403
+    # renderers work here without anybody teaching them about an admin.
 
     (def table (http/routes-table))
     (each name [:admin/dashboard
@@ -161,7 +160,7 @@
       (assert (get-in table [:by-name name :meta :void.openapi/hidden])
               (string name " must carry :void.openapi/hidden from [:admin :route-meta]")))
 
-    # -- shut, and opened by one line of config ---------------------------
+    # -- shut, and opened by one line of config --------------------------
 
     (assert (= 403 ((test/inject c {:uri "/admin"}) :status))
             "the gate is a policy, and a visitor does not pass it")
@@ -188,7 +187,7 @@
             "the front page is what the modules contributed to it")
     (note "the gate: one policy the shop already had, one line of config")
 
-    # -- a list, and the three affordances it declared --------------------
+    # -- a list, and the three affordances it declared -------------------
 
     (def listing (test/inject desk {:uri "/admin/products"}))
     (assert (= 200 (listing :status)))
@@ -208,7 +207,7 @@
             ":filters narrows by an enum whose members came off the schema")
     (note "list, search, filter and a count that agrees with the page")
 
-    # -- the one cell a desk edits all day --------------------------------
+    # -- the one cell a desk edits all day -------------------------------
 
     (def mug (db/one catalog/Product {:where [:= :sku "VOID-MUG"]}))
     (def patched
@@ -230,14 +229,13 @@
             "and only the columns :editable named — the rest is a 4xx, not a write")
     (note "in-place edit, bounded by the declaration")
 
-    # -- a picture, which is one line in catalog.model --------------------
+    # -- a picture, which is one line in catalog.model -------------------
     #
-    # The desk uploads it, the storefront shows it, and neither the
-    # admin declaration nor the view says anything about buckets: the
-    # `:file` field resolves to void/storage-admin's widget, the value
-    # in the column is a **key**, and `storage/url` turns it into an
-    # address — a path under /uploads here, a minio URL in the compose
-    # file (ADR-0039).
+    # The desk uploads it, the storefront shows it, and neither the admin
+    # declaration nor the view says anything about buckets: the `:file`
+    # field resolves to void/storage-admin's widget, the value in the
+    # column is a **key**, and `storage/url` turns it into an address — a
+    # path under /uploads here, a minio URL in the compose file.
 
     (def edit-page (test/inject desk {:uri (string "/admin/products/" (mug :id) "/edit")}))
     (assert (string/find "multipart/form-data" (text edit-page))
@@ -300,7 +298,7 @@
             "the refusal changed nothing")
     (note "an upload: one :file field, and the desk, the storefront and the store agree")
 
-    # -- the action that is a domain call ---------------------------------
+    # -- the action that is a domain call --------------------------------
     #
     # `:ship` calls orders.service/ship!, which is where "only a paid
     # order can ship" lives. So the desk cannot ship an unpaid order,
@@ -333,7 +331,7 @@
             "the unpaid one was left alone by the rule in orders.service, not by a check in the desk")
     (note "a declared action is a call into the module that owns the rule")
 
-    # -- a bulk that is too big for a request -----------------------------
+    # -- a bulk that is too big for a request ----------------------------
     #
     # `:archive` declares `:job`, so pressing the button enqueues
     # void/admin-jobs' one job and answers with a progress page. The
@@ -361,7 +359,7 @@
             "the worker did the rows, one policy decision each, with the desk's identity")
     (note "a bulk action as a job, with the subject riding along")
 
-    # -- the desk may not edit the account it is signed in as -------------
+    # -- the desk may not edit the account it is signed in as ------------
 
     (def desk-row (db/one customers/Customer {:where [:= :email (seed/staff :email)]}))
     (assert (= 403 ((test/inject desk {:uri (string "/admin/customers/" (desk-row :id) "/edit")})
@@ -378,7 +376,7 @@
             "...and anybody else's account is the desk's to edit")
     (note "narrowing an action is a defpolicy and nothing else")
 
-    # -- the trail this application already kept --------------------------
+    # -- the trail this application already kept -------------------------
 
     (settle)
     (def trail (audit/trail {:limit 100}))
@@ -399,7 +397,7 @@
             "and the trail comes back as the history tab of a row (:void.admin/history)")
     (note "changes announced, not written — the trail is the application's")
 
-    # -- and the same declarations, read by an agent ----------------------
+    # -- and the same declarations, read by an agent ---------------------
 
     (def server (mcp/server-value))
     (def tools (map |($ :name) (server :tools)))

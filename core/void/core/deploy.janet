@@ -1,5 +1,5 @@
-### void/core/deploy — the shape of the deployment, and the one
-### question every store has to answer (ADR-0030).
+### void/core/deploy — the shape of the deployment, and the one question
+### every store has to answer.
 ###
 ### void has a shared replacement for almost everything it keeps in a
 ### heap: sessions in redis or in the database, a redis cache, the
@@ -59,7 +59,7 @@
 ###
 ### `:by-design` exists so that the right answers stop looking like
 ### missing ones. The `void/ws` room registry is per-worker on purpose
-### (ADR-0028: fan-out between workers is a bus subscriber), the
+### (fan-out between workers is a bus subscriber), the
 ### `void/pressure` sampler measures this process's RSS and loop lag,
 ### and the `void/obs` metric registry is aggregated by whatever
 ### scrapes it. All three show up in `void deploy check` with the
@@ -124,7 +124,7 @@
     (cond
       (= :fleet named) [:fleet "[:deploy :shape] says so"]
       (and (= :single named) forked?)
-      [:fleet (string/format "[:deploy :shape] :single, but [:http :workers] %q — prefork workers are separate heaps (ADR-0010)" workers)]
+      [:fleet (string/format "[:deploy :shape] :single, but [:http :workers] %q — prefork workers are separate heaps" workers)]
       (= :single named) [:single "[:deploy :shape] says so"]
       forked? [:fleet (string/format "[:http :workers] %q" workers)]
       (= :prod profile) [:fleet "the :prod default — say [:deploy :shape] :single to deploy one replica"]

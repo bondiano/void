@@ -1,4 +1,4 @@
-### void/dev — the canonical dev-mode plugin (SPEC.md §4).
+### void/dev — the canonical dev-mode plugin.
 ###
 ### A plugin like any other — it proves the Plugin API on itself:
 ### config slice under :dev with schema + defaults, two stateful
@@ -30,11 +30,10 @@
 #
 # The one thing a dev process prints on its own. It exists for a single
 # sentence — the shape this composition is deployed in and which of its
-# stores would not survive a second replica — because that is the
-# question `[:deploy :shape]` answers at start in :prod and nobody
-# thinks to ask in :dev, where the default is :single and the check is
-# inert (ADR-0030). Reading it here is cheaper than reading it from a
-# failed deploy.
+# stores would not survive a second replica — because that is the question
+# `[:deploy :shape]` answers at start in :prod and nobody thinks to ask in
+# :dev, where the default is :single and the check is inert. Reading it
+# here is cheaper than reading it from a failed deploy.
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start

@@ -1,19 +1,19 @@
-### void/oauth/flow — the authorization-code flow as data (ADR-0034).
+### void/oauth/flow — the authorization-code flow as data.
 ###
 ### Three requests make up the flow, and each is built here as a value
 ### before anything touches a socket: the authorization URL the
 ### browser is redirected to, the token exchange `void/http/client`
 ### POSTs, and the refresh that repeats it later. The suite asserts on
 ### all three without a network — the `introspection-request` form of
-### ADR-0032.
+### void/auth's resource server.
 ###
 ### **The pending record is the flow's memory**, and it lives in the
-### session: `{:provider :state :verifier :nonce :next :at}`, written
-### by the start route, read *and deleted* by the callback in one
-### motion — a code is good for one exchange, and so is the record
-### that vouches for it. Under `[:deploy :shape] :fleet` the session
-### store is already shared (ADR-0030), so the flow survives a load
-### balancer without this package storing anything anywhere.
+### session: `{:provider :state :verifier :nonce :next :at}`, written by
+### the start route, read *and deleted* by the callback in one motion — a
+### code is good for one exchange, and so is the record that vouches for
+### it. Under `[:deploy :shape] :fleet` the session store is already
+### shared, so the flow survives a load balancer without this package
+### storing anything anywhere.
 
 (import spork/json)
 (import void/core/log :as log)
@@ -62,7 +62,7 @@
           (if (string/find "?" endpoint) "&" "?")
           (wire/encode-query query)))
 
-# -- the exchanges, as data -----------------------------------------------
+# -- the exchanges, as data ----------------------------------------------
 
 (defn- client-auth
   "Put the client credentials on a token-endpoint request: Basic by
@@ -111,7 +111,7 @@
    :headers headers
    :timeout (cfg :timeout)})
 
-# -- running them ---------------------------------------------------------
+# -- running them --------------------------------------------------------
 
 (defn- no [reason] {:ok false :reason reason})
 
@@ -159,8 +159,7 @@
 
 (defn refresh!
   ``Exchange a refresh token for fresh tokens — the half an
-  application that stored one (its own column; this package stores
-  nothing, ADR-0034) calls later. The same shape as `exchange!`.``
+  application that stored one (its own column; this package stores nothing) calls later. The same shape as `exchange!`.``
   [p refresh-token &opt cfg ring]
   (run-exchange (refresh-request p refresh-token cfg ring) p :refresh))
 

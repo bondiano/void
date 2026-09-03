@@ -1,4 +1,4 @@
-### The B4 load generator (SPEC §8.2).
+### The B4 load generator.
 ###
 ### wrk and wrk2 speak HTTP, and B4 is not an HTTP benchmark: it is a
 ### fan-out, measured from the receiving end. So this is the generator
@@ -27,8 +27,8 @@
 ###     reads it from `bench/probe`) is what says whose delay it was.
 ###     A generator on the same core as the server is measuring both.
 
-# The module path is a projection of the package graph (ADR-0020), the
-# way every other entry point in the repository builds it.
+# The module path is a projection of the package graph, the way every
+# other entry point in the repository builds it.
 (import ../../scripts/packages :as packages)
 (packages/add-paths [:void/ws])
 
@@ -163,7 +163,7 @@
      :requested wanted
      :duration elapsed
      :messages (delivery :samples)
-     # what §8.2 budgets as "10k msg/s": messages *delivered* to peers
+     # what is budgeted as "10k msg/s": messages *delivered* to peers
      # per second, which is the fan-out and not the broadcast rate
      :rps (if (pos? elapsed) (/ (delivery :samples) elapsed) 0)
      :delivery delivery

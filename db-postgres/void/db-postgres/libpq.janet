@@ -1,5 +1,5 @@
 ### void/db-postgres/libpq — the libpq surface this driver uses, and
-### nothing more (ADR-0011, SPEC.md §5.10, Appendix A).
+### nothing more (Appendix A).
 ###
 ### Everything here is `ffi/`: libpq is a C library with a complete
 ### non-blocking API, so there is no reason to reimplement the

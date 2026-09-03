@@ -1,4 +1,4 @@
-### void/crypto/kdf — key derivation, off the event loop (ADR-0022 §5).
+### void/crypto/kdf — key derivation, off the event loop.
 ###
 ### Three functions, one shape: bytes in, bytes out, every parameter
 ### explicit. Password *encoding* (the PHC string that says which
@@ -9,8 +9,8 @@
 ### **Why every derivation goes through `derive`.** A KDF is a
 ### deliberately expensive, entirely synchronous computation: scrypt at
 ### the default cost takes ~25 ms of pure CPU. On a single-threaded ev
-### loop (ADR-0010) that is 25 ms during which the worker answers
-### nobody — measured, with a 2 ms ticker as the witness:
+### loop that is 25 ms during which the worker answers nobody — measured,
+### with a 2 ms ticker as the witness:
 ###
 ###     on the loop        25.3 ms   ticker ran 0 times
 ###     through ev/thread  36.9 ms   ticker ran 17 times
@@ -43,7 +43,7 @@
 
   argon2id t=2 m=64 MiB lanes=1 is the OWASP second-choice profile
   (m=64 MiB, t=2, p=1). It is not the default because it needs
-  OpenSSL 3.2 and an LTS distribution may not have it (ADR-0022 §2).
+  OpenSSL 3.2 and an LTS distribution may not have it.
 
   PBKDF2 600k iterations is OWASP's 2023 number for HMAC-SHA256. It
   is here for compatibility with hashes that arrive from another
@@ -58,7 +58,7 @@
   [:crypto :kdf :in-thread].``
   true)
 
-# -- the computation, over an already-open library ----------------------
+# -- the computation, over an already-open library -----------------------
 
 (defn- bound [handle name ret & argtypes]
   (def ptr (ffi/lookup handle name))
@@ -179,7 +179,7 @@
       (def kdf (fetch nil "ARGON2ID" nil))
       (unless kdf
         (error (string "argon2id needs OpenSSL 3.2 or newer; this library has the EVP_KDF "
-                       "interface (3.0) but no ARGON2ID behind it. Use :scrypt, or install "
+                       "interface but no ARGON2ID behind it. Use :scrypt, or install "
                        "a newer OpenSSL")))
       (def ctx (ctx-new kdf))
       (kdf-free kdf)
@@ -191,10 +191,9 @@
            ["iter" :uint (spec :t)]
            ["memcost" :uint (spec :m)]
            ["lanes" :uint (spec :lanes)]
-           # threads > 1 would need OSSL_set_max_threads and a thread
-           # pool inside a process that already has its own concurrency
-           # model (ADR-0010); lanes are the parallelism knob that costs
-           # nothing here
+           # threads > 1 would need OSSL_set_max_threads and a thread pool
+           # inside a process that already has its own concurrency model;
+           # lanes are the parallelism knob that costs nothing here
            ["threads" :uint 1]
            # the pepper: a key held by the application, not by the
            # database, so a dump of the password column is not enough to
@@ -213,7 +212,7 @@
     (errorf "unknown kdf %q" (spec :kind)))
   (string out))
 
-# -- running it somewhere sensible --------------------------------------
+# -- running it somewhere sensible ---------------------------------------
 
 (defn thread-work
   ``The worker thread's body: open the library by path, derive, answer
@@ -236,7 +235,7 @@
       (if (= :ok status) value (error value)))
     (derive-with (lib/handle) spec)))
 
-# -- the three functions ------------------------------------------------
+# -- the three functions -------------------------------------------------
 
 (defn scrypt
   ``scrypt (RFC 7914) over a password and a salt. Options override

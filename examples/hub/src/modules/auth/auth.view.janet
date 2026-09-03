@@ -6,8 +6,8 @@
 ### annotated, `:message` is the one line a page is allowed to say.
 ###
 ### **Nothing here says a word about CSRF.** `form/form` has been
-### splicing the token slot since wave 1 and void/security binds it
-### (ADR-0025) — these forms carry a token because they are forms.
+### splicing the token slot since wave 1 and void/security binds it —
+### these forms carry a token because they are forms.
 (import void/html/form :as form)
 (import void/http/wire :as wire)
 (import ./auth.dto :as dto)

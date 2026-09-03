@@ -1,11 +1,10 @@
 ### Generate the docs site — static HTML in site/ — from what the
-### repository already says about itself (ROADMAP «Сквозные работы»:
-### docs-сайт как генерация из деклараций).
+### repository already says about itself: the docs site is generated
+### from the declarations.
 ###
 ### Two kinds of page, one principle:
 ###
-###   * the documents (README, SPEC, ROADMAP, CONTRACTS, DEPLOY, BENCH,
-###     CONTRIBUTING, every ADR) are rendered from their Markdown —
+###   * the documents (README, CONTRACTS, DEPLOY, BENCH, CONTRIBUTING, every ADR) are rendered from their Markdown —
 ###     CONTRACTS.md is itself generated from the declarations and
 ###     drift-checked in CI, so the site's contract reference is a
 ###     projection of a projection and cannot disagree with the code;
@@ -26,6 +25,8 @@
 (import ./packages :as packages)
 
 (packages/add-paths (packages/packages))
+
+(import spork/json)
 
 (import ./site/markdown :as md)
 (import ./site/page :as page)
@@ -145,41 +146,50 @@
 (def out-dir "site")
 
 (def doc-pages
-  "Markdown sources and the pages they become. :here names the nav
-  entry the page lights up."
-  @[{:src "README.md" :out "index.html" :here "index.html"}
+  ``Markdown sources and the pages they become. :here names the nav
+  entry the page lights up — `index.html` is not among them: the landing
+  is the one page built rather than rendered, and the README it draws from
+  is a document like any other, at overview.html.``
+  @[{:src "README.md" :out "overview.html" :here "overview.html"}
     # the tutorial: install -> running app -> single binary, with the
     # outputs the CLI actually prints — first in the nav, because it is
     # the page a newcomer is looking for
     {:src "docs/GETTING-STARTED.md" :out "getting-started.html" :here "getting-started.html"}
     {:src "docs/COMPARISON.md" :out "comparison.html" :here "comparison.html"}
     {:src "docs/cookbook/README.md" :out "cookbook/index.html" :here "cookbook/index.html"}
-    {:src "docs/SPEC.md" :out "spec.html" :here "spec.html"}
-    {:src "docs/ROADMAP.md" :out "roadmap.html" :here "roadmap.html"}
     {:src "docs/CONTRACTS.md" :out "contracts.html" :here "contracts.html"}
     {:src "docs/DEPLOY.md" :out "deploy.html" :here "deploy.html"}
-    # the §9 metric, measured on examples/hub rather than asserted
+    # the idea-to-deploy time, measured on examples/hub rather than asserted
     {:src "docs/IDEA-TO-DEPLOY.md" :out "idea-to-deploy.html" :here "idea-to-deploy.html"}
     {:src "docs/BENCH-v0.1.md" :out "bench.html" :here "bench.html"}
     {:src "CONTRIBUTING.md" :out "contributing.html" :here nil}
     # itself a projection (scripts/gen-changelog.janet) — the site
     # renders it like CONTRACTS: a projection of a projection
-    {:src "CHANGELOG.md" :out "changelog.html" :here nil}
-    {:src "docs/adr/README.md" :out "adr/index.html" :here "adr/index.html"}])
+    {:src "CHANGELOG.md" :out "changelog.html" :here "changelog.html"}])
 
-(each f (sorted (os/dir "docs/adr"))
-  (when (and (string/has-suffix? ".md" f) (not= "README.md" f))
-    (array/push doc-pages
-                {:src (string "docs/adr/" f)
-                 :out (string "adr/" (string/slice f 0 -4) ".html")
-                 :here "adr/index.html"})))
+# The children a section unfolds in the sidebar: [label href], in the
+# order the pages themselves are in. Every one is the document's own first
+# heading — a hand-kept list of links is a list that goes stale.
+
+(def cookbook-nav @[])
 
 (each f (sorted (os/dir "docs/cookbook"))
   (when (and (string/has-suffix? ".md" f) (not= "README.md" f))
-    (array/push doc-pages
-                {:src (string "docs/cookbook/" f)
-                 :out (string "cookbook/" (string/slice f 0 -4) ".html")
-                 :here "cookbook/index.html"})))
+    (def src (string "docs/cookbook/" f))
+    (def out (string "cookbook/" (string/slice f 0 -4) ".html"))
+    (array/push cookbook-nav [(or (md/title (slurp src)) f) out])
+    (array/push doc-pages {:src src :out out :here "cookbook/index.html"})))
+
+(def module-nav
+  "The packages under Modules, by their bundle name."
+  (seq [pkg :in (packages/packages)]
+    [(string pkg)
+     (string "modules/" (get-in packages/graph [pkg :dir]) ".html")]))
+
+(def subnavs
+  "Which children each section unfolds."
+  {"cookbook/index.html" cookbook-nav
+   "modules/index.html" module-nav})
 
 (def page-for
   "repo path of a .md -> site path of its page."
@@ -255,11 +265,11 @@
 
 # -- table of contents ---------------------------------------------------
 #
-# Long pages (SPEC is 110 KB) get a generated contents sidebar and
-# every h2/h3 gets a self-link — both projections of the heading ids
-# the markdown parser (or a reference page) already minted. The
-# sidebar is CSS-only: hidden below the width where it would crowd the
-# column, fixed beside it above.
+# Long pages (is 110 KB) get a generated contents sidebar and every h2/h3
+# gets a self-link — both projections of the heading ids the markdown
+# parser (or a reference page) already minted. The sidebar is CSS-only:
+# hidden below the width where it would crowd the column, fixed beside it
+# above.
 
 (def- toc-levels {:h2 2 :h3 3})
 
@@ -295,9 +305,9 @@
        body))
 
 (defn- dedup-ids
-  "GitHub's answer to two headings spelled the same (CHANGELOG's
-  repeated «Добавлено»): the second occurrence gets -1, the third -2 —
-  so every anchor on the page points at exactly one place."
+  ``GitHub's answer to two headings spelled the same (CHANGELOG's
+  repeated `Added`): the second occurrence gets -1, the third -2 — so
+  every anchor on the page points at exactly one place.``
   [body]
   (def seen @{})
   (map (fn [n]
@@ -313,9 +323,11 @@
            n))
        body))
 
-(defn- with-toc
-  "The page body, anchored — and prefixed with a contents sidebar when
-  it has enough headings to need one."
+(defn- prepare
+  ``Everything a body needs before it becomes a page: heading ids made
+  unique, a self-link on every h2/h3, the contents rail when the page has
+  enough headings to earn one, and the heading list itself — the rail and
+  the search index are two readings of one list.``
   [body]
   (def body (dedup-ids body))
   (def entries
@@ -323,15 +335,14 @@
       {:level (toc-levels (first n))
        :id (get-in n [1 :id])
        :text (string/trim (node-text n))}))
-  (def anchored (add-anchors body))
-  (if (< (length entries) toc-min)
-    anchored
-    [[:nav {:class "toc" :aria-label "Contents"}
-      [:div {:class "toc-title"} "On this page"]
-      [:ol ;(seq [e :in entries]
-              [:li {:class (string "toc-h" (e :level))}
-               [:a {:href (string "#" (e :id))} (e :text)]])]]
-     ;anchored]))
+  {:body (add-anchors body)
+   :entries entries
+   :toc (when (>= (length entries) toc-min)
+          [:nav {:class "toc" :aria-label "Contents"}
+           [:div {:class "toc-title"} "On this page"]
+           [:ol ;(seq [e :in entries]
+                   [:li {:class (string "toc-h" (e :level))}
+                    [:a {:href (string "#" (e :id))} (e :text)]])]])})
 
 # -- pages ---------------------------------------------------------------
 
@@ -339,17 +350,62 @@
   "The footer's provenance line, set by main before any page renders."
   nil)
 
-(defn- write-page! [{:out out :title title :here here :body body :lang lang}]
+# -- search index --------------------------------------------------------
+#
+# The box in the top bar answers from site/search.json — one record per
+# page: its title, the section it sits in, its headings with their
+# anchors, and the opening prose. Written by write-page! itself, from the
+# very nodes that became the page, so the index cannot describe a page the
+# site does not have.
+
+(def- search-index @[])
+
+(def- snippet-limit 240)
+
+(defn- clip
+  ``A string cut to at most n bytes without splitting a UTF-8
+  character — half the corpus is Russian, and half a codepoint is not
+  text.``
+  [s n]
+  (if (<= (length s) n)
+    s
+    (do
+      (var i n)
+      (while (and (> i 0) (= 0x80 (band 0xC0 (s i)))) (-- i))
+      (string (string/slice s 0 i) "…"))))
+
+(defn- opening-prose
+  "The page's first paragraph as plain text, cut to a snippet."
+  [body]
+  (def para (find |(and (indexed? $) (= :p (first $))) body))
+  (when para
+    (clip (string/trim (node-text para)) snippet-limit)))
+
+(defn- index-page! [out title here entries body]
+  (array/push search-index
+              # the landing carries no title of its own
+              {"t" (or title "void")
+               "n" (page/short-name out title)
+               "u" out
+               "s" (page/section here)
+               "x" (or (opening-prose body) "")
+               "h" (seq [e :in entries] {"t" (e :text) "i" (e :id)})}))
+
+(defn- write-page! [{:out out :title title :here here :body body :toc toc
+                     :lang lang :subnav subnav :layout layout
+                     :entries entries}]
   (def path (string out-dir "/" out))
   (def dir (string/join (array/slice (string/split "/" path) 0 -2) "/"))
   (os/mkdir dir)
   (spit path
-        (page/render {:title title :here here :depth (depth-of out)
-                      :body body :generated generated-line :lang lang}))
+        (page/render {:title title :here here :self out :depth (depth-of out)
+                      :body body :toc toc :generated generated-line
+                      :lang lang :subnav subnav :layout layout}))
+  (index-page! out title here (or entries []) body)
   (print "  " path))
 
 (defn- doc-lang
-  ``"ru" when the document is mostly Cyrillic prose (SPEC, the ADRs),
+  ``"ru" when the document is mostly Cyrillic prose (the ADRs),
   "en" otherwise — measured, not listed, so a translated document
   changes its own lang attribute.``
   [src]
@@ -373,17 +429,19 @@
   (def source (slurp src))
   (def body (md/parse source {:rewrite-link (rewriter src out)}))
   (each node body (assert-no-raw-tables! src node))
-  (write-page! {:out out :here here
+  (def page-body (prepare body))
+  (write-page! {:out out :here here :subnav (get subnavs here)
                 :title (or (md/title source) src)
                 :lang (doc-lang source)
-                :body (with-toc body)}))
+                :body (page-body :body) :toc (page-body :toc)
+                :entries (page-body :entries)}))
 
 (defn- config-page! []
   (def body @[[:h1 "Config reference"]
               [:p "Every plugin's slice of the configuration, projected "
                "from the manifests of the in-repo composition — the "
                "schema a value is validated against before the system "
-               "starts (ADR-0007), and the defaults the kernel merges "
+               "starts, and the defaults the kernel merges "
                "under it. A plugin with no config key is listed for its "
                "components alone."]])
   (each name (sorted (keys (boot :manifests)))
@@ -412,8 +470,10 @@
                              [:span {:class "tag"} (string "provides " p)])]
                          [:dd (or (clean-doc (c :doc)) "")]])
                       components)])))
+  (def page-body (prepare body))
   (write-page! {:out "config.html" :here "config.html"
-                :title "Config reference" :body (with-toc body)}))
+                :title "Config reference" :body (page-body :body)
+                :toc (page-body :toc) :entries (page-body :entries)}))
 
 (defn- cli-page! []
   (def commands
@@ -440,8 +500,10 @@
                           [:span {:class "muted"}
                            (string " — boots " (string/join (map string needs) ", "))]))]])
                   commands)]])
+  (def page-body (prepare body))
   (write-page! {:out "cli.html" :here "cli.html"
-                :title "CLI reference" :body body}))
+                :title "CLI reference" :body (page-body :body)
+                :toc (page-body :toc) :entries (page-body :entries)}))
 
 # -- module reference ----------------------------------------------------
 #
@@ -713,10 +775,12 @@
                           [:span {:class "tag"} (b :kind)]]
                          [:dd ;(doc-hiccup (b :doc))]])
                       bindings)])))
+  (def page-body (prepare body))
   (write-page! {:out (string "modules/" dir ".html")
-                :here "modules/index.html"
+                :here "modules/index.html" :subnav module-nav
                 :title (string pkg)
-                :body (with-toc body)}))
+                :body (page-body :body) :toc (page-body :toc)
+                :entries (page-body :entries)}))
 
 (defn- modules-pages!
   "The per-package pages plus their index. Returns how many pages."
@@ -741,9 +805,113 @@
              [:td [:a {:href (string dir ".html")} [:code (string pkg)]]]
              [:td (or (package-description dir) "")]])]]]])
   (write-page! {:out "modules/index.html" :here "modules/index.html"
-                :title "Modules" :body body})
+                :subnav module-nav :title "Modules" :body body})
   (each pkg pkgs (package-page! pkg))
   (inc (length pkgs)))
+
+# -- the landing ---------------------------------------------------------
+#
+# The one page that is not a rendered document — and still not written
+# here. Its words are the README's own (the opening claim, the quick
+# start, «Where void fits»), its numbers are counted off the bootstrapped
+# composition, and each card describes where it leads with that document's
+# first sentence. What this file contributes is the arrangement.
+
+(def- heading-level {:h1 1 :h2 2 :h3 3 :h4 4})
+
+(defn- first-of
+  "The first block of a kind, or nil."
+  [blocks tag]
+  (find |(and (indexed? $) (= tag (first $))) blocks))
+
+(defn- section-blocks
+  ``The blocks under the heading with this id, up to the next heading
+  of the same or a higher level — how the landing quotes a section of the
+  README without repeating a word of it.``
+  [blocks id]
+  (var level nil)
+  (def out @[])
+  (each n blocks
+    (def lvl (and (indexed? n) (heading-level (first n))))
+    (cond
+      (and (nil? level) lvl (= id (get-in n [1 :id])))
+      (set level lvl)
+
+      (nil? level) nil
+
+      (and lvl (<= lvl level)) (break)
+
+      (array/push out n)))
+  out)
+
+(defn- first-sentence
+  "A document's opening sentence, for the card that leads to it."
+  [src]
+  (def para (first-of (md/parse (slurp src)) :p))
+  (when para
+    (def text (string/trim (node-text para)))
+    (def stop (string/find ". " text))
+    (clip (if stop (string/slice text 0 (inc stop)) text) 190)))
+
+(def- landing-cards
+  ``Where the landing sends a reader, in reading order. A card with a
+  :src takes its blurb from that document; the three generated references
+  have no document to quote, so their one line lives here — the same
+  sentence their own page opens with.``
+  [{:label "Getting started" :href "getting-started.html"
+    :src "docs/GETTING-STARTED.md"}
+   {:label "Cookbook" :href "cookbook/index.html"
+    :src "docs/cookbook/README.md"}
+   {:label "Modules" :href "modules/index.html"
+    :blurb "One page per package: its plugins with their config slices, components and extension points, and every documented binding of every module."}
+   {:label "Config reference" :href "config.html"
+    :blurb "Every plugin's slice of the configuration — the schema a value is validated against before the system starts, and the defaults the kernel merges under it."}
+   {:label "CLI reference" :href "cli.html"
+    :blurb "Every command the void binary answers, and the subset of the system each one boots."}
+   {:label "Contracts" :href "contracts.html" :src "docs/CONTRACTS.md"}
+   {:label "Idea → deploy" :href "idea-to-deploy.html"
+    :src "docs/IDEA-TO-DEPLOY.md"}
+   {:label "Deploy" :href "deploy.html" :src "docs/DEPLOY.md"}
+   {:label "Compared" :href "comparison.html" :src "docs/COMPARISON.md"}
+   {:label "Benchmarks" :href "bench.html" :src "docs/BENCH-v0.1.md"}])
+
+(defn- landing! []
+  (def readme (md/parse (slurp "README.md")
+                        {:rewrite-link (rewriter "README.md" "index.html")}))
+  (def lede (first-of readme :p))
+  (def quick (first-of (section-blocks readme (md/slug "Quick start")) :pre))
+  (def fits (take 2 (filter |(and (indexed? $) (= :p (first $)))
+                            (section-blocks readme (md/slug "Where void fits")))))
+  (def stats
+    [[(length (packages/packages)) "packages"]
+     [(length (keys (boot :manifests))) "plugins"]
+     [(length (keys (boot :extensions))) "extension points"]
+     [(length (or (get-in boot [:extensions :void.core/cli :resolved]) []))
+      "CLI commands"]])
+  (write-page!
+    {:out "index.html" :here nil :title nil :layout :landing
+     :body
+     @[[:section {:class "hero"}
+        [:h1 "void"]
+        (when lede [:p {:class "lede"} ;(tuple/slice lede 1)])
+        [:div {:class "cta"}
+         [:a {:class "primary" :href "getting-started.html"} "Getting started"]
+         [:a {:class "ghost" :href "overview.html"} "Overview"]
+         [:a {:class "ghost" :href page/github} "Source"]]]
+       [:div {:class "strip"}
+        ;(seq [[n label] :in stats]
+           [:div [:div {:class "n"} (string n)] [:div {:class "k"} label]])]
+       [:h2 "Quick start"]
+       (or quick "")
+       [:h2 "Where void fits"]
+       [:div {:class "prose"} ;fits]
+       [:h2 "Read"]
+       [:div {:class "cards"}
+        ;(seq [c :in landing-cards]
+           [:a {:class "card" :href (c :href)}
+            [:div {:class "t"} (c :label)]
+            [:div {:class "d"}
+             (or (c :blurb) (when (c :src) (first-sentence (c :src))) "")]])]]}))
 
 # -- main ----------------------------------------------------------------
 
@@ -758,19 +926,22 @@
 
 (defn main [&]
   (os/mkdir out-dir)
-  (os/mkdir (string out-dir "/adr"))
   (set generated-line
        (string "generated from "
                (or (git-sha) "the working tree")
                " on " (os/strftime "%Y-%m-%d" (os/time))))
   (spit (string out-dir "/style.css") page/css)
+  (spit (string out-dir "/site.js") (slurp "scripts/site/site.js"))
   (print "site/")
+  (landing!)
   (each d doc-pages (doc-page! d))
   (config-page!)
   (cli-page!)
   (def module-pages (modules-pages!))
-  (printf "%d pages, %d plugins, %d CLI commands, %d module pages"
-          (+ 2 module-pages (length doc-pages))
+  (spit (string out-dir "/search.json") (json/encode search-index))
+  (printf "%d pages, %d plugins, %d CLI commands, %d module pages, search index %d KB"
+          (length search-index)
           (length (keys (boot :manifests)))
           (length (or (get-in boot [:extensions :void.core/cli :resolved]) []))
-          (dec module-pages)))
+          (dec module-pages)
+          (div (length (json/encode search-index)) 1024)))

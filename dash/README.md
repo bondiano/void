@@ -38,8 +38,8 @@ gets a sentence naming the plugin that would fill the section — never
 an empty box, never an import.
 
 With `:void/datastar` composed, the Overview and Logs pages ride a
-morph-stream: the page re-renders whole and Datastar morphs the delta
-(ADR-0037's idiom, on its first real consumer). Without it, htmx polls
+morph-stream: the page re-renders whole and Datastar morphs the delta —
+the Datastar idiom, on its first real consumer. Without it, htmx polls
 every 5 seconds — the same data, a moment later.
 
 ## Access

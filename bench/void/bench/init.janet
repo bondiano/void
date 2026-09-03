@@ -1,4 +1,4 @@
-### void/bench — the bench-suite plugin (SPEC.md §8.3, ADR-0014).
+### void/bench — the bench-suite plugin.
 ###
 ### `void bench` is a :void.core/cli contribution like any other — the
 ### suite itself is a tiny void application (see ../../main.janet)
@@ -16,6 +16,6 @@
    :fn (fn cli-bench [& args] (runner/run-cli args))})
 
 (plugin/defplugin void/bench
-  :doc "Bench-suite runner (ADR-0014): SPEC §8.3 методика over the bench/apps mini-apps and the Go/FastAPI calibration baselines; baseline recording and 5% regression checks."
+  :doc "Bench-suite runner: the wrk/wrk2 method over the bench/apps mini-apps and the Go/FastAPI calibration baselines; baseline recording and 5% regression checks."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"})

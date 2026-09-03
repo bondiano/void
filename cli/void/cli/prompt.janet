@@ -1,5 +1,5 @@
 ### void/cli/prompt — the questions a generator asks, and the two ways
-### they can be answered (SPEC.md §5.17: "интерактив через rawterm").
+### they can be answered — including interactively, through rawterm.
 ###
 ### A scaffolder that only works in front of a human is a scaffolder
 ### nobody can run from a Makefile, from CI or from `void make resource

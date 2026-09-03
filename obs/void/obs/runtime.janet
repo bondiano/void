@@ -1,34 +1,33 @@
-### void/obs/runtime — what a process knows about itself (SPEC.md
-### §5.13 and §8.4).
+### void/obs/runtime — what a process knows about itself.
 ###
 ### **The event-loop lag histogram is the point of this module.** On a
-### single-threaded ev loop (ADR-0010) every other number is downstream
-### of it: a latency p99 rises because the loop is late, a request
-### times out because the loop is late, and a GC pause *is* the loop
-### being late. SPEC §8.4 names it "the main health indicator of an ev
-### system" and budgets its p99 under 1 ms; §8.2 alerts on p99 > 10 ms.
-### So it is sampled here, from inside the process, with the same meter
-### void/pressure reacts to and void/bench/probe budgets against
+### single-threaded ev loop every other number is downstream of it: a
+### latency p99 rises because the loop is late, a request times out
+### because the loop is late, and a GC pause *is* the loop being late. It
+### is "the main health indicator of an ev system", budgeted at a p99
+### under 1 ms, with an alert past 10 ms. So it is sampled here, from
+### inside the process, with the same meter void/pressure reacts to and
+### void/bench/probe budgets against
 ### (`void/pressure/sample` — the module, never the plugin: observing a
 ### process must not start shedding from it).
 ###
 ### **There are no GC metrics, and that is janet's limit rather than an
 ### omission.** janet 1.41 exposes `gccollect`, `gcinterval` and
-### `gcsetinterval` — nothing that reports a pause, a collection count
-### or an allocation rate. But a janet collection is stop-the-world on
-### the one thread the loop runs on, so every pause is loop lag of at
-### least its own length: `loop-lag max >= GC max pause`, always. That
-### bound is what `:void.obs/loop-lag-seconds` carries, and it is the
-### same reasoning void/bench/probe uses for the §8.2 GC budget. A
-### fiber count has no such proxy — janet keeps no registry of live
-### fibers — so what void can honestly report is the count of the
-### fibers it creates itself: in-flight requests and open connections,
-### which void/obs-http collects from the kernel it can see.
+### `gcsetinterval` — nothing that reports a pause, a collection count or
+### an allocation rate. But a janet collection is stop-the-world on the
+### one thread the loop runs on, so every pause is loop lag of at least
+### its own length: `loop-lag max >= GC max pause`, always. That bound is
+### what `:void.obs/loop-lag-seconds` carries, and it is the same
+### reasoning void/bench/probe uses for the GC budget. A fiber count has
+### no such proxy — janet keeps no registry of live fibers — so what void
+### can honestly report is the count of the fibers it creates itself:
+### in-flight requests and open connections, which void/obs-http collects
+### from the kernel it can see.
 ###
 ### Everything else here is the process, not the machine: RSS as the
 ### kernel reports it (nil, and therefore no series at all, where the
 ### platform has no cheap meter), uptime, and the log records that were
-### dropped rather than block a request fiber (ADR-0018).
+### dropped rather than block a request fiber.
 
 (import void/core/log :as log)
 (import void/pressure/sample :as sample)
@@ -43,16 +42,15 @@
 
 (def lag-buckets
   ``Bucket bounds for loop lag, in seconds. The budget lives at 1 ms
-  and the alert at 10 ms (SPEC §8.2/§8.4), so the resolution is
-  packed between 100 µs and 25 ms — a p99 that has to distinguish
-  "fine" from "alert" needs bounds on both sides of both numbers. The
-  tail runs to 5 s because a loop that late is the incident being
-  reconstructed, and a bucket it lands in is the difference between
-  "we saw it" and "it was over the last bound".``
+  and the alert at 10 ms, so the resolution is packed between 100 µs and
+  25 ms — a p99 that has to distinguish "fine" from "alert" needs bounds
+  on both sides of both numbers. The tail runs to 5 s because a loop that
+  late is the incident being reconstructed, and a bucket it lands in is
+  the difference between "we saw it" and "it was over the last bound".``
   [0.0001 0.00025 0.0005 0.001 0.0025 0.005 0.01 0.025 0.05 0.1 0.25 0.5 1 2.5 5])
 
 (def loop-lag
-  "How late the event loop is running — the §8.4 health indicator."
+  "How late the event loop is running — the health indicator."
   (metrics/histogram :void.obs/loop-lag-seconds
     {:doc "Event-loop lag: how much longer than it asked for a sleep took"
      :buckets lag-buckets}))
@@ -93,7 +91,7 @@
     {:doc "Resident set size in bytes"}))
 
 (def process-info
-  ``A constant 1 carrying this process's pid. Under prefork (ADR-0010)
+  ``A constant 1 carrying this process's pid. Under prefork
   every worker has its own registry, and a scrape reaches whichever
   worker the kernel handed the connection to — this label is what
   tells an operator *which* worker answered. See void/obs-http's
@@ -104,8 +102,8 @@
 
 (def log-dropped
   "Log records an async sink dropped rather than back-pressure a
-  request fiber (ADR-0018). Not zero is a sizing problem, and the
-  number is the size of it."
+  request fiber. Not zero is a sizing problem, and the number is the size
+  of it."
   (metrics/counter :void.obs/log-dropped-total
     {:doc "Log records dropped by a full async sink buffer"}))
 
@@ -141,11 +139,11 @@
 (defn start-sampler!
   ``Start the lag sampler: a heartbeat thread stamps the clock every
   `interval` and the fiber records how long each stamp waited to be
-  taken — the cost SPEC §8.4 asks for in exchange for the only signal
-  that sees a blocked loop. A heartbeat rather than an ev/sleep,
-  because janet resumes sleeping fibers only when the ready queue goes
-  quiet: an ev/sleep sampler under sustained traffic sleeps through
-  the busy period and then books all of it as one enormous "GC pause"
+  taken — the cost of the only signal that sees a blocked loop. A
+  heartbeat rather than an ev/sleep, because janet resumes sleeping fibers
+  only when the ready queue goes quiet: an ev/sleep sampler under
+  sustained traffic sleeps through the busy period and then books all of
+  it as one enormous "GC pause"
   (void/pressure/sample.janet has the measurement).``
   [&opt interval]
   (default interval (state :interval))
@@ -210,7 +208,7 @@
 # -- the status view -----------------------------------------------------
 
 (defn stats
-  ``What the sampler has seen, in **milliseconds** — the unit §8.2 and
+  ``What the sampler has seen, in **milliseconds** — the unit the budgets and
   every under-pressure-shaped dashboard are written in, and the unit
   `void obs status` prints. The percentiles come off the histogram
   itself (`metrics/quantile`), so what an operator reads in the REPL

@@ -1,6 +1,5 @@
-### void/kafka/config — from the [:kafka] config slice to the
-### property list librdkafka is configured with (ADR-0035, SPEC.md
-### §5.11).
+### void/kafka/config — from the [:kafka] config slice to the property
+### list librdkafka is configured with.
 ###
 ### librdkafka is configured entirely through string properties
 ### ("bootstrap.servers", "acks", ...), of which there are several
@@ -31,9 +30,9 @@
    :client-id [:optional :string]
    :library [:optional :string]
 
-   # the boot probe (ADR-0035): DescribeCluster through the event API,
-   # parked, bounded — the keeper-connection bargain for a client that
-   # has no "connect" moment
+   # the boot probe: DescribeCluster through the event API, parked,
+   # bounded — the keeper-connection bargain for a client that has no
+   # "connect" moment
    :verify [:optional :boolean]
    :probe-timeout [:optional [:number {:min 0}]]
 
@@ -67,9 +66,9 @@
 
 (def reserved
   ``Properties the integration owns, and why a config that sets them
-  is refused rather than obeyed (ADR-0035): the event pump is the only
-  consumer of the library's news, and these are the knobs that would
-  point the news elsewhere.``
+  is refused rather than obeyed: the event pump is the only consumer of
+  the library's news, and these are the knobs that would point the news
+  elsewhere.``
   ["enabled_events"           # set by rd_kafka_conf_set_events
    "log.queue"                # logs must come out as events, not callbacks
    "background_event_cb"      # a callback on the library's own thread
@@ -106,8 +105,8 @@
   (each name reserved
     (when (or (get given name) (get base name))
       (errorf (string "kafka: property %q belongs to the event machinery "
-                      "(ADR-0035) and cannot be configured — see "
-                      "void/kafka/config") name)))
+                      "and cannot be configured — see void/kafka/config")
+              name)))
   (each name (keys extra)
     (when (get given name)
       (errorf (string "kafka: property %q is set by this component to %q and "

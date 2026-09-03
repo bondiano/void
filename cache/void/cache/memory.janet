@@ -1,15 +1,14 @@
-### void/cache/memory — the in-process store: TTL and an exact LRU
-### (SPEC.md §5.11).
+### void/cache/memory — the in-process store: TTL and an exact LRU.
 ###
-### A table of entries plus a recency list, which is the textbook
-### answer; the one decision worth stating is how the list is built.
-### The usual intrusive doubly-linked list stores *the neighbouring
-### entries* in each entry, and a cache built that way is a cycle: `pp`
-### on the component walks it forever, and "all runtime state lives
-### inside the system value itself, fully inspectable from the REPL"
-### (ADR-0001) stops being true the moment someone tries it. So the
-### links here are **keys**, not entries: two extra hash lookups per
-### touch, no cycles anywhere, and the whole store prints.
+### A table of entries plus a recency list, which is the textbook answer;
+### the one decision worth stating is how the list is built. The usual
+### intrusive doubly-linked list stores *the neighbouring entries* in each
+### entry, and a cache built that way is a cycle: `pp` on the component
+### walks it forever, and "all runtime state lives inside the system value
+### itself, fully inspectable from the REPL" stops being true the moment
+### someone tries it. So the links here are **keys**, not entries: two
+### extra hash lookups per touch, no cycles anywhere, and the whole store
+### prints.
 ###
 ### Eviction is exact LRU, not an approximation: the entry evicted is
 ### the one least recently *used*, reads included, because a cache

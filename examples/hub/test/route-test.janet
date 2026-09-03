@@ -80,7 +80,7 @@
 (assert (= [:telegram] (note :channels))
         "the rule decides the channels, not the call site")
 (assert (= "-1001234567890" (get-in note [:to :telegram]))
-        "and the address is keyed by what an address is (ADR-0040)")
+        "and the address is keyed by what an address is")
 (assert (= "ce4b1f00" (get-in note [:data :delivery]))
         "the delivery is on the notification, so a message can be traced back")
 (assert (= "github/2026/09/ce4b1f00.json" (get-in note [:data :key]))

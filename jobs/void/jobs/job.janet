@@ -1,15 +1,15 @@
 ### void/jobs/job — what a job *is*: the definition registry, `defjob`,
-### and the options a definition carries (SPEC.md §5.12, ADR-0012).
+### and the options a definition carries.
 ###
 ### A job definition is a name, a handler and a policy. The name is a
 ### keyword and it is what travels: a queued job is `{:job :welcome-mail
 ### :args [42]}` in a table, in redis or in a row, and the process that
 ### runs it looks the name up in this registry. Which is also why the
-### handler is held as a *binding*, not as a function value (ADR-0002):
-### the environment of the defining module plus the symbol, read at
-### call time, so redefining the function in the REPL — or a reload by
-### void/dev's watcher — is live for jobs already queued. void/http's
-### symbol handlers resolve the same way and for the same reason.
+### handler is held as a *binding*, not as a function value: the
+### environment of the defining module plus the symbol, read at call time,
+### so redefining the function in the REPL — or a reload by void/dev's
+### watcher — is live for jobs already queued. void/http's symbol handlers
+### resolve the same way and for the same reason.
 ###
 ### The policy is everything the runtime needs to decide what to do
 ### when the handler throws or when two enqueues collide: how many
@@ -258,13 +258,13 @@
 # queue does not depend on and which therefore sits composed and
 # unstarted in the worker's own process — five failed attempts against
 # a very clear message about libssl, which is how this was found
-# (examples/hub, ROADMAP 6.6).
+# (examples/hub, 6.6).
 #
 # So the definition says it, and `void jobs work` starts the union over
-# the queues it serves. `needs!` is the same statement made later, for
-# the definitions whose needs are not known where they are written:
-# void/notify-jobs has one job for every channel, and which components
-# a channel opens is a fact about the channel (ADR-0040).
+# the queues it serves. `needs!` is the same statement made later, for the
+# definitions whose needs are not known where they are written:
+# void/notify-jobs has one job for every channel, and which components a
+# channel opens is a fact about the channel.
 
 (defn needs!
   ``Add component keys to a definition's `:needs`, after the fact.

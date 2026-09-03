@@ -1,12 +1,12 @@
 ### void/crypto/random — randomness, from the operating system.
 ###
-### The one primitive ADR-0022 deliberately does **not** take from
+### The one primitive this package deliberately does **not** take from
 ### libcrypto. `os/cryptorand` is getrandom(2) / arc4random(3) — the
 ### kernel's own CSPRNG, with the guarantees we want, and going through
 ### `RAND_bytes` instead would add a userspace pool that has to be
-### re-seeded after fork. void forks (ADR-0010, prefork workers), and a
-### generator whose state is inherited by every worker is the classic
-### way to hand several processes the same "random" session ids.
+### re-seeded after fork. void forks (prefork workers), and a generator
+### whose state is inherited by every worker is the classic way to hand
+### several processes the same "random" session ids.
 ###
 ### Sizes are in **bytes**, and the default is 32 of them: 256 bits is
 ### the size at which guessing stops being a threat model, and every

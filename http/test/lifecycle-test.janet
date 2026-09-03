@@ -1,10 +1,9 @@
-# Request-lifecycle stages (ADR-0016): global hooks through the
-# :void.http/hook point, route/group hooks through the
-# :void.http/hooks metadata key (per-stage concat), short-circuit
-# semantics, response-stage ordering around rendering-phase
-# middleware, :on-error before renderers, and the out-of-chain
-# :on-response / :on-timeout / :void.http/listening notifications on
-# a real socket.
+# Request-lifecycle stages: global hooks through the :void.http/hook
+# point, route/group hooks through the :void.http/hooks metadata key
+# (per-stage concat), short-circuit semantics, response-stage ordering
+# around rendering-phase middleware, :on-error before renderers, and the
+# out-of-chain :on-response / :on-timeout / :void.http/listening
+# notifications on a real socket.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)

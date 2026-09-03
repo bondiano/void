@@ -1,8 +1,8 @@
-### The declaration is a value (ADR-0029 §1): built from the entity,
-### frozen, and readable by anybody. Everything below asserts on the
-### descriptor alone — no system, no database, no routes — because a
-### declaration that needed a running system to be inspected would be a
-### declaration the MCP projection could not read either.
+### The declaration is a value: built from the entity, frozen, and
+### readable by anybody. Everything below asserts on the descriptor alone
+### — no system, no database, no routes — because a declaration that
+### needed a running system to be inspected would be a declaration the MCP
+### projection could not read either.
 
 (import ../test-support/paths)
 (import void/core/schema :as schema)
@@ -157,7 +157,7 @@
 (assert (string/find "unknown admin resource" (fails |(res/resource! :nope) "an unknown resource")))
 
 # re-declaring replaces, which is what makes a REPL redefinition take
-# effect (ADR-0002)
+# effect
 (res/register! (res/resource :widgets Widget :title "Again"))
 (assert (= "Again" ((res/lookup :widgets) :title)))
 

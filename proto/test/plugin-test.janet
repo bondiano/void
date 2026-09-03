@@ -5,7 +5,7 @@
 (import void/proto/descriptor :as desc)
 (require "void/proto/init")
 
-# -- the manifest holds together on its own -------------------------------
+# -- the manifest holds together on its own ------------------------------
 
 (def boot (plugin/dry-run {:plugins [:void/proto] :profile :test}))
 (assert boot "void/proto dry-runs alone — it needs no transport and no components")
@@ -17,7 +17,7 @@
 (assert (= 2 (get-in boot [:extensions :void.core/schema-type :contributions]))
         "the 64-bit integer types are declared, not smuggled in")
 (assert (= 1 (get-in boot [:extensions :void.core/schema-projection :contributions]))
-        "and the :proto projection is the row SPEC §3.3 reserved for it")
+        "and the :proto projection is the row reserved for it")
 (assert (index-of :proto/int64 (schema/types)))
 (assert (index-of :proto/uint64 (schema/types)))
 (assert (index-of :proto (schema/projections)))
@@ -31,16 +31,16 @@
 (assert (by-name :proto/describe))
 (each c [(by-name :proto/list) (by-name :proto/describe)]
   (assert (c :read-only?)
-          "both commands are read-only, so an agent may run them (ADR-0031)"))
+          "both commands are read-only, so an agent may run them"))
 
-# -- the config slice ------------------------------------------------------
+# -- the config slice ----------------------------------------------------
 
 (assert (deep= [] (get-in full [:config :values :proto :paths])))
 (def [ok _] (protect (plugin/dry-run {:plugins [:void/proto] :profile :test
                                       :config {:cli {:proto {:paths "not a list"}}}})))
 (assert (not ok) "a [:proto :paths] that is not a list of strings fails the bootstrap")
 
-# -- .proto files a plugin ships ------------------------------------------
+# -- .proto files a plugin ships -----------------------------------------
 
 (plugin/register-manifest!
   (plugin/manifest 'test/proto-consumer
@@ -78,7 +78,7 @@
 (assert (not ok))
 (assert (string/find "test/nope" err) "and the error says which contribution and which file")
 
-# -- the CLI commands print what they promise ------------------------------
+# -- the CLI commands print what they promise ----------------------------
 
 (proto/defmessage :cli/Thing {:a [1 :string]})
 
@@ -101,7 +101,7 @@
 (assert (not (first (protect ((get-in by-name [:proto/describe :fn]) "nothing.At.All")))))
 (assert (not (first (protect ((get-in by-name [:proto/list :fn]) "everything")))))
 
-# -- removing the plugin leaves no trace ----------------------------------
+# -- removing the plugin leaves no trace ---------------------------------
 
 (def without (plugin/bootstrap {:plugins [] :profile :test} true))
 (assert (empty? (get-in without [:extensions :void.core/cli :resolved] []))

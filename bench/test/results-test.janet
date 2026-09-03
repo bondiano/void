@@ -2,7 +2,7 @@
 (import void/bench/results :as results)
 (import void/bench/targets :as targets)
 
-# -- comparison: the 5% contract (ADR-0014) ------------------------------
+# -- comparison: the 5% contract -----------------------------------------
 
 (defn rows [&keys {:rps rps :p50 p50 :p99 p99}]
   {:rows {:b0 {:bench :plaintext
@@ -79,7 +79,7 @@
      :latency {:rate 16000 :p50 0.4 :p99 2.9}
      :runtime {:loop-lag {:p50 0.05 :p99 0.4 :max 3}}}
     (targets/budgets :b0)))
-(assert (all |(= :ok (first $)) notes) "all §8.2 b0 budgets met")
+(assert (all |(= :ok (first $)) notes) "all b0 budgets met")
 
 (def missed
   (results/budget-notes
@@ -95,7 +95,7 @@
   (results/budget-notes {:throughput {:rps 25000}} (targets/budgets :b0)))
 (assert (= :skip (first (unmeasured 1))) "no wrk2 run -> latency unchecked")
 
-# -- the two budgets only the process itself can see (§8.2, §8.4) --------
+# -- the two budgets only the process itself can see ---------------------
 
 (def laggy
   (results/budget-notes
@@ -104,7 +104,7 @@
      :runtime {:loop-lag {:p50 0.9 :p99 4.2 :max 12}}}
     (targets/budgets :b0)))
 (assert (deep= @[:miss] (distinct (map first (filter |(string/find "loop-lag" ($ 1)) laggy))))
-        "a loop that runs 4ms late under target load misses the §8.2 budget")
+        "a loop that runs 4ms late under target load misses the budget")
 
 (def unprobed
   (results/budget-notes

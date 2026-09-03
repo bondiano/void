@@ -63,7 +63,7 @@
   ``The :void.core/log-sink contribution: keep the record, wake the
   tails, poke the live page. Never throws and never blocks — a full
   tail drops the record for that tail (the page re-syncs on its next
-  poll), which is the jdn-sink's own posture (ADR-0018).``
+  poll), which is the jdn-sink's own posture.``
   [rec]
   (ring/push! records rec)
   (eachk conn subscribers

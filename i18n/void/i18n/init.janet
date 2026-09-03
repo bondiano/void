@@ -1,26 +1,24 @@
 ### void/i18n — dictionaries as contributions, the locale as a dyn, and
-### schema errors that translate themselves (ADR-0036).
+### schema errors that translate themselves.
 ###
-### A dictionary is a contribution to :void.i18n/messages — a flat
-### table of namespaced keywords to strings (or plural-form tables) for
-### one locale, merged by ascending :precedence (default 100; the
-### shipped dictionaries sit at 0), so an application overrides a
-### package's text without naming a number — the :phase-of-middleware
-### posture, with the deterministic resolution order as the tie-break.
-### No config carries a translation — config is data and functions do
-### not live in it (ADR-0007); neither do catalogs that two parties
-### write.
+### A dictionary is a contribution to :void.i18n/messages — a flat table
+### of namespaced keywords to strings (or plural-form tables) for one
+### locale, merged by ascending :precedence (default 100; the shipped
+### dictionaries sit at 0), so an application overrides a package's text
+### without naming a number — the :phase-of-middleware posture, with the
+### deterministic resolution order as the tie-break. No config carries a
+### translation — config is data and functions do not live in it; neither
+### do catalogs that two parties write.
 ###
-### The request's locale is resolved once per request (application
-### hook -> cookie -> Accept-Language -> default) by a middleware at
-### phase 4500 — after auth, so the hook sees the identity — and bound
-### as (dyn :void.i18n/locale) together with (dyn
-### :void.schema/messages), the seam void/core/schema has carried
-### since wave 0 (ADR-0008). Everything deeper in the chain sees both:
-### the validation middleware, the handler, the template rendering at
-### phase 9000, the fibers the handler spawns, and mail/send, which
-### renders before queueing exactly so that this capture works. Forms,
-### admin and problem+json localize with zero changes in their
+### The request's locale is resolved once per request (application hook ->
+### cookie -> Accept-Language -> default) by a middleware at phase 4500 —
+### after auth, so the hook sees the identity — and bound as (dyn
+### :void.i18n/locale) together with (dyn :void.schema/messages), the seam
+### void/core/schema has carried since wave 0. Everything deeper in the
+### chain sees both: the validation middleware, the handler, the template
+### rendering at phase 9000, the fibers the handler spawns, and mail/send,
+### which renders before queueing exactly so that this capture works.
+### Forms, admin and problem+json localize with zero changes in their
 ### packages.
 ###
 ### `(i18n/t :shop.cart/items {:count n})` — named {param}
@@ -58,7 +56,7 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.i18n/messages
-  :doc "A dictionary for one locale (ADR-0036): {:name :locale :messages {namespaced-keyword string-or-plural-table} :precedence?}. Merged by ascending :precedence — default 100, the shipped dictionaries contribute at 0 — so an application overrides a package's key without naming a number; ties fold in the deterministic resolution order, last write wins. A plural table maps CLDR categories (:zero :one :two :few :many :other) and must carry :other"
+  :doc "A dictionary for one locale: {:name :locale :messages {namespaced-keyword string-or-plural-table} :precedence?}. Merged by ascending :precedence — default 100, the shipped dictionaries contribute at 0 — so an application overrides a package's key without naming a number; ties fold in the deterministic resolution order, last write wins. A plural table maps CLDR categories (:zero :one :two :few :many :other) and must carry :other"
   :schema {:name :keyword
            :locale :keyword
            :messages :dictionary
@@ -111,7 +109,7 @@
   language-switch route of the application sets it; :cookie false
   turns the source off). There is deliberately no query-parameter
   source — a query string travels into logs and referrers, and a GET
-  that changes the representation arms cache traps (ADR-0036).``
+  that changes the representation arms cache traps.``
   {:locales [:en]
    :default :en
    :cookie "lang"})
@@ -122,7 +120,7 @@
   {:hook :before-start
    :phase 400
    :name :i18n/install-catalog
-   :doc "Merge the :void.i18n/messages contributions in resolution order, run the ADR-0036 boot gates and prebuild the :void.schema/messages tables"
+   :doc "Merge the :void.i18n/messages contributions in resolution order, run the boot gates and prebuild the :void.schema/messages tables"
    :fn (fn install [boot]
          (catalog/install!
            (get-in boot [:config :values :i18n] {})
@@ -201,7 +199,7 @@
 # -- the plugin ----------------------------------------------------------
 
 (plugin/defplugin void/i18n
-  :doc "Dictionaries as data: a translation table is a contribution merged in resolution order, the request's locale is a dyn bound after auth and inherited by every fiber the handler spawns, and the schema errors of forms, admin and problem+json translate through the (dyn :void.schema/messages) seam the core has carried since wave 0 (ADR-0036)."
+  :doc "Dictionaries as data: a translation table is a contribution merged in resolution order, the request's locale is a dyn bound after auth and inherited by every fiber the handler spawns, and the schema errors of forms, admin and problem+json translate through the (dyn :void.schema/messages) seam the core has carried since wave 0."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :i18n

@@ -1,4 +1,4 @@
-### void/storage/key — keys as data (ADR-0039 §2).
+### void/storage/key — keys as data.
 ###
 ### A key is a relative, slash-separated string: what a text column
 ### stores, what a URL path carries, what every store addresses. The

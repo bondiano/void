@@ -1,5 +1,4 @@
-### void/ws-htmx — the htmx ws-extension, from the server's side
-### (SPEC §5.6, ADR-0028, ADR-0041).
+### void/ws-htmx — the htmx ws-extension, from the server's side.
 ###
 ### htmx's `hx-ws` extension makes a websocket look like the rest of
 ### htmx: an element opens the socket (`hx-ws:connect="/live"`), a form
@@ -53,11 +52,10 @@
   ``The key htmx puts its request metadata under when an `hx-ws:send`
   element serialises a form. Everything beside it is a form field.
 
-  It is `:headers` and lowercase since htmx 4 (ADR-0041; the envelope
-  spelled it `HEADERS` before), and a keyword because the JSON arrives
-  decoded the way every other request body in void does (`void/rest`
-  reads one the same way): a field named `message` in the HTML is
-  `:message` here.``
+  It is `:headers` and lowercase since htmx 4 (the envelope spelled it
+  `HEADERS` before), and a keyword because the JSON arrives decoded the
+  way every other request body in void does (`void/rest` reads one the
+  same way): a field named `message` in the HTML is `:message` here.``
   :headers)
 
 (defn fields
@@ -162,12 +160,11 @@
       # -> hx-ws:connect="/live"
 
   There is no `hx-ext` beside it: htmx 4 removed the attribute, and an
-  extension is loaded by its script tag alone (ADR-0041) — see the
-  header of this file.
+  extension is loaded by its script tag alone — see the header of this
+  file.
 
   The URL is relative or absolute; htmx works out the scheme, which is
-  why nothing here says `ws://` (and why a deployment behind a TLS
-  relay needs no change on this side — ADR-0010).``
+  why nothing here says `ws://` (and why a deployment behind a TLS relay needs no change on this side).``
   [url & kvs]
   (merge @{"hx-ws:connect" url} (hx/attrs ;kvs)))
 

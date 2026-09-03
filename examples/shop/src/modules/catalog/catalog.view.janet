@@ -21,7 +21,7 @@
   this page that knows where files live, and it answers a path under
   [:storage :serve :prefix] on a laptop and a minio URL in the compose
   file — from the same column, because the column holds a key
-  (ADR-0039). A product with no picture draws no element rather than a
+. A product with no picture draws no element rather than a
   broken one: the catalog was seeded before anybody uploaded anything.``
   [product class]
   (when-let [key (product :image)]

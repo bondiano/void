@@ -17,10 +17,10 @@
 ### form helper renders the token because `void/security` bound the
 ### slot `void/html` has carried since wave 1.
 ###
-### Wave 3.5 added a second way in and no template for it: the
-### "mail me a link" form posts to `request-link`, which calls
-### `auth/challenge!` and stops there — the letter, its URL and its
-### one-time code belong to `void/mail-auth` (ADR-0026 §6).
+### Wave 3.5 added a second way in and no template for it: the "mail me a
+### link" form posts to `request-link`, which calls `auth/challenge!` and
+### stops there — the letter, its URL and its one-time code belong to
+### `void/mail-auth`.
 ###
 ### The application's posture is `[:authz :default :deny]`
 ### (config/default.janet), so every route below names a policy —
@@ -34,8 +34,8 @@
 ### goes or knows that ./audit exists — that file subscribes to the bus
 ### and is deletable.
 ###
-### Handlers are registered as symbols, so a redefinition in the repl —
-### or a save with `void dev` running — is live (ADR-0002).
+### Handlers are registered as symbols, so a redefinition in the repl — or
+### a save with `void dev` running — is live.
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/http/router :as router)
@@ -75,7 +75,7 @@
   ``What the policy on the edit routes decides about: the row itself.
   Route metadata carries a function rather than a symbol, because a
   route entry does not keep the environment of the module that
-  declared it (ADR-0024 §5).``
+  declared it.``
   [req]
   (when-let [id (scan-number (get-in req [:params :id] ""))]
     (db/find e/Article id)))
@@ -102,7 +102,7 @@
   ``The article list, through the cache. The read underneath is one
   query plus one batched IN for the authors — `:preload` is explicit
   because the alternative is an N+1 nobody notices until production
-  (ADR-0009).``
+.``
   []
   (cache/remember blog-jobs/index-cache-key {:ttl 60}
     (fn load-index []
@@ -164,9 +164,9 @@
 
   `auth/hash-password` produces a PHC string: the algorithm and its
   cost travel inside the value, so raising the cost later is a config
-  change rather than a migration nobody can write (ADR-0023 §4). The
-  sign-in that follows goes through the ordinary password path rather
-  than trusting what was just inserted.``
+  change rather than a migration nobody can write. The sign-in that
+  follows goes through the ordinary password path rather than trusting
+  what was just inserted.``
   [req]
   (def result (form/check e/Registration (req :form)))
   (def v (result :value))
@@ -216,8 +216,8 @@
   The application issues the challenge and says nothing else about
   it: `auth/challenge!` mints a single-use code, stores its digest and
   hands it to the deliverers, and `void/mail-auth` turns that into a
-  letter (ADR-0026 §6). Which is why this handler contains no template,
-  no URL and no token — those belong to the plugin that delivers.
+  letter. Which is why this handler contains no template, no URL and no
+  token — those belong to the plugin that delivers.
 
   **The answer is the same whether or not the address has an
   account.** A page that said "no such account" would be a way to ask
@@ -244,9 +244,9 @@
   ``GET /auth/magic?h=&c= — the link from the letter.
 
   `redeem!` takes the challenge out of the store before it checks the
-  code (ADR-0023 §7), so a link works once and a wrong one is spent:
-  the visitor asks for another, which costs them a click and an
-  attacker a full guess of 256 bits per try.``
+  code, so a link works once and a wrong one is spent: the visitor asks
+  for another, which costs them a click and an attacker a full guess of
+  256 bits per try.``
   [req]
   (def query (or (req :query) {}))
   (if-let [id (auth/redeem! (get query "h") (get query "c"))]

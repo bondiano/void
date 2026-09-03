@@ -1,10 +1,9 @@
-# The wave-5 example is also its smoke test (ROADMAP, сквозные
-# работы), and it tests the way void apps are meant to be tested
-# (ADR-0017): test/inject drives the full production stack for both
-# representations of the same handler — the HTML document and the
-# Datastar morph events — and the live half runs against the real
-# :datastar/registry component, poked by the same mutation the
-# buttons post.
+# The wave-5 example is also its smoke test, and it
+# tests the way void apps are meant to be tested: test/inject drives the
+# full production stack for both representations of the same handler — the
+# HTML document and the Datastar morph events — and the live half runs
+# against the real :datastar/registry component, poked by the same
+# mutation the buttons post.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)

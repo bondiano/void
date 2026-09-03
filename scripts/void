@@ -1,5 +1,5 @@
 #!/usr/bin/env janet
-### The void CLI straight out of the checkout — no install (ADR-0020).
+### The void CLI straight out of the checkout — no install.
 ###
 ###     scripts/void new demo
 ###     cd demo && ../scripts/void routes

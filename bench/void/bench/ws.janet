@@ -1,5 +1,4 @@
-### void/bench/ws — driving the B4 load generator and reading its
-### output (SPEC §8.3, ADR-0014).
+### void/bench/ws — driving the B4 load generator and reading its output.
 ###
 ### What ./wrk is to B0–B3, this is to B4. The difference is that the
 ### generator is ours (loadgen/ws-broadcast.janet — wrk speaks HTTP and
@@ -9,12 +8,12 @@
 ###
 ### There is only one mode. B0–B3 have two — max throughput and latency
 ### under a fixed rate — because a request benchmark can be run either
-### open or closed. B4 is already a fixed-rate benchmark by
-### construction: the server broadcasts at its configured rate, and
-### what is measured is how long the message takes to arrive. Running
-### it "at max throughput" would mean broadcasting as fast as the loop
-### allows, and the delivery time of a saturated fan-out is the same
-### meaningless number as the latency of a saturated server (§8.3).
+### open or closed. B4 is already a fixed-rate benchmark by construction:
+### the server broadcasts at its configured rate, and what is measured is
+### how long the message takes to arrive. Running it "at max throughput"
+### would mean broadcasting as fast as the loop allows, and the delivery
+### time of a saturated fan-out is the same meaningless number as the
+### latency of a saturated server.
 
 (import spork/json)
 
@@ -35,9 +34,9 @@
 
 (defn summarize
   ``Fold the generator's report into a result row of the shape the rest
-  of the suite uses: `:rps` is messages *delivered* per second (§8.2's
-  10k msg/s is a fan-out number, not a broadcast rate) and the
-  delivery percentiles are milliseconds.``
+  of the suite uses: `:rps` is messages *delivered* per second (the budgeted
+  10k msg/s is a fan-out number, not a broadcast rate) and the delivery
+  percentiles are milliseconds.``
   [report]
   (def d (get report :delivery {}))
   (def row

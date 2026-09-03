@@ -1,5 +1,4 @@
-### void/core/log — structured logger in the core (ADR-0018, SPEC
-### §3.7). pino-parity by property, data-idiomatic by construction:
+### void/core/log — structured logger in the core. pino-parity by property, data-idiomatic by construction:
 ###
 ### - A record is a plain table {:ts :level :ns :msg ...kv} plus the
 ###   fiber-bound context — no format strings on the hot path, sinks
@@ -46,7 +45,7 @@
 
 (defn set-level!
   ``Set the minimum level for a namespace prefix ("my-app.orders"), or
-  the root minimum with nil/"" — runtime-changeable (SPEC §5.13):
+  the root minimum with nil/"" — runtime-changeable:
 
       (log/set-level! "my-app.orders" :debug)
       (log/set-level! nil :warn)``
@@ -102,8 +101,7 @@
   (or (dyn context-dyn) {}))
 
 (defmacro with-context
-  ``Bind extra kv pairs to every record emitted in `body` (per-fiber —
-  the child logger of ADR-0018):
+  ``Bind extra kv pairs to every record emitted in `body` (per-fiber — the child logger of):
 
       (log/with-context {:request-id id} (handler req))``
   [kvs & body]
@@ -139,12 +137,11 @@
 
   Errors in void are frequently values rather than strings — a status
   and a message, so that the code deciding whether to retry can read
-  the status (ADR-0040 is one). `describe` renders such a value as
-  `<struct 0xAAAA…>`, and that address was, until this function
-  existed, what a failed job's record, a log line and `void: …` on the
-  terminal actually said. Which is to say: the framework's own
-  convention was being thrown away at every boundary where somebody was
-  reading.
+  the status (is one). `describe` renders such a value as `<struct
+  0xAAAA…>`, and that address was, until this function existed, what a
+  failed job's record, a log line and `void: …` on the terminal actually
+  said. Which is to say: the framework's own convention was being thrown
+  away at every boundary where somebody was reading.
 
   A string is itself; a fiber is its last value; a dictionary with a
   `:message` (or `:msg`, or `:error`) hands that over; any other value

@@ -50,7 +50,7 @@
 (assert (not (first (protect (router/define! :bad {:topic :a/b} {}))))
         "a definition needs a function")
 
-# -- late binding (ADR-0002) ---------------------------------------------
+# -- late binding --------------------------------------------------------
 
 (assert (= order-paid (router/handler-fn (router/lookup :order-paid)))
         "the function is resolved through the module binding")

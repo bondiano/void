@@ -1,5 +1,5 @@
 ### void/dash/live — the Datastar half, armed only by composition
-### (ADR-0037; the module-edge pose of void/storage/sign).
+### (the module-edge pose of void/storage/sign).
 ###
 ### This module imports void/datastar — the package edge is real — but
 ### the *plugin* is the application's opt-in: when :void/datastar is
@@ -8,7 +8,7 @@
 ### page falls back to the htmx poll of M1. When it is, the overview
 ### and the log page live on a morph-stream: each update re-renders
 ### the whole page and Datastar morphs the delta into the DOM — the
-### page *is* the state, which is the idiom ADR-0037 is waiting to
+### page *is* the state, which is the idiom the experiment is waiting to
 ### judge on a real consumer.
 
 (import void/datastar/init :as datastar)

@@ -9,14 +9,13 @@
 ###
 ### **The gate is shut everywhere but on the developer's machine.** In
 ### the :dev profile the dashboard is open — the netrepl logic: this
-### process already answers an unauthenticated REPL to whoever can
-### reach it, and a read-only page of the same values adds nothing. In
-### every other profile every route refuses until `[:dash :access]`
-### names a predicate, and the refusal says which key opens it — the
-### same construction as `[:admin :access]` (ADR-0029 §3), without the
-### void/authz edge this package does not have. Pages are read-only;
-### the one action (log levels) is separately behind
-### `[:dash :allow-actions]`.
+### process already answers an unauthenticated REPL to whoever can reach
+### it, and a read-only page of the same values adds nothing. In every
+### other profile every route refuses until `[:dash :access]` names a
+### predicate, and the refusal says which key opens it — the same
+### construction as `[:admin :access]`, without the void/authz edge this
+### package does not have. Pages are read-only; the one action (log
+### levels) is separately behind `[:dash :allow-actions]`.
 
 (import void/http/router :as router)
 (import ./context :as ctx)

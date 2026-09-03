@@ -1,4 +1,4 @@
-### void/ws/handshake — the RFC 6455 §4 opening handshake (ADR-0028).
+### void/ws/handshake — the RFC 6455 §4 opening handshake.
 ###
 ### A websocket connection begins as an ordinary GET, and in void it
 ### *stays* an ordinary GET for as long as possible: it is routed,
@@ -7,10 +7,9 @@
 ### may. Only then does this module look at the four headers that make
 ### the request an upgrade and produce either the 101 or the refusal.
 ###
-### That ordering is the whole design (ADR-0028): a websocket route is
-### a route. Nothing here knows about extension points, and none of the
-### plugins that protect an HTTP route needed a second implementation
-### for sockets.
+### That ordering is the whole design: a websocket route is a route.
+### Nothing here knows about extension points, and none of the plugins
+### that protect an HTTP route needed a second implementation for sockets.
 ###
 ### The refusals are deliberately HTTP responses rather than close
 ### frames — at this point no connection has been upgraded, so the peer
@@ -34,7 +33,7 @@
 
 (defn accept-key
   "The `Sec-WebSocket-Accept` value for a client's `Sec-WebSocket-Key`
-  (§4.2.2 step 5): base64(sha1(key + guid))."
+  (step 5): base64(sha1(key + guid))."
   [key]
   (base64/encode (sha1/digest (string key guid))))
 

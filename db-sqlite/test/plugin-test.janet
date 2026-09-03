@@ -66,7 +66,7 @@
 
 (defer (rimraf sandbox)
 
-  # -- a file database under a pool of two --------------------------------
+  # -- a file database under a pool of two -------------------------------
 
   (def file (string sandbox "/data/app.sqlite3"))
   (def file-config (config {:db-sqlite {:path file}}))
@@ -119,7 +119,7 @@
     (def status (db/migration-status migrations "schema_migrations"))
     (assert (get-in status [0 :applied]) "status reads it back from the database")
 
-    # -- entities ---------------------------------------------------------
+    # -- entities --------------------------------------------------------
 
     (db/defentity User
       {:id [:int {:db/pk true}]
@@ -151,7 +151,7 @@
     (assert (= "a@b.c" ((db/find! User 1) :email)) "find by primary key")
     (assert (nil? (db/find User 99)) "and nil for a row that is not there")
 
-    # -- partial update through the AR sugar ------------------------------
+    # -- partial update through the AR sugar -----------------------------
     (def loaded (db/find! User 1))
     (put loaded :note "hello")
     (assert (deep= @{:note "hello"} (db/changes loaded)) "only the touched column is dirty")
@@ -164,7 +164,7 @@
     (assert (= 1 (db/update! User 2 {:role "owner"})) "update! reports the affected count")
     (assert (zero? (db/update! User 99 {:role "ghost"})) "nothing matched, nothing written")
 
-    # -- relations are preloaded in one batched IN ------------------------
+    # -- relations are preloaded in one batched IN -----------------------
     (db/insert-all! Post [{:user-id 1 :title "first"}
                           {:user-id 1 :title "second"}
                           {:user-id 2 :title "third"}])
@@ -172,9 +172,9 @@
     (assert (= 2 (length (db/rel (first users) :posts))) "the has-many loaded")
     (assert (= 1 (length (db/rel (last users) :posts))))
     (assert (not (first (protect (db/rel (db/find! User 1) :posts))))
-            "and an unplanned relation is an error under :strict (ADR-0009)")
+            "and an unplanned relation is an error under :strict")
 
-    # -- transactions ------------------------------------------------------
+    # -- transactions ----------------------------------------------------
     (db/with-tx
       (db/insert! User {:email "tx@commit"}))
     (assert (db/exists? User {:where {:email "tx@commit"}}) "a committed transaction")
@@ -207,7 +207,7 @@
       (db/insert! User {:email "iso@tx"}))
     (assert (db/exists? User {:where {:email "iso@tx"}}))
 
-    # -- the pool's second connection is the same database ----------------
+    # -- the pool's second connection is the same database ---------------
     (def e1 (pool/checkout p))
     (def e2 (pool/checkout p))
     (defer (do (pool/checkin p e1) (pool/checkin p e2))
@@ -219,11 +219,11 @@
       (assert (pos? (get-in seen [:rows 0 :n]))
               "the second one sees the migrated schema and the rows"))
 
-    # -- foreign keys are enforced, unlike sqlite's own default -----------
+    # -- foreign keys are enforced, unlike sqlite's own default ----------
     (assert (not (first (protect (db/insert! Post {:user-id 999 :title "orphan"}))))
             "[:db-sqlite :foreign-keys] is on, so the reference is checked")
 
-    # -- rolling back -----------------------------------------------------
+    # -- rolling back ----------------------------------------------------
     (assert (= 1 (length (db/migrate-down! opts))) "the migration rolled back")
     (assert (not (first (protect (db/count User)))) "the table is gone with it")
 
@@ -239,7 +239,7 @@
     (assert (= "written once" (db/value {:select [:body] :from "notes"}))
             "a second boot reads what the first one wrote"))
 
-  # -- an in-memory database is served as the one connection it is --------
+  # -- an in-memory database is served as the one connection it is -------
 
   (def mem-config (config {:db {:pool {:size 1} :n1-guard :strict}
                            :db-sqlite {:path ":memory:"}}))

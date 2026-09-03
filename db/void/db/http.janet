@@ -1,5 +1,5 @@
 ### void/db-http — the two pieces of void/db that need void/http
-### (SPEC.md §5.9, CONTRACTS v1 row `:void.db/txn`, ADR-0030).
+### (CONTRACTS v1 row `:void.db/txn`).
 ###
 ### Kept a separate plugin so a CLI or worker process never drags the
 ### HTTP kernel in. It carries two things that have nothing to do with
@@ -208,7 +208,7 @@
                              (fn txn-handler [] (handler req)))))})
 
 (plugin/defplugin void/db-http
-  :doc "The two pieces of void/db that need void/http: the :void.db/txn route metadata key, which runs a handler inside db/with-tx, and the :db session store — a shared session store for an application that has a database and would rather not also have a redis (ADR-0030)."
+  :doc "The two pieces of void/db that need void/http: the :void.db/txn route metadata key, which runs a handler inside db/with-tx, and the :db session store — a shared session store for an application that has a database and would rather not also have a redis."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/db ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :db-http

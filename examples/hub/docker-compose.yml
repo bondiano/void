@@ -2,18 +2,18 @@
 ###
 ###     docker compose up --build       the hub on https://localhost
 ###
-### Seven services, and the four that matter are the four ROADMAP 6.6
+### Seven services, and the four that matter are the four wave 6
 ### named: a web tier, a worker, a database and a bucket. The other
 ### three are the edge that holds the TLS, the one-shot that creates the
 ### bucket, and an inbox to catch the letters a sign-in sends.
 ###
 ###   caddy      the certificate and the only published ports. void
 ###              serves plain HTTP and a proxy in front of it holds the
-###              TLS (ADR-0010) — on a laptop from Caddy's internal CA,
+###              TLS — on a laptop from Caddy's internal CA,
 ###              on a real host from Let's Encrypt
 ###   postgres   the deliveries, the queue, the sessions and the
 ###              accounts — one database, because a delivery and the
-###              notification it caused commit together (ADR-0012)
+###              notification it caused commit together
 ###   minio      the bucket every delivery's raw body goes into. Private,
 ###              unlike the shop's: every object here is somebody else's
 ###              payload, and the desk hands out five-minute links
@@ -55,12 +55,12 @@ x-app: &app
     VOID_PROFILE: prod
     # the two switches main.janet reads: the driver, and where delivery
     # bodies live. Both are the same decision — a fleet's stores are
-    # shared or the fleet does not work (ADR-0030)
+    # shared or the fleet does not work
     VOID_HUB_DB: postgres
     VOID_HUB_STORAGE: s3
     # config/prod.janet reads these as {:secret "…"} references, so the
     # values live in the environment and the config tree holds an opaque
-    # box that does not print (ADR-0007 §5)
+    # box that does not print
     HUB_SECRET_KEY: ${HUB_SECRET_KEY:-development-signing-key-change-me}
     S3_ACCESS_KEY: ${S3_ACCESS_KEY:-hub}
     S3_SECRET_KEY: ${S3_SECRET_KEY:-hub-hub-hub}
@@ -79,7 +79,7 @@ x-app: &app
     VOID_MAIL__SMTP__HOST: mailpit
     VOID_MAIL__SMTP__PORT: "1025"
     VOID_MAIL__BASE_URL: https://${HUB_DOMAIN:-localhost}
-    # -- what this hub is for ------------------------------------------
+    # -- what this hub is for --------------------------------------------
     #
     # The source it receives from, the rules that say where a delivery
     # goes, the bot it speaks as, and who may read what arrived. All
@@ -151,9 +151,9 @@ services:
   # One shot, like `migrate` below and for the same reason: a bucket is
   # part of the schema of this deployment. There is no `mc anonymous set
   # download` here, and its absence is the design — the shop's bucket
-  # holds product pictures a browser loads by the hundred, this one
-  # holds webhook payloads, and the only way in is a link the desk
-  # signed for five minutes (ADR-0039 §5).
+  # holds product pictures a browser loads by the hundred, this one holds
+  # webhook payloads, and the only way in is a link the desk signed for
+  # five minutes.
   createbucket:
     image: minio/mc:latest
     depends_on:
@@ -178,9 +178,9 @@ services:
 
   # One shot, and it has to finish before anything serves. Four
   # migrations: the accounts `void make auth` generated, the deliveries,
-  # the queue's tables and the session table — the last two out of DDL
-  # the plugins ship as data, on a timeline this application owns
-  # (ADR-0023 §2). Idempotent, so a redeploy runs it again for free.
+  # the queue's tables and the session table — the last two out of DDL the
+  # plugins ship as data, on a timeline this application owns.
+  # Idempotent, so a redeploy runs it again for free.
   migrate:
     <<: *app
     command: ["janet", "main.janet", "db", "migrate"]
@@ -190,10 +190,9 @@ services:
     <<: *app
     deploy:
       # **Two**, and that is the point of this file. One replica would
-      # pass every check while hiding the two that matter: a session in
-      # a process's heap, and a delivery body on a container's disk.
-      # `void deploy check` asks about both because there are two of
-      # these (ADR-0030)
+      # pass every check while hiding the two that matter: a session in a
+      # process's heap, and a delivery body on a container's disk. `void
+      # deploy check` asks about both because there are two of these
       replicas: 2
     depends_on:
       postgres:
@@ -208,12 +207,11 @@ services:
         condition: service_started
 
   # The same image, running the command the README is about. `void jobs
-  # work` starts the union of what the jobs on its queues need — for
-  # this application `:tls/lib`, because a telegram delivery is https
-  # and the queue does not depend on the TLS stack (ADR-0040 §3). That
-  # union is the fix for the bug this example found; running the worker
-  # as its own command rather than as a flag on the web tier is what
-  # keeps it proven.
+  # work` starts the union of what the jobs on its queues need — for this
+  # application `:tls/lib`, because a telegram delivery is https and the
+  # queue does not depend on the TLS stack. That union is the fix for the
+  # bug this example found; running the worker as its own command rather
+  # than as a flag on the web tier is what keeps it proven.
   #
   # No healthcheck, because this process opens no port — a worker's
   # liveness is the queue's depth, and that is the front page of the

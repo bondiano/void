@@ -1,4 +1,4 @@
-### void/crypto/digest — SHA-2 and HMAC, from the library (ADR-0022).
+### void/crypto/digest — SHA-2 and HMAC, from the library.
 ###
 ### One-shot calls (`EVP_Digest`, `HMAC`) rather than the init/update/
 ### final dance: everything void hashes — a token, a JWS signing input,

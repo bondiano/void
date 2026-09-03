@@ -59,7 +59,7 @@
   (assert (= :local (st :name)) "over the store this plugin ships")
   (assert (= st (state/active-store)) "and it is what the module-level functions reach for")
 
-  # -- the surface applications import ------------------------------------
+  # -- the surface applications import -----------------------------------
 
   (def meta (storage/put! "docs/readme.txt" "hello" {}))
   (assert (= 5 (meta :size)))
@@ -77,12 +77,12 @@
   (def [ok] (protect (storage/put! "../escape.txt" "x" {})))
   (assert (not ok) "the key is checked on the way in, not by each backend")
 
-  # -- the :file schema type ----------------------------------------------
+  # -- the :file schema type ---------------------------------------------
 
   (def types (get-in boot [:extensions :void.core/schema-type :contributions]))
   (assert (and types (pos? types)) ":file is contributed as a schema type")
 
-  # -- health -------------------------------------------------------------
+  # -- health ------------------------------------------------------------
 
   (def h ((system/health (boot :system)) :components))
   (assert (= :up (get-in h [:storage/store :status])))
@@ -90,17 +90,17 @@
   (assert (= false (get-in h [:storage/store :shared])))
   (assert (= :up (get-in h [:storage/local :status])))
 
-  # -- what `void deploy check` is told ------------------------------------
+  # -- what `void deploy check` is told ----------------------------------
 
   (def stores (boot :stores))
   (def entry (find |(= :void/storage-store ($ :name)) stores))
-  (assert entry "the store declares itself to the deployment survey (ADR-0030)")
+  (assert entry "the store declares itself to the deployment survey")
   (assert (= "uploaded files" (entry :what)))
   (assert (= false (entry :shared?)) "and answers the question honestly")
   (assert (string/find "storage-s3" (entry :replacement))
           "with the line that says what to compose instead")
 
-  # -- the CLI commands ---------------------------------------------------
+  # -- the CLI commands --------------------------------------------------
 
   (def cli (get-in boot [:extensions :void.core/cli :resolved]))
   (def names (map |($ :name) cli))
@@ -142,9 +142,9 @@
 
 # -- a disk under a fleet is refused at start ----------------------------
 #
-# Last, because the refusal happens *after* :after-start (ADR-0030):
-# the components are up when it fires, and this test does not tidy them
-# away — in a deployment the process is on its way down.
+# Last, because the refusal happens *after* :after-start: the components
+# are up when it fires, and this test does not tidy them away — in a
+# deployment the process is on its way down.
 
 (def [fok ferr]
   (protect (plugin/start! {:plugins plugins :profile :test
@@ -153,7 +153,7 @@
 (assert (string/find "uploaded files" (string ferr))
         "and the refusal names what would be lost")
 (assert (string/find "storage-s3" (string ferr))
-        "and what to compose instead (ADR-0030)")
+        "and what to compose instead")
 
 # -- what the bucket store needs open ------------------------------------
 #

@@ -1,5 +1,4 @@
-### void/jobs/backend — the :void/jobs-backend contract (SPEC.md
-### §5.12, ADR-0012).
+### void/jobs/backend — the :void/jobs-backend contract.
 ###
 ### A backend is a plain dictionary produced by a backend component's
 ### :start (the component declares :provides [:void/jobs-backend], so
@@ -92,7 +91,7 @@
 (def- optional
   [:reap! :touch! :lock! :unlock! :rate-take! :release-parent! :stats :close])
 
-# -- the in-process fallbacks -------------------------------------------
+# -- the in-process fallbacks --------------------------------------------
 
 (defn local-rate-limiter
   ``A fixed-window rate limiter in this process's heap: the fallback

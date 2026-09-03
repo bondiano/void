@@ -1,5 +1,5 @@
 ### void/redis/codec — how a Janet value becomes bytes and back
-### (SPEC.md §5.10, extension point :void.redis/codec).
+### (extension point :void.redis/codec).
 ###
 ### Redis stores byte strings. Everything else — a table, a keyword, a
 ### number that must come back a number — is a convention between the

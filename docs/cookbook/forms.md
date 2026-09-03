@@ -72,10 +72,10 @@ gets the full page — the handler does not branch:
 
 In [examples/blog](../../examples/blog/entities.janet) the schema is a
 `db/defentity` — the same node is also the table mapping, and the form
-DTO is `schema/select` over it, so a renamed field updates the form,
-the validation and the migration comparison in one edit.
-`void make resource` ([Getting started §5](../GETTING-STARTED.md))
-scaffolds exactly this arrangement.
+DTO is `schema/select` over it, so a renamed field updates the form, the
+validation and the migration comparison in one edit. `void make
+resource` ([Getting started](../GETTING-STARTED.md)) scaffolds exactly
+this arrangement.
 
 Two things the scaffold already handled that you would otherwise meet
 later: CSRF — with `void/security` composed, the signed token is

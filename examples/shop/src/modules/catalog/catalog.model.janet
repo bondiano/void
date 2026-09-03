@@ -1,15 +1,14 @@
 ### shop/catalog/model — what the shop sells, declared once.
 ###
-### `defentity` is a schema plus a db-mapping (ADR-0009): the binding
+### `defentity` is a schema plus a db-mapping: the binding
 ### *is* the normalized schema, so `schema/select` projects a form off
 ### it, while the table, the primary key, the columns and the relations
 ### live in a descriptor the repository, `:preload`, `void db erd` and
 ### void/openapi all read.
 ###
-### The `:db/*` props are annotations: parsed and stored, never
-### consulted by validation (ADR-0008). `:db/type` is the column type
-### the migration actually created, so `void db erd` says `text` and
-### not `value`.
+### The `:db/*` props are annotations: parsed and stored, never consulted
+### by validation. `:db/type` is the column type the migration actually
+### created, so `void db erd` says `text` and not `value`.
 ###
 ### This file is the only one in the module that names a table. Every
 ### query about a product is in ./catalog.repository, and nothing above
@@ -18,7 +17,7 @@
 ### schema type this package registers when its module loads, and a
 ### `defentity` normalizes its schema right there — so the entity that
 ### uses the type has to have loaded the module that registers it
-### (ADR-0039 §6, the void/proto pose).
+### (the void/proto pose).
 (import void/db :as db)
 (import void/storage)
 
@@ -39,14 +38,13 @@
    # get to have a `case` on the dialect in a template
    :status [:enum "active" "archived"]
    # The picture, and the whole of what this application says about
-   # uploads (ADR-0039). What the column holds is a storage **key**,
-   # so the same row works against a disk in development and against
-   # the minio bucket the compose file runs — `storage/url` is what
-   # turns it into an address. The three annotations are read by the
-   # form projection and by the admin widget and ignored by
-   # validation, exactly like the `:db/*` ones above (ADR-0008): the
-   # accept list is enforced on the server as well as rendered into
-   # the input, because a browser filters politely and a request is
+   # uploads. What the column holds is a storage **key**, so the same row
+   # works against a disk in development and against the minio bucket the
+   # compose file runs — `storage/url` is what turns it into an address.
+   # The three annotations are read by the form projection and by the
+   # admin widget and ignored by validation, exactly like the `:db/*` ones
+   # above: the accept list is enforced on the server as well as rendered
+   # into the input, because a browser filters politely and a request is
    # bytes anybody assembled.
    :image [:optional [:file {:db/type "text"
                              :storage/prefix "products"

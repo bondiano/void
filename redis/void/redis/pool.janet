@@ -1,4 +1,4 @@
-### void/redis/pool — fiber-aware connection pool (SPEC.md §5.10).
+### void/redis/pool — fiber-aware connection pool.
 ###
 ### The same shape as void/db's pool, and deliberately not the same
 ### code: a cache should not require a database, so the two packages
@@ -11,8 +11,8 @@
 ### the idle stack when nobody waits.
 ###
 ### The wait deadline runs in a child task, never `ev/with-deadline` on
-### the caller: that cancels the *root task*, which for a request fiber
-### is the whole request (the bug class documented in ADR-0015).
+### the caller: that cancels the *root task*, which for a request fiber is
+### the whole request (the bug class documented in).
 ###
 ### Why a pool at all, when redis is single-threaded and one connection
 ### can carry every command? Because a fiber that sends a command has

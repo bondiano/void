@@ -1,4 +1,4 @@
-### void/notify — one notification, several channels (ADR-0040).
+### void/notify — one notification, several channels.
 ###
 ### The shape of this package is one sentence: **a notification is
 ### data, a channel is a contribution, and which channels a
@@ -44,7 +44,7 @@
 ### mail about shipping"), digests, and a `:sms` channel. The first is
 ### an application's table and a `:channels` list computed from it — a
 ### one-line argument to `notify/send`; the last two are named in
-### ADR-0040 §7 as the things a real application should ask for before
+### as the things a real application should ask for before
 ### void guesses at them.
 
 (import void/core/plugin :as plugin)
@@ -61,7 +61,7 @@
 # -- extension point -----------------------------------------------------
 
 (plugin/defextension-point :void.notify/channel
-  :doc "Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)"
+  :doc "Notification channels: {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)"
   :schema {:name :keyword
            :doc [:optional :string]
            :address [:optional :keyword]

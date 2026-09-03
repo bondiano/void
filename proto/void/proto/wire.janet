@@ -1,12 +1,11 @@
-### void/proto/wire — the protobuf wire format (SPEC.md §5.7,
-### ADR-0013).
+### void/proto/wire — the protobuf wire format.
 ###
 ### The bottom of the package: bytes in, bytes out, and no idea what a
-### message is. Everything above it — ./codec, ./json, the parser —
-### speaks descriptors; this module speaks varints, tags and the four
-### wire types the format actually has, so the layer that will one day
-### be C (ADR-0013: "varint-ядро — кандидат на C по бюджетам §8") is
-### the layer with no policy in it.
+### message is. Everything above it — ./codec, ./json, the parser — speaks
+### descriptors; this module speaks varints, tags and the four wire types
+### the format actually has, so the layer that will one day be C — the
+### varint core is the candidate the budgets point at — is the layer
+### with no policy in it.
 ###
 ### **Where the 64-bit honesty lives.** A Janet number is a double, so
 ### it holds every integer up to 2^53 and lies about the rest. An
@@ -19,9 +18,9 @@
 ### **The fast path is arithmetic, not abstract types.** Janet's bit
 ### operations are 32-bit (`(band 1099511627776 1)` is an error), so a
 ### varint over an ordinary number is written with `%` and `/` and
-### allocates nothing; only a negative or a genuinely 64-bit value
-### drops into `int/u64`, where every step allocates. That split is
-### the whole performance story of this file (§8.5 rule 2).
+### allocates nothing; only a negative or a genuinely 64-bit value drops
+### into `int/u64`, where every step allocates. That split is the whole
+### performance story of this file.
 ###
 ### Every reader takes `[bytes idx]` and returns `[value next-idx]`;
 ### running off the end is an error rather than a nil, because a

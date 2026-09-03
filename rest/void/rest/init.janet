@@ -1,9 +1,8 @@
-### void/rest — REST/JSON API plugin, sugar over void/http (SPEC.md
-### §5.2).
+### void/rest — REST/JSON API plugin, sugar over void/http.
 ###
-### Three moves, all driven by the :void.schema/* route metadata keys
-### this plugin declares (the SPEC part II §2.5 reserved rows):
-### validation, serialization, problems. The validation middleware
+### Three moves, all driven by the :void.schema/* route metadata keys this
+### plugin declares (the reserved rows): validation, serialization,
+### problems. The validation middleware
 ### (phase 6000) coerces and checks :params/:query/:headers/:body
 ### against the route's schemas before the handler runs — the handler
 ### only ever sees typed, valid data — and answers violations with RFC
@@ -41,7 +40,7 @@
   (or current-context
       (error "void/rest is not booted — plugin/start! builds the rest context at :before-start")))
 
-# -- metadata keys (SPEC part II §2.5, frozen v1 rows) -------------------
+# -- metadata keys (frozen v1 rows) --------------------------------------
 
 (defn- schema-form? [x]
   (def [ok _] (protect (schema/normalize x)))

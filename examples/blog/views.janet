@@ -6,13 +6,12 @@
 ### schemas in ./entities, so a field added there shows up here with
 ### its validation already attached.
 ###
-### Two wave-3 seams pass through here without a line of plumbing.
-### Every non-GET form below renders a CSRF field, because
-### `void/security` binds the slot `form/form` has been splicing since
-### wave 1 — there is no call to make. And the Edit control asks
-### `authz/can?` with the same policy the route enforces, so a link
-### that is drawn and a request that is allowed cannot drift apart
-### (ADR-0024).
+### Two wave-3 seams pass through here without a line of plumbing. Every
+### non-GET form below renders a CSRF field, because `void/security` binds
+### the slot `form/form` has been splicing since wave 1 — there is no call
+### to make. And the Edit control asks `authz/can?` with the same policy
+### the route enforces, so a link that is drawn and a request that is
+### allowed cannot drift apart.
 (import void/html :as html)
 (import void/html/form :as form)
 (import void/htmx/hx :as hx)
@@ -39,7 +38,7 @@
   has no form around it — carry the CSRF token. `security/htmx-meta`
   builds them from the same token the form fields get; the suffix is
   htmx 4's, which inherits an attribute only where the name asks for
-  it (ADR-0041).``
+  it.``
   [content context]
   (def req (get context :request))
   (html/html5 {:lang "en"}
@@ -63,7 +62,7 @@
   ``One line of the article list. `db/rel` is a table lookup when the
   relation was preloaded and an N+1 in the making when it was not —
   which is exactly why it is the accessor and not a plain key
-  (ADR-0009).``
+.``
   [article]
   [:li {:class "article"}
    [:a {:href (string "/articles/" (article :id))} (article :title)]
@@ -168,9 +167,9 @@
      " · " (get article :created-at "")]
     [:p (article :body)]]
    # the same policy the routes enforce, asked here: a control that is
-   # drawn and a request that is allowed come from one source, so
-   # neither can drift (ADR-0024). A reader, or another author, sees
-   # nothing to click rather than a button that answers 403
+   # drawn and a request that is allowed come from one source, so neither
+   # can drift. A reader, or another author, sees nothing to click rather
+   # than a button that answers 403
    (when (authz/can? :articles/own {:resource article})
      [:p {:class "actions"}
       [:a {:href (string "/articles/" (article :id) "/edit")} "Edit"]

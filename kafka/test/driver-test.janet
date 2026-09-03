@@ -1,10 +1,9 @@
-# The event machinery without a broker: produceva writes a real vu
-# array, the pump serves a real queue through a real pipe and
-# void/fdwait, and the delivery report arrives — saying failed,
-# because there is nobody on the port. That a *failure* exercises the
-# whole path is the point: message.timeout.ms guarantees the report
-# comes, one way or the other (ADR-0035), and this suite holds it to
-# that.
+# The event machinery without a broker: produceva writes a real vu array,
+# the pump serves a real queue through a real pipe and void/fdwait, and
+# the delivery report arrives — saying failed, because there is nobody on
+# the port. That a *failure* exercises the whole path is the point:
+# message.timeout.ms guarantees the report comes, one way or the other,
+# and this suite holds it to that.
 #
 # Needs librdkafka on the machine (brew install librdkafka / apt
 # install librdkafka1) but no cluster; skips, announcing itself, when
@@ -34,7 +33,7 @@
 
 # -- the loop lives while a fiber waits for its report -------------------
 #
-# The ADR-0033 ticker proof, pointed at ADR-0035's machinery: while
+# The ticker proof from void/db-mysql, pointed at this machinery: while
 # produce! is parked on its delivery report, a 20 ms ticker must keep
 # ticking — the fiber is parked, not the loop blocked.
 
@@ -84,7 +83,7 @@
 (def d1 (ev/take done))
 (def d2 (ev/take done))
 (assert (< (max d1 d2) 3.5)
-        (string/format "two 2 s waits overlap (%.1f / %.1f s), the ADR-0033 shape of the same proof" d1 d2))
+        (string/format "two 2 s waits overlap (%.1f / %.1f s), the same shape of proof" d1 d2))
 
 # -- the boot probe fails the way a boot wants ---------------------------
 

@@ -70,7 +70,7 @@
 (assert (string/find "library" text))
 (assert (string/find "sha256" text))
 (assert (string/find "on the event loop" text)
-        "and it says where derivation runs, because that is a decision with a cost (ADR-0022 §5)")
+        "and it says where derivation runs, because that is a decision with a cost")
 
 (plugin/shutdown! boot 3)
 

@@ -1,18 +1,18 @@
-### Generate docs/CONTRACTS.md — the frozen v1 contract registry —
-### from the declarations themselves (SPEC part II, готовность п. 4:
-### «вся документация metadata генерируется из деклараций»). The
-### in-repo composition is bootstrapped (phases 1-5, nothing starts)
-### and every extension point and every declared route-metadata key is
-### rendered from its live declaration; the reserved-for-later tables
-### are the hand-maintained data at the bottom of this script. CI
-### regenerates the file and fails on drift:
+### Generate docs/CONTRACTS.md — the frozen v1 contract registry — from
+### the declarations themselves: all metadata documentation is
+### generated from what the plugins declare. The in-repo composition is
+### bootstrapped (phases 1-5, nothing starts) and every extension point
+### and every declared route-metadata key is rendered from its live
+### declaration; the reserved-for-later tables are the hand-maintained
+### data at the bottom of this script. CI regenerates the file and fails
+### on drift:
 ###
 ###     janet scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md
 
-# The module path is the package graph's, not this file's (ADR-0020):
-# a hand-kept list here is how the registry silently lost the points of
-# every package the list forgot (cli, db-mysql, kafka, tls once were).
-# fdwait's native module comes with it — build it first
+# The module path is the package graph's, not this file's: a hand-kept
+# list here is how the registry silently lost the points of every package
+# the list forgot (cli, db-mysql, kafka, tls once were). fdwait's native
+# module comes with it — build it first
 # (cd fdwait && jpm build).
 (import ./packages :as packages)
 
@@ -147,8 +147,7 @@
 # -- reserved-for-later data (hand-maintained) ---------------------------
 
 (def reserved-keys
-  ``Metadata keys reserved by SPEC part II §2.5 whose owner plugins
-  land in waves 2+. The names and merge strategies are frozen with v1;
+  ``Metadata keys reserved for owner plugins that land in waves 2+. The names and merge strategies are frozen with v1;
   each plugin declares its keys through :void.http/route-meta-key when
   it ships (an undeclared key stays a boot error until then).``
   [# Wave 3 emptied this table of everything but the bus and admin
@@ -157,23 +156,23 @@
    # the plugins that own them now, so they are generated from the
    # declarations above — the same thing that happened to
    # :void.obs/name in wave 3.1.
-   # (:void.obs/name and :void.obs/sample-rate left it in 3.1 for the
+   # (:void.obs/name and :void.obs/sample-rate left it for the
    # same reason.)
    ])
 
 (def reserved-points
-  "Extension points reserved by SPEC part I §1.4/ADRs whose owner
-  plugins land in waves 2+. Names are frozen with v1."
+  "Extension points reserved for owner plugins that land in waves 2+.
+  Names are frozen with v1."
   # :void.obs/instrument and :void.obs/exporter left this table in wave
   # 3: void/obs owns them, so they are generated above.
   # :void.bus/backend and :void.bus/codec left this table in wave 3.6:
   # void/bus owns them, so they are generated above — along with
   # :void.bus/middleware, which the point-per-layer shape of the router
-  # asked for and which SPEC part II did not name.
+  # asked for and which the frozen list did not name.
   # :void.admin/widget, /page, /dashboard-widget and /menu left it in
   # 4.4: void/admin owns them, so they are generated above — along with
-  # :void.admin/history and :void.admin/bulk-runner, which ADR-0029 §8
-  # and §7 asked for and which SPEC part II did not name.
+  # :void.admin/history and :void.admin/bulk-runner, which the admin
+  # asked for and which the frozen list did not name.
   [])
 
 # -- assemble ------------------------------------------------------------
@@ -199,8 +198,8 @@
 (p "> and regenerate; CI fails on drift. The reserved-for-later tables")
 (p "> are maintained in the generator script.")
 (p "")
-(p "This is the normative registry of the two contracts frozen at v0.1")
-(p "(SPEC part II): the **extension points** with their contribution")
+(p "This is the normative registry of the two contracts frozen at v0.1:")
+(p "the **extension points** with their contribution")
 (p "schemas, and the **route metadata keys**. From this tag on, every")
 (p "change follows the deprecation procedure in")
 (p "[CONTRIBUTING.md](../CONTRIBUTING.md#deprecation): schemas may only")
@@ -233,8 +232,8 @@
     (p "- **contribution schema:** none (any value)"))
   (p ""))
 
-# The table is empty from 4.4 on: every point SPEC part I §1.4 reserved
-# now has a plugin that owns it and is generated above. It is kept
+# The table is empty from 4.4 on: every reserved point now has a plugin
+# that owns it and is generated above. It is kept
 # rather than deleted, because the next wave that reserves a name puts
 # it back here, and its absence would then read as an oversight.
 (unless (empty? reserved-points)
@@ -246,7 +245,7 @@
     (p "| %s | `%s` | %s |" n o d))
   (p ""))
 
-(p "## Request-lifecycle stages (ADR-0016)")
+(p "## Request-lifecycle stages")
 (p "")
 (p "Frozen with v1: stage names and their phase slots. In-chain stages")
 (p "compile into the route chain as thin wrappers (an empty stage costs")
@@ -306,7 +305,7 @@
 (p "| Key | Type | Merge | Owner-to-be |")
 (p "|---|---|---|---|")
 (if (empty? reserved-keys)
-  (p "| — | — | — | *(none: every key SPEC part II §2.5 reserved is now declared by its owner)* |")
+  (p "| — | — | — | *(none: every key reserved is now declared by its owner)* |")
   (each [n t m o] reserved-keys
     (p "| %s | %s | %s | %s |" n t m o)))
 (p "")

@@ -1,5 +1,5 @@
 ### void/mcp/registry — the projection: a booted composition in, the
-### server value ./server dispatches on out (SPEC.md §5.18, ADR-0031).
+### server value ./server dispatches on out.
 ###
 ### **Nothing here is a second declaration.** A tool is a
 ### `:void.core/cli` command — the same command a human runs as `void
@@ -86,8 +86,8 @@
 
 (defn- callable
   ``The function of a contribution under `key`, or a readable refusal —
-  symbols are late-bound (ADR-0002) and nothing resolves them for CLI
-  commands yet, so say that rather than call a symbol.``
+  symbols are late-bound and nothing resolves them for CLI commands yet,
+  so say that rather than call a symbol.``
   [entry &opt key]
   (default key :fn)
   (def f (entry key))

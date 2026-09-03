@@ -1,5 +1,5 @@
 ### void/auth — authentication: identity as data, strategies as an
-### extension point (SPEC.md §5.14, ADR-0023).
+### extension point.
 ###
 ### void does not know what a user is, and this plugin is the shape of
 ### that ignorance: an **identity** is `{:subject "user:42" :via
@@ -33,9 +33,9 @@
 ###       [:get "/dashboard" dashboard]
 ###       [:get "/login" login-form {:void.auth/access :public}])
 ###
-### Every primitive comes from `void/crypto` (ADR-0022): this package
-### hashes nothing itself, and a composition without `:void/crypto` is
-### a boot error rather than a surprise at the first login.
+### Every primitive comes from `void/crypto`: this package hashes nothing
+### itself, and a composition without `:void/crypto` is a boot error
+### rather than a surprise at the first login.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -58,7 +58,7 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.auth/strategy
-  :doc "Authentication strategies (ADR-0023): {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify"
+  :doc "Authentication strategies: {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify"
   :schema {:name :keyword
            :doc [:optional :string]
            :authenticate [:optional :function]
@@ -80,7 +80,7 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.auth/hasher
-  :doc "Password hashers behind PHC identifiers (ADR-0023): {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] \"m=..,t=..\") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes"
+  :doc "Password hashers behind PHC identifiers: {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] \"m=..,t=..\") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes"
   :schema {:name :keyword
            :derive :function
            :encode-params :function
@@ -89,7 +89,7 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.auth/deliver
-  :doc "Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires :to :claims :channel}. void/mail-auth is one of these, and an application that texts its codes contributes its own. Called by auth/challenge!, which refuses a challenge nobody delivered"
+  :doc "Delivery of magic links and one-time codes: {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires :to :claims :channel}. void/mail-auth is one of these, and an application that texts its codes contributes its own. Called by auth/challenge!, which refuses a challenge nobody delivered"
   :schema {:name :keyword
            :doc [:optional :string]
            :fn :function}
@@ -139,10 +139,7 @@
 
   `:users` is the in-process user store's contents: subject ->
   `{:email :password-hash :claims}`. It is meant for a handful of
-  operators and for tests (`void auth hash` prints what goes in
-  `:password-hash` — the key is spelled that way because
-  `{:secret "NAME"}` is an env-var reference to the config layer,
-  ADR-0007). Anything with a registration form wants void/auth-db.``
+  operators and for tests (`void auth hash` prints what goes in `:password-hash` — the key is spelled that way because `{:secret "NAME"}` is an env-var reference to the config layer). Anything with a registration form wants void/auth-db.``
   {:hasher :scrypt
    :scrypt (get hash-mod/defaults :scrypt)
    :argon2id (get hash-mod/defaults :argon2id)
@@ -202,7 +199,7 @@
 
 (defn challenge!
   ``Issue a magic link (or a one-time code) for `subject` **and get it
-  to the person** — the half of ADR-0023 §7 that waited for a delivery
+  to the person** — the half that waited for a delivery
   to exist (`void/mail-auth` is one, 3.5):
 
       (auth/challenge! (string "user:" (user :id)) {:to (user :email)})
@@ -306,10 +303,10 @@
 (def memory-challenges-component
   (system/component :auth/memory-challenges
     :doc "The in-process store for magic links and one-time codes.
-    Per-process: with prefork workers (ADR-0010) or a second replica a
-    code issued by one process cannot be redeemed at another, so
-    anything past one process wants void/auth-db — and under
-    [:deploy :shape] :fleet this store stops the boot (ADR-0030)."
+    Per-process: with prefork workers or a second replica a code issued by
+    one process cannot be redeemed at another, so anything past one
+    process wants void/auth-db — and under
+    [:deploy :shape] :fleet this store stops the boot."
     :provides [:void/auth-challenge-store]
     :start
     (fn start [_ _]
@@ -346,7 +343,7 @@
 
   Read from a hook rather than from `plugin/current-boot` on purpose:
   that var is only set by the tracking start path, and `test/start!`
-  (ADR-0017) does not use it — a component that reached for it would
+ does not use it — a component that reached for it would
   work under `plugin/start!` and silently register no strategies under
   the inject client, which is precisely the arrangement every test in
   this package uses.``

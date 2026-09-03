@@ -1,6 +1,5 @@
-### MCP over HTTP: a route like any other, stateless by construction,
-### with SSE reserved for the one thing that has anything to stream
-### (ADR-0031).
+### MCP over HTTP: a route like any other, stateless by construction, with
+### SSE reserved for the one thing that has anything to stream.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
@@ -126,11 +125,11 @@
 
 # -- an identity, and the scopes it carries ------------------------------
 #
-# `[:mcp-http :auth] :identity` reads void/auth's dyn key and nothing
-# else — which is the whole of this plugin's tie to authentication
-# (ADR-0023 §1, ADR-0032). The suite binds that key from a middleware
-# of its own, exactly as void/auth-oauth's would after verifying an
-# access token: what is under test here is the gate, not the verifier.
+# `[:mcp-http :auth] :identity` reads void/auth's dyn key and nothing else
+# — which is the whole of this plugin's tie to authentication. The suite
+# binds that key from a middleware of its own, exactly as
+# void/auth-oauth's would after verifying an access token: what is under
+# test here is the gate, not the verifier.
 
 (var presented nil)
 

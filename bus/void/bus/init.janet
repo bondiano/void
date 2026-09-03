@@ -1,5 +1,4 @@
-### void/bus — messaging: a message is data, a guarantee is declared
-### (SPEC.md §5.22, ADR-0012).
+### void/bus — messaging: a message is data, a guarantee is declared.
 ###
 ### The shape of this package is one sentence: **a message is a plain
 ### table on a keyword topic, what happens to it when a handler throws
@@ -15,8 +14,8 @@
 ###       (search/index (msg :payload)))
 ###
 ### **Why this is not void/jobs, and not void/core/hooks.** Three
-### mechanisms, three semantics (ADR-0012), and picking between them
-### is a sentence, not a table:
+### mechanisms, three semantics, and picking between them is a sentence,
+### not a table:
 ###
 ###   `void/core/hooks`  "call these functions now" — synchronous,
 ###                      in-process, part of the bootstrap wiring
@@ -91,7 +90,7 @@
     (put seen (c :name) true)))
 
 (plugin/defextension-point :void.bus/backend
-  :doc "Message-bus backends (ADR-0012): {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend"
+  :doc "Message-bus backends: {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend"
   :schema {:name :keyword
            :doc [:optional :string]
            :make :function}

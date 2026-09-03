@@ -1,6 +1,6 @@
-# void/auth-http end to end over test/inject (ADR-0017): the session
-# flow with its cookie rotation, bearer tokens, JWT, :void.auth/access
-# enforcement and the strategy narrowing a route can ask for.
+# void/auth-http end to end over test/inject: the session flow with its
+# cookie rotation, bearer tokens, JWT, :void.auth/access enforcement and
+# the strategy narrowing a route can ask for.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
@@ -100,10 +100,10 @@
         (string "and it fails for the :restrict violation, not for anything else: "
                 (describe err)))
 
-# `with-http` starts the kernel and what it depends on (ADR-0017); the
-# auth registry is not one of the kernel's dependencies — it is a
-# component the middleware reaches through state — so the subset has to
-# name it, or the handlers find no user store.
+# `with-http` starts the kernel and what it depends on; the auth registry
+# is not one of the kernel's dependencies — it is a component the
+# middleware reaches through state — so the subset has to name it, or the
+# handlers find no user store.
 (def only [:http/kernel :auth/registry])
 
 # -- the session flow ----------------------------------------------------
@@ -147,7 +147,7 @@
   (def logged-cookie (get (c :cookies) "void-session"))
   (assert logged-cookie "the login issued a session cookie")
   (assert (not= anon-cookie logged-cookie)
-          "and it is a new session id — an id that survives a login is session fixation (ADR-0023 §8)")
+          "and it is a new session id — an id that survives a login is session fixation")
 
   # the session is what carries it now
   (assert (= "user:1" (test/text (test/inject c {:uri "/me"}))))
@@ -210,7 +210,7 @@
   (def other-key (auth/encode-jwt {:sub "user:7"} {:key "not-the-secret" :ttl 60 :issuer "void-test"}))
   (assert (= 401 ((test/inject c {:uri "/me" :headers {"authorization" (string "Bearer " other-key)}}) :status))))
 
-# -- redirect instead of 401 --------------------------------------------
+# -- redirect instead of 401 ---------------------------------------------
 
 (test/with-http [c {:plugins plugins :only only
                     :config (config {:auth-http {:unauthenticated :redirect

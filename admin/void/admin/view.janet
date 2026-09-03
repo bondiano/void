@@ -1,4 +1,4 @@
-### void/admin/view — the pages, as hiccup (ADR-0029 §6, §7, §9).
+### void/admin/view — the pages, as hiccup.
 ###
 ### Everything here renders twice over: once as a whole page, and once
 ### as the fragment htmx swaps into a page that is already open. There
@@ -509,8 +509,8 @@ form.admin-act { display:inline; }
    (when (in (desc :action-set) :new)
      [:p [:a {:class "admin-button" :href (ctx/url desc "/new")}
           (string "New " (desc :singular))]])
-   # the selection form is a GET: a bulk action first shows a page, and
-   # a page has a URL (ADR-0029 §7)
+   # the selection form is a GET: a bulk action first shows a page, and a
+   # page has a URL
    [:form {:method "get" :action (ctx/url desc "/-/bulk/destroy")}
     (rows-fragment desc rows st total)
     (bulk-bar desc)]])
@@ -541,7 +541,7 @@ form.admin-act { display:inline; }
 (defn- form-attrs
   ``The <form> attributes of a form drawing `fields` of `desc`: the
   class, plus the enctype when a widget on it says its control needs
-  one (ADR-0039 §6).``
+  one.``
   [desc fields &opt extra]
   (def entries (map |(ctx/widget-entry (desc :name) ($ :name)) fields))
   (merge {:class "admin-form"}
@@ -552,7 +552,7 @@ form.admin-act { display:inline; }
   ``The create/edit form. The version column, when the entity declares
   one, rides along as a hidden field: `save!` compares it and a lost
   race becomes a conflict the operator can read instead of a silently
-  overwritten edit (ADR-0029 §10).``
+  overwritten edit.``
   [desc opts]
   (def row (get opts :row))
   (def values (or (get opts :values) (or row {})))
@@ -659,7 +659,7 @@ form.admin-act { display:inline; }
   record, which the queue backend already stores. A percentage bar is
   drawn only when the action left one behind — a progress *column*
   would have meant editing the `:void/jobs-backend` contract, three
-  backends and one conformance suite, for a widget (ADR-0029 §7).``
+  backends and one conformance suite, for a widget.``
   [desc job-id state]
   # :completed and :dead are the queue's own terminal states; :gone is
   # the record the backend no longer holds. The page stops polling on
@@ -688,7 +688,7 @@ form.admin-act { display:inline; }
   ``One inline: the child rows, each an ordinary form, plus an add
   form. The foreign key back to the parent is **not here** — it is put
   on by the server from the URL, so a forged POST cannot reparent a
-  row (ADR-0029 §5).``
+  row.``
   [desc row inline child rows errors]
   (def id (id-of desc row))
   (def base (ctx/url desc (string "/" id "/-/inline/" (inline :name))))

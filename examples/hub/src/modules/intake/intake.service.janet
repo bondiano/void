@@ -80,14 +80,13 @@
 (defn signature-of
   ``What `X-Hub-Signature-256` should say for these bytes: GitHub's
   scheme is `sha256=<hex hmac-sha256 of the raw body>`. The same shape
-  void/notify's webhook channel *sends* (ADR-0040), read from the other
-  end.``
+  void/notify's webhook channel *sends*, read from the other end.``
   [secret body]
   (string "sha256=" (crypto/hex (crypto/hmac-sha256 (string secret) (string body)))))
 
 (defn signature-ok?
   ``Constant-time comparison, and `crypto/equal?` rather than `=`
-  (ADR-0022): a signature check that returns early on the first wrong
+: a signature check that returns early on the first wrong
   byte tells the sender how much of the guess was right.
 
   Takes the source's configuration rather than its secret, so the
@@ -102,9 +101,9 @@
   ``The sender's delivery id as a storage key may hold it, or nil. It is
   **checked, not laundered**: GitHub sends a UUID, and a string that is
   not one is somebody else's idea of an identifier — a key is not the
-  place to find out what it can do (ADR-0039: the key is data, so the
-  data is checked). Refusing is a 400 the sender can read; quietly
-  rewriting it would put two deliveries under one key.``
+  place to find out what it can do (the key is data, so the data is
+  checked). Refusing is a 400 the sender can read; quietly rewriting it
+  would put two deliveries under one key.``
   [id]
   (def cleaned (string/ascii-lower (string/replace-all "-" "" (or id ""))))
   (when (and (not (empty? cleaned))
@@ -159,9 +158,8 @@
   Where a delivery goes is ../routing's decision, and it is made
   **here**, on the fiber the request is on: projecting a notification is
   what happens now, and delivering it is what void/notify-jobs does
-  later (ADR-0040). A routing failure is logged and does not undo a
-  delivery that was received and kept — the sender is owed its 202
-  either way.``
+  later. A routing failure is logged and does not undo a delivery that was
+  received and kept — the sender is owed its 202 either way.``
   [opts]
   (def name (opts :source))
   (def body (or (opts :body) ""))

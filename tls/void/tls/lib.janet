@@ -1,16 +1,14 @@
 ### void/tls/lib — the libssl surface void uses, and nothing more
-### (ADR-0038, SPEC.md §1 п. 4).
 ###
-### The same decision `void/crypto/lib` made (ADR-0022), made again for
-### the other half of the OpenSSL installation: bindings are `var`s
-### installed by `load!` at component :start, nil until then, so a
-### plugin that merely gets *loaded* — `plugin/dry-run` in CI, `void
-### routes` on a laptop — never explodes on import. The candidate list
-### is written out by platform because of the macOS trap ADR-0022 §3
-### documents: on macOS 15 the system LibreSSL shim *aborts the
-### process* when opened by bare name, so the macOS list is explicit
-### installation prefixes only, never a bare soname, never /usr/lib.
-### `VOID_LIBSSL` is the escape hatch.
+### The same decision `void/crypto/lib` made, made again for the other
+### half of the OpenSSL installation: bindings are `var`s installed by
+### `load!` at component :start, nil until then, so a plugin that merely
+### gets *loaded* — `plugin/dry-run` in CI, `void routes` on a laptop —
+### never explodes on import. The candidate list is written out by
+### platform because of the macOS trap void/crypto documents: on macOS 15
+### the system LibreSSL shim *aborts the process* when opened by bare
+### name, so the macOS list is explicit installation prefixes only, never
+### a bare soname, never /usr/lib. `VOID_LIBSSL` is the escape hatch.
 ###
 ### Only `SSL_*` symbols live here. `BIO_*`, `ERR_*` and
 ### `X509_verify_cert_error_string` are libcrypto symbols, and void

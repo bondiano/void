@@ -1,5 +1,4 @@
-### void/security/headers — the response headers a browser needs
-### (ADR-0025 §3).
+### void/security/headers — the response headers a browser needs.
 ###
 ### Static values, computed once at boot and stamped on every response
 ### **at the edge** — the point of application matters more than the

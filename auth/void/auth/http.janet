@@ -1,5 +1,5 @@
 ### void/auth-http — the strategies that read a request, and the
-### enforcement (SPEC.md §5.14, ADR-0023 §3, §8, §9).
+### enforcement.
 ###
 ### The half of void/auth that needs the HTTP kernel, kept a separate
 ### plugin so a jobs worker never drags it in — what `void/cache-http`
@@ -13,7 +13,7 @@
 ### bearer strategy passes and the JWT one picks it up.
 ###
 ### **Login and logout.** `login!` puts the subject in the session and
-### **rotates the session id** (`session/rotate!`, ADR-0023 §8): an id
+### **rotates the session id** (`session/rotate!`): an id
 ### that survives a change of privilege is session fixation, and the
 ### only moment it can be changed is this one.
 ###
@@ -85,8 +85,8 @@
 
   `[:jwt :key]` is the HMAC secret or the PEM of a verifying key. It
   is **not** spelled `:secret`, because `{:secret "NAME"}` is how
-  void/core/config references an environment variable (ADR-0007) —
-  which is exactly how this key should be supplied in production:
+  void/core/config references an environment variable — which is exactly
+  how this key should be supplied in production:
 
       {:auth-http {:jwt {:key {:secret "JWT_SIGNING_KEY"}}}}
 
@@ -189,7 +189,7 @@
 (def session-strategy
   ``Identity from the session a login put it in. `:cookie true` is the
   fact `void/security` needs: this credential rides on a cookie, so
-  the request is subject to CSRF (ADR-0025 §1).``
+  the request is subject to CSRF.``
   {:name :session
    :doc "The identity a login stored in the session; the subject is re-read from the user store unless [:auth-http :session :load] says otherwise"
    :cookie true
@@ -204,7 +204,7 @@
   handler that logs somebody in and renders a page sees them.
 
   The rotation is not optional: keeping the id across a login is
-  session fixation (ADR-0023 §8).``
+  session fixation.``
   [req id &opt opts]
   (default opts {})
   (unless (identity/identity? id)
@@ -253,7 +253,7 @@
 
 (def bearer-strategy
   "API tokens from the Authorization header, checked against the token
-  store as digests (ADR-0023 §5)."
+  store as digests."
   {:name :bearer
    :doc "Authorization: Bearer vt_<id>.<secret> — an API token, looked up by id and compared as a digest"
    :cookie false
@@ -302,7 +302,7 @@
 
 (def jwt-strategy
   "JWS bearer tokens, with the algorithm fixed by [:auth-http :jwt
-  :alg] rather than by the token (ADR-0023 §6)."
+  :alg] rather than by the token."
   {:name :jwt
    :doc "Authorization: Bearer <JWS> — verified with the configured algorithm and key; the token's own alg header only ever has to match"
    :cookie false
@@ -314,7 +314,7 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.auth/access
    :schema [:enum :public :required]
-   :doc "Whether this route needs an authenticated identity (SPEC part II §2.5). :restrict — a group that requires authentication cannot be loosened by a route inside it"
+   :doc "Whether this route needs an authenticated identity. :restrict — a group that requires authentication cannot be loosened by a route inside it"
    :merge :restrict
    :allow? (fn [outer inner]
              # tightening is public -> required; the other direction is

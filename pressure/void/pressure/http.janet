@@ -1,5 +1,4 @@
-### void/pressure-http — the flag, as a 503 (SPEC.md §5.23,
-### ADR-0019).
+### void/pressure-http — the flag, as a 503.
 ###
 ### The piece of void/pressure that needs void/http, kept a separate
 ### plugin so a jobs worker or a CLI never drags the HTTP kernel in —
@@ -81,7 +80,7 @@
   ``Defaults of the [:pressure-http] slice.
 
   `:log :first` is the one that is a decision rather than a value.
-  ADR-0019 asks for refused requests in the log with a counter, and
+  Refused requests belong in the log with a counter, and
   under saturation that is thousands of lines per second of logging
   work added to a process that is shedding because it has no work
   left to give — the log becomes part of the overload. So one warning
@@ -108,7 +107,7 @@
          (set settings
               (merge defaults (or (get-in boot [:config :values :pressure-http]) {}))))})
 
-# -- prefork (ADR-0010) --------------------------------------------------
+# -- prefork -------------------------------------------------------------
 #
 # With :workers > 1 the process that started is the master: it spawns
 # the workers, waits on them and serves nothing. Sampling its loop
@@ -116,7 +115,7 @@
 # — before it starts, which is why this is a hook and not something the
 # component works out for itself — that this process supervises.
 #
-# There is no aggregation to go with it, and that is ADR-0010's design
+# There is no aggregation to go with it, and that is the prefork design
 # rather than a gap here: prefork workers share nothing but the
 # listening socket, so the master has no channel to collect a number
 # over. It does not need one. SO_REUSEPORT is the aggregation: the
@@ -131,7 +130,7 @@
   {:hook :before-start
    :phase 440
    :name :pressure-http/prefork-mode
-   :doc "In a prefork master (ADR-0010) mark the process a supervisor: it serves no requests, so its loop is not the one worth sampling"
+   :doc "In a prefork master mark the process a supervisor: it serves no requests, so its loop is not the one worth sampling"
    :fn (fn prefork-mode [boot]
          (def workers
            (prefork/worker-count (get-in boot [:config :values :http :workers] 1)))
@@ -190,7 +189,7 @@
    # phase 100: after the panic guard (0), before the :on-send stage
    # (500) and everything that costs anything
    :phase 100
-   :doc "Answer 503 + Retry-After while the process is over its pressure thresholds (ADR-0019); routes marked :void.pressure/exempt are never wrapped"
+   :doc "Answer 503 + Retry-After while the process is over its pressure thresholds; routes marked :void.pressure/exempt are never wrapped"
    # `:void.obs/endpoint` counts as exempt too, and reading a key
    # void/obs-http declares costs nothing when it is not in the
    # composition (an absent key is nil). An operator endpoint that

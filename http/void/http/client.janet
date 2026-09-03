@@ -1,4 +1,4 @@
-### void/http/client — the HTTP/1.1 client (SPEC.md §5.1, ADR-0015).
+### void/http/client — the HTTP/1.1 client.
 ###
 ### The other direction of the kernel. void has had a server since
 ### wave 1 and no client at all: `void/obs` could put a `traceparent`
@@ -14,8 +14,8 @@
 ###
 ### **What it deliberately does not do.**
 ###
-###   TLS         not by itself (ADR-0010): `https://` works when the
-###               composition has `:void/tls` (ADR-0038), which
+###   TLS         not by itself: `https://` works when the
+###               composition has `:void/tls`, which
 ###               installs its connector into `tls-connect` below —
 ###               the seam pattern of void/mail-jobs. Without it an
 ###               `https://` URL is an error naming both ways out: a
@@ -49,7 +49,7 @@
 ###
 ### **Timeouts cancel a task, never the caller's fiber.** A deadline
 ### around a socket operation in the calling fiber is the upstream bug
-### class ADR-0015 names (janet-lang/janet#1337); so a request with a
+### class the kernel documents (janet-lang/janet#1337); so a request with a
 ### `:timeout` runs as its own task and the deadline cancels *that*,
 ### which is the same shape `run-handler` uses on the server side.
 ###
@@ -68,15 +68,15 @@
 (var tls-connect
   ``How an https:// connection is opened — `(fn [host port opts]
   stream)` — or nil when this composition has no TLS. `void/tls`
-  installs its connector here on load (ADR-0038 §4); nothing else
-  may, because "can this process speak TLS" is a fact about the
-  composition and not a thing to guess. While it is nil, an https URL
-  is refused with both ways out named.``
+  installs its connector here on load; nothing else may, because "can this
+  process speak TLS" is a fact about the composition and not a thing to
+  guess. While it is nil, an https URL is refused with both ways out
+  named.``
   nil)
 
 (defn tls-available?
   "Can this process open https:// connections? What the boot gates of
-  void/oauth and void/obs-otlp ask (ADR-0038 §4)."
+  void/oauth and void/obs-otlp ask."
   []
   (not (nil? tls-connect)))
 
@@ -148,7 +148,7 @@
   (def scheme (string/ascii-lower (string/slice s 0 sep)))
   (when (and (= "https" scheme) (nil? tls-connect))
     (errorf (string "http client: %s — this composition has no TLS. Add :void/tls "
-                    "to :plugins (ADR-0038), or put the TLS at a relay next to the "
+                    "to :plugins, or put the TLS at a relay next to the "
                     "process and point this at it over http://") s))
   (unless (get default-ports scheme)
     (errorf "http client: unsupported scheme %s:// (only http:// and https://)" scheme))
@@ -284,8 +284,8 @@
   "Grow buf from the socket. Returns buf, or nil at EOF; throws
   :void.http/timeout on a read timeout."
   [conn buf timeout]
-  # a method call, not net/read: the connection may be a TLS stream
-  # (ADR-0038), which answers :read with the same signature
+  # a method call, not net/read: the connection may be a TLS stream,
+  # which answers :read with the same signature
   (def [ok res] (protect (:read conn 8192 buf timeout)))
   (cond
     ok res
@@ -504,7 +504,7 @@
              # `open` was handed :host/:scheme directly, skipping
              # parse-url's early refusal — same message, same both
              # ways out
-             (error "this composition has no TLS — add :void/tls to :plugins (ADR-0038), or point this at a relay over http://"))
+             (error "this composition has no TLS — add :void/tls to :plugins, or point this at a relay over http://"))
          (client :host) (client :port)
          {:timeout (client :connect-timeout)})
         (net/connect (client :host) (client :port) :stream))))

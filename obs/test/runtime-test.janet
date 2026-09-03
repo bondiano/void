@@ -28,7 +28,7 @@
 
 (def s (runtime/stats))
 (assert (= 4 (s :samples)))
-(assert (= 200 (get-in s [:loop-lag :max])) "the status view is in milliseconds — the unit §8.2 is written in")
+(assert (= 200 (get-in s [:loop-lag :max])) "the status view is in milliseconds — the unit the budgets are written in")
 (assert (<= (get-in s [:loop-lag :p50]) (get-in s [:loop-lag :p99]))
         "and the percentiles come off the histogram itself, so the REPL and /metrics cannot disagree")
 

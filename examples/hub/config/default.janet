@@ -22,11 +22,11 @@
 
  :db-sqlite {:path "db/hub.sqlite3"}
 
- # two components provide :void/jobs-backend — the memory queue
- # void/jobs ships and the database one void/jobs-db does — and the
- # kernel refuses to guess between them (ADR-0030). The queue goes in
- # the database, because a notification that a delivery caused should
- # be committed with the delivery
+ # two components provide :void/jobs-backend — the memory queue void/jobs
+ # ships and the database one void/jobs-db does — and the kernel refuses
+ # to guess between them. The queue goes in the database, because a
+ # notification that a delivery caused should be committed with the
+ # delivery
  :void/jobs-backend {:impl :jobs/db}
 
  # void/notify-jobs puts its work on the `:notify` queue, and a worker
@@ -35,16 +35,15 @@
  :jobs {:queues {:notify {:concurrency 2}}}
 
  # where a delivery's bytes are kept. A directory on one machine; the
- # bucket is what `[:deploy :shape] :fleet` will ask for the moment
- # there is a second replica (ADR-0030)
+ # bucket is what `[:deploy :shape] :fleet` will ask for the moment there
+ # is a second replica
  #
  # `:serve :signed` turns the whole prefix private: every GET under
- # /storage has to carry the `exp`/`sig` pair a temporary URL minted
- # (ADR-0039 §5), and an expired or edited link is a 403 that does not
- # say which it was. This application stores exactly one kind of object
- # — somebody else's webhook payload — so there is nothing here that
- # should be public, and the deliveries page hands out five-minute
- # links instead (./admin.janet)
+ # /storage has to carry the `exp`/`sig` pair a temporary URL minted, and
+ # an expired or edited link is a 403 that does not say which it was. This
+ # application stores exactly one kind of object — somebody else's webhook
+ # payload — so there is nothing here that should be public, and the
+ # deliveries page hands out five-minute links instead (./admin.janet)
  #
  # `:policy :public` is the other half of saying that out loud: the
  # signature *is* the authorization on this prefix, so the route is
@@ -137,10 +136,10 @@
                            :object-src [:none]
                            :img-src [:self "data:"]}}}
 
- # The desk (ADR-0029). `:access` names the policy that decides who is
- # an operator and is the whole of opening it — without this line every
- # admin route refuses everybody, which is the right default for a back
- # office and the reason there is no default value.
+ # The desk. `:access` names the policy that decides who is an operator
+ # and is the whole of opening it — without this line every admin route
+ # refuses everybody, which is the right default for a back office and the
+ # reason there is no default value.
  #
  # `:route-meta` is what this application says about *its* admin's
  # routes, as group metadata:
@@ -155,7 +154,7 @@
 
  # the one route a letter points at: `challenge!` mints the code, the
  # deliverer builds this URL, and which flow it was for travels on the
- # challenge rather than in the path (ADR-0023 §7)
+ # challenge rather than in the path
  :mail-auth {:link-path "/auth/link"}
 
  :mail {:from "hub <no-reply@hub.example>"}}

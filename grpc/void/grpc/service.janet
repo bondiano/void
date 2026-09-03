@@ -1,5 +1,4 @@
-### void/grpc/service — an RPC service as a value (SPEC.md §5.8,
-### ADR-0013, ADR-0004).
+### void/grpc/service — an RPC service as a value.
 ###
 ### `defservice` binds handlers to a service descriptor void/proto
 ### already has — from a `.proto` file, or declared in Janet. It adds
@@ -16,11 +15,10 @@
 ###       (rpc :ListOrders list-orders)
 ###       (rpc :PlaceOrder place-order {:void.db/txn true}))
 ###
-### What it does add is the two things a `.proto` cannot say: which
-### Janet function answers a method, and what route metadata it
-### carries — the same metadata an HTTP route carries, because
-### ./mount turns each method into a real route (ADR-0005, and the
-### promise ADR-0013 makes about one stack of policies).
+### What it does add is the two things a `.proto` cannot say: which Janet
+### function answers a method, and what route metadata it carries — the
+### same metadata an HTTP route carries, because ./mount turns each method
+### into a real route (and the promise makes about one stack of policies).
 ###
 ### **A missing handler is a boot error.** A service that answers
 ### `unimplemented` for a method its own `.proto` declares is a
@@ -29,8 +27,8 @@
 ### or the declaration fails, naming the method.
 ###
 ### **A streaming method is refused here, too.** Not at call time: at
-### declaration, where the person reading the error is the person who
-### can change the `.proto` or wait for v2 (ADR-0013).
+### declaration, where the person reading the error is the person who can
+### change the `.proto` or wait for v2.
 ###
 ### The registry holds *values*, the way void/admin's resource
 ### registry does — so ./mount can project it into routes and the CLI
@@ -98,7 +96,7 @@
   (each m (d :methods)
     (when (or (m :client-streaming) (m :server-streaming))
       (errorf (string "void/grpc: %q.%s is a streaming method, and void speaks unary Connect "
-                      "over HTTP/1.1 (ADR-0013: streaming needs a transport that keeps two "
+                      "over HTTP/1.1 (streaming needs a transport that keeps two "
                       "directions open, and that is a v2 decision). Serve it as unary, or "
                       "leave the method out of the service void mounts")
               name (m :proto-name)))
@@ -193,10 +191,10 @@
         (rpc :PlaceOrder place-order {:void.db/txn true}))
 
   The leading dictionary is optional and carries the service-wide
-  options (`:meta` is route metadata for every method — the group
-  layer of ADR-0005's merge). Each `(rpc :Name handler [meta])` binds
-  one method; a bare symbol is quoted for you, so redefining the
-  handler in the REPL is live (ADR-0002), exactly as in `defroutes`.
+  options (`:meta` is route metadata for every method — the group layer of
+  the merge). Each `(rpc :Name handler [meta])` binds one method; a bare
+  symbol is quoted for you, so redefining the handler in the REPL is live,
+  exactly as in `defroutes`.
 
   The service's *shape* comes from the registered descriptor of the
   same name — `(proto/defproto "…")` first, or

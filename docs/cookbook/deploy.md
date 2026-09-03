@@ -49,7 +49,7 @@ is a deployment rather than a demo — the shape to crib:
 - **minio** — a private bucket for raw payload bodies (a disk is one
   machine's disk; a `:fleet` boot refuses a per-process store and
   names the bucket);
-- **caddy** — the TLS lives at the edge (ADR-0010); void serves plain
+- **caddy** — the TLS lives at the edge; void serves plain
   HTTP behind it;
 - one-shot **migrate** and **createbucket** services — schema is
   deployed the way tables are.

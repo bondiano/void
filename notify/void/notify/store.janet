@@ -1,9 +1,9 @@
-### void/notify/store — the in-app notification, as rows (ADR-0040 §6).
+### void/notify/store — the in-app notification, as rows.
 ###
 ### One table, and void owns it — unlike the users table `void/auth-db`
 ### reads and unlike the notification itself, which is a value that
 ### belongs to nobody. It comes as **DDL data** rather than as a
-### migration file, for the reason ADR-0009 gives and `void/auth-db`
+### migration file, for the reason the db layer gives and `void/auth-db`
 ### follows: a migration timeline belongs to the application. One file
 ### in `db/migrations`:
 ###
@@ -43,7 +43,7 @@
   [{:create-table t
     :columns [[:id :text {:primary-key true}]
               # the subject an identity carries — "user:42" — and not a
-              # foreign key: void does not know what a user is (ADR-0023)
+              # foreign key: void does not know what a user is
               [:recipient :text {:null false}]
               [:key :text {:null false}]
               [:title :text {:null false}]

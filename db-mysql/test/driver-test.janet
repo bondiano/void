@@ -26,7 +26,7 @@
 
   # -- the thread is real, and it is off the loop ------------------------
   #
-  # The claim ADR-0033 is built on, asserted rather than described: a
+  # The claim this driver is built on, asserted rather than described: a
   # query blocks the fiber that issued it and nothing else. Without the
   # worker thread this is where the ticker would stop.
 
@@ -42,7 +42,7 @@
   (assert (> ticks 20)
           (string/format
             (string "the ev loop kept running during a %.2fs query (%d ticks) "
-                    "— this is the whole of ADR-0033")
+                    "— this is the whole of the design")
             elapsed ticks))
   (set ticking false)
 

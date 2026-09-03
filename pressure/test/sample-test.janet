@@ -8,10 +8,10 @@
 (assert (< idle 0.01)
         "an idle loop wakes on time — the signal is quiet when nothing is wrong")
 
-# The measurement is the point: block the loop from another fiber and
-# the sleeping fiber cannot be resumed until the block ends, which is
-# exactly the thing loop-lag is for (a synchronous FFI call, a CPU
-# loop, a GC pause — SPEC §8.4).
+# The measurement is the point: block the loop from another fiber and the
+# sleeping fiber cannot be resumed until the block ends, which is exactly
+# the thing loop-lag is for (a synchronous FFI call, a CPU loop, a GC
+# pause).
 (ev/go
   (fn blocker []
     (ev/sleep 0.01)

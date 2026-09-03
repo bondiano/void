@@ -1,6 +1,6 @@
 ### The state of a list is read out of the URL and turned into one
-### where-clause (ADR-0029 §6, §10). Two properties matter more than
-### the rest, and both are about what the clause is built *from*:
+### where-clause. Two properties matter more than the rest, and both are
+### about what the clause is built *from*:
 ###
 ### The clause is built from the entity's own columns and the
 ### resource's own declarations — never from the keys a browser sent.

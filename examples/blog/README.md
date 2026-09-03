@@ -39,7 +39,7 @@ added ten plugins and no engine-specific line, so
 | `config/` | the layers: `default.janet` (shared), `<profile>.janet`, then `VOID_*`, then CLI overrides — `void config explain :cache :ttl` says which one won |
 | `app.janet` (wave 3) | `defpolicy :articles/own` — a pure function of a context; `:void.auth/access`, `:void.authz/policy` and `:void.authz/resource` as route metadata; the sign-in, sign-out and registration handlers |
 | `views.janet` (wave 3) | `authz/can?` deciding whether to draw the Edit control, and `security/htmx-meta` putting the CSRF token where htmx will find it |
-| `app.janet` (wave 3.5) | `auth/challenge!` — the whole of "mail me a sign-in link" — and the route the link lands on; the letter itself is `void/mail-auth`'s |
+| `app.janet` | `auth/challenge!` — the whole of "mail me a sign-in link" — and the route the link lands on; the letter itself is `void/mail-auth`'s |
 
 ## The parts worth reading twice
 
@@ -50,11 +50,11 @@ is the whole of the transaction management; the handler never says
 `begin`.
 
 **The counter is a job, not a callback.** Entities in void have no
-lifecycle hooks (ADR-0009). Posting a comment enqueues
-`:recount-comments`, `:unique :args` collapses a burst on one article
-into a single run, and the job recomputes the count and drops the
-cached index. The queue is `void/jobs-db` — the same database and the
-same transaction as the data it is counting.
+lifecycle hooks. Posting a comment enqueues `:recount-comments`,
+`:unique :args` collapses a burst on one article into a single run, and
+the job recomputes the count and drops the cached index. The queue is
+`void/jobs-db` — the same database and the same transaction as the data
+it is counting.
 
 **`db/rel`, not `(article :author)`.** A preloaded relation is a table
 lookup; an unpreloaded one warns with the call site in dev and throws

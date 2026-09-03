@@ -1,9 +1,9 @@
 ### void/i18n/plural — CLDR plural categories for the shipped language
-### families (ADR-0036). A rule is (fn [n] category) over the CLDR
-### keywords :zero :one :two :few :many :other; a language beyond this
-### table contributes {:language :categories} to :void.i18n/plural, and
-### an unknown one declines as one/other — the honest default, named
-### in the ADR as the price of not shipping CLDR whole.
+### families. A rule is (fn [n] category) over the CLDR keywords :zero
+### :one :two :few :many :other; a language beyond this table contributes
+### {:language :categories} to :void.i18n/plural, and an unknown one
+### declines as one/other — the honest default, named in the ADR as the
+### price of not shipping CLDR whole.
 
 (defn- int-n? [n] (and (number? n) (= n (math/floor n))))
 

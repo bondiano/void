@@ -12,14 +12,14 @@ void make auth
 ```
 
 writes the five pages every application used to write by hand —
-register, sign in, sign out, password reset, address verification —
-plus the users migration and a suite that drives all of them
-([Getting started §6](../GETTING-STARTED.md)). It prints the three
-edits it refuses to make for you (plugins, config, the driver
-dependency) rather than rewriting your files. What follows is what the
-generated code does, so you can change it with open eyes.
-[examples/hub](../../examples/hub) began as exactly this scaffold, and
-its first commit is the generator's raw output.
+register, sign in, sign out, password reset, address verification — plus
+the users migration and a suite that drives all of them ([Getting
+started](../GETTING-STARTED.md)). It prints the three edits it refuses
+to make for you (plugins, config, the driver dependency) rather than
+rewriting your files. What follows is what the generated code does, so
+you can change it with open eyes. [examples/hub](../../examples/hub)
+began as exactly this scaffold, and its first commit is the generator's
+raw output.
 
 ## Passwords
 
@@ -68,9 +68,9 @@ code, so a link works exactly once:
 
 Note the enumeration guard in the blog: the page answers "if that
 address has an account, a link is on its way" whether or not it found
-one. A challenge nobody would deliver is an error at the call site
-(ADR-0023 §7) — composing `:void/mail-auth` or contributing your own
-deliverer is required, not optional.
+one. A challenge nobody would deliver is an error at the call site —
+composing `:void/mail-auth` or contributing your own deliverer is
+required, not optional.
 
 ## API tokens
 

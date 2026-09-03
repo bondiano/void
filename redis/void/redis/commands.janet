@@ -1,4 +1,4 @@
-### void/redis/commands — the command surface (SPEC.md §5.10).
+### void/redis/commands — the command surface.
 ###
 ### Redis has some two hundred and forty commands. What is here is the
 ### handful an application reaches for daily, given a shape Janet code
@@ -31,7 +31,7 @@
 (import ./resp :as resp)
 (import ./state :as state)
 
-# -- raw ------------------------------------------------------------------
+# -- raw -----------------------------------------------------------------
 
 (defn command
   ``Run one command exactly as written, and return its reply.
@@ -57,7 +57,7 @@
   "A key as it reaches the server: the client's prefix plus `k`."
   state/prefixed)
 
-# -- keys ------------------------------------------------------------------
+# -- keys ----------------------------------------------------------------
 
 (defn get-key
   "The value of `k`, decoded, or nil when the key does not exist."
@@ -133,7 +133,7 @@
   (state/call ["RENAME" (state/prefixed from) (state/prefixed to)])
   nil)
 
-# -- numbers ---------------------------------------------------------------
+# -- numbers -------------------------------------------------------------
 
 (defn incr
   "Add `by` (default 1) to the integer at `k`, and return the result.
@@ -155,7 +155,7 @@
   [k by]
   (scan-number (state/call ["INCRBYFLOAT" (state/prefixed k) by])))
 
-# -- several keys at once --------------------------------------------------
+# -- several keys at once ------------------------------------------------
 
 (defn mget
   "The values of several keys, decoded, in the order asked — a missing
@@ -176,7 +176,7 @@
   (state/call args)
   nil)
 
-# -- hashes ----------------------------------------------------------------
+# -- hashes --------------------------------------------------------------
 
 (defn hget
   "One field of a hash, decoded, or nil."
@@ -236,7 +236,7 @@
   [k]
   (state/call ["HLEN" (state/prefixed k)]))
 
-# -- lists -----------------------------------------------------------------
+# -- lists ---------------------------------------------------------------
 
 (defn lpush
   "Push values onto the head of a list; returns the new length."
@@ -302,7 +302,7 @@
                      {:timeout (if (pos? timeout) (+ timeout 1) conn/no-timeout)}))
   (when r [(state/unprefixed (in r 0)) (state/codec-decode (in r 1))]))
 
-# -- sets ------------------------------------------------------------------
+# -- sets ----------------------------------------------------------------
 
 (defn sadd
   "Add members to a set; returns how many were new."
@@ -331,7 +331,7 @@
   [k]
   (state/call ["SCARD" (state/prefixed k)]))
 
-# -- sorted sets -----------------------------------------------------------
+# -- sorted sets ---------------------------------------------------------
 
 (defn- score-of
   "A score as a number, whichever protocol answered: RESP3 sends a
@@ -408,7 +408,7 @@
     (array/push args n))
   (codec/decode-all (state/active-codec) (state/call args)))
 
-# -- scanning --------------------------------------------------------------
+# -- scanning ------------------------------------------------------------
 
 (defn scan-each
   ``Call `f` with every key matching `opts`, walking the keyspace with
@@ -445,7 +445,7 @@
   (scan-each |(array/push out $) opts)
   out)
 
-# -- scripting -------------------------------------------------------------
+# -- scripting -----------------------------------------------------------
 
 (defn script
   ``A Lua script as a callable: loaded once, called by its digest, and
@@ -481,7 +481,7 @@
       (error (conn/command-error r ["EVALSHA"]))
       r)))
 
-# -- the cache shape -------------------------------------------------------
+# -- the cache shape -----------------------------------------------------
 
 (defn remember
   ``The value under `k`, or — when there is none — the result of
@@ -513,7 +513,7 @@
   [& ks]
   (del-keys ;ks))
 
-# -- server ----------------------------------------------------------------
+# -- server --------------------------------------------------------------
 
 (defn ping
   "PING the server. True, or a thrown connection error."

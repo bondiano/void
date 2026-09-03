@@ -1,12 +1,12 @@
 ### blog/audit — the trail, and nothing that produces it (exit criterion 1 of wave 3).
 ###
-### This file subscribes to the bus and writes rows. That is all it
-### does, and the interesting part is what it does *not* need: no
-### handler in ./app calls it, no entity has a callback (ADR-0009 says
-### they have none), and no middleware is wrapped around anything.
-### Deleting this file stops the audit trail and changes nothing else
-### in the application — which is the whole claim behind having a bus
-### rather than a function everybody remembers to call.
+### This file subscribes to the bus and writes rows. That is all it does,
+### and the interesting part is what it does *not* need: no handler in
+### ./app calls it, no entity has a callback (says they have none), and no
+### middleware is wrapped around anything. Deleting this file stops the
+### audit trail and changes nothing else in the application — which is the
+### whole claim behind having a bus rather than a function everybody
+### remembers to call.
 ###
 ### Two kinds of thing end up here, and they arrive by two different
 ### routes on purpose.
@@ -24,8 +24,8 @@
 ### there is no transaction to ride and nothing to be consistent with:
 ### `authz/decision-hook` fires, this module publishes, and the worst
 ### case of losing one is a missing line rather than a lie. Note where
-### it comes from — the hook `void/authz` has fired since 3.3 for
-### exactly this, "шов, который в 3.6 забирает void/bus".
+### it comes from — the hook `void/authz` has fired for exactly this
+### since it shipped, and the bus is what picks it up.
 ###
 ### The consumer is in its own group (`:audit`), so it reads the whole
 ### log at its own pace and a slow write here never slows the group

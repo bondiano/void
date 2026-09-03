@@ -1,4 +1,4 @@
-### void/cache/store — the :void/cache-store contract (SPEC.md §5.11).
+### void/cache/store — the :void/cache-store contract.
 ###
 ### Two interfaces, deliberately, and the split is the whole design of
 ### this plugin:
@@ -44,7 +44,7 @@
 ###            in mind is; `[:deploy :shape] :fleet` refuses one at
 ###            start, because `cache/forget` on a per-process store
 ###            clears one replica out of N and the stale answer stays
-###            on the others (ADR-0030)
+###            on the others
 ###   :values  :janet (default) — the store gives back what it was
 ###            given, keywords and tables and all — or :bytes, when it
 ###            round-trips through an encoding that does not preserve
@@ -131,7 +131,7 @@
 (defn shared?
   "True when several processes see the same entries — the question
   `[:deploy :shape] :fleet` asks of every store it can reach
-  (ADR-0030)."
+."
   [st]
   (truthy? (get st :shared?)))
 

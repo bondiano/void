@@ -25,7 +25,7 @@
 (assert (= "4318" ((client/parse-url "http://[::1]:4318/v1/metrics") :port)))
 
 (def [ok err] (protect (client/parse-url "https://collector.example/v1/traces")))
-(assert (not ok) "https without :void/tls in the composition is refused (ADR-0038)")
+(assert (not ok) "https without :void/tls in the composition is refused")
 (assert (string/find ":void/tls" (string err))
         "and the error names the plugin rather than failing at connect time")
 
@@ -260,7 +260,7 @@
 (assert (= 2 (length (client/header-values setter "set-cookie")))
         "and a repeated header keeps all of its values")
 
-# -- redirects, when asked ------------------------------------------------
+# -- redirects, when asked -----------------------------------------------
 
 (def not-followed (client/get (string base "/moved")))
 (assert (= 302 (not-followed :status))

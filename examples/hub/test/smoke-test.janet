@@ -1,4 +1,4 @@
-### The composition in main.janet, booted and driven (ADR-0017).
+### The composition in main.janet, booted and driven.
 ###
 ### ./auth-test.janet is the generated suite, and it writes its own
 ### plugin list on purpose — it has to pass the moment it is generated,
@@ -65,7 +65,7 @@
   (def register (test/inject c {:uri "/register"}))
   (assert (= 200 (register :status)) "the generated sign-up page is mounted")
   (assert (string/find `name="_csrf"` (test/text register))
-          "void/security binds the token the form asks for (ADR-0025)")
+          "void/security binds the token the form asks for")
 
   # -- the identity is wired, not merely composed ------------------------
   (def guarded (test/inject c {:uri "/password/edit"}))

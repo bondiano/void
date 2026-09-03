@@ -111,7 +111,7 @@
   # -- the chat that threw the bot out -----------------------------------
   (def refused (notify/send (note "-403")))
   (assert (= :failed ((first (refused :results)) :status))
-          "one channel's failure is a result, never an exception (ADR-0040)")
+          "one channel's failure is a result, never an exception")
 
   # -- the address, and the one the configuration falls back to ----------
   # `:to {}` rather than no `:to` at all: void/notify insists a

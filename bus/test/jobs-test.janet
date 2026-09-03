@@ -11,7 +11,7 @@
 # the dead-letter case below logs an error on purpose
 (log/set-level! "void.jobs.worker" :fatal)
 
-# ADR-0012's last sentence, made true: void/jobs publishes its
+# The last promise, made true: void/jobs publishes its
 # lifecycle events onto the bus when there is one. The seam is
 # `jobs/listen!`, which void/jobs left ready in wave 2 for exactly
 # this; the bridge is a plugin rather than a line in void/jobs so that

@@ -1,4 +1,4 @@
-### blog/admin — the back office, declared (ADR-0029).
+### blog/admin — the back office, declared.
 ###
 ### This whole file is declarations. There are no handlers, no
 ### templates and no routes: `void/admin` projects the registry into
@@ -10,13 +10,13 @@
 ### Two things worth reading for what they do *not* say.
 ###
 ### **Scoping is one function.** `:scope` narrows the query and the
-### count with the same clause, so an author's list pages over their
-### own articles and says how many of them there are. Behind it, the
-### edit and delete actions still pass `:articles/own` — the row-level
-### policy this application already had, for its own routes, reused by
-### name (§3's two echelons).
+### count with the same clause, so an author's list pages over their own
+### articles and says how many of them there are. Behind it, the edit and
+### delete actions still pass `:articles/own` — the row-level policy this
+### application already had, for its own routes, reused by name (the two
+### echelons).
 ###
-### **The trail is not new.** ADR-0029 §8 says the admin owns no table:
+### **The trail is not new.** The admin owns no table:
 ### it announces `:void.admin/changed` and somebody else decides
 ### whether that survives the process. Here the somebody is ./audit,
 ### which has been writing this application's facts since wave 3.6 —
@@ -68,16 +68,16 @@
   :form [:title :body]
   :order-by [[:id :desc]]
   :scope own-articles
-  # `created_at` is NOT NULL and nobody types a timestamp; the author
-  # of a row created here is whoever created it. Entities have no
-  # callbacks by design (ADR-0009), so the value comes from whoever
-  # writes the row — and the admin is one of the writers
+  # `created_at` is NOT NULL and nobody types a timestamp; the author of a
+  # row created here is whoever created it. Entities have no callbacks by
+  # design, so the value comes from whoever writes the row — and the admin
+  # is one of the writers
   :defaults {:created-at (fn [_req] (e/now))
              :author-id (fn [_req] (current-author-id))}
-  # the comments of an article, edited on the article's page. The
-  # target is declared below with :mount false — its fields and its
-  # policies exist once, and the inline is guarded by the child's
-  # policies as well as by this resource's :show (§5)
+  # the comments of an article, edited on the article's page. The target
+  # is declared below with :mount false — its fields and its policies
+  # exist once, and the inline is guarded by the child's policies as well
+  # as by this resource's :show
   :inlines {:comments {:style :table :fields [:author-name :body]}})
 
 (admin/defresource-admin comments e/Comment
@@ -123,7 +123,7 @@
   is, ./audit does not know what the admin is, and the trail gets the
   back office for free — with the message riding the same
   transactional outbox as everything else, because the admin's writing
-  routes carry `:void.db/txn` (ADR-0012, ADR-0029 §8).``
+  routes carry `:void.db/txn`.``
   [fact]
   (bus/publish-tx! (keyword "admin/" (fact :action))
                    {:actor (fact :subject)
@@ -149,7 +149,7 @@
            {:at (row :at) :actor (row :actor) :detail (row :topic)}))})
 
 (plugin/defplugin blog/admin
-  :doc "The blog's back office: four declarations, no handlers and no templates. Every action is a route with the shut-by-default gate plus its own policy, an author's list is scoped to their own articles, comments are edited inline on the article, and every change is announced onto the bus the audit trail already reads (ADR-0029)."
+  :doc "The blog's back office: four declarations, no handlers and no templates. Every action is a route with the shut-by-default gate plus its own policy, an author's list is scoped to their own articles, comments are edited inline on the article, and every change is announced onto the bus the audit trail already reads."
   :version "0.1.0"
   :requires {:void/admin ">=0.0.1" :void/authz ">=0.0.1"
              :void/bus ">=0.0.1" :blog/app ">=0.1.0"})

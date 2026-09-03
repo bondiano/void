@@ -9,7 +9,7 @@
 (require "void/http/init")
 (require "void/proto/init")
 
-# -- the manifest ---------------------------------------------------------
+# -- the manifest --------------------------------------------------------
 
 (def report (plugin/dry-run {:plugins [:void/http :void/proto :void/grpc] :profile :test}))
 (assert report "void/grpc dry-runs over the kernel and the codec")
@@ -26,7 +26,7 @@
 (def meta-keys (get-in boot [:extensions :void.http/route-meta-key :resolved] {}))
 (each k [:void.grpc/service :void.grpc/method]
   (assert (get meta-keys k)
-          (string/format "%q is declared, so a route may carry it (ADR-0005)" k)))
+          (string/format "%q is declared, so a route may carry it" k)))
 
 (def renderers (get-in boot [:extensions :void.http/error-renderer :resolved] []))
 (def connect-renderer (first (filter |(= :void.grpc/error ($ :name)) renderers)))
@@ -40,7 +40,7 @@
 (assert services-cmd)
 (assert (services-cmd :read-only?) "listing methods changes nothing, so an agent may do it")
 
-# -- config ----------------------------------------------------------------
+# -- config --------------------------------------------------------------
 
 (def settings (grpc/build-settings boot))
 (assert (settings :mount))
@@ -59,7 +59,7 @@
                                 :config {:cli {:grpc {:mount "yes please"}}}}))))
         "a [:grpc] slice that is not the shape the schema says fails the bootstrap")
 
-# -- codes ------------------------------------------------------------------
+# -- codes ---------------------------------------------------------------
 
 (assert (= 16 (length codes/names)) "the sixteen gRPC codes, and no seventeenth")
 (each name codes/names
@@ -88,7 +88,7 @@
 (assert (not (first (protect (codes/error-value :nonsense "x"))))
         "a code that is not one of the sixteen is refused where it is written")
 
-# -- codec selection ---------------------------------------------------------
+# -- codec selection -----------------------------------------------------
 
 (def codecs (get-in boot [:extensions :void.grpc/codec :resolved] []))
 (assert (= :void.grpc/proto ((connect/codec-for codecs "application/proto") :name)))
@@ -101,7 +101,7 @@
         "Connect's GET form names a codec by its short name")
 (assert (deep= @["application/json" "application/proto"] (connect/content-types codecs)))
 
-# -- [:grpc :mount] false leaves the routes off ------------------------------
+# -- [:grpc :mount] false leaves the routes off --------------------------
 
 (proto/load-file! "test/protos/orders.proto")
 (defn h [_msg _req] {:count 0})
@@ -122,7 +122,7 @@
 (set grpc/settings (grpc/build-settings boot))
 (assert (not (empty? (((source :routes) boot) :children))))
 
-# -- the CLI prints what it promises -----------------------------------------
+# -- the CLI prints what it promises -------------------------------------
 
 (defn- captured [f]
   (def out @"")
@@ -135,7 +135,7 @@
 (assert (string/find "shop.orders.Order" printed) "with the messages it speaks")
 (assert (not (first (protect ((services-cmd :fn) "extra")))))
 
-# -- and taking the plugin out leaves nothing behind --------------------------
+# -- and taking the plugin out leaves nothing behind ---------------------
 
 (def without (plugin/bootstrap {:plugins [:void/http] :profile :test} true))
 (assert (empty? (filter |(= :void/grpc ($ :name))

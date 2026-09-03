@@ -8,15 +8,15 @@
 ###
 ###   postgres   the data, the queue, the message log and the outbox —
 ###              one database, because that is what makes an order and
-###              the fact that it happened commit together (ADR-0012)
+###              the fact that it happened commit together
 ###   redis      sessions and the shared cache, which is what lets the
-###              web tier be more than one process (ADR-0010)
+###              web tier be more than one process
 ###   mailpit    an SMTP relay with a web inbox: the receipts, the
 ###              cancellations and the magic-link letters land in it
 ###   minio      the bucket the product pictures live in — because a
 ###              picture uploaded to one replica's disk is a 404 on the
 ###              next, which is what [:deploy :shape] :fleet refuses to
-###              start with (ADR-0030, ADR-0039)
+###              start with
 ###   createbucket  a one-shot `mc mb` — the bucket is part of this
 ###              deployment's schema, so it is created the way the
 ###              tables are
@@ -46,8 +46,8 @@ x-app: &app
     VOID_SHOP_REDIS: "1"
     # config/prod.janet reads these as {:secret "…"} references, so the
     # values live in the environment and the config tree holds an opaque
-    # box that does not print (ADR-0007 §5). Change them for anything
-    # that is not a laptop.
+    # box that does not print. Change them for anything that is not a
+    # laptop.
     SHOP_SECRET_KEY: development-signing-key-change-me
     # every connection detail is an env var rather than a line in
     # config/prod.janet, which is what lets one image run against any
@@ -64,10 +64,10 @@ x-app: &app
     VOID_MAIL__SMTP__HOST: mailpit
     VOID_MAIL__SMTP__PORT: "1025"
     VOID_MAIL__BASE_URL: http://localhost:8080
-    # product pictures in the bucket rather than on a container's disk
-    # (ADR-0039). main.janet reads this one the way it reads
-    # VOID_SHOP_DB: it decides which plugins are composed, so a
-    # deployment on a disk never loads the signer or the TLS stack
+    # product pictures in the bucket rather than on a container's disk.
+    # main.janet reads this one the way it reads VOID_SHOP_DB: it decides
+    # which plugins are composed, so a deployment on a disk never loads
+    # the signer or the TLS stack
     VOID_SHOP_STORAGE: s3
     # the application reaches minio over the compose network...
     VOID_STORAGE_S3__ENDPOINT: http://minio:9000
@@ -78,7 +78,7 @@ x-app: &app
     VOID_STORAGE_S3__PUBLIC_URL: http://localhost:9000/shop
     # secret references, like SHOP_SECRET_KEY above: the values live in
     # the environment and the config tree holds boxes that do not print
-    # (ADR-0007 §5)
+    #
     MINIO_ACCESS_KEY: shop
     MINIO_SECRET_KEY: shop-shop-shop
     # the pictures come from an origin the default policy does not
@@ -182,11 +182,11 @@ services:
       mc anonymous set download local/shop
       "
 
-  # One shot, and it has to finish before anything serves: the schema
-  # is the application's (void/auth-db and void/bus-db ship their DDL
-  # as data, and the migration that creates their tables is ours —
-  # ADR-0023 §2), and the catalog has to exist for the shop to be
-  # worth opening. Both commands are idempotent.
+  # One shot, and it has to finish before anything serves: the schema is
+  # the application's (void/auth-db and void/bus-db ship their DDL as
+  # data, and the migration that creates their tables is ours), and the
+  # catalog has to exist for the shop to be worth opening. Both commands
+  # are idempotent.
   migrate:
     <<: *app
     command: ["sh", "-c", "void --profile prod db migrate && void --profile prod shop seed"]
@@ -240,7 +240,7 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # -- the observability profile ------------------------------------------
+  # -- the observability profile -----------------------------------------
   #
   #     docker compose --profile obs up
   #

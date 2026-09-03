@@ -1,4 +1,4 @@
-# The plugin and the seams of ADR-0038 §4, end to end: one boot, and
+# The plugin and its seams, end to end: one boot, and
 # then https:// through void/http/client, RESP over a rediss-shaped
 # connection, and an SMTP delivery that upgrades with STARTTLS — every
 # consumer talking to a real TLS server on a real socket, none of them
@@ -19,11 +19,10 @@
 (log/set-level! "void" :error)
 
 # before any boot the seams are open: importing the module is not
-# composing the plugin, and "is there TLS" is a fact about the
-# composition (ADR-0038 §4)
+# composing the plugin, and "is there TLS" is a fact about the composition
 (assert (not (client/tls-available?)) "an import alone closes no seam")
 
-# -- what the boot refuses ------------------------------------------------
+# -- what the boot refuses -----------------------------------------------
 
 # a composition that turns verification off in :prod does not start
 (def [pok perr]
@@ -74,7 +73,7 @@
   # the URL parser knows 443 the way it knows 80
   (assert (= "443" ((client/parse-url "https://api.example/x") :port)))
 
-  # -- RESP over TLS: what a rediss:// URL opens --------------------------
+  # -- RESP over TLS: what a rediss:// URL opens -------------------------
 
   (def resp-server
     (tls-server/start
@@ -90,7 +89,7 @@
   (redis-conn/close rc)
   (tls-server/stop resp-server)
 
-  # -- SMTP with STARTTLS -------------------------------------------------
+  # -- SMTP with STARTTLS ------------------------------------------------
 
   (def smtp-listener (net/listen "127.0.0.1" "0"))
   (def [_ smtp-port] (net/localname smtp-listener))
@@ -160,7 +159,7 @@
   (protect (:close smtp-listener))
   (stream/close-context server-ctx)
 
-  # -- the gates ----------------------------------------------------------
+  # -- the gates ---------------------------------------------------------
 
   # AUTH over :starttls passes the plaintext gate by construction
   (assert (nil? (smtp/auth-refusal {:host "mail.example" :username "u" :password "p"

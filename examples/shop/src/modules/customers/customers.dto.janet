@@ -3,9 +3,8 @@
 ### `Registration` is the one worth reading: `schema/merge` composes a
 ### **projection of the model** with the one field that has no place in
 ### it. The hash is what the table stores, and the plaintext exists for
-### exactly the length of one request (ADR-0023 §4) — so it is in the
-### DTO and not in the model, which is precisely the distinction the
-### two files are for.
+### exactly the length of one request — so it is in the DTO and not in the
+### model, which is precisely the distinction the two files are for.
 (import void/core/schema :as schema)
 (import ./customers.model :as model)
 

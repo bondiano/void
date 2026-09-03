@@ -1,4 +1,4 @@
-### void/storage — files and uploads (ADR-0039).
+### void/storage — files and uploads.
 ###
 ### Two interfaces and a seam on each side. `:void/storage-store` is a
 ### backend — five functions over keys and bytes (./store);
@@ -40,7 +40,7 @@
 ### entity keeps the key in a text column, `storage/url` turns it back
 ### into an address. The `:storage/*` props (`:storage/accept`,
 ### `:storage/max-bytes`, `:storage/prefix`) are annotations in the
-### ADR-0008 sense — parsed and stored, never consulted by validation,
+### schema-layer sense — parsed and stored, never consulted by validation,
 ### read by the widgets that act on them.
 
 (import void/core/log :as log)
@@ -166,7 +166,7 @@
     :root], atomic writes (tmp + rename), served through
     void/storage-http when it is composed. The default backend, and
     per-machine on purpose — [:deploy :shape] :fleet refuses it and
-    names void/storage-s3 (ADR-0030)."
+    names void/storage-s3."
     :provides [:void/storage-store]
     :config {:key :storage :schema Config}
     :start

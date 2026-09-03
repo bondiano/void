@@ -1,4 +1,4 @@
-### void/openapi — OpenAPI 3.1 plugin (SPEC.md §5.3).
+### void/openapi — OpenAPI 3.1 plugin.
 ###
 ### A pure projection, nothing to keep in sync by hand: `spec` reads
 ### the built route table and the schema registry and folds them into
@@ -37,7 +37,7 @@
   (or current-context
       (error "void/openapi is not booted — plugin/start! builds the openapi context at :before-start")))
 
-# -- metadata keys (SPEC part II §2.5: :void.openapi/*, merge replace) ---
+# -- metadata keys (:void.openapi/*, merge replace) ----------------------
 
 (each [key sch doc]
   [[:void.openapi/tags [:vector :keyword]

@@ -1,4 +1,4 @@
-### void/security/csrf — one token, always signed (ADR-0025 §1, §2).
+### void/security/csrf — one token, always signed.
 ###
 ### **When it applies.** Not "every unsafe method" — that breaks every
 ### JSON API with a bearer token, and the `:restrict` merge on
@@ -16,7 +16,7 @@
 ### **The token.** `<nonce>.<issued-at>.<mac>`, where the MAC is
 ### HMAC-SHA256 over the three parts plus a **binding**: the value of a
 ### cookie this module sets. One format, one verification path, one
-### binding (ADR-0025 §2 on why there is not a second, unsigned kind).
+### binding (on why there is not a second, unsigned kind).
 ###
 ### The binding is deliberately *not* the session id, although that
 ### would be a stronger tie. A page is very often rendered by the
@@ -186,7 +186,7 @@
 
   htmx 4 inherits an attribute only where the name says so, so what
   goes on `<body>` is `hx-headers:inherited` (./hx-headers) — see
-  ADR-0041.``
+  htmx 4.``
   [req cfg]
   (def token (token-for req cfg))
   (def header (get cfg :header (defaults :header)))
@@ -199,7 +199,7 @@
 
   The name carries htmx 4's `:inherited` suffix, and it has to: since
   4.0 an attribute applies to the element it sits on and no further
-  (ADR-0041), and a token that reached only `<body>`'s own requests
+, and a token that reached only `<body>`'s own requests
   would leave every other element's POST to be refused.``
   [req cfg]
   {:hx-headers:inherited (string/format `{"%s": "%s"}`

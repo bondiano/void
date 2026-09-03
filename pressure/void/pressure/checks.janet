@@ -1,24 +1,23 @@
 ### void/pressure/checks — the built-in `:void.pressure/check`
-### contributions (ADR-0019).
+### contributions.
 ###
-### The module docstring of init.janet names an exhausted database
-### pool as the motivating example of a check, and this is where that
-### example stops being prose. It cannot live in void/db: a
-### contribution to a point no active plugin owns is a boot error by
-### design (SPEC part II §1.2), so void/db contributing here would
-### break every application that composes a database without the
-### shedder. void/pressure owns the point, so its own contribution can
-### never dangle — the same reasoning that puts the wave-2
-### instrumentations inside void/obs (obs/instrument.janet).
+### The module docstring of init.janet names an exhausted database pool as
+### the motivating example of a check, and this is where that example
+### stops being prose. It cannot live in void/db: a contribution to a
+### point no active plugin owns is a boot error by design, so void/db
+### contributing here would break every application that composes a
+### database without the shedder. void/pressure owns the point, so its own
+### contribution can never dangle — the same reasoning that puts the
+### wave-2 instrumentations inside void/obs (obs/instrument.janet).
 ###
 ### And like those, this check reaches the pool the long way round: the
 ### *public* stats function of void/db/pool, resolved with `require` at
 ### check time, and the `:db/pool` instance of the running system,
-### resolved per call rather than captured — a `system/restart` (the
-### dev reload path, ADR-0002) must not leave the check watching a pool
-### that has been closed. A process without void/db on its module path,
-### or a composition without a `:db/pool` component, answers `{:ok
-### true}`: "shed on the database if there is one" is the whole point.
+### resolved per call rather than captured — a `system/restart` (the dev
+### reload path) must not leave the check watching a pool that has been
+### closed. A process without void/db on its module path, or a composition
+### without a `:db/pool` component, answers `{:ok true}`: "shed on the
+### database if there is one" is the whole point.
 ###
 ### The decision itself has a grace period instead of hysteresis. A
 ### burst that parks a fiber for one sample is the pool doing its job —

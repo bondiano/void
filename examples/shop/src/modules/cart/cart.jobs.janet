@@ -9,9 +9,8 @@
 ### not held, because a cart reserves nothing (the checkout is what
 ### takes stock).
 ###
-### It is not an entity callback, because entities in void have none
-### (ADR-0009): what happens after a write is a job, a bus consumer or
-### nothing.
+### It is not an entity callback, because entities in void have none:
+### what happens after a write is a job, a bus consumer or nothing.
 (import void/jobs :as jobs)
 (import ./cart.service :as service)
 

@@ -16,10 +16,10 @@
 ### `src/modules/audit/` can be removed with three lines of change.
 ###
 ### **There is no `admin` module.** There was one until wave 4 — a
-### controller, a view and three hand-written routes — and what
-### replaced it is a `*.admin.janet` in each module that has rows a
-### person at a desk looks at. The back office is a projection of the
-### declarations those modules already made (ADR-0029), so it is a
+### controller, a view and three hand-written routes — and what replaced
+### it is a `*.admin.janet` in each module that has rows a person at a
+### desk looks at. The back office is a projection of the declarations
+### those modules already made, so it is a
 ### *layer* of a module and not a module of its own, exactly as
 ### `*.api.janet` is.
 ###
@@ -104,10 +104,10 @@
 
 (plugin/contribute! :void.core/cli
   {:name :shop/stock
-   # and *because* it says so, it is one of the tools an agent gets
-   # when this process is `void mcp serve`: read-only commands are
-   # exposed and nothing else is (ADR-0031). One keyword, two
-   # audiences, and no MCP code in this application
+   # and *because* it says so, it is one of the tools an agent gets when
+   # this process is `void mcp serve`: read-only commands are exposed and
+   # nothing else is. One keyword, two audiences, and no MCP code in this
+   # application
    :read-only? true
    :doc "What is running out: void shop stock [threshold]"
    :needs [:db/pool]
