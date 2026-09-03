@@ -1,5 +1,5 @@
-# void/authz-http over test/inject (ADR-0017): group and route policies
-# both enforced, the resource a route names, a 403 that says nothing,
+# void/authz-http over test/inject: group and route policies both
+# enforced, the resource a route names, a 403 that says nothing,
 # deny-by-default as a boot error, and the seam that lets authz read
 # void/auth's identity without importing the package.
 
@@ -141,7 +141,7 @@
   (def theirs (test/inject c {:uri "/orders/2"}))
   (assert (= 403 (theirs :status)) "an order of another brand is not")
   (assert (not (string/find "brand mismatch" (string (theirs :body))))
-          "and the body does not say why — the reason is a description of internal state (ADR-0024 §3)")
+          "and the body does not say why — the reason is a description of internal state")
 
   # group AND route: :staff from the group, :orders/read from the route
   (def group-route (http/explain-route "/admin/reports"))
@@ -181,10 +181,9 @@
 
 # -- authz without void/auth ---------------------------------------------
 #
-# The identity is a dyn key, not an import (ADR-0024): an application
-# with its own authentication binds :void.auth/identity and gets the
-# same authorization. Here nothing from void/auth is in the composition
-# at all.
+# The identity is a dyn key, not an import: an application with its own
+# authentication binds :void.auth/identity and gets the same
+# authorization. Here nothing from void/auth is in the composition at all.
 
 (def own-auth
   (plugin/manifest 'test/own-auth

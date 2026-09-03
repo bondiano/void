@@ -1,5 +1,4 @@
-### void/http/middleware — middleware phases and chain building
-### (SPEC.md part II §1.4).
+### void/http/middleware — middleware phases and chain building.
 ###
 ### Middleware is a wrapper (fn [handler] handler') registered through
 ### the :void.http/middleware extension point with a numeric phase —
@@ -14,7 +13,7 @@
 ### all — nothing is decided on the hot path.
 
 (def phases
-  "The standard phase constants (SPEC part II §1.4)."
+  "The standard phase constants."
   {:panic-guard 0
    :observability 1000
    :parsing 2000
@@ -35,7 +34,7 @@
 (def phase/business (phases :business))
 (def phase/response (phases :response))
 
-# -- request-lifecycle stages (ADR-0016) ---------------------------------
+# -- request-lifecycle stages --------------------------------------------
 #
 # A stage is a reserved slot on this same phase scale — hooks compile
 # into the one route chain as thin wrappers; a route with no hooks on a

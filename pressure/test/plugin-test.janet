@@ -17,7 +17,7 @@
 (assert (report :ok) "the plugin composes on its own — no void/http anywhere in it")
 (assert (index-of :pressure/sampler (report :components)))
 (assert (get-in report [:extensions :void.pressure/check])
-        "and it owns the point ADR-0019 reserved for it")
+        "and it owns the point reserved for it")
 (assert (= 1 (get-in report [:extensions :void.pressure/check :contributions]))
         "with the built-in :db/pool check already contributed — the motivating example of the module docstring, not left to prose")
 
@@ -34,7 +34,7 @@
 # -- defaults ------------------------------------------------------------
 
 (assert (= 100 (pressure/defaults :max-loop-lag))
-        "the default lag limit is two orders of magnitude over the §8.2 budget — a process there has already missed every latency budget it has")
+        "the default lag limit is two orders of magnitude over the budget — a process there has already missed every latency budget it has")
 (assert (zero? (pressure/defaults :max-rss-bytes))
         "and the memory ceiling is off by default: it is the deployment's number, not a guess")
 (assert (= 1 (pressure/defaults :db-pool-max-waiting))
@@ -64,7 +64,7 @@
 (assert (nil? (get-in s [:limits :max-rss-bytes])) "an off limit reports as off, not as 0")
 (assert (get-in s [:available :loop-lag]))
 (assert (= (os/getpid) (s :pid))
-        "the status names its process — in prefork every worker samples its own loop (ADR-0010) and the pid is what tells two of them apart")
+        "the status names its process — in prefork every worker samples its own loop and the pid is what tells two of them apart")
 
 (def health (first (filter |(= :pressure/state ($ :name))
                            (plugin/extension boot :void.core/health))))

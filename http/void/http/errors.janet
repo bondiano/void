@@ -1,4 +1,4 @@
-### void/http/errors — exception -> response mapping (SPEC.md §5.1).
+### void/http/errors — exception -> response mapping.
 ###
 ### wrap-panic is the phase-0 panic guard: everything a route chain
 ### throws becomes a response instead of a dropped connection. A
@@ -164,7 +164,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
     :renderers  :void.http/error-renderer contributions, priority order
     :dev        truthy exposes stacktraces (dev error page)
     :on-error   (fn [req err]) hooks — the :on-error lifecycle stage
-                (ADR-0016), run before the renderers; the first hook
+, run before the renderers; the first hook
                 returning a response table wins over rendering
     :log        (fn [err req trace]) — 500s reach it (aborts do not);
                 default prints to stderr``

@@ -1,5 +1,5 @@
 ### void/bus/state — the broker an application talks to: publish, the
-### outbox, the consumers and the numbers (SPEC.md §5.22, ADR-0012).
+### outbox, the consumers and the numbers.
 ###
 ### The shape is void/db's and void/jobs's, because the problem is:
 ### one component holds the value, a dyn overrides it for a scope
@@ -21,7 +21,7 @@
 ### leaves — published, then died before marking the row — is a
 ### *duplicate*, which is the direction to fail in and which the dedup
 ### middleware handles. Publishing straight from inside a transaction
-### is the thing this exists to replace, and ADR-0012 makes it a
+### is the thing this exists to replace, which makes it a
 ### convention: an event about money goes through the outbox.
 ###
 ### **How the trace reaches obs from here.** It does not: void/bus has
@@ -235,7 +235,7 @@
 
   A rollback takes the message with it; a commit cannot lose it. This
   is the only sanctioned way to announce what a transaction wrote
-  (ADR-0012) — publishing straight from inside a transaction
+ — publishing straight from inside a transaction
   announces a state that may never exist.
 
   Needs `void/bus-db` in the composition (it is what installs the

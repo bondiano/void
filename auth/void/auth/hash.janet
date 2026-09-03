@@ -1,4 +1,4 @@
-### void/auth/hash — password hashes as PHC strings (ADR-0023 §4).
+### void/auth/hash — password hashes as PHC strings.
 ###
 ### What is stored is not a hash but a **PHC string**:
 ###
@@ -25,9 +25,9 @@
 ### every registered address at leisure. The comparison itself is
 ### `crypto/equal?` — constant-time — for the same reason.
 ###
-### Every primitive comes from `void/crypto` (ADR-0022). This module
-### derives nothing itself; it decides what to derive, how to spell it,
-### and when to spell it again.
+### Every primitive comes from `void/crypto`. This module derives nothing
+### itself; it decides what to derive, how to spell it, and when to spell
+### it again.
 
 (import void/crypto/kdf :as kdf)
 (import void/crypto/random :as random)
@@ -41,11 +41,10 @@
   ``Default hasher and its cost.
 
   `:scrypt` is the default rather than argon2id because argon2id
-  needs OpenSSL 3.2 and an LTS distribution may ship 3.0 (ADR-0022
-  §2) — a default that fails to start on Ubuntu 24.04 is not a
-  default. An application on a newer library sets `[:auth :hasher
-  :argon2id]` and, ideally, `[:crypto :require [:argon2id]]` so the
-  choice is checked at boot.
+  needs OpenSSL 3.2 and an LTS distribution may ship 3.0 — a default that
+  fails to start on Ubuntu 24.04 is not a default. An application on a
+  newer library sets `[:auth :hasher :argon2id]` and, ideally, `[:crypto
+  :require [:argon2id]]` so the choice is checked at boot.
 
   ln=14 is N=16384: ~25 ms and 16 MiB per hash, the interactive
   setting from RFC 7914 §2 raised a notch. argon2id m=64 MiB t=2 p=1
@@ -207,7 +206,7 @@
   ``Burn the time a real verification would take, and answer false.
   Call it where there is no stored hash to check — an unknown account,
   a user with no password set — or the difference between 200 µs and
-  25 ms enumerates every registered address (ADR-0023 §4).``
+  25 ms enumerates every registered address.``
   [&opt password]
   (default password "void-dummy-password")
   (unless (and dummy-cache (= (dummy-cache :hasher) (active-hasher)))

@@ -1,5 +1,4 @@
-### void/pressure/state — the flag, and everything that decides it
-### (SPEC.md §5.23, ADR-0019).
+### void/pressure/state — the flag, and everything that decides it.
 ###
 ### One boolean is the whole hot path. Every request that reaches the
 ### shedding middleware asks exactly one question — "is this process
@@ -65,13 +64,13 @@
   worth measuring. The default, and every process that is not the
   other one.
 
-  `:supervisor` — it serves nothing: the prefork master (ADR-0010),
-  which spawns workers and waits on them. Its loop is idle by
-  construction, so a sampler there would publish a reassuring zero
-  that is about nobody's requests, and every worker has its own loop
-  and its own sampler anyway. void/pressure-http sets this before the
-  component starts; the sampler then does not run, and the health line
-  says so rather than implying a measurement nobody took.``
+  `:supervisor` — it serves nothing: the prefork master, which spawns
+  workers and waits on them. Its loop is idle by construction, so a
+  sampler there would publish a reassuring zero that is about nobody's
+  requests, and every worker has its own loop and its own sampler anyway.
+  void/pressure-http sets this before the component starts; the sampler
+  then does not run, and the health line says so rather than implying a
+  measurement nobody took.``
   :process)
 
 (def state-dyn

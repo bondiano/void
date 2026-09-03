@@ -1,7 +1,7 @@
-# Serving the local store: one route, the static machinery behind it,
-# and the two postures the prefix can take. Everything goes through
+# Serving the local store: one route, the static machinery behind it, and
+# the two postures the prefix can take. Everything goes through
 # test/inject, so what is asserted is the whole chain a socket request
-# would run (ADR-0017).
+# would run.
 
 (import ../test-support/paths)
 (import void/core/log :as log)
@@ -138,7 +138,7 @@
                    :status))
           "one object's link does not open another's"))
 
-# -- the posture the application takes ------------------------------------
+# -- the posture the application takes -----------------------------------
 #
 # The route carries no policy of its own, because this plugin does not
 # know the policy names of the application it lands in. Under

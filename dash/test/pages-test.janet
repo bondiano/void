@@ -1,4 +1,4 @@
-### The M1 pages, through inject (ADR-0017) — and the gate.
+### The M1 pages, through inject — and the gate.
 ###
 ### Claims. In :dev the dashboard is open (the netrepl logic) and every
 ### page is a projection: the overview says which sections have no

@@ -1,5 +1,5 @@
-### void/db-postgres/config — from the [:db-postgres] config slice to
-### the connection string libpq opens (SPEC.md §5.10).
+### void/db-postgres/config — from the [:db-postgres] config slice to the
+### connection string libpq opens.
 ###
 ### libpq takes either a keyword string (`host=db user=void`) or a URI
 ### (`postgres://void@db/app`), and it fills in whatever neither one
@@ -44,7 +44,7 @@
    :password [:optional :string]
    :application-name [:optional :string]
 
-   # TLS is libpq's own — the driver adds nothing to it (ADR-0011)
+   # TLS is libpq's own — the driver adds nothing to it
    :sslmode [:optional [:enum :disable :allow :prefer :require
                         :verify-ca :verify-full]]
    :sslrootcert [:optional :string]

@@ -1,12 +1,11 @@
-### void/admin/query — the state of a list, read out of the URL
-### (ADR-0029 §6, §10).
+### void/admin/query — the state of a list, read out of the URL.
 ###
-### Filters, search, sorting and the page number live in the query
-### string and nowhere else. That is what makes the back button work
-### under htmx (`hx-push-url`), and it is also what makes the admin
-### horizontally scalable: there is no server-side basket of "what the
-### operator selected", so selecting on one replica and confirming on
-### another is the same request either way (§10).
+### Filters, search, sorting and the page number live in the query string
+### and nowhere else. That is what makes the back button work under htmx
+### (`hx-push-url`), and it is also what makes the admin horizontally
+### scalable: there is no server-side basket of "what the operator
+### selected", so selecting on one replica and confirming on another is
+### the same request either way.
 ###
 ### **`:scope` narrows the query and the count with the same
 ### expression.** A count that ignored the scope would page over rows
@@ -150,7 +149,7 @@
   ``The scope alone (plus `extra`) — what every single-row action reads
   through. A row outside the scope is not a 403 by accident: it is
   simply not found, and the policy on the loaded row is the second
-  echelon behind it (ADR-0029 §3).``
+  echelon behind it.``
   [desc req &opt extra]
   (where desc req {:filters {}} extra))
 

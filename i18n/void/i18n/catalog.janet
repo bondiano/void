@@ -1,5 +1,5 @@
 ### void/i18n/catalog — the merged dictionary index and the current
-### locale (ADR-0036).
+### locale.
 ###
 ### The index is data in this module, not a component: a catalog has no
 ### resource and no lifetime. `install!` merges the :void.i18n/messages
@@ -27,7 +27,7 @@
   ``The dyn the request's locale lives in. Named rather than passed:
   the render middleware, mail/send and anything the handler spawns
   read it without importing void/i18n — the :void.auth/identity
-  convention (ADR-0023).``
+  convention.``
   :void.i18n/locale)
 
 # -- installed state -----------------------------------------------------
@@ -118,7 +118,7 @@
   (with-dyns [locale-dyn (locale/normalize loc)]
     (thunk)))
 
-# -- the schema-error bridge (ADR-0008's seam) ---------------------------
+# -- the schema-error bridge ---------------------------------------------
 
 (def- schema-codes
   [:type :literal :enum :union :missing :unknown :key :min :max

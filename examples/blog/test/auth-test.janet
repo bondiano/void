@@ -6,9 +6,9 @@
 ### because "the same application on either engine" has to keep being
 ### true of the parts wave 3 added, not only of the CRUD.
 ###
-### The first section boots nothing at all: a policy is a pure function
-### of a context (ADR-0024 §1), so the cases that matter are a table,
-### and everything after that is about the wiring around it.
+### The first section boots nothing at all: a policy is a pure function of
+### a context, so the cases that matter are a table, and everything after
+### that is about the wiring around it.
 
 (import ../test-support/paths)
 (import ../test-support/postgres :as pg)
@@ -104,9 +104,9 @@
     # -- every route names a policy --------------------------------------
     #
     # The application boots under [:authz :default :deny], so this is
-    # already proven — a route without a policy would have failed the
-    # boot rather than served traffic (ADR-0024 §6). Asserting it here
-    # says which routes those are.
+    # already proven — a route without a policy would have failed the boot
+    # rather than served traffic. Asserting it here says which routes
+    # those are.
     (each route ((http/routes-table) :routes)
       (assert (not (empty? (get-in route [:meta :void.authz/policy] [])))
               (string/format "route %q carries a policy" (route :name))))
@@ -206,7 +206,7 @@
 
     (def mine (test/inject c {:uri url}))
     (assert (string/find "Edit" (text mine))
-            "the author sees the Edit control — the same policy the route enforces (ADR-0024)")
+            "the author sees the Edit control — the same policy the route enforces")
 
     (assert (= 200 ((test/inject c {:uri (string url "/edit")}) :status)))
     (assert (= 302 ((test/inject c {:uri url
@@ -244,7 +244,7 @@
     (assert (db/find e/Article (article :id)) "the article is still there")
     (note "row-level policy ok")
 
-    # -- anonymous --------------------------------------------------------
+    # -- anonymous -------------------------------------------------------
 
     (def anon (test/client (c :boot)))
     (def redirected (test/inject anon {:uri (string url "/edit")}))
@@ -261,11 +261,10 @@
 
     # -- the sign-in link ------------------------------------------------
     #
-    # The last piece of the wave-3 exit criterion: the
-    # application issues a challenge and says nothing else about it —
-    # the letter, the URL and the one-time code belong to
-    # void/mail-auth (ADR-0026 §6), and it goes out through the queue
-    # this application already runs.
+    # The last piece of the wave-3 exit criterion: the application issues
+    # a challenge and says nothing else about it — the letter, the URL and
+    # the one-time code belong to void/mail-auth, and it goes out through
+    # the queue this application already runs.
 
     (jobs/clear!)
     (mail/clear-outbox!)
@@ -324,7 +323,7 @@
             "and no letter is queued for it")
     (note "magic link ok")
 
-    # -- the decision log -------------------------------------------------
+    # -- the decision log ------------------------------------------------
 
     (def decisions @[])
     (authz/listen! :test/spy (fn [d] (array/push decisions d)))

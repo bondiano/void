@@ -2,12 +2,11 @@
 ### place so that the view, the mount and the handlers can read them
 ### without importing each other in a circle.
 ###
-### It is assembled once, at :before-start, from the [:admin] config
-### slice and the four extension points the plugin owns — and then it
-### is only read. The admin keeps no other process state that affects
-### correctness (ADR-0029 §10): the registry is derived from code, the
-### widget resolution is derived from the registry, and the state of a
-### list lives in the URL.
+### It is assembled once, at :before-start, from the [:admin] config slice
+### and the four extension points the plugin owns — and then it is only
+### read. The admin keeps no other process state that affects correctness:
+### the registry is derived from code, the widget resolution is derived
+### from the registry, and the state of a list lives in the URL.
 
 (var current
   ``The running admin context, set by ./init's :before-start hook:

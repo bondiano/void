@@ -1,5 +1,4 @@
-### void/storage/sigv4 — AWS Signature Version 4, as pure functions
-### (ADR-0039 §4).
+### void/storage/sigv4 — AWS Signature Version 4, as pure functions.
 ###
 ### The whole scheme is deterministic string assembly over
 ### `crypto/hmac-sha256` and `crypto/sha256`, which is why this module
@@ -168,7 +167,7 @@
                                     (req :region) (req :service) sts)))
 
 (defn presign-query
-  ``The query parameters of a presigned URL (query auth, ADR-0039 §5):
+  ``The query parameters of a presigned URL (query auth):
   X-Amz-Algorithm/-Credential/-Date/-Expires/-SignedHeaders plus the
   computed X-Amz-Signature. `req`: :method :path :date :expires
   :region :service :access-key :secret-key and :host (the one signed

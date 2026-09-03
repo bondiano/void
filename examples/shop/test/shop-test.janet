@@ -7,10 +7,10 @@
 ### `run-suite` is engine-agnostic on purpose: if a single assertion
 ### needed a `case` on the dialect, the claim would be false.
 ###
-### Requests go through test/inject (ADR-0017) — the production stack
-### without a socket: routing, lifecycle stages, middleware, sessions,
-### the identity, the policies, the CSRF check, schema validation,
-### rendering, wire bytes.
+### Requests go through test/inject — the production stack without a
+### socket: routing, lifecycle stages, middleware, sessions, the identity,
+### the policies, the CSRF check, schema validation, rendering, wire
+### bytes.
 
 (import ../test-support/paths)
 (import ../test-support/postgres :as pg)
@@ -101,8 +101,8 @@
      :profile :test
      :config {:env @{}
               :cli (merge {# an unpreloaded relation is an error here,
-                           # not a warning: the application must not
-                           # have a single one (ADR-0009)
+                           # not a warning: the application must not have
+                           # a single one
                            :db {:n1-guard :strict
                                 :migrations {:dir "db/migrations"}}
                            :cache {:prefix (string "shop-test-" label ":")}
@@ -188,10 +188,10 @@
                     :form form}))
 
     # The first POST from a browser holding no cookie of ours is not
-    # checked, and that is the rule rather than a hole: CSRF applies to
-    # a request whose credential rode on a **cookie**, not to every
-    # unsafe verb (ADR-0025 §1). Nobody can forge a request on behalf
-    # of a browser that is not carrying anything.
+    # checked, and that is the rule rather than a hole: CSRF applies to a
+    # request whose credential rode on a **cookie**, not to every unsafe
+    # verb. Nobody can forge a request on behalf of a browser that is not
+    # carrying anything.
     (def added (test/inject c {:uri "/cart/items"
                                :form {:product-id (mug :id) :quantity 2}}))
     (assert (= 302 (added :status)) (text added))
@@ -394,7 +394,7 @@
     (assert (string/find "order/placed" (text trail-page))
             "the trail is a resource of the desk, read-only")
     (assert (string/find "admin/ship" (text trail-page))
-            "and the desk's own change is on it, announced rather than written (ADR-0029 §8)")
+            "and the desk's own change is on it, announced rather than written")
     (note "admin desk ok")
 
     # -- the queue's own life is on the trail too ------------------------

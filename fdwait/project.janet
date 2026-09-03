@@ -1,6 +1,6 @@
 (declare-project
   :name "void-fdwait"
-  :description "void/fdwait — readiness on a foreign file descriptor: park a fiber until a descriptor owned by a C library is readable or writable, without touching it (ADR-0011, SPEC Appendix A). The primitive void/db-postgres is built on."
+  :description "void/fdwait — readiness on a foreign file descriptor: park a fiber until a descriptor owned by a C library is readable or writable, without touching it (Appendix A). The primitive void/db-postgres is built on."
   :version "0.0.1")
 
 # The only native module in the monorepo, and deliberately small: what

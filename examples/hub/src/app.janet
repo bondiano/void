@@ -15,8 +15,8 @@
 ### is why every module is named exactly once, here.
 ###
 ### **There is no `admin` module**, for the reason examples/shop has
-### none: the desk is a `*.admin.janet` in the module whose rows a
-### person looks at (ADR-0029). A back office is a *layer* of a module.
+### none: the desk is a `*.admin.janet` in the module whose rows a person
+### looks at. A back office is a *layer* of a module.
 ###
 ### The layers inside a module are described in the README; the short
 ### version is that a **controller** may call a service, a **service**
@@ -40,8 +40,8 @@
 # routing: where a delivery goes, as data
 (import ./modules/routing/routing.service)
 
-# telegram: the notify channel this application wrote — project where
-# the request is, deliver where the network is (ADR-0040)
+# telegram: the notify channel this application wrote — project where the
+# request is, deliver where the network is
 (import ./modules/telegram/telegram.channel)
 
 # auth: the accounts `void make auth` generated, and the policy that
@@ -61,12 +61,11 @@
 
 # -- hooks ---------------------------------------------------------------
 #
-# One slice, four readers, one hook. `[:hub]` is this application's
-# whole configuration, and each module gets the part it is about —
-# rather than four hooks racing to read the same value at the same
-# phase. `void config explain :hub :sources` prints which layer put a
-# value there, and no layer prints a secret: those are references
-# resolved into boxes (ADR-0007 §5).
+# One slice, four readers, one hook. `[:hub]` is this application's whole
+# configuration, and each module gets the part it is about — rather than
+# four hooks racing to read the same value at the same phase. `void config
+# explain :hub :sources` prints which layer put a value there, and no
+# layer prints a secret: those are references resolved into boxes.
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start

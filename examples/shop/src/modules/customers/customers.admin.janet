@@ -1,5 +1,5 @@
 ### shop/customers/admin — the accounts, and the one action this
-### application narrows (ADR-0029 §3).
+### application narrows.
 ###
 ### **A column left out of `:form` is left out of everywhere.** The
 ### password hash is a column on `customers` — void/auth-db reads it,
@@ -41,10 +41,10 @@
   ``The desk may edit any account but the one it is signed in as.
 
   A pure function of a context, like every other policy in this
-  application (ADR-0024 §1): `:subject/id` falls back to the id half
-  of the subject string (`customer:7`) and `:resource/id` to a key of
-  the row, so this needs no provider, no configuration and no database
-  — `test/policy-test.janet` runs it next to `:orders/own`.
+  application: `:subject/id` falls back to the id half of the subject
+  string (`customer:7`) and `:resource/id` to a key of the row, so this
+  needs no provider, no configuration and no database —
+  `test/policy-test.janet` runs it next to `:orders/own`.
 
   It is a real rule and not a decoration. `role` is the only thing
   standing between a customer and this desk, so the account editing

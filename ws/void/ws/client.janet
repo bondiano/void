@@ -1,19 +1,19 @@
-### void/ws/client — the other end of the same framing (ADR-0028).
+### void/ws/client — the other end of the same framing.
 ###
 ### The server side of this package is callback-shaped because a
 ### server holds thousands of connections and none of them may block
 ### another. A client holds one, and what a client's caller wants is a
 ### **pull**: send this, now read the next message. So `receive` is a
-### blocking call rather than a handler registration, and the whole
-### client is a socket, a buffer and the frame codec read in the
-### opposite direction — the same relationship `void/http/client` has
-### with `void/http/server` (ADR-0027).
+### blocking call rather than a handler registration, and the whole client
+### is a socket, a buffer and the frame codec read in the opposite
+### direction — the same relationship `void/http/client` has with
+### `void/http/server`.
 ###
-### It exists for the two callers that would otherwise have to fake
-### one: this package's own suite, which cannot test a protocol
-### against itself without a peer that speaks it, and the B4 load
-### generator (§8.2: a thousand connections, 10k messages a second),
-### which is a thousand of these in one process.
+### It exists for the two callers that would otherwise have to fake one:
+### this package's own suite, which cannot test a protocol against itself
+### without a peer that speaks it, and the B4 load generator (a thousand
+### connections, 10k messages a second), which is a thousand of these in
+### one process.
 ###
 ### **Client frames are masked, and the key is real randomness**
 ### (`os/cryptorand`, RFC 6455 §5.3). Masking is not encryption and the
@@ -22,9 +22,8 @@
 ### client that masked with a constant would satisfy the letter of the
 ### framing and none of its purpose.
 ###
-### No TLS (ADR-0010): `wss://` is an error at URL-parse time naming
-### the relay that terminates it, the same answer `void/http/client`
-### gives `https://`.
+### No TLS: `wss://` is an error at URL-parse time naming the relay that
+### terminates it, the same answer `void/http/client` gives `https://`.
 
 (import void/http/client :as http-client)
 (import void/http/wire :as wire)
@@ -55,7 +54,7 @@
   (def rest (string/slice s (+ sep 3)))
   (cond
     (or (= "wss" scheme) (= "https" scheme))
-    (errorf (string "ws client: %s — void speaks no TLS (ADR-0010). "
+    (errorf (string "ws client: %s — void speaks no TLS. "
                     "wss:// terminates at the relay, sidecar or proxy in front "
                     "of the process; point this at it over ws://") s)
 

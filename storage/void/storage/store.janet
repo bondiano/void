@@ -1,4 +1,4 @@
-### void/storage/store — the :void/storage-store contract (ADR-0039).
+### void/storage/store — the :void/storage-store contract.
 ###
 ### Two interfaces, deliberately — the split void/cache proved out:
 ###
@@ -8,14 +8,13 @@
 ###   :void/storage-store  what you implement — five functions over
 ###                        keys and bytes (this module)
 ###
-### A store is a plain dictionary produced by a store component's
-### :start; the component declares :provides [:void/storage-store], so
-### the config picks the implementation and no code above names one.
-### A key is a string like "products/2026/09/4f2a1c.png" — relative,
-### slash-separated, validated by ./key — and metadata is a plain
-### struct; neither is an object with behavior, which is what lets a
-### key live in a text column and ride a form (ADR-0039 §2). Required
-### keys:
+### A store is a plain dictionary produced by a store component's :start;
+### the component declares :provides [:void/storage-store], so the config
+### picks the implementation and no code above names one. A key is a
+### string like "products/2026/09/4f2a1c.png" — relative, slash-separated,
+### validated by ./key — and metadata is a plain struct; neither is an
+### object with behavior, which is what lets a key live in a text column
+### and ride a form. Required keys:
 ###
 ###   :put!    (fn [key bytes opts] meta)  — write, whole; opts may carry
 ###            :content-type. Returns {:key :size :content-type ...} —
@@ -48,7 +47,7 @@
 ###            is the same answer as one process's heap once there is a
 ###            second replica: a file uploaded to one is a 404 on the
 ###            next. `[:deploy :shape] :fleet` refuses a store that does
-###            not say `true` (ADR-0030), and `:replacement` (a string)
+###            not say `true`, and `:replacement` (a string)
 ###            is the line the refusal prints.
 
 (defn- callable? [x]
@@ -92,6 +91,6 @@
 (defn shared?
   "True when several processes see the same objects — the question
   `[:deploy :shape] :fleet` asks of every store it can reach
-  (ADR-0030)."
+."
   [st]
   (truthy? (get st :shared?)))

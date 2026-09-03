@@ -1,5 +1,4 @@
-### void/bus/message — a message, and what a topic is (SPEC.md §5.22,
-### ADR-0012).
+### void/bus/message — a message, and what a topic is.
 ###
 ### A message is a plain table:
 ###
@@ -7,12 +6,12 @@
 ###      :payload {:id 42 :email "a@example.com"}
 ###      :meta {:published-at 1756... :correlation-id "..." ...}}
 ###
-### Four keys and no builder (ADR-0004), for the reason void/mail has
-### no builder either: a message that is a table can be written by
-### hand in a test, compared field by field in an assertion, printed
-### whole in a log line and stored as four columns by a backend that
-### has columns. `make` is a normalizer, not a constructor — it fills
-### in what was not said and refuses what cannot be meant.
+### Four keys and no builder, for the reason void/mail has no builder
+### either: a message that is a table can be written by hand in a test,
+### compared field by field in an assertion, printed whole in a log line
+### and stored as four columns by a backend that has columns. `make` is a
+### normalizer, not a constructor — it fills in what was not said and
+### refuses what cannot be meant.
 ###
 ### **The payload is the application's, the meta is the framework's.**
 ### Everything void puts on a message — when it was published, which

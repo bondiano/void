@@ -20,8 +20,8 @@
 > and regenerate; CI fails on drift. The reserved-for-later tables
 > are maintained in the generator script.
 
-This is the normative registry of the two contracts frozen at v0.1
-(SPEC part II): the **extension points** with their contribution
+This is the normative registry of the two contracts frozen at v0.1:
+the **extension points** with their contribution
 schemas, and the **route metadata keys**. From this tag on, every
 change follows the deprecation procedure in
 [CONTRIBUTING.md](../CONTRIBUTING.md#deprecation): schemas may only
@@ -53,7 +53,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/history`
 
 - **owner:** `:void/admin` · **cardinality:** `:single`
-- Where the history tab of a row comes from: {:name :fn (fn [{:resource :id :request}] [{:at :actor :detail} ...])}. Nobody contributes one by default, so there is no history tab by default — the admin announces changes (:void.admin/changed) and does not keep them (ADR-0029 §8)
+- Where the history tab of a row comes from: {:name :fn (fn [{:resource :id :request}] [{:at :actor :detail} ...])}. Nobody contributes one by default, so there is no history tab by default — the admin announces changes (:void.admin/changed) and does not keep them
 - **contribution schema:**
 
   ```janet
@@ -83,7 +83,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/widget`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
+- Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
 - **contribution schema:**
 
   ```janet
@@ -93,7 +93,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.auth/deliver`
 
 - **owner:** `:void/auth` · **cardinality:** `:many`
-- Delivery of magic links and one-time codes (ADR-0023): {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires :to :claims :channel}. void/mail-auth is one of these, and an application that texts its codes contributes its own. Called by auth/challenge!, which refuses a challenge nobody delivered
+- Delivery of magic links and one-time codes: {:name :mail/magic-link :fn (fn [challenge] ...)}; called with {:kind :subject :handle :code :expires :to :claims :channel}. void/mail-auth is one of these, and an application that texts its codes contributes its own. Called by auth/challenge!, which refuses a challenge nobody delivered
 - **contribution schema:**
 
   ```janet
@@ -103,7 +103,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.auth/hasher`
 
 - **owner:** `:void/auth` · **cardinality:** `:many`
-- Password hashers behind PHC identifiers (ADR-0023): {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] "m=..,t=..") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes
+- Password hashers behind PHC identifiers: {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] "m=..,t=..") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes
 - **contribution schema:**
 
   ```janet
@@ -113,7 +113,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.auth/strategy`
 
 - **owner:** `:void/auth` · **cardinality:** `:many`
-- Authentication strategies (ADR-0023): {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify
+- Authentication strategies: {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify
 - **contribution schema:**
 
   ```janet
@@ -123,7 +123,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.authz/policy`
 
 - **owner:** `:void/authz` · **cardinality:** `:many`
-- Policies contributed by a plugin (ADR-0024): {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own
+- Policies contributed by a plugin: {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own
 - **contribution schema:**
 
   ```janet
@@ -133,7 +133,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.authz/provider`
 
 - **owner:** `:void/authz` · **cardinality:** `:many`
-- Attribute providers (ADR-0024): {:name :orders/brand :for :subject|:resource|:env :keys [:subject/brand-id]? :fn (fn [ctx] attrs) :needs [component-keys]?}; called when a policy first asks for one of its keys, and memoized for the rest of that decision
+- Attribute providers: {:name :orders/brand :for :subject|:resource|:env :keys [:subject/brand-id]? :fn (fn [ctx] attrs) :needs [component-keys]?}; called when a policy first asks for one of its keys, and memoized for the rest of that decision
 - **contribution schema:**
 
   ```janet
@@ -143,7 +143,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.bus/backend`
 
 - **owner:** `:void/bus` · **cardinality:** `:many`
-- Message-bus backends (ADR-0012): {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend
+- Message-bus backends: {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend
 - **contribution schema:**
 
   ```janet
@@ -173,7 +173,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/cli`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to "does running this change anything?" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it (ADR-0031), so silence means "unknown" and unknown is never offered
+- CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to "does running this change anything?" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it, so silence means "unknown" and unknown is never offered
 - **contribution schema:**
 
   ```janet
@@ -223,7 +223,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/log-serializer`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- Log value serializers by record key (ADR-0018): {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer
+- Log value serializers by record key: {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer
 - **contribution schema:**
 
   ```janet
@@ -233,7 +233,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/log-sink`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- Log record sinks (ADR-0018): {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink
+- Log record sinks: {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink
 - **contribution schema:**
 
   ```janet
@@ -263,7 +263,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/store`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- Stores a second replica would have to see (ADR-0030): {:name :void.http/session :what "sessions" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port
+- Stores a second replica would have to see: {:name :void.http/session :what "sessions" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port
 - **contribution schema:**
 
   ```janet
@@ -333,7 +333,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.http/hook`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
-- Global request-lifecycle hooks (ADR-0016): {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata
+- Global request-lifecycle hooks: {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata
 - **contribution schema:**
 
   ```janet
@@ -353,7 +353,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.http/route-meta-key`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
-- Route metadata key declarations (ADR-0005): {:key :schema? :doc? :merge (:replace :concat :deep-merge :restrict)? :allow?}
+- Route metadata key declarations: {:key :schema? :doc? :merge (:replace :concat :deep-merge :restrict)? :allow?}
 - **contribution schema:**
 
   ```janet
@@ -373,7 +373,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.http/session-store`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
-- Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to "would a second replica see this session" (ADR-0030) — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is
+- Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to "would a second replica see this session" — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is
 - **contribution schema:**
 
   ```janet
@@ -393,7 +393,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.i18n/messages`
 
 - **owner:** `:void/i18n` · **cardinality:** `:many`
-- A dictionary for one locale (ADR-0036): {:name :locale :messages {namespaced-keyword string-or-plural-table} :precedence?}. Merged by ascending :precedence — default 100, the shipped dictionaries contribute at 0 — so an application overrides a package's key without naming a number; ties fold in the deterministic resolution order, last write wins. A plural table maps CLDR categories (:zero :one :two :few :many :other) and must carry :other
+- A dictionary for one locale: {:name :locale :messages {namespaced-keyword string-or-plural-table} :precedence?}. Merged by ascending :precedence — default 100, the shipped dictionaries contribute at 0 — so an application overrides a package's key without naming a number; ties fold in the deterministic resolution order, last write wins. A plural table maps CLDR categories (:zero :one :two :few :many :other) and must carry :other
 - **contribution schema:**
 
   ```janet
@@ -413,7 +413,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.mail/transport`
 
 - **owner:** `:void/mail` · **cardinality:** `:many`
-- Mail transports (ADR-0026): {:name :smtp :send (fn [delivery] receipt) :doc string?}; [:mail :transport] names the one this process uses. A delivery is {:message :bytes :id :at}; a receipt is {:transport :id :accepted :rejected}
+- Mail transports: {:name :smtp :send (fn [delivery] receipt) :doc string?}; [:mail :transport] names the one this process uses. A delivery is {:message :bytes :id :at}; a receipt is {:transport :id :accepted :rejected}
 - **contribution schema:**
 
   ```janet
@@ -443,7 +443,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.notify/channel`
 
 - **owner:** `:void/notify` · **cardinality:** `:many`
-- Notification channels (ADR-0040): {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)
+- Notification channels: {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)
 - **contribution schema:**
 
   ```janet
@@ -453,7 +453,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.oauth/sign-in`
 
 - **owner:** `:void/oauth` · **cardinality:** `:single`
-- The application's half of the flow (ADR-0034): {:name :fn}, where :fn is (fn [{:provider :claims :tokens :req}] ...) — return an identity to sign it in (login! with session-id rotation, then a redirect), a response table to answer yourself (onboarding, account linking), or nil to refuse (403). One per composition; it receives the provider name first. Mind the user store: under the default [:auth-http :session :load] :store the subject is re-read from it on every request, so either upsert the user in this hook or set :load :session
+- The application's half of the flow: {:name :fn}, where :fn is (fn [{:provider :claims :tokens :req}] ...) — return an identity to sign it in (login! with session-id rotation, then a redirect), a response table to answer yourself (onboarding, account linking), or nil to refuse (403). One per composition; it receives the provider name first. Mind the user store: under the default [:auth-http :session :load] :store the subject is re-read from it on every request, so either upsert the user in this hook or set :load :session
 - **contribution schema:**
 
   ```janet
@@ -473,7 +473,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.obs/instrument`
 
 - **owner:** `:void/obs` · **cardinality:** `:many`
-- Auto-instrumentation (SPEC §5.13): {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition
+- Auto-instrumentation: {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition
 - **contribution schema:**
 
   ```janet
@@ -483,7 +483,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.pressure/check`
 
 - **owner:** `:void/pressure` · **cardinality:** `:many`
-- Custom pressure checks (ADR-0019): {:name :db/pool :fn (fn [] {:ok bool :reason ...}) :doc?}; a check that answers :ok false — or throws — is one more reason to shed
+- Custom pressure checks: {:name :db/pool :fn (fn [] {:ok bool :reason ...}) :doc?}; a check that answers :ok false — or throws — is one more reason to shed
 - **contribution schema:**
 
   ```janet
@@ -510,7 +510,7 @@ key plus a deprecation alias for the old name, never a mutation.
   {:decode :function :encode :function :name :keyword}
   ```
 
-## Request-lifecycle stages (ADR-0016)
+## Request-lifecycle stages
 
 Frozen with v1: stage names and their phase slots. In-chain stages
 compile into the route chain as thin wrappers (an empty stage costs
@@ -551,10 +551,10 @@ layer.
 | Key | Declared by | Merge | Schema | Doc |
 |---|---|---|---|---|
 | `:void.admin/widget-route` | `:void/admin` | `:replace` | `:boolean` | This route belongs to a widget (:void.admin/widget :routes), not to an action of a resource |
-| `:void.auth/access` | `:void/auth-http` | `:restrict` + `:allow?` | `[:enum :public :required]` | Whether this route needs an authenticated identity (SPEC part II §2.5). :restrict — a group that requires authentication cannot be loosened by a route inside it |
+| `:void.auth/access` | `:void/auth-http` | `:restrict` + `:allow?` | `[:enum :public :required]` | Whether this route needs an authenticated identity. :restrict — a group that requires authentication cannot be loosened by a route inside it |
 | `:void.auth/scopes` | `:void/auth-oauth` | `:concat` | `[:vector :string]` | OAuth scopes an access token must carry for this route (RFC 6750): a request without them is a 403 with insufficient_scope, not a 401 — the credential was fine, the grant was not |
 | `:void.auth/strategies` | `:void/auth-http` | `:replace` | `[:vector :keyword]` | Which authentication strategies may answer for this route, in order — a login form that must not accept an API token, an API that must not accept a session cookie |
-| `:void.authz/policy` | `:void/authz-http` | `:concat` | `[:or :keyword [:vector :keyword]]` | Policy (or policies) enforced before the handler (SPEC part II §2.5). :concat — a group's policy and a route's are both enforced, and every one of them must allow |
+| `:void.authz/policy` | `:void/authz-http` | `:concat` | `[:or :keyword [:vector :keyword]]` | Policy (or policies) enforced before the handler. :concat — a group's policy and a route's are both enforced, and every one of them must allow |
 | `:void.authz/resource` | `:void/authz-http` | `:replace` | `:function` | (fn [request] resource) — what the policies of this route decide about. Without one the resource is nil and the policies see only the subject and the environment; a row-level check belongs in the handler, next to the query that loaded the row |
 | `:void.cache/response` | `:void/cache-http` | `:replace` | `{:ttl [:optional [:number {:min 0}]] :vary [:optional [:vector [:or :string :keyword]]] :vary-cookie [:optional :boolean]}` | Cache this route's 200 responses in the shared cache for :ttl seconds (0 opts out of a group's setting), keyed by method, host, path, query and the request headers named in :vary; requests carrying a cookie bypass unless :vary-cookie false says the answer does not depend on them |
 | `:void.datastar/morph` | `:void/datastar` | `:replace` | `:boolean` | Answer a Datastar request with the rendered page as morph events (title + body over SSE) instead of an HTML document |
@@ -562,7 +562,7 @@ layer.
 | `:void.grpc/method` | `:void/grpc` | `:replace` | `:keyword` | The RPC method this route serves — set by void/grpc's projection; its presence is what the Connect error renderer keys on |
 | `:void.grpc/service` | `:void/grpc` | `:replace` | `:keyword` | The RPC service this route serves — set by void/grpc's projection, so a middleware can tell an RPC method from a page |
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request-Type: partial with the fragment alone — the view response's layout is stripped before rendering |
-| `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
+| `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks: {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |
 | `:void.http/max-body` | `:void/http` | `:restrict` + `:allow?` | `[:int {:min 0}]` | Request body cap in bytes; a more specific *metadata* layer may only lower it (group -> route). `[:http :max-body]` is not one of those layers: it is what a route that declares nothing gets, so a single route that has to accept more than the rest of the application says so on itself and raises nothing for anybody else |
 | `:void.http/middleware` | `:void/http` | `:concat` | `[:vector :keyword]` | Named middleware this route opts into, concatenated group -> route |
 | `:void.http/timeout` | `:void/http` | `:restrict` + `:allow?` | `[:number {:min 0.001}]` | Handler deadline in seconds; a more specific *metadata* layer may only lower it (group -> route). `[:http :read-timeout]` and the server's own limits are not metadata layers: a route that declares nothing inherits them, and one that declares a deadline is bounded by the group above it and by nothing else |
@@ -581,7 +581,7 @@ layer.
 | `:void.schema/params` | `:void/rest` | `:deep-merge` | `[:pred <fn> "must be a schema form"]` | Path-param schemas: {:id :int}; coerced and validated before the handler, failures answer 400 problem+json |
 | `:void.schema/query` | `:void/rest` | `:deep-merge` | `[:pred <fn> "must be a schema form"]` | Query-param map schema; coerced and validated before the handler, failures answer 400 problem+json |
 | `:void.schema/response` | `:void/rest` | `:deep-merge` | `[:map-of [:int {:max 599 :min 100}] [:pred <fn> "must be a schema form"]]` | Response schemas by status: {200 :Order 404 :Problem}; checked against rest/json payloads when [:rest :validate-responses], projected by void/openapi |
-| `:void.security/csrf` | `:void/security` | `:restrict` + `:allow?` | `:boolean` | Demand a CSRF token on this route even when the credential did not ride on a cookie (SPEC part II §2.5). :restrict, true wins — protection can be tightened by a more specific layer and never loosened, so there is no key that switches it off |
+| `:void.security/csrf` | `:void/security` | `:restrict` + `:allow?` | `:boolean` | Demand a CSRF token on this route even when the credential did not ride on a cookie. :restrict, true wins — protection can be tightened by a more specific layer and never loosened, so there is no key that switches it off |
 | `:void.security/rate` | `:void/security` | `:restrict` + `:allow?` | `{:key [:optional [:or :keyword :function]] :limit [:int {:min 1}] :window [:number {:min 1}]}` | Rate limit for this route: {:limit 5 :window 60 :key :ip|:subject|(fn [req])}. :restrict — a route may only lower the rate it inherits, never raise it |
 | `:void.ws/socket` | `:void/ws` | `:replace` | `:boolean` | This route answers a WebSocket handshake: no handler deadline may apply to it, and `void routes` says so |
 
@@ -589,7 +589,7 @@ layer.
 
 | Key | Type | Merge | Owner-to-be |
 |---|---|---|---|
-| — | — | — | *(none: every key SPEC part II §2.5 reserved is now declared by its owner)* |
+| — | — | — | *(none: every key reserved is now declared by its owner)* |
 
 `:void.openapi/*` note: v0.1 declares `tags`, `summary`,
 `description`, `id`, `hidden`; further `:void.openapi/...` names

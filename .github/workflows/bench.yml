@@ -1,8 +1,8 @@
-# Bench regression gate (SPEC §8, ADR-0014). Shared runners cannot be
-# trusted with absolute numbers, so the 5% thresholds are RELATIVE:
-# the PR head and its merge-base are measured on the same runner in
-# the same job and compared. A dedicated runner can later switch this
-# to the committed bench/results/baseline.jdn.
+# Bench regression gate. Shared runners cannot be trusted with absolute
+# numbers, so the 5% thresholds are RELATIVE: the PR head and its
+# merge-base are measured on the same runner in the same job and compared.
+# A dedicated runner can later switch this to the committed
+# bench/results/baseline.jdn.
 name: Bench
 
 on:
@@ -66,9 +66,9 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libpq5
 
       - name: Build void/fdwait
-        # the one native module (ADR-0011) — void/db-postgres parks its
-        # fibers on libpq's socket through it, so B2/B3 cannot even load
-        # without it built
+        # the one native module — void/db-postgres parks its fibers on
+        # libpq's socket through it, so B2/B3 cannot even load without it
+        # built
         run: cd fdwait && jpm build
 
       - name: Install wrk, build wrk2
@@ -79,15 +79,14 @@ jobs:
           make -C /tmp/wrk2 -j"$(nproc)"
           sudo cp /tmp/wrk2/wrk /usr/local/bin/wrk2
 
-      # Shorter than the local методика (2×30s vs 3×60s) — the verdict
-      # is relative, both sides run under the same settings.
-      # b1-obs is B1 with void/obs in the chain: the delta against b1 in
-      # the same run is SPEC §8.2's instrumentation budget (≤ 7% of
-      # throughput), and having it here keeps that number from drifting
-      # unnoticed between waves. It has no budget of its own — B1's is
-      # B1's — and the merge-base comparison below simply ignores a
-      # target the baseline does not have.
-      # b4 is the broadcast row (§8.2, ROADMAP 4.2): a thousand websocket
+      # Shorter than the local method (2×30s vs 3×60s) — the verdict is
+      # relative, both sides run under the same settings. b1-obs is B1
+      # with void/obs in the chain: the delta against b1 in the same run
+      # is the instrumentation budget (≤ 7% of throughput), and
+      # having it here keeps that number from drifting unnoticed between
+      # waves. It has no budget of its own — B1's is B1's — and the
+      # merge-base comparison below simply ignores a target the baseline
+      # does not have. b4 is the broadcast row: a thousand websocket
       # connections in one room. It brings its own generator rather than
       # wrk, and it needs a file-descriptor limit above the thousand it
       # opens — the runner's report says how many it actually held, so a

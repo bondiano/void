@@ -11,8 +11,8 @@
 (require "void/authz/http")
 (require "void/rest/init")
 
-### ADR-0013's promise, checked: "один стек политик (auth/authz/obs/
-### validation) на HTTP и RPC". An RPC method carries route metadata,
+### The promise, checked: one policy stack (auth/authz/obs/validation)
+### over HTTP and over RPC. An RPC method carries route metadata,
 ### so `:void.authz/policy` is *the same key* enforced by the same
 ### middleware in the same phase as on a page — and this file is the
 ### assertion that nothing in void/grpc had to know that.
@@ -87,11 +87,11 @@
 
 (defer (test/stop! boot)
 
-  # -- [:authz :default :deny] reaches RPC methods too ---------------------
+  # -- [:authz :default :deny] reaches RPC methods too -------------------
   #
   # The boot above succeeded, and under :deny a route with no policy
   # fails the boot — so every method got one, from the service's layer
-  # or its own. That is ADR-0024's gate closing over routes this
+  # or its own. That is the authz gate closing over routes this
   # package generated, with no cooperation from this package.
 
   (def denied (rpc c "GetOrder" {:id "A-1"}))
@@ -100,7 +100,7 @@
   (assert (= "permission_denied" (body "code"))
           "a policy that says no reaches an RPC client as the code it means")
   (assert (not (string/find "no identity" (string (denied :body))))
-          "and the *reason* stays in the log, exactly as it does for a page (ADR-0024)")
+          "and the *reason* stays in the log, exactly as it does for a page")
 
   (def allowed (rpc c "GetOrder" {:id "A-1"} nil {:subject "user:someone"}))
   (assert (= 200 (allowed :status)))
@@ -116,7 +116,7 @@
   (assert (= 200 (buyer :status)))
   (assert (= "5" ((json/decode (string (buyer :body))) "totalCents")))
 
-  # -- and the two error renderers stay out of each other's way ------------
+  # -- and the two error renderers stay out of each other's way ----------
 
   (def page-403 (test/inject c {:uri "/boom" :headers @{"accept" "application/json"}}))
   (assert (= 403 (page-403 :status)))
@@ -128,7 +128,7 @@
 
   (assert (= 200 ((test/inject c {:uri "/page"}) :status))))
 
-# -- a route with no policy still fails the boot --------------------------
+# -- a route with no policy still fails the boot -------------------------
 
 (grpc/defservice :shop.orders/OrderService
   (rpc :GetOrder get-order)

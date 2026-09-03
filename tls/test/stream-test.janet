@@ -1,4 +1,4 @@
-# The stream half of ADR-0038, against a real socket: handshake,
+# The stream half, against a real socket: handshake,
 # data both ways, records bigger than one TLS record, verification
 # failing the handshake (not a status), STARTTLS-shaped mid-stream
 # upgrade, and EOF. The server side is void/tls's own accept state
@@ -24,7 +24,7 @@
 (when (= :macos (os/which))
   (each c (lib/candidates)
     (assert (string/has-prefix? "/" c)
-            "the macOS candidate list is explicit paths only — a bare name aborts the process (ADR-0022 §3, pinned here the way crypto/lib pins it")))
+            "the macOS candidate list is explicit paths only — a bare name aborts the process (pinned here the way crypto/lib pins it")))
 
 # -- echo, both ways, across records -------------------------------------
 
@@ -94,7 +94,7 @@
 (assert (not (first (protect (stream/wrap @{} {:ctx trusting}))))
         "wrap without :host on the connect side is an error, not a guess")
 
-# -- STARTTLS shape: wrap a socket that has already spoken ----------------
+# -- STARTTLS shape: wrap a socket that has already spoken ---------------
 
 (def plain-listener (net/listen "127.0.0.1" "0"))
 (def [_ plain-port] (net/localname plain-listener))
@@ -127,7 +127,7 @@
 (protect (:close plain-listener))
 (stream/close-context starttls-ctx)
 
-# -- EOF ------------------------------------------------------------------
+# -- EOF -----------------------------------------------------------------
 
 (def closer (tls-server/start (fn [ts] nil)))   # handler returns; server closes
 (def c3 (stream/connect "127.0.0.1" (closer :port) {:ctx trusting :host "localhost" :timeout 5}))

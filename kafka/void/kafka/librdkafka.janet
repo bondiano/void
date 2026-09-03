@@ -1,5 +1,5 @@
-### void/kafka/librdkafka — the librdkafka surface this plugin uses,
-### and nothing more (ADR-0035, SPEC.md §5.11).
+### void/kafka/librdkafka — the librdkafka surface this plugin uses, and
+### nothing more.
 ###
 ### The shape is void/db-mysql/libmysql's: the library path is
 ### configuration ([:kafka :library]) rather than a compile-time
@@ -10,15 +10,15 @@
 ###
 ### Unlike libmysqlclient, everything here is called from ONE VM — the
 ### loop's. librdkafka runs its own threads regardless (one per broker
-### plus internals), but they never call us: the only surface we use
-### is the event API, where the library parks its news on a queue and
+### plus internals), but they never call us: the only surface we use is
+### the event API, where the library parks its news on a queue and
 ### `rd_kafka_queue_poll` with timeout 0 hands it over without ever
-### blocking (ADR-0035). The one hole a thread could crawl through —
-### the logger callback — is closed by routing logs to a queue too
+### blocking. The one hole a thread could crawl through — the logger
+### callback — is closed by routing logs to a queue too
 ### (`log.queue`), where they come out as ordinary events.
 ###
 ### Two structs are read by offset, and both are a different bargain
-### from ADR-0033's MYSQL_FIELD:
+### from void/db-mysql's MYSQL_FIELD:
 ###
 ###   * `rd_kafka_message_t` is documented public ABI, unchanged since
 ###     0.8 — the header declares it in the open, applications iterate
@@ -88,17 +88,17 @@
 (defrk rd_kafka_conf_set :int :ptr :string :string :ptr :ulong)
 (defrk rd_kafka_conf_set_events :void :ptr :int)
 
-# client lifecycle. rd_kafka_new takes ownership of the conf on
-# success only; rd_kafka_destroy joins the library's threads — the one
-# deliberately blocking call, made at :stop (ADR-0035)
+# client lifecycle. rd_kafka_new takes ownership of the conf on success
+# only; rd_kafka_destroy joins the library's threads — the one
+# deliberately blocking call, made at :stop
 (defrk rd_kafka_new :ptr :int :ptr :ptr :ulong)
 (defrk rd_kafka_destroy :void :ptr)
 (defrk rd_kafka_name :string :ptr)
 (defrk rd_kafka_outq_len :int :ptr)
 
-# event queues — the whole integration (ADR-0035): poll with timeout 0
-# never blocks, io_event_enable writes a byte to OUR fd on the
-# empty→non-empty transition, and void/fdwait sleeps on that
+# event queues — the whole integration: poll with timeout 0 never blocks,
+# io_event_enable writes a byte to OUR fd on the empty→non-empty
+# transition, and void/fdwait sleeps on that
 (defrk rd_kafka_queue_get_main :ptr :ptr)
 (defrk rd_kafka_set_log_queue :int :ptr :ptr)
 (defrk rd_kafka_queue_get_consumer :ptr :ptr)
@@ -153,10 +153,10 @@
 (defrk rd_kafka_message_headers :int :ptr :ptr)
 (defrk rd_kafka_header_get_all :int :ptr :ulong :ptr :ptr :ptr)
 
-# the boot probe (ADR-0035): DescribeCluster through the same event
-# API — an admin request whose answer is an event, so the boot check
-# parks instead of blocking. The symbols appeared in librdkafka 2.3;
-# on an older library the probe is skipped and says so
+# the boot probe: DescribeCluster through the same event API — an admin
+# request whose answer is an event, so the boot check parks instead of
+# blocking. The symbols appeared in librdkafka 2.3; on an older library
+# the probe is skipped and says so
 (defrk rd_kafka_AdminOptions_new :ptr :ptr :int :optional)
 (defrk rd_kafka_AdminOptions_destroy :void :ptr :optional)
 (defrk rd_kafka_AdminOptions_set_request_timeout :int :ptr :int :ptr :ulong :optional)
@@ -342,10 +342,9 @@
 
 # -- rd_kafka_vu_t -------------------------------------------------------
 #
-# What produceva takes: vtype at 0, the union at 8, and the union
-# padded by the header itself to 64 bytes ("Padding size for
-# future-proofness") — so the stride is 72 and the layout is the
-# library's promise (ADR-0035).
+# What produceva takes: vtype at 0, the union at 8, and the union padded
+# by the header itself to 64 bytes ("Padding size for future-proofness") —
+# so the stride is 72 and the layout is the library's promise.
 
 (def vu-size 72)
 (def- vu-union 8)
@@ -404,7 +403,7 @@
   ``Take whatever is in the pipe. Called only after fdwait said the
   descriptor is readable, so the read cannot block; anything left
   keeps the fd readable and the next pass drains again
-  (level-triggered, ADR-0035).``
+  (level-triggered).``
   [fd]
   (def buf (buffer/new-filled 256))
   (read- fd buf 256)

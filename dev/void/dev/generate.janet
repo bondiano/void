@@ -1,4 +1,4 @@
-### void/dev/generate — sample values from schemas (SPEC.md §4).
+### void/dev/generate — sample values from schemas.
 ###
 ### The :generator schema projection: walk a normalized schema node
 ### and produce a value that validates against it — the substrate for

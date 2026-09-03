@@ -124,7 +124,7 @@
 
     # -- the loop is not blocked ---------------------------------------
     #
-    # The claim ADR-0010 makes for a pure-Janet client: a command in
+    # The claim a pure-Janet client makes: a command in
     # flight parks its fiber, it does not stop the loop. Four
     # connections wait a second each on BLPOP while a ticker runs.
 

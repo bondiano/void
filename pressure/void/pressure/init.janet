@@ -1,4 +1,4 @@
-### void/pressure — load shedding (SPEC.md §5.23, ADR-0019).
+### void/pressure — load shedding.
 ###
 ### A single-threaded ev-loop process does not degrade gracefully on
 ### its own: the accept queue grows, loop-lag lands on *every* request
@@ -16,11 +16,7 @@
 ###                       jobs worker or a CLI can have all of it.
 ###   void/pressure-http  the middleware that turns the flag into a
 ###                       503 — ./http, and the only piece that needs
-###                       void/http. (ADR-0019 described one plugin;
-###                       the split is the same one void/cache and
-###                       void/cache-http already make, and it is what
-###                       keeps a worker process from importing the
-###                       HTTP kernel to find out its loop is late.)
+###                       void/http. (described one plugin; the split is the same one void/cache and void/cache-http already make, and it is what keeps a worker process from importing the HTTP kernel to find out its loop is late.)
 ###
 ### What an application composes:
 ###
@@ -60,7 +56,7 @@
 # -- the extension point -------------------------------------------------
 
 (plugin/defextension-point :void.pressure/check
-  :doc "Custom pressure checks (ADR-0019): {:name :db/pool :fn (fn [] {:ok bool :reason ...}) :doc?}; a check that answers :ok false — or throws — is one more reason to shed"
+  :doc "Custom pressure checks: {:name :db/pool :fn (fn [] {:ok bool :reason ...}) :doc?}; a check that answers :ok false — or throws — is one more reason to shed"
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
@@ -87,7 +83,7 @@
   "Schema of the [:pressure] config slice."
   {:enabled [:optional :boolean]
    :sample-interval [:optional [:number {:min 0.01}]]
-   # milliseconds: the unit the budget in SPEC §8.2 and every
+   # milliseconds: the unit the budget and every
    # under-pressure-shaped dashboard is already written in
    :max-loop-lag [:optional [:number {:min 0}]]
    :max-rss-bytes [:optional [:number {:min 0}]]
@@ -100,7 +96,7 @@
 (def defaults
   ``Defaults of the [:pressure] slice.
 
-  `:max-loop-lag` is the one with an argument behind it. SPEC §8.2
+  `:max-loop-lag` is the one with an argument behind it. The budget
   budgets loop-lag p99 under 1 ms at target load, so a limit two
   orders of magnitude above that is not "slightly busy" — it is a
   process that has already stopped meeting every latency budget it
@@ -166,8 +162,8 @@
     event-loop lag and RSS sample every :sample-interval seconds,
     compared against the thresholds with a recovery bar below them,
     plus every :void.pressure/check contribution. Sets the flag the
-    shedding middleware reads; in prefork (ADR-0010) one of these runs
-    per worker, because each worker has the loop it is measuring."
+    shedding middleware reads; in prefork one of these runs per worker,
+    because each worker has the loop it is measuring."
     :provides [:void/pressure]
     :config {:key :pressure :schema Config}
     :start

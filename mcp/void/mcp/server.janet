@@ -1,5 +1,4 @@
-### void/mcp/server — the MCP methods over a server value (SPEC.md
-### §5.18, ADR-0031).
+### void/mcp/server — the MCP methods over a server value.
 ###
 ### One function of consequence, `handle`: a decoded JSON-RPC message
 ### and a server value in, a response message (or nil, for a
@@ -30,7 +29,7 @@
 ### **This server asks the client for nothing.** No sampling, no
 ### elicitation, no roots: every one of those is a request travelling
 ### server -> client, which needs a stream held open per session, which
-### is exactly the state ADR-0031 refuses to keep. What comes back is
+### is exactly the state this plugin refuses to keep. What comes back is
 ### therefore never a request, and ./jsonrpc drops responses.
 
 (import ./jsonrpc :as rpc)

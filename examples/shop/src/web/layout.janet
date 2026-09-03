@@ -15,7 +15,7 @@
 ###     since wave 1 — there is no call to make;
 ###   * the two `<meta>` tags and the `hx-headers:inherited` attribute
 ###     are what let a request htmx makes on its own carry the same
-###     token — the suffix is htmx 4's, and load-bearing (ADR-0041);
+###     token — the suffix is htmx 4's, and load-bearing;
 ###   * the stylesheet is linked through `html/asset`, which is the
 ###     logical path in development and the fingerprinted one after an
 ###     asset build — the markup does not change either way.

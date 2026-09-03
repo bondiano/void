@@ -1,5 +1,4 @@
-### void/datastar — Datastar integration plugin, an experiment
-### (SPEC §5.5, ADR-0037).
+### void/datastar — Datastar integration plugin, an experiment.
 ###
 ### The Biff idiom, standing on what the repository already has: a
 ### handler keeps returning the full page it always returned, and the
@@ -20,7 +19,7 @@
 ### room, and each connection re-renders *its own* page (identity,
 ### locale and the rest live in dyns the stream fiber inherited) and
 ### pushes the same two events. Fan-out across replicas is a void/bus
-### subscriber that pokes locally — the pose ADR-0028 struck for
+### subscriber that pokes locally — the pose void/ws struck for
 ### websocket rooms, and the registry answers the fleet check the same
 ### way (:shared? :by-design).
 
@@ -83,10 +82,10 @@
   (ring/sse evs headers))
 
 (defn- slice-tag [html tag]
-  # "<tag ...>...</tag>" inclusive, or nil. Enough HTML awareness for
-  # a page this plugin's own render produced; a page that puts
-  # "<body" inside a comment before its body element deserves what it
-  # gets (named in ADR-0037).
+  # "<tag ...>...</tag>" inclusive, or nil. Enough HTML awareness for a
+  # page this plugin's own render produced; a page that puts "<body"
+  # inside a comment before its body element deserves what it gets (named
+  # in).
   (def open-at (string/find (string "<" tag) html))
   (def close-tag (string "</" tag ">"))
   (def close-at (string/find close-tag html))
@@ -239,12 +238,12 @@
   {:name :void.datastar/streams
    :what "datastar morph streams"
    :needs [:datastar/registry]
-   :doc "The stream registry is per process, and that is the design (ADR-0037, the pose of ADR-0028) — not something a fleet check should ask anyone to fix"
+   :doc "The stream registry is per process, and that is the design (the pose of) — not something a fleet check should ask anyone to fix"
    :ask (fn ask-streams [boot]
           (when (get-in boot [:system :instances :datastar/registry])
             {:store :process
              :shared? :by-design
-             :why "an SSE connection lives in the process holding its socket, so a registry that spanned processes could not reach it anyway; fan-out across replicas is a void/bus subscriber that pokes locally (ADR-0028's pose)"}))})
+             :why "an SSE connection lives in the process holding its socket, so a registry that spanned processes could not reach it anyway; fan-out across replicas is a void/bus subscriber that pokes locally"}))})
 
 # -- manifest ------------------------------------------------------------
 

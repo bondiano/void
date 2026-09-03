@@ -1,4 +1,4 @@
-### void/proto/wkt — the well-known types (SPEC.md §5.7).
+### void/proto/wkt — the well-known types.
 ###
 ### `google/protobuf/*.proto` is not a library one downloads: every
 ### protobuf implementation ships these descriptors, because a

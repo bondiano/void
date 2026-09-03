@@ -5,8 +5,8 @@
 (import void/grpc :as grpc)
 (require "void/http/init")
 
-### Wave 4's second exit criterion: "Connect-RPC сервис вызывается
-### grpcurl/buf-клиентом". This file is that criterion, run rather
+### Wave 4's second exit criterion: a Connect-RPC service is called by
+### a grpcurl/buf client. This file is that criterion, run rather
 ### than asserted — `buf curl` is the Buf toolchain's own Connect
 ### client, it reads the same `.proto` this server was built from, and
 ### it knows nothing about void.
@@ -28,7 +28,7 @@
 
 # the service is declared at the top level whether or not buf is here:
 # `defservice` resolves its handlers against this module's environment
-# (late binding, ADR-0002), and a handler defined inside an `if` is a
+# (late binding), and a handler defined inside an `if` is a
 # local rather than a binding anything can find
 
 (proto/load-file! "test/protos/orders.proto")

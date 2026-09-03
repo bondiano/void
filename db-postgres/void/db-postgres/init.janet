@@ -1,5 +1,4 @@
-### void/db-postgres — the production :void/db-driver (SPEC.md §5.10,
-### ADR-0011).
+### void/db-postgres — the production :void/db-driver.
 ###
 ### Postgres over libpq's non-blocking API, driven from the ev loop
 ### through void/fdwait: no thread pool, no blocking syscall on the
@@ -41,10 +40,9 @@
 ### not the first request. It is also what answers the health check
 ### without borrowing a connection from the pool.
 ###
-### TLS costs nothing here: libpq does the handshake, so `sslmode` and
-### the certificate paths are ordinary connection parameters and there
-### is no TLS code in this plugin at all (ADR-0010 — TLS stays out of
-### the kernel).
+### TLS costs nothing here: libpq does the handshake, so `sslmode` and the
+### certificate paths are ordinary connection parameters and there is no
+### TLS code in this plugin at all (TLS stays out of the kernel).
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -314,7 +312,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/db-postgres
-  :doc "Postgres as the :void/db-driver: async libpq on the ev loop through void/fdwait (ADR-0011) — no thread pool, prepared statements, pipeline mode, single-row streaming, LISTEN/NOTIFY, cancellation, and TLS because libpq does it."
+  :doc "Postgres as the :void/db-driver: async libpq on the ev loop through void/fdwait — no thread pool, prepared statements, pipeline mode, single-row streaming, LISTEN/NOTIFY, cancellation, and TLS because libpq does it."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/db ">=0.0.1"}
   :config-key :db-postgres

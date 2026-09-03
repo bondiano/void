@@ -61,9 +61,9 @@
       (parser/eof p)
       (assert (not= :error (parser/status p)) (string f " parses"))))
 
-  # the generated project declares a real dependency, not a comment
-  # (ADR-0020): the Quick start is an executable claim, and this is the
-  # unit-level half of the CI step that installs the bundle for real
+  # the generated project declares a real dependency, not a comment: the
+  # Quick start is an executable claim, and this is the unit-level half of
+  # the CI step that installs the bundle for real
   (def manifest (slurp "sample/project.janet"))
   (assert (string/find "https://github.com/bondiano/void.git" manifest)
           "project.janet depends on the void bundle")

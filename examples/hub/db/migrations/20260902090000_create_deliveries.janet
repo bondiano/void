@@ -2,8 +2,8 @@
 ###
 ### The bytes themselves are not here: they are in void/storage under
 ### `body-key`, because a delivery is hundreds of kilobytes of somebody
-### else's JSON read once a month, and a row is what a person filters
-### by (ADR-0039, ./intake.janet).
+### else's JSON read once a month, and a row is what a person filters by
+### (./intake.janet).
 ###
 ### `delivery-id` is unique and that is the whole of the idempotency:
 ### GitHub retries, a retry carries the same `X-GitHub-Delivery`, and

@@ -77,23 +77,23 @@
    :void/authz :void/authz-http
    :void/security
    # 3.5: the sign-in link is a letter, and it goes out through the
-   # queue this application already runs — void/mail-jobs is the whole
-   # of that, and no handler mentions it (ADR-0026 §5)
+   # queue this application already runs — void/mail-jobs is the whole of
+   # that, and no handler mentions it
    :void/mail :void/mail-jobs :void/mail-auth
    # 3.6: the audit trail. void/bus-db puts the message log, the
-   # consumer cursors and the outbox in the same database as the data —
-   # so "the article exists" and "the trail says so" commit together
-   # (ADR-0012). void/bus-jobs puts the queue's own lifecycle on the
-   # bus, and the trail gets it for nothing
+   # consumer cursors and the outbox in the same database as the data — so
+   # "the article exists" and "the trail says so" commit together.
+   # void/bus-jobs puts the queue's own lifecycle on the bus, and the
+   # trail gets it for nothing
    :void/bus :void/bus-db :void/bus-jobs
    # 4.4: the back office is a projection of the entities this
    # application already declared — ./admin.janet is declarations and
-   # nothing else, and the audit trail above picks its changes up
-   # through the bus without either side knowing the other (ADR-0029)
-   # ...and the *same* declarations reach an agent through MCP, with
-   # the same gate and the same per-action policies: void/admin-mcp is
-   # a projection of the registry ./admin.janet fills, and neither it
-   # nor ./admin.janet says a word about the other (ADR-0031, ADR-0029)
+   # nothing else, and the audit trail above picks its changes up through
+   # the bus without either side knowing the other ...and the *same*
+   # declarations reach an agent through MCP, with the same gate and the
+   # same per-action policies: void/admin-mcp is a projection of the
+   # registry ./admin.janet fills, and neither it nor ./admin.janet says a
+   # word about the other
    :void/admin :void/mcp :void/admin-mcp
    :void/dev
    :blog/app :blog/admin])

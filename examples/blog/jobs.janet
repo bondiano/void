@@ -1,10 +1,10 @@
 ### blog/jobs — the work that must not happen on the request path.
 ###
-### The comment counter on `articles` is denormalized, so something has
-### to keep it true. In void that something is a job, not an entity
-### callback (ADR-0009): posting a comment enqueues `recount-comments`,
-### the worker recomputes the count in a transaction and drops the
-### cached index page. The queue lives in the database
+### The comment counter on `articles` is denormalized, so something has to
+### keep it true. In void that something is a job, not an entity callback:
+### posting a comment enqueues `recount-comments`, the worker recomputes
+### the count in a transaction and drops the cached index page. The queue
+### lives in the database
 ### (:void/jobs-backend {:impl :jobs/db}), so it is the same
 ### transactional store as the data — and the same code on sqlite and
 ### on Postgres.

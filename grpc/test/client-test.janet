@@ -8,7 +8,7 @@
 
 ### The client, against a real socket. void/http/client is what it
 ### speaks through, so this is also the assertion that the two halves
-### of ADR-0013 — a Connect server on void/http and a Connect client on
+### of the design — a Connect server on void/http and a Connect client on
 ### void/http/client — agree about the protocol they were written from.
 
 (proto/load-file! "test/protos/orders.proto")

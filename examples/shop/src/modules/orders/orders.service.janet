@@ -29,11 +29,11 @@
 ### controller renders.
 ###
 ### **The announcement rides the transaction.** `bus/publish-tx!`
-### writes `:order/placed` into the outbox in this same transaction
-### (ADR-0012), and `jobs/enqueue` writes the payment capture into the
-### same one again (void/jobs-db). So the order, the fact that it
-### happened and the work it causes commit together: no receipt for an
-### order that rolled back, and no order that nobody charges.
+### writes `:order/placed` into the outbox in this same transaction, and
+### `jobs/enqueue` writes the payment capture into the same one again
+### (void/jobs-db). So the order, the fact that it happened and the work
+### it causes commit together: no receipt for an order that rolled back,
+### and no order that nobody charges.
 ###
 ### Nothing in this file mentions a request, a session or a page. The
 ### controller hands it a cart and a customer and renders what comes

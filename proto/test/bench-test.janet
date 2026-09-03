@@ -1,17 +1,17 @@
 (import ../test-support/paths)
 (import void/proto :as proto)
 
-### The bench line ADR-0013 asks for: "Pure-Janet protobuf на больших
-### payload может упереться в CPU — бенчмарк-строчка в суите
-### обязательна (правило §8.5)".
+### The bench line this package owes: pure-Janet protobuf on a large
+### payload can become CPU-bound, and a package that can must carry a
+### bench row in its suite.
 ###
 ### It prints rather than gates. Absolute numbers on a shared CI runner
-### mean nothing (ADR-0014 is explicit about it: the thresholds in this
-### repository are *relative*, head against merge-base on one machine),
-### so what is asserted here is that the payload survives the trip; what
-### is printed is the number a person comparing two commits reads. The
-### shape is deliberately the unfriendly one — a list of nested messages
-### with strings in them, which is what an RPC response actually is.
+### mean nothing (is explicit about it: the thresholds in this repository
+### are *relative*, head against merge-base on one machine), so what is
+### asserted here is that the payload survives the trip; what is printed
+### is the number a person comparing two commits reads. The shape is
+### deliberately the unfriendly one — a list of nested messages with
+### strings in them, which is what an RPC response actually is.
 
 (proto/defmessage :bench/Line
   {:sku [1 :string] :title [2 :string] :price_cents [3 :int64] :quantity [4 :int32]})

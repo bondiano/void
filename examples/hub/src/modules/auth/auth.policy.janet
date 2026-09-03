@@ -38,7 +38,7 @@
 (authz/defpolicy :hub/operator
   ``The gate `[:admin :access]` names. The identity carries the address
   as a claim (`[:auth-db :users :claims-columns]`), so this decision
-  costs no query — which is what `attr` is for (ADR-0024 §2).
+  costs no query — which is what `attr` is for.
 
   Both refusals are sentences rather than `false`, because a policy that
   says why is a policy an operator can act on: `void authz explain`

@@ -1,10 +1,9 @@
-### void/security — CSRF, headers, CORS and rate limiting
-### (SPEC.md §5.16, ADR-0025).
+### void/security — CSRF, headers, CORS and rate limiting.
 ###
 ### Four things that are on by default in Rails, Laravel and Spring and
 ### without which a server-rendered framework cannot be released. Each
 ### of them has exactly one decision that decides whether it works in a
-### real application, and ADR-0025 is about those four decisions:
+### real application, and this package is those four decisions:
 ###
 ###   **CSRF** applies to requests whose credential rode on a **cookie**
 ###   — not to every unsafe method, which would break every JSON API
@@ -157,12 +156,12 @@
 
 (defn htmx-attrs
   "The `hx-headers:inherited` attribute for `<body>`, so every htmx
-  request the page makes carries the token (ADR-0041)."
+  request the page makes carries the token."
   [req]
   (csrf/hx-headers req (settings :csrf)))
 
 (defn client-ip
-  "The address this request is attributed to (ADR-0025 §6)."
+  "The address this request is attributed to."
   [req]
   (ip/client-ip req (ip-config settings)))
 
@@ -242,11 +241,11 @@
    :phase 200
    :name :security/limiter-store
    :doc "Resolve the rate limiter's store once the components are up"
-   # nothing here looks at [:http :workers] any more: "the effective
-   # limit is the configured one times the number of counters" is true
-   # of a second machine exactly as it is of a second worker, and the
+   # nothing here looks at [:http :workers] any more: "the effective limit
+   # is the configured one times the number of counters" is true of a
+   # second machine exactly as it is of a second worker, and the
    # deployment shape asks that once, for everybody, through the
-   # :void.core/store declaration below (ADR-0030)
+   # :void.core/store declaration below
    :fn (fn limiter [boot]
          (def cfg (settings :rate))
          (when (get cfg :enabled)
@@ -272,7 +271,7 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.security/csrf
    :schema :boolean
-   :doc "Demand a CSRF token on this route even when the credential did not ride on a cookie (SPEC part II §2.5). :restrict, true wins — protection can be tightened by a more specific layer and never loosened, so there is no key that switches it off"
+   :doc "Demand a CSRF token on this route even when the credential did not ride on a cookie. :restrict, true wins — protection can be tightened by a more specific layer and never loosened, so there is no key that switches it off"
    :merge :restrict
    :allow? (fn [outer inner] (or inner (not outer)))})
 
@@ -289,7 +288,7 @@
              (<= (/ (inner :limit) (inner :window))
                  (/ (outer :limit) (outer :window))))})
 
-# -- the edge: headers, CSP, CORS ---------------------------------------
+# -- the edge: headers, CSP, CORS ----------------------------------------
 
 (plugin/contribute! :void.http/edge
   {:name :void.security/cors

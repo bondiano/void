@@ -1,6 +1,6 @@
-### The projection and its gate: which of a composition's commands
-### reach an agent, what a tool call does with a command that prints,
-### and what a typo in the allowlist costs (ADR-0031).
+### The projection and its gate: which of a composition's commands reach
+### an agent, what a tool call does with a command that prints, and what a
+### typo in the allowlist costs.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)

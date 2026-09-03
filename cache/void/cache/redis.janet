@@ -1,4 +1,4 @@
-### void/cache-redis — the cache in redis (SPEC.md §5.10 / §5.11).
+### void/cache-redis — the cache in redis.
 ###
 ### The piece of void/cache that needs void/redis, kept a separate
 ### plugin so an application that caches in its own heap never loads a

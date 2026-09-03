@@ -1,4 +1,4 @@
-### shop/catalog/admin — the products, as a back office (ADR-0029).
+### shop/catalog/admin — the products, as a back office.
 ###
 ### There is not a line of a page in this file. `void/admin` projects
 ### the declaration below into routes when the route table is built,
@@ -31,14 +31,14 @@
   :title "Products"
   # a column with a :value is the one hook a list has, and money is
   # exactly what it is for: `values/format-price` is the only place in
-  # this application where cents become "€14.99", and the desk uses
-  # that one rather than a second one that would round differently
-  # `:image` is in the list, the detail and the form, and this file
-  # says nothing else about it: the `:file` type in ./catalog.model
-  # resolves to void/storage-admin's upload widget, which draws the
-  # thumbnail here, the preview on the detail page and the file input
-  # on the form — and stores what is submitted (ADR-0039 §6).
-  # `void admin widgets` prints that resolution and why
+  # this application where cents become "€14.99", and the desk uses that
+  # one rather than a second one that would round differently `:image` is
+  # in the list, the detail and the form, and this file says nothing else
+  # about it: the `:file` type in ./catalog.model resolves to
+  # void/storage-admin's upload widget, which draws the thumbnail here,
+  # the preview on the detail page and the file input on the form — and
+  # stores what is submitted. `void admin widgets` prints that resolution
+  # and why
   :list [:id :sku :image :name
          {:name :price :label "Price"
           :value (fn [row] (values/format-price (row :price-cents)))}
@@ -79,7 +79,7 @@
     # policy decisions. :void/admin-jobs turns the confirmation into a
     # progress page; without that plugin composed this line is a
     # start-up error naming it, not a surprise at the button
-    # (ADR-0029 §7)
+    #
     :job true
     :confirm "Archived products disappear from the storefront and stay linked to the orders that bought them."}})
 

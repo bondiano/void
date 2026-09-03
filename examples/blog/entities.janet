@@ -1,6 +1,6 @@
 ### blog/entities — the domain, declared once.
 ###
-### `defentity` is a schema plus a db-mapping (ADR-0009): the binding
+### `defentity` is a schema plus a db-mapping: the binding
 ### *is* the normalized schema, so `schema/select` projects a form DTO
 ### straight off it, while the table, the primary key, the columns and
 ### the relations live in a descriptor the repository, `:preload` and
@@ -9,10 +9,10 @@
 (import void/core/schema :as schema)
 (import void/db :as db)
 
-# The :db/* props are annotations: parsed and stored, never consulted
-# by validation (ADR-0008). They are what the repository, `:preload`
-# and `void db erd` read — :db/type is the column type the migrations
-# actually created, so the diagram says `text` and not `value`.
+# The :db/* props are annotations: parsed and stored, never consulted by
+# validation. They are what the repository, `:preload` and `void db erd`
+# read — :db/type is the column type the migrations actually created, so
+# the diagram says `text` and not `value`.
 
 (db/defentity Author
   {:id [:int {:db/pk true :db/type "integer"}]
@@ -32,8 +32,8 @@
    :author-id [:int {:db/fk :Author :db/type "integer"}]
    :title [:string {:min 1 :max 120 :db/type "text"}]
    :body [:string {:min 1 :max 4000 :db/type "text"}]
-   # denormalized, and kept honest by a background job rather than by
-   # a callback — entities deliberately have none (ADR-0009)
+   # denormalized, and kept honest by a background job rather than by a
+   # callback — entities deliberately have none
    :comment-count [:optional [:int {:db/type "integer"}]]
    :created-at [:optional [:string {:db/type "text"}]]}
   :db/table "articles"
@@ -49,7 +49,7 @@
   :db/table "comments"
   :db/rels {:article [:belongs-to :Article :article-id]})
 
-# One line of the audit trail (wave 3.6). Written only by ./audit, and
+# One line of the audit trail. Written only by ./audit, and
 # only from a message: :message-id is unique, so a redelivery is
 # recognised by the *database* rather than by a consumer trusting
 # itself to be idempotent — which is the shape an at-least-once bus
@@ -80,7 +80,7 @@
   not a column. `schema/merge` composes the projection of the entity
   with the one field that has no place in it — the hash is what the
   table stores, and the plaintext exists for exactly the length of one
-  request (ADR-0023 §4).``
+  request.``
   (schema/merge (schema/select Author [:name :email])
                 {:password [:string {:min 8 :max 200}]}))
 

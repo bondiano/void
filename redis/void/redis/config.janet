@@ -1,5 +1,5 @@
-### void/redis/config — from the [:redis] config slice to the options
-### one connection opens with (SPEC.md §5.10).
+### void/redis/config — from the [:redis] config slice to the options one
+### connection opens with.
 ###
 ### Two spellings meet here. A URL is what a deployment hands you —
 ### REDIS_URL is as much a convention as DATABASE_URL — and explicit
@@ -13,13 +13,12 @@
 ### won. Percent-escapes in the userinfo are decoded, because a
 ### password containing @ or / has no other way through a URL.
 ###
-### TLS is not this package's (ADR-0010): `rediss://` parses into
-### `{:tls true}`, and whether the connection can honour that is
-### decided where the socket opens — `void/redis/conn` holds the seam
-### `void/tls` closes (ADR-0038). A composition without the plugin
-### refuses a `rediss://` URL at connect time with both ways out
-### named; it never quietly speaks plaintext to a URL that asked for
-### encryption.
+### TLS is not this package's: `rediss://` parses into `{:tls true}`, and
+### whether the connection can honour that is decided where the socket
+### opens — `void/redis/conn` holds the seam `void/tls` closes. A
+### composition without the plugin refuses a `rediss://` URL at connect
+### time with both ways out named; it never quietly speaks plaintext to a
+### URL that asked for encryption.
 ###
 ### Nothing here opens a socket: this module is pure parsing, which is
 ### why all of it is testable with no redis anywhere.
@@ -34,8 +33,8 @@
    :password [:optional :string]
    :database [:optional [:int {:min 0}]]
 
-   # encrypt the connection (what a rediss:// URL sets) — honoured by
-   # the void/tls seam in ./conn, refused loudly without it (ADR-0038)
+   # encrypt the connection (what a rediss:// URL sets) — honoured by the
+   # void/tls seam in ./conn, refused loudly without it
    :tls [:optional :boolean]
 
    # protocol version asked for in HELLO; 2 pins RESP2 for a server

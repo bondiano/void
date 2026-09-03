@@ -1,4 +1,4 @@
-### void/auth/password — the login form's half (ADR-0023 §3, §4).
+### void/auth/password — the login form's half.
 ###
 ### The strategy with a `:verify` and no `:authenticate`: a password is
 ### never carried by a request the way a cookie or a token is, so this

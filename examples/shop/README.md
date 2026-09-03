@@ -74,10 +74,9 @@ src/
 There is no `admin/` module, and there used to be: a controller, a view
 and three hand-written routes. What replaced it is a `*.admin.janet` in
 each module that has rows somebody at a desk looks at — declarations
-over the entities those modules already had, which `void/admin`
-projects into pages and `void/admin-mcp` into tools for an agent
-(ADR-0029). A back office is a *layer* of a module, exactly as
-`*.api.janet` is.
+over the entities those modules already had, which `void/admin` projects
+into pages and `void/admin-mcp` into tools for an agent . A back office
+is a *layer* of a module, exactly as `*.api.janet` is.
 
 **A module is a directory, and the suffix says which layer a file is.**
 
@@ -253,16 +252,15 @@ the button riding along so the per-row policies decide about the same
 subject.
 
 **A product picture is one line in the model, and nowhere else.**
-`:image [:optional [:file {:storage/accept [...] :storage/max-bytes ...}]]`
-in `catalog/catalog.model.janet` is the whole declaration: the desk
-gets a file input carrying that accept list (on a form that flipped
+`:image [:optional [:file {:storage/accept [...] :storage/max-bytes
+...}]]` in `catalog/catalog.model.janet` is the whole declaration: the
+desk gets a file input carrying that accept list (on a form that flipped
 itself to `multipart/form-data`), the list and the detail page get a
 thumbnail and a preview, a submitted file is checked against those two
 annotations **on the server** and stored, and what lands in the column
 is a storage **key**. `catalog.view` turns it back into an `<img>` with
-`storage/url`. Nothing in the admin declaration mentions files —
-`void admin widgets` prints which widget was resolved for the field and
-why (ADR-0039).
+`storage/url`. Nothing in the admin declaration mentions files — `void
+admin widgets` prints which widget was resolved for the field and why.
 
 **The gate is shut until one line opens it, and that line names a
 policy the shop already had.** `{:admin {:access :staff}}` in
@@ -329,11 +327,11 @@ either — the same gate, and the same per-action policy, per row.
 Nothing that writes is offered: `db migrate`, `jobs work`, `mail send`,
 `shop seed`, and every admin `create`, `update`, `delete` and declared
 action are absent because none of them said `:read-only? true`, and the
-default exposes nothing else (ADR-0031). Handing an agent one of them
-is a line of config — `{:mcp {:tools [:shop/seed]}}` — and it is the
-operator's line, not the framework's. `test/mcp-test.janet` asserts
-both halves of that list, and `test/admin-test.janet` calls the tools
-with and without an identity.
+default exposes nothing else. Handing an agent one of them is a line of
+config — `{:mcp {:tools [:shop/seed]}}` — and it is the operator's line,
+not the framework's. `test/mcp-test.janet` asserts both halves of that
+list, and `test/admin-test.janet` calls the tools with and without an
+identity.
 
 The HTTP transport (`:void/mcp-http`, `POST /mcp`) is deliberately
 *not* composed here: it is one more plugin and one token, and an
@@ -348,9 +346,9 @@ to run.
 Five files:
 
 * `test/shop-test.janet` — the whole application through `test/inject`
-  (ADR-0017): catalog, cart, sign-up, checkout, the payment job, the
-  sold-out path, a declined card, row-level authorization, the desk,
-  the metrics endpoint and the rate limit. Once per engine.
+: catalog, cart, sign-up, checkout, the payment job, the sold-out path,
+a declined card, row-level authorization, the desk, the metrics endpoint
+and the rate limit. Once per engine.
 * `test/admin-test.janet` — the back office, once per engine: the gate,
   a list with its search, filter and count, an in-place cell edit, a
   declared action that leaves an unpaid order alone, a bulk that runs
@@ -396,15 +394,14 @@ enqueues is usually not the process that runs.
 A few things the compose file is making a point about:
 
 * **The pictures are in a bucket, and that is a config line.** On a
-  laptop `[:storage :local :root]` is a directory and
-  `void/storage-http` serves it under `/uploads`; here
-  `VOID_SHOP_STORAGE=s3` composes `void/storage-s3` and
-  `{:void/storage-store {:impl :storage/s3}}` points the same
-  `storage/url` at minio. Nothing in `catalog.model`, `catalog.view` or
-  `catalog.admin` changes, because the column holds a **key** and not a
-  URL (ADR-0039). The disk store is what `void deploy check` refuses
-  here: a picture uploaded to one replica is a 404 on the next, and the
-  container that gets replaced takes the uploads with it.
+laptop `[:storage :local :root]` is a directory and `void/storage-http`
+serves it under `/uploads`; here `VOID_SHOP_STORAGE=s3` composes
+`void/storage-s3` and `{:void/storage-store {:impl :storage/s3}}` points
+the same `storage/url` at minio. Nothing in `catalog.model`,
+`catalog.view` or `catalog.admin` changes, because the column holds a
+**key** and not a URL. The disk store is what `void deploy check`
+refuses here: a picture uploaded to one replica is a 404 on the next,
+and the container that gets replaced takes the uploads with it.
 
 * **The schema is migrated by a one-shot service**, not by whichever
   process boots first. `[:jobs-db :auto-create]` and
@@ -460,16 +457,15 @@ void plugins lock     # write void.lock; `void plugins check` in CI
 `deploy check` is the one this example exists to demonstrate. The
 compose file runs a web tier that scales and a worker beside it, so
 `config/prod.janet` says `{:deploy {:shape :fleet}}` out loud and names
-a shared implementation for every store the composition holds —
-sessions and the cache in redis, the queue and the bus in Postgres, the
-rate limiter's counters in the cache. Take one of those away and the
-process **refuses to start**, with every violation named at once and a
+a shared implementation for every store the composition holds — sessions
+and the cache in redis, the queue and the bus in Postgres, the rate
+limiter's counters in the cache. Take one of those away and the process
+**refuses to start**, with every violation named at once and a
 replacement named for each; run the same composition with in-memory
-stores under `:single` and it starts, because on one replica it is
-true (ADR-0030). The bulk actions of the desk are part of that check:
-`void/admin-jobs` refuses a fleet whose queue backend is per-process,
-because a progress page served by another replica would not find the
-job.
+stores under `:single` and it starts, because on one replica it is true.
+The bulk actions of the desk are part of that check: `void/admin-jobs`
+refuses a fleet whose queue backend is per-process, because a progress
+page served by another replica would not find the job.
 
 `plugins lock` writes the composition down as data — the plugin list,
 every extension point with its contributions in resolution order, the

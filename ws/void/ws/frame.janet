@@ -1,5 +1,4 @@
-### void/ws/frame — the RFC 6455 §5 framing layer (SPEC §5.6,
-### ADR-0028).
+### void/ws/frame — the RFC 6455 §5 framing layer.
 ###
 ### Pure functions over buffers, exactly like `void/http/wire`: parse
 ### one frame out of a buffer, encode one frame into bytes, and say no
@@ -18,12 +17,12 @@
 ### Two rules that look like details and are not:
 ###
 ###   * **A client frame must be masked and a server frame must not
-###     be** (§5.3). It is not a security measure between us and the
+###     be**. It is not a security measure between us and the
 ###     peer — it exists so that a proxy on the path cannot be fooled
 ###     into seeing a request inside a payload — and both directions
 ###     of the rule are enforced, because a server that tolerates an
 ###     unmasked client frame is the hole the rule exists to close.
-###   * **Text is UTF-8 or it is a 1007** (§8.1). The check costs a
+###   * **Text is UTF-8 or it is a 1007**. The check costs a
 ###     pass over the payload and it is the only thing standing
 ###     between "a websocket" and "a byte pipe with an opcode".
 
@@ -73,8 +72,8 @@
 
 (defn sendable-close-code?
   ``May this code go out on the wire? 1005/1006/1015 are reserved for
-  what a *local* endpoint reports and must never be sent (§7.4.1), the
-  range below 1000 does not exist, and 1016-2999 is unassigned.``
+  what a *local* endpoint reports and must never be sent, the range below
+  1000 does not exist, and 1016-2999 is unassigned.``
   [code]
   (and (int? code)
        (or (and (>= code 1000) (<= code 1011)
@@ -122,7 +121,7 @@
 # -- masking -------------------------------------------------------------
 
 (defn mask!
-  "XOR `buf` in place with a 4-byte key (§5.3). Its own inverse."
+  "XOR `buf` in place with a 4-byte key. Its own inverse."
   [buf key]
   (def n (length buf))
   (var i 0)
@@ -189,8 +188,8 @@
           (refuse :protocol-error
                   "a 64-bit payload length must have its high bit clear"))
         (be-length buf (+ start 2) len-bytes))))
-  # a minimal length encoding is required (§5.2); a peer padding the
-  # length field is a peer whose framing must not be trusted
+  # a minimal length encoding is required; a peer padding the length field
+  # is a peer whose framing must not be trusted
   (when (or (and (= len-bytes 2) (< len 126))
             (and (= len-bytes 8) (< len 65536)))
     (refuse :protocol-error "payload length is not minimally encoded"))
@@ -217,7 +216,7 @@
   ``One frame as bytes. `opcode` is a keyword from `opcodes`, `payload`
   bytes (nil for none). Options:
     :fin   false for a fragment that continues (default true)
-    :mask  a 4-byte key — what a *client* must send (§5.3); a server
+    :mask  a 4-byte key — what a *client* must send; a server
            never masks, so leaving it out is the server's case``
   [opcode payload &opt opts]
   (default opts {})
@@ -258,8 +257,8 @@
 
 (defn close-payload
   ``The body of a close frame: a big-endian code and an optional UTF-8
-  reason (§5.5.1). A close with no code at all is an empty payload —
-  legal, and what `nil` here means.``
+  reason. A close with no code at all is an empty payload — legal, and
+  what `nil` here means.``
   [&opt code reason]
   (if (nil? code)
     ""

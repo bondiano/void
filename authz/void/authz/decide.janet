@@ -1,4 +1,4 @@
-### void/authz/decide — a decision is a value (ADR-0024 §3, §4).
+### void/authz/decide — a decision is a value.
 ###
 ###     (authz/decide :orders/read {:resource order})
 ###     # => {:allow false :policy :orders/read :reason "brand 7 ≠ 3"
@@ -33,7 +33,7 @@
 (def log-ns "void.authz")
 
 (def decision-hook
-  "Core-hook name every decision passes through. void/bus (3.6) turns
+  "Core-hook name every decision passes through. void/bus turns
   these into audit events; obs can count them."
   :void.authz/decision)
 

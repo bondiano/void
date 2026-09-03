@@ -1,5 +1,5 @@
 ### void/mail/address — an address, and the header it is written into
-### (RFC 5322 §3.4, ADR-0026).
+### (RFC 5322 §3.4).
 ###
 ### Two things happen here, and the second is the reason this is a
 ### module rather than three lines in ./mime:

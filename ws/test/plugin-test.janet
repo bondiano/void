@@ -83,7 +83,7 @@
 (assert (string/find "websocket lives longer" (string err))
         "and the error says why, not just that")
 
-# -- an unmarked route that answers a handshake ---------------------------
+# -- an unmarked route that answers a handshake --------------------------
 
 (def boot
   (plugin/start!
@@ -104,7 +104,7 @@
   (assert (= 4096 (st :limit)) "the default connection limit is the documented one")
   (assert (st :sweeping) "the sweeper is running")
   (assert (= (os/getpid) (st :pid))
-          "the status names its process — in prefork every worker has its own registry (ADR-0010)")
+          "the status names its process — in prefork every worker has its own registry")
 
   (def resp
     (let [[ok3 e]

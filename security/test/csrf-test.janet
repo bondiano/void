@@ -96,6 +96,6 @@
 (assert (string/find "x-csrf-token" (get hx :hx-headers:inherited "")))
 (assert (nil? (get hx :hx-headers))
         "htmx 4 inherits by name only — a bare hx-headers on <body> would
-         cover <body>'s own requests and nothing else (ADR-0041)")
+         cover <body>'s own requests and nothing else")
 
 (print "csrf-test ok")

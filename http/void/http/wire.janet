@@ -1,4 +1,4 @@
-### void/http/wire — HTTP/1.1 wire-format primitives (SPEC §5.1, ADR-0015).
+### void/http/wire — HTTP/1.1 wire-format primitives.
 ###
 ### The layer inherited from spork/http: PEG grammars for request and
 ### response heads, query strings and cookies, the status-message table

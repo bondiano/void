@@ -1,5 +1,4 @@
-### void/mcp/stdio — the transport that owns a process's stdin
-### (SPEC.md §5.18, ADR-0031).
+### void/mcp/stdio — the transport that owns a process's stdin.
 ###
 ### MCP's stdio framing is a line: one JSON-RPC message per line, no
 ### embedded newlines, no length header (that is LSP, and the
@@ -8,12 +7,12 @@
 ### interesting decisions are the three below.
 ###
 ### **stdout belongs to the protocol.** Everything else this process
-### has to say goes to stderr, which is where both of the core's log
-### sinks already write (ADR-0018) — and the one thing that would
-### still land on stdout, a command's own `print`, is captured by
-### ./registry into the tool's result. That capture is not a nicety:
-### it is what makes an ordinary CLI command a well-behaved MCP tool
-### without the command knowing what MCP is.
+### has to say goes to stderr, which is where both of the core's log sinks
+### already write — and the one thing that would still land on stdout, a
+### command's own `print`, is captured by ./registry into the tool's
+### result. That capture is not a nicety: it is what makes an ordinary CLI
+### command a well-behaved MCP tool without the command knowing what MCP
+### is.
 ###
 ### **Messages are answered one at a time.** MCP allows a client to
 ### have several requests in flight, and a server may answer them out

@@ -17,8 +17,8 @@
 ###   :void.authz/policy …         the whole of "and it must be yours"
 ###   :void.security/rate …        the whole of "and not fifty times a minute"
 ###
-### Handlers are registered as symbols, so a redefinition in the repl —
-### or a save with `void dev` running — is live (ADR-0002).
+### Handlers are registered as symbols, so a redefinition in the repl — or
+### a save with `void dev` running — is live.
 (import void/http/router :as router)
 (import void/http/errors :as errors)
 (import ../../web/layout :as layout)

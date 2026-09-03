@@ -1,10 +1,9 @@
-### void/auth/jwt — JSON Web Tokens, the half that is worth having
-### (ADR-0023 §6).
+### void/auth/jwt — JSON Web Tokens, the half that is worth having.
 ###
 ### JWS compact serialization: `header.payload.signature`, each segment
 ### base64url without padding. HS256/384/512 through HMAC, RS256/384/512
 ### and ES256/384/512 through `void/crypto/sign` — asymmetric
-### verification is here from the first version because ADR-0022 made
+### verification is here from the first version because libcrypto made
 ### it four bindings rather than a project, and the common case for
 ### JWT in an application is *verifying somebody else's* token.
 ###

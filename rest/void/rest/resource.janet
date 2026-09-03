@@ -1,5 +1,4 @@
-### void/rest/resource — defresource: a REST resource as route data
-### (SPEC.md §5.2, ADR-0004).
+### void/rest/resource — defresource: a REST resource as route data.
 ###
 ### `resource` is an ordinary function producing an ordinary
 ### router/group — data first, the `defresource` macro is one line of

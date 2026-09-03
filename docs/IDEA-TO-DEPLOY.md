@@ -1,12 +1,12 @@
 # Idea to deploy: the path, step by step
 
-SPEC §9 says the measure of this project is not adoption but three
-things, and the first of them is **the time from an idea to a working
-deploy for one developer**. A number nobody can reproduce is not a
-measurement, so this document is the path itself: every step that took
-`examples/hub` from `void new` to a webhook hub receiving signed
-deliveries over TLS and posting them to a chat — what each step
-produced, what it cost, and which of them were the framework's fault.
+The measure of this project is not adoption but three things, and the
+first of them is **the time from an idea to a working deploy for one
+developer**. A number nobody can reproduce is not a measurement, so this
+document is the path itself: every step that took `examples/hub` from
+`void new` to a webhook hub receiving signed deliveries over TLS and
+posting them to a chat — what each step produced, what it cost, and
+which of them were the framework's fault.
 
 It is written from that one application. Where a step was decided
 rather than run, the decision is named. Where a step found a bug, the
@@ -24,7 +24,7 @@ the ledger behind a claim.
 ## 0. What you need on the machine
 
 Janet ≥ 1.41, `jpm`, and — for the deploy at the end — Docker. That is
-the list. void installs as **one bundle** ([ADR-0020](adr/0020-odin-bundle-a-ne-tridcat-paketov.md)):
+the list. void installs as **one bundle**:
 
 ```sh
 jpm install https://github.com/bondiano/void.git
@@ -67,8 +67,8 @@ identity, the strategies, `challenge!`); what the generator writes is
 the part that is the same in every application.
 
 It also **prints three things it did not do**, and that is a decision
-rather than a limitation ([ADR-0011](adr/0011-ffi-vmesto-native-modulej.md)
-on the driver, and the generator's own output on the rest):
+rather than a limitation — the FFI driver on one side, and the
+generator's own output on the rest:
 
 - the `janet-lang/sqlite3` line for `project.janet`, and why the bundle
   does not carry it,
@@ -109,12 +109,9 @@ was composed rather than written.
 
 ## 4. Receiving, in the order that is the design
 
-Four framework pieces, one line of composition each: `void/http` for
-the route, `void/crypto` for the HMAC over the raw bytes
-([ADR-0022](adr/0022-kriptografiya-cherez-libcrypto.md): `crypto/equal?`,
-not `=`), `void/storage` for the body
-([ADR-0039](adr/0039-hranilishe-fajlov-klyuch-kak-dannye.md)),
-`void/db` for the row.
+Four framework pieces, one line of composition each: `void/http` for the
+route, `void/crypto` for the HMAC over the raw bytes (`crypto/equal?`,
+not `=`), `void/storage` for the body, `void/db` for the row.
 
 Two things the framework made cheap and one it made impossible to get
 wrong:
@@ -123,8 +120,8 @@ wrong:
   every other route in this application keeps 64 KiB without a word,
   because `:void.http/max-body` is route metadata and `[:http
   :max-body]` is what a route that declares nothing gets.
-- **A burst is shed rather than queued in the kernel** — `void/pressure`
-  ([ADR-0019](adr/0019-obratnoe-davlenie-i-shedding.md)), one plugin.
+- **A burst is shed rather than queued in the kernel** — `void/pressure`,
+  one plugin.
 - **Idempotency is a unique column**, not a check in the handler. Two
   workers can be inside the handler at once and only one of them can
   hold that index.
@@ -132,19 +129,17 @@ wrong:
 ## 5. Where a delivery goes: rules as data
 
 A rule is a table; matching is a pure function of two values; every
-matching rule is its own notification
-([ADR-0040](adr/0040-notifikacii-odno-sobytie-neskolko-kanalov.md)).
-The test for all of it boots nothing — it is a table of examples.
+matching rule is its own notification. The test for all of it boots
+nothing — it is a table of examples.
 
 ## 6. The outgoing channel: two functions
 
 telegram is not in void, on purpose, and adding it is a contribution
 with two functions: `project` builds a chat and a string where the
 request is, `deliver` posts it where the network is. The queue fits
-between them, which is why a retry delivers the value the request
-meant. `void/tls` is what makes the https call possible
-([ADR-0038](adr/0038-tls-ishodyashij-cherez-libssl-memory-bio.md)),
-and it is one line of composition.
+between them, which is why a retry delivers the value the request meant.
+`void/tls` is what makes the https call possible, and it is one line of
+composition.
 
 **Cost: 160 lines**, of which about 40 are the retry policy — which
 statuses mean "no" and which mean "later".
@@ -156,8 +151,7 @@ Two screens, and neither is a page this application wrote:
 - `/` is the **jobs dashboard** `void/admin-jobs` contributes — the
   question a hub is asked at three in the morning is "did it go out",
   and that is a question about the queue.
-- `/admin/deliveries` is `defentity` projected
-  ([ADR-0029](adr/0029-admin-kak-proekciya-deklaracij.md)): one
+- `/admin/deliveries` is `defentity` projected — one
   declaration naming the columns an operator scans, the fields they
   search by, and one widget for the column that is genuinely this
   application's — the storage key, drawn as a five-minute signed link
@@ -185,7 +179,6 @@ spent.
 
 `void deploy check` asks every store in the composition whether a
 second replica would see its contents
-([ADR-0030](adr/0030-forma-razvertyvaniya-i-razdelyaemye-hranilisha.md)),
 and refuses to start a `:fleet` that keeps anything in one process's
 heap. For the hub that is four answers and each is one line: sessions
 in the database, the queue in the database, one-time codes in the
@@ -209,10 +202,10 @@ is what makes the image and the "clean machine" CI job the same claim.
 ## 11. `docker compose up`
 
 Seven services, four of which are the deployment: two web replicas, a
-worker, Postgres, a bucket. The other three are the proxy that holds
-the TLS ([ADR-0010](adr/0010-model-parallelizma-i-vhodyashij-tls.md):
-void serves plain HTTP and something in front terminates), a one-shot
-that creates the bucket, and a one-shot that runs the migrations.
+worker, Postgres, a bucket. The other three are the proxy that holds the
+TLS (void serves plain HTTP and something in front terminates), a
+one-shot that creates the bucket, and a one-shot that runs the
+migrations.
 
 The worker is **the same image running one command** — `janet main.janet
 jobs work` — and it opens no port. What it starts is the union of what
@@ -266,8 +259,7 @@ question wrote the framework; the reproducible part is not the hours
 but the ledger above, and the three bugs in step 13 are what those
 hours actually bought.
 
-What the path did **not** require, and this is the claim §9 is about:
-no second language, no node, no message broker, no third-party job
-runner, no admin framework, no reverse-proxy config beyond a
-certificate, and no library outside the bundle except a database
-driver's own.
+What the path did **not** require, and this is the claim: no second
+language, no node, no message broker, no third-party job runner, no
+admin framework, no reverse-proxy config beyond a certificate, and no
+library outside the bundle except a database driver's own.

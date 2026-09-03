@@ -1,9 +1,9 @@
-# test/inject over the :http/kernel component (ADR-0017): full-stack
-# in-memory requests with zero sockets — kernel-only start (no port),
-# request sugar, wire-serialized :raw bytes, cookie jar across a
-# session flow, SSE frames, :raw request mode through the server's
-# parser, and the :on-response lifecycle stage firing on the inject
-# path exactly as it does on the socket path.
+# test/inject over the :http/kernel component: full-stack in-memory
+# requests with zero sockets — kernel-only start (no port), request sugar,
+# wire-serialized :raw bytes, cookie jar across a session flow, SSE
+# frames, :raw request mode through the server's parser, and the
+# :on-response lifecycle stage firing on the inject path exactly as it
+# does on the socket path.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)

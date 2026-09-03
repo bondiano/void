@@ -35,7 +35,7 @@
 
 (def CreateUser (schema/select User [:email :brand-id]))
 (assert (schema/valid? CreateUser {:email "a@b.c" :brand-id 2})
-        "a DTO projects straight off the entity (SPEC §5.9)")
+        "a DTO projects straight off the entity")
 
 (def desc (entity/resolve User))
 (assert (= "users" (desc :table)) ":db/table")
@@ -237,7 +237,7 @@
 (assert (= `DELETE FROM "users" WHERE "id" = ?` (get-in (fake/log st) [0 :sql]))
         "delete! by primary key")
 
-# -- a :db/column that is not snake_case is used verbatim (M2) ------------
+# -- a :db/column that is not snake_case is used verbatim (M2) -----------
 
 (entity/defentity Event
   {:id [:int {:db/pk true}]

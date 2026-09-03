@@ -1,13 +1,13 @@
-### void/storage-s3 — the S3-compatible store (ADR-0039 §4).
+### void/storage-s3 — the S3-compatible store.
 ###
 ### One bucket behind an endpoint, spoken to with void's own stack and
-### nothing else: `http/client` carries the requests, `void/tls` makes
-### an https endpoint possible (the client refuses one without it,
-### naming the plugin — ADR-0038), and the SigV4 in ./sigv4 is
-### `void/crypto` all the way down. No SDK, no XML: the four object
-### operations and HEAD are status codes and headers, which is the
-### slice of S3 a storage store needs. Listing a bucket is an XML
-### document — deliberately not here until something needs it.
+### nothing else: `http/client` carries the requests, `void/tls` makes an
+### https endpoint possible (the client refuses one without it, naming the
+### plugin), and the SigV4 in ./sigv4 is `void/crypto` all the way down.
+### No SDK, no XML: the four object operations and HEAD are status codes
+### and headers, which is the slice of S3 a storage store needs. Listing a
+### bucket is an XML document — deliberately not here until something
+### needs it.
 ###
 ### **Path-style, on purpose.** Requests go to
 ### `<endpoint>/<bucket>/<key>` rather than to a bucket-named host:
@@ -48,10 +48,10 @@
   {:endpoint [:optional :string]
    :bucket [:optional :string]
    :region [:optional :string]
-   # a string in dev, a {:secret "MINIO_SECRET_KEY"} reference
-   # everywhere it matters — the resolved box is unwrapped at :start
-   # and never printed (ADR-0007 §5). :any because a secret box is an
-   # opaque table the schema layer has no name for
+   # a string in dev, a {:secret "MINIO_SECRET_KEY"} reference everywhere
+   # it matters — the resolved box is unwrapped at :start and never
+   # printed. :any because a secret box is an opaque table the schema
+   # layer has no name for
    :access-key [:optional :any]
    :secret-key [:optional :any]
    # where a browser reads a public object: a CDN, or the endpoint
@@ -92,7 +92,7 @@
   ``The store table for one [:storage-s3] slice: the parsed endpoint,
   the client, the revealed credentials. Parsing the endpoint is the
   https gate — a composition without void/tls is refused here, at
-  :start, with the plugin named (ADR-0038).``
+  :start, with the plugin named.``
   [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (def endpoint (require-str cfg :endpoint))
@@ -264,7 +264,7 @@
     (and void/tls when the endpoint is https). Selecting it is one
     config line — {:void/storage-store {:impl :storage/s3}} — and it is
     the line `[:deploy :shape] :fleet` asks for, because a bucket is
-    what every replica sees (ADR-0030)."
+    what every replica sees."
     :provides [:void/storage-store]
     # Every request this store makes is signed, and SigV4 is HMAC over
     # `void/crypto` — so the library has to be open before the store
@@ -272,17 +272,16 @@
     # here is what makes a **partial** bootstrap correct: a CLI command
     # starts what it declared in `:needs` plus that closure (`void jobs
     # work`, `void hub replay`), and a command that asked for the store
-    # and got it unsigned failed on the first fetch with a message
-    # about libcrypto — the same shape as the `:needs [:tls/lib]` a
-    # notify channel declares (ADR-0040 §3).
+    # and got it unsigned failed on the first fetch with a message about
+    # libcrypto — the same shape as the `:needs [:tls/lib]` a notify
+    # channel declares.
     #
     # An https endpoint additionally needs `:tls/lib`, and that one is
     # *not* here: it depends on the endpoint's scheme, which is config,
     # and a hard dependency would force every http-only deployment to
-    # compose void/tls. `make` refuses at :start, by name, when the
-    # scheme asks for a stack the composition does not carry (ADR-0038)
-    # — and a command that touches an https bucket declares `:tls/lib`
-    # the way a job does.
+    # compose void/tls. `make` refuses at :start, by name, when the scheme
+    # asks for a stack the composition does not carry — and a command that
+    # touches an https bucket declares `:tls/lib` the way a job does.
     :deps [:crypto/lib]
     :config {:key :storage-s3 :schema Config}
     :start

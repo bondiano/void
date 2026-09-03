@@ -1,5 +1,4 @@
-### void/proto/json — the proto3 JSON mapping (SPEC.md §5.7,
-### ADR-0013).
+### void/proto/json — the proto3 JSON mapping.
 ###
 ### protobuf defines *two* encodings, and this is the second one. It
 ### is not "the message, as JSON": it is a specified mapping with

@@ -5,9 +5,8 @@
 #
 # They are also deliberately self-contained — they run against the
 # database as it was, not against today's entities. A migration that
-# projected `defentity` would rewrite its own history every time a
-# field changed (generation from the entity registry is a v2 story,
-# SPEC §5.9).
+# projected `defentity` would rewrite its own history every time a field
+# changed (generation from the entity registry is a v2 story).
 
 (defn up []
   [{:create-table "authors"

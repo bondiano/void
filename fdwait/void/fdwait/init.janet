@@ -1,5 +1,4 @@
-### void/fdwait — "tell me when this descriptor is ready" (ADR-0011,
-### SPEC.md Appendix A).
+### void/fdwait — "tell me when this descriptor is ready" (Appendix A).
 ###
 ### A non-blocking C library owns its socket: it does the reading and
 ### the writing, and all it wants from the runtime is to be woken when

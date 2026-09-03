@@ -1,6 +1,5 @@
 ### void/jobs/state — the queue an application talks to: policy
-### resolution, enqueue, inspection and the lifecycle events (SPEC.md
-### §5.12, ADR-0012).
+### resolution, enqueue, inspection and the lifecycle events.
 ###
 ### The shape is void/db's and void/cache's, because the problem is:
 ### one component holds the value, a dyn overrides it for a scope
@@ -24,12 +23,12 @@
 ### sits between the application's and the job's, because a job that
 ### declares `:max-attempts 10` means it whichever queue it lands in.
 ###
-### Lifecycle events (ADR-0012) are fired here and in ./worker as
-### synchronous hooks — `:void.jobs/event` on the core hook registry,
-### plus any listener registered with `listen!`. They run on the fiber
-### that caused them, and a listener that throws is logged rather than
-### allowed to fail the job. This is the seam void/bus takes over in
-### wave 3; until it exists, "publish job events" means "run these".
+### Lifecycle events are fired here and in ./worker as synchronous hooks —
+### `:void.jobs/event` on the core hook registry, plus any listener
+### registered with `listen!`. They run on the fiber that caused them, and
+### a listener that throws is logged rather than allowed to fail the job.
+### This is the seam void/bus takes over in wave 3; until it exists,
+### "publish job events" means "run these".
 
 (import void/core/log :as log)
 (import void/core/hooks :as hooks)

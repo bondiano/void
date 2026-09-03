@@ -1,5 +1,4 @@
-### void/ws/rooms — the connection registry, rooms and broadcast
-### (SPEC §5.6, ADR-0028).
+### void/ws/rooms — the connection registry, rooms and broadcast.
 ###
 ### A room is a **set of connections under a keyword**, and that is the
 ### whole abstraction. There is no membership store, no persistence and
@@ -10,16 +9,16 @@
 ### room that pretended otherwise would be a worse version of both.
 ###
 ### **One encode, N enqueues.** A broadcast frames the message once and
-### hands the *same bytes* to every member, which is possible only
-### because a server never masks (RFC 6455 §5.3): the frame that goes
-### to the thousandth connection is byte for byte the one that went to
-### the first. That property is what makes B4 (§8.2: 1k connections,
-### 10k msg/s) an exercise in queueing rather than in encoding.
+### hands the *same bytes* to every member, which is possible only because
+### a server never masks (RFC 6455 §5.3): the frame that goes to the
+### thousandth connection is byte for byte the one that went to the first.
+### That property is what makes B4 (1k connections, 10k msg/s) an
+### exercise in queueing rather than in encoding.
 ###
 ### **Prefork is a boundary, and it is not hidden.** With
 ### `[:http :workers] > 1` each worker has its own registry, and a
 ### broadcast reaches the connections *that worker* holds — the same
-### shape ADR-0010 gives every other piece of per-worker state and the
+### shape every other piece of per-worker state has and the
 ### same one `void/pressure` reports per worker. There is nothing to
 ### aggregate over: prefork workers share nothing but the listening
 ### socket. An application that needs a fan-out across workers (or

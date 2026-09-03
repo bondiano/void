@@ -1,5 +1,4 @@
-### void/security/limit — rate limiting over the cache-store contract
-### (ADR-0025 §4).
+### void/security/limit — rate limiting over the cache-store contract.
 ###
 ### A limiter needs "key -> counter with a TTL and an increment". That
 ### is exactly `:void/cache-store` (wave 2), which already has a memory
@@ -49,7 +48,7 @@
   arithmetic: N processes counting separately let N times the
   configured limit through, so a fleet's "60 per minute" is 180 across
   three replicas. `[:deploy :shape] :fleet` refuses it at start
-  (ADR-0030) rather than let the number be discovered from a graph.``
+ rather than let the number be discovered from a graph.``
   [&opt opts]
   (default opts {})
   (def entries @{})

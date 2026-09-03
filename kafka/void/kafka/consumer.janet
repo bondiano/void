@@ -1,5 +1,5 @@
-### void/kafka/consumer — a balanced group member whose offset moves
-### only behind the handler (ADR-0035, SPEC.md §5.11).
+### void/kafka/consumer — a balanced group member whose offset moves only
+### behind the handler.
 ###
 ### At-least-once is two properties and one rule:
 ###
@@ -18,7 +18,7 @@
 ### Rebalancing is deliberately librdkafka's: with no REBALANCE event
 ### enabled the library assigns partitions itself, and this module has
 ### no opinion a group protocol would want to hear. The price is
-### named in ADR-0035 — between revoke and assign a group can see a
+### named up front — between revoke and assign a group can see a
 ### handful of duplicates, which is what at-least-once already means.
 ###
 ### Closing is the asynchronous half (`rd_kafka_consumer_close_queue`)

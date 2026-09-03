@@ -1,5 +1,4 @@
-### void/auth/store — where users, tokens and one-time codes live
-### (ADR-0023 §2).
+### void/auth/store — where users, tokens and one-time codes live.
 ###
 ### Three contracts, because void does not get to know an
 ### application's schema. Each is a plain dictionary of functions,
@@ -37,11 +36,11 @@
 ### that cannot do that atomically has to say so rather than pretend.
 ###
 ### Two of the three contracts also carry `:shared?` — "would a second
-### replica see this row" (ADR-0030). It matters for tokens and for
-### challenges, and `[:deploy :shape] :fleet` refuses a per-process one
-### at start: a magic link issued by replica A and clicked on replica B
-### is a login that fails for no reason the user can see, and an API
-### token minted on one replica authenticates on one replica. It does
+### replica see this row". It matters for tokens and for challenges, and
+### `[:deploy :shape] :fleet` refuses a per-process one at start: a magic
+### link issued by replica A and clicked on replica B is a login that
+### fails for no reason the user can see, and an API token minted on one
+### replica authenticates on one replica. It does
 ### **not** matter for the user store, and that is not an oversight: the
 ### in-process user store is seeded from `[:auth :users]`, so every
 ### replica reads the same configuration and holds the same users. A
@@ -83,8 +82,8 @@
 
   The hash lives under `:password-hash` rather than `:secret` because
   `{:secret "NAME"}` is how void/core/config spells an env-var
-  reference (ADR-0007) — a record with a `:secret` key in
-  `[:auth :users]` would be resolved as one and fail the boot.``
+  reference — a record with a `:secret` key in `[:auth :users]` would be
+  resolved as one and fail the boot.``
   [records &opt index]
   (default index [:email])
   # freeze, not table/to-struct: the caller may hand over either a
@@ -105,11 +104,11 @@
              (when-let [table (get indexes by)
                         subject (get table value)]
                (get by-subject subject))))
-   # `:password-hash`, not `:secret`: a config value shaped
-   # `{:secret "NAME"}` is an env-var reference to void/core/config
-   # (ADR-0007), so a store seeded from `[:auth :users]` would have its
-   # hashes resolved as environment variables and fail the boot with a
-   # message about a variable nobody wrote
+   # `:password-hash`, not `:secret`: a config value shaped `{:secret
+   # "NAME"}` is an env-var reference to void/core/config, so a store
+   # seeded from `[:auth :users]` would have its hashes resolved as
+   # environment variables and fail the boot with a message about a
+   # variable nobody wrote
    :secret (fn user-secret [rec] (get rec :password-hash))
    :subject (fn user-subject [rec] (get rec :subject))
    :claims (fn user-claims [rec] (get rec :claims {}))})
@@ -119,7 +118,7 @@
 (defn normalize-token-store
   ``Validate an API-token store. Records are {:id :digest :subject
   :name :scopes :expires :created :used}; the store never sees a
-  token, only its digest (ADR-0023 §5).``
+  token, only its digest.``
   [st]
   (unless (dictionary? st)
     (errorf "token store must be a dictionary, got %q" st))
@@ -130,7 +129,7 @@
       @{:name name
         # a store several replicas read; false means "this heap only",
         # which makes a token valid on the process that minted it and
-        # nowhere else (ADR-0030)
+        # nowhere else
         :shared? false
         # "when was this token last used" is an audit nicety, not a
         # contract: a store that will not write on every request says so
@@ -178,10 +177,9 @@
 
 (defn memory-challenge-store
   "An in-process challenge store. Single-use by construction, and
-  per-process — with prefork workers (ADR-0010) or a fleet, a code
-  issued by one process cannot be redeemed at another, which is what
-  void/auth-db is for and what `[:deploy :shape] :fleet` refuses to
-  start without (ADR-0030)."
+  per-process — with prefork workers or a fleet, a code issued by one
+  process cannot be redeemed at another, which is what void/auth-db is for
+  and what `[:deploy :shape] :fleet` refuses to start without."
   []
   (def rows @{})
   (defn now [] (os/time))
@@ -205,6 +203,6 @@
 (defn shared?
   "True when several processes see the same rows — the question
   `[:deploy :shape] :fleet` asks of every store it can reach
-  (ADR-0030)."
+."
   [st]
   (truthy? (get st :shared?)))

@@ -411,7 +411,7 @@
       "id": 11,
       "title": "Resident memory",
       "type": "timeseries",
-      "description": "void's budget is an RSS under 50 MB (SPEC \u00a78). config/prod.janet gives void/pressure a ceiling of 384 MB, above which the process sheds rather than being killed.",
+      "description": "void's budget is an RSS under 50 MB (\u00a78). config/prod.janet gives void/pressure a ceiling of 384 MB, above which the process sheds rather than being killed.",
       "gridPos": {
         "h": 7,
         "w": 8,

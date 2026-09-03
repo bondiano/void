@@ -1,7 +1,7 @@
-### The receiving end, driven the way GitHub drives it (ADR-0017):
-### test/inject puts a request through the whole chain — routing,
-### middleware, the handler, the store, the row — without opening a
-### socket, so what passes here is what a delivery gets.
+### The receiving end, driven the way GitHub drives it: test/inject puts a
+### request through the whole chain — routing, middleware, the handler,
+### the store, the row — without opening a socket, so what passes here is
+### what a delivery gets.
 ###
 ### The body is a **file**, not a literal, and it is shaped like the
 ### thing GitHub actually sends: the signature is over exact bytes, and
@@ -117,8 +117,8 @@
   # -- and what the rule did with it -------------------------------------
   #
   # the routing decision is made on the request fiber, where the request
-  # still is (ADR-0040): by the time the sender has its 202, the
-  # notification has been projected
+  # still is: by the time the sender has its 202, the notification has
+  # been projected
   (def notified (last (notify/outbox)))
   (assert notified "a delivery a rule covers is a notification")
   (assert (= "bondiano/void — push by bondiano" (notified :title)))
@@ -196,10 +196,10 @@
   #
   # `[:http :max-body]` is 64 KiB and is what a route that declares
   # nothing gets; the intake route declares GitHub's 25 MiB on itself.
-  # `:restrict` binds a route to the *metadata* layers above it, and
-  # this source declares none — asserted here because the shape used to
-  # be the other way round, and the inverse looks identical until you
-  # read what the application means (README, ROADMAP 6.6)
+  # `:restrict` binds a route to the *metadata* layers above it, and this
+  # source declares none — asserted here because the shape used to be the
+  # other way round, and the inverse looks identical until you read what
+  # the application means (README, 6.6)
   (assert (= 26214400 (get-in (http/explain-route "/in/github" :post)
                               [:meta :void.http/max-body]))
           "the route that receives a delivery says what a delivery weighs")

@@ -1,6 +1,6 @@
 (declare-project
   :name "void-cache"
-  :description "void/cache — the :void/cache interface, an in-process TTL+LRU store, the (cache/wrap f) decorator and a redis backend (SPEC §5.11)."
+  :description "void/cache — the :void/cache interface, an in-process TTL+LRU store, the (cache/wrap f) decorator and a redis backend."
   :version "0.0.1")
 
 # No dependencies. The kernel and the memory store are plain Janet;
@@ -10,7 +10,7 @@
 # neither pays for neither.
 #
 # What has to be on the module path is a projection of the package graph
-# (scripts/packages.janet, ADR-0020), not prose: see
+# (scripts/packages.janet), not prose: see
 # test-support/paths.janet.
 
 (declare-source

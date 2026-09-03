@@ -1,13 +1,12 @@
 ### void/auth/jwk — JSON Web Keys as the PEM libcrypto will open
-### (RFC 7517/7518, ADR-0032).
+### (RFC 7517/7518).
 ###
-### An authorization server publishes its public keys as JWKS: JSON
-### with base64url integers in it. `void/crypto/sign` opens keys from
-### PEM, because that is what `PEM_read_bio_PUBKEY` takes (ADR-0022 —
-### every primitive comes from libcrypto, and none of them is
-### reimplemented here). The gap between the two is an encoding, and
-### this module is that encoding and nothing else: a JWK in, a
-### `-----BEGIN PUBLIC KEY-----` block out.
+### An authorization server publishes its public keys as JWKS: JSON with
+### base64url integers in it. `void/crypto/sign` opens keys from PEM,
+### because that is what `PEM_read_bio_PUBKEY` takes (every primitive
+### comes from libcrypto, and none of them is reimplemented here). The gap
+### between the two is an encoding, and this module is that encoding and
+### nothing else: a JWK in, a `-----BEGIN PUBLIC KEY-----` block out.
 ###
 ### **It is DER writing, not cryptography.** SubjectPublicKeyInfo is
 ### four nested TLVs, the OIDs are constants out of the RFCs, and the

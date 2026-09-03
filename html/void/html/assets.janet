@@ -1,4 +1,4 @@
-### void/html/assets — the asset pipeline (SPEC.md §5.4).
+### void/html/assets — the asset pipeline.
 ###
 ### Production: build! walks the asset root, copies every file to its
 ### fingerprinted name (crc32 of the content in the filename) and

@@ -2,7 +2,7 @@
 (import void/ws/handshake :as handshake)
 (import void/ws/sha1 :as sha1)
 
-# -- sha1, against the vectors that define it ---------------------------
+# -- sha1, against the vectors that define it ----------------------------
 
 (defn- hex [s] (string/join (seq [b :in s] (string/format "%02x" b))))
 
@@ -16,7 +16,7 @@
           (string/format "sha1 of %d bytes matches the published vector"
                          (length input))))
 
-# -- the accept value the RFC prints (§1.3) ------------------------------
+# -- the accept value the RFC prints -------------------------------------
 
 (assert (= "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
            (handshake/accept-key "dGhlIHNhbXBsZSBub25jZQ=="))

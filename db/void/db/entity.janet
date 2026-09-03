@@ -1,5 +1,4 @@
-### void/db/entity — Data Mapper core with thin AR sugar (SPEC.md
-### §5.9, ADR-0009).
+### void/db/entity — Data Mapper core with thin AR sugar.
 ###
 ### `defentity` is defschema plus db-mapping: one declaration feeds
 ### validation, the repository, preload planning, migrations-diff,
@@ -11,12 +10,11 @@
 ###
 ### Entities are plain data. A loaded row is an ordinary table whose
 ### prototype carries the descriptor, the load-time snapshot and the
-### preloaded relations: `pp` prints the columns and nothing else,
-### `keys` lists the columns, `put`/`merge` are how you change a
-### record. `save!` diffs the table against its snapshot and writes
-### only the changed columns; there is no lazy loading, no Unit of
-### Work, and deliberately no lifecycle callbacks (audit and domain
-### events belong in the outbox, ADR-0012).
+### preloaded relations: `pp` prints the columns and nothing else, `keys`
+### lists the columns, `put`/`merge` are how you change a record. `save!`
+### diffs the table against its snapshot and writes only the changed
+### columns; there is no lazy loading, no Unit of Work, and deliberately
+### no lifecycle callbacks (audit and domain events belong in the outbox).
 ###
 ### N+1 is a bug the layer refuses to hide: `rel` on a relation nobody
 ### preloaded warns with the call site in dev and throws under
@@ -168,7 +166,7 @@
   descriptor is what the repository resolves, and
   (schema/db-annotations User) is what everything reading schemas
   alone — admin widgets, migrations-diff — gets to see. One
-  declaration, both readers (ADR-0008).``
+  declaration, both readers.``
   [name form &opt kvs]
   (default kvs [])
   (register! (descriptor name form ;kvs))
@@ -177,7 +175,7 @@
 
 (defmacro defentity
   ``Define an entity: a schema *and* its db-mapping in one declaration
-  (ADR-0009).
+.
 
       (defentity User
         {:id       [:uuid {:db/pk true}]
@@ -284,8 +282,8 @@
   (with-dyns [identity-map-dyn @{}] (f)))
 
 (defmacro with-identity-map
-  ``Run the body with a per-scope identity map (ADR-0009: opt-in, off
-  by default) — repeated `find`s of one row return one instance.``
+  ``Run the body with a per-scope identity map (opt-in, off by default)
+  — repeated `find`s of one row return one instance.``
   [& body]
   ~(,with-identity-map* (fn identity-map-body [] ,;body)))
 
@@ -443,7 +441,7 @@
       (def belongs? (= :belongs-to (relation :kind)))
       # belongs-to: our :key holds the target's pk; has-*: the target's
       # :key holds our pk — one batched IN query either way, never one
-      # query per row (ADR-0009)
+      # query per row
       (def local (if belongs? (relation :key) (desc :pk)))
       (def remote (if belongs? (get target :pk) (relation :key)))
       (def ids (distinct (filter |(not (nil? $)) (map |(get $ local) insts))))
@@ -522,7 +520,7 @@
 
   Preloaded relations are a table lookup. Anything else is an N+1 in
   the making: in dev it warns with the call site and loads the row, in
-  :strict it throws (ADR-0009). Either way the fix is :preload.``
+  :strict it throws. Either way the fix is :preload.``
   [inst rname]
   (def desc (descriptor-of inst))
   (rel-of desc rname)
@@ -611,7 +609,7 @@
 
 (defn save!
   ``Write back the fields that changed since the instance was loaded —
-  the AR half of ADR-0009, and nothing more:
+  the Active Record half, and nothing more:
 
       (-> u (put :email "x@y.z") (db/save!))
 

@@ -1,18 +1,18 @@
-### The in-process half of SPEC §8.2's "void/obs on vs off ≤ 7%
+### The in-process half of the "void/obs on vs off ≤ 7%
 ### throughput" — what obs costs a B1 request in CPU, measured from
 ### inside, for the edit-measure loop.
 ###
-### The workload is B1's (bench/apps/b1-json-echo): void/rest decodes
-### the 1KB order, the validation middleware checks it against the
-### schema, the handler echoes it back through the serialization
-### middleware. What is missing is the socket — inject runs the whole
-### stack without one (ADR-0017) — and that makes this reading
+### The workload is B1's (bench/apps/b1-json-echo): void/rest decodes the
+### 1KB order, the validation middleware checks it against the schema, the
+### handler echoes it back through the serialization middleware. What is
+### missing is the socket — inject runs the whole stack without one — and
+### that makes this reading
 ### **conservative**: the bytes wrk2 pushes through the kernel are
 ### denominator obs does not add to, so a ratio measured here is at
 ### least the ratio measured out there.
 ###
 ### The budget itself is a bench row, on the reference environment,
-### through wrk2, like every other §8.2 number:
+### through wrk2, like every other budgeted number:
 ###
 ###     void bench b1 b1-obs
 ###

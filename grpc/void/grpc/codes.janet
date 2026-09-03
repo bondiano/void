@@ -1,5 +1,4 @@
-### void/grpc/codes — the sixteen answers an RPC can fail with
-### (SPEC.md §5.8, ADR-0013).
+### void/grpc/codes — the sixteen answers an RPC can fail with.
 ###
 ### gRPC named them, Connect spells them in `snake_case` and carries
 ### them as an HTTP status plus a JSON body. All three spellings are

@@ -1,4 +1,4 @@
-### void/notify/notification — a notification is a table (ADR-0040 §1).
+### void/notify/notification — a notification is a table.
 ###
 ###     {:key   :order/shipped          what happened — required
 ###      :title "Your order shipped"    the one line every channel has — required
@@ -10,7 +10,7 @@
 ###
 ### There is no notification *class* with a `via()` and five `toX`
 ### methods. A notification is data all the way to the channel, for the
-### three reasons ADR-0026 gives for a message: it can be an argument
+### three reasons void/mail gives for a message being data: it can be an argument
 ### of a job, compared field by field in a test, and printed whole in a
 ### log.
 ###

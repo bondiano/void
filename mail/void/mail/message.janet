@@ -1,4 +1,4 @@
-### void/mail/message — a message is a table (ADR-0026 §1).
+### void/mail/message — a message is a table.
 ###
 ###     {:to "ada@example.com"
 ###      :subject "Your sign-in link"

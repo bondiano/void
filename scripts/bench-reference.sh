@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-### The reference-environment calibration run (ROADMAP 6.2, ADR-0014).
+### The reference-environment calibration run.
 ###
 ### Shared CI runners are only trusted with *relative* numbers; the
 ### absolute budgets of §8.2 (docs/BENCH-v0.1.md) want one clean
@@ -7,7 +7,7 @@
 ### release. This script is that run as one command: it sets a clean
 ### Ubuntu 24.04 host up (janet, jpm, the one native module, wrk,
 ### wrk2, a local Postgres, the Go and FastAPI baselines) and drives
-### the full методика — 3×60s per mode, warmup, all targets including
+### the full method — 3×60s per mode, warmup, all targets including
 ### the baselines — writing the result set where the repository keeps
 ### them.
 ###
@@ -24,7 +24,7 @@
 ###     cp results/reference-<host>-<date>.jdn results/baseline.jdn
 ###
 ### Numbers move into docs/BENCH-v0.1.md by hand, next to the
-### методика — that edit is the point of the exercise, not a side
+### the method — that edit is the point of the exercise, not a side
 ### effect this script hides.
 
 set -euo pipefail
@@ -98,7 +98,7 @@ host="$(hostname -s)"
 stamp="$(date +%Y%m%d)"
 out="results/reference-${host}-${stamp}.jdn"
 
-echo "== the full методика: 3×60s per mode, all targets (baselines included in 'all')"
+echo "== the full method: 3×60s per mode, all targets (baselines included in 'all')"
 echo "   (machine facts worth writing down next to the numbers:)"
 nproc; grep -m1 "model name" /proc/cpuinfo 2>/dev/null || true
 free -h | head -2 || true

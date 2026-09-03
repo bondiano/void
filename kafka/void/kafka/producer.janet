@@ -1,8 +1,7 @@
-### void/kafka/producer — produceva in, delivery reports out
-### (ADR-0035, SPEC.md §5.11).
+### void/kafka/producer — produceva in, delivery reports out.
 ###
 ### `produce!` has two modes, and the difference between them is the
-### whole reason ADR-0035 exists twice over:
+### whole reason this package exists twice over:
 ###
 ###   * confirmed (the default): the fiber parks until the broker's
 ###     delivery report arrives, and a report that says "failed" is an
@@ -90,7 +89,7 @@
 
   A nil `:key` lets the partitioner spread; a key routes every message
   with the same bytes to the same partition, which is the only
-  ordering Kafka has to offer (ADR-0035).``
+  ordering Kafka has to offer.``
   [p msg]
   (def c (p :client))
   (def topic (string (msg :topic)))
@@ -158,7 +157,7 @@
   ``Flush, stop the pump, release the handle. The flush is best
   effort with its remainder logged: at :stop the alternative to
   losing a queued message is holding the process, and the bounded
-  wait IS the policy (ADR-0035).``
+  wait IS the policy.``
   [p &opt timeout]
   (def left (flush! p timeout))
   (when (pos? left)

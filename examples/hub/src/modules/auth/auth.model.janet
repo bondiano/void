@@ -2,9 +2,9 @@
 ###
 ### The table is **the application's**: void/auth-db reads it
 ### (`[:auth-db :users]` in config/default.janet says which column means
-### what) and never writes to it, which is why registration and a
-### password change are handlers in this module rather than something a
-### plugin does behind them (ADR-0023 §2).
+### what) and never writes to it, which is why registration and a password
+### change are handlers in this module rather than something a plugin does
+### behind them.
 (import void/db :as db)
 
 (db/defentity User

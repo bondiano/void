@@ -1,4 +1,4 @@
-### Contributor bootstrap (ADR-0020). Run once from the repository root:
+### Contributor bootstrap. Run once from the repository root:
 ###
 ###     janet scripts/bootstrap.janet
 ###
@@ -34,8 +34,8 @@
   (each url (packages/jpm-dependencies true)
     (run "jpm" ;jpm-args "install" url))
 
-  # void/db-postgres parks its fibers on libpq's socket through this
-  # (ADR-0011); nothing else in the monorepo is compiled.
+  # void/db-postgres parks its fibers on libpq's socket through this;
+  # nothing else in the monorepo is compiled.
   (print "building void/fdwait")
   (def here (os/cwd))
   (defer (os/cd here)

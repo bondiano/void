@@ -97,12 +97,12 @@
 (assert (= 30 (get-in health [:meta :void.http/timeout]))
         "global default reaches other routes")
 
-# :restrict binds a route to the *layers above it* and to nothing else.
-# A source that declares no ceiling declares no ceiling: the one route
-# in an application that has to accept a 25 MiB webhook says so on
-# itself, and the rest of the application keeps [:http :max-body] —
-# which is the server's fallback for a route that names nothing, not an
-# outer metadata layer (examples/hub, ROADMAP 6.6).
+# :restrict binds a route to the *layers above it* and to nothing else. A
+# source that declares no ceiling declares no ceiling: the one route in an
+# application that has to accept a 25 MiB webhook says so on itself, and
+# the rest of the application keeps [:http :max-body] — which is the
+# server's fallback for a route that names nothing, not an outer metadata
+# layer (examples/hub, 6.6).
 (def raised
   (router/build-table
     {:sources [{:name :app

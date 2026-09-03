@@ -1,5 +1,5 @@
-### void/auth-oauth — the application as an OAuth 2.1 **resource
-### server** (RFC 6750/7662/8414/9728, MCP authorization; ADR-0032).
+### void/auth-oauth — the application as an OAuth 2.1 **resource server**
+### (RFC 6750/7662/8414/9728, MCP authorization).
 ###
 ### This is the half of OAuth an API needs and the half `void/oauth`
 ### (wave 5) will not have: not "log in with Google" — that is a
@@ -22,11 +22,11 @@
 ### composition that does not name it does not start.
 ###
 ### **Two ways to check a token, and the choice is the issuer's, not
-### ours.** A JWT is verified locally against the issuer's published
-### keys (JWKS, fetched lazily and cached; the key is opened once and
-### held for the process, per ADR-0022's note on key lifetimes) — no
-### network on the hot path. An opaque token has no structure to
-### verify, so it goes to the issuer's introspection endpoint (RFC
+### ours.** A JWT is verified locally against the issuer's published keys
+### (JWKS, fetched lazily and cached; the key is opened once and held for
+### the process, per the note on key lifetimes) — no network on the hot
+### path. An opaque token has no structure to verify, so it goes to the
+### issuer's introspection endpoint (RFC
 ### 7662) with the resource server's own client credentials. `:auto`
 ### tries the first and falls back to the second, which is what a
 ### deployment with both kinds of token needs.
@@ -681,10 +681,10 @@
 (def keys-component
   (system/component :auth.oauth/keys
     :doc "The issuer's public keys, opened once and held for the
-    process (ADR-0022 documents the lifetime). Fetched lazily on the
-    first token rather than at :start: an authorization server that is
-    down must not stop this application from starting, and a process
-    that never sees a token never calls it at all."
+    process (documents the lifetime). Fetched lazily on the first token
+    rather than at :start: an authorization server that is down must not
+    stop this application from starting, and a process that never sees a
+    token never calls it at all."
     :deps [:crypto/lib]
     :start
     (fn start [_ _]

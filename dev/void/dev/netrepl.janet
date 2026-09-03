@@ -1,4 +1,4 @@
-### void/dev/netrepl — in-process networked REPL (SPEC.md §4).
+### void/dev/netrepl — in-process networked REPL.
 ###
 ### spork/netrepl served from inside the running system — a unix
 ### socket in dev by default. Every connection lands in one shared

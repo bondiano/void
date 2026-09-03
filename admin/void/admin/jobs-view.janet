@@ -1,4 +1,4 @@
-### void/admin/jobs-view — the queue, as pages (ROADMAP 6.3).
+### void/admin/jobs-view — the queue, as pages.
 ###
 ### Horizon and Sidekiq-web, at the scale of the eight functions
 ### `:void/jobs-backend` already answers. Nothing here asks the backend

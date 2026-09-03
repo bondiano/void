@@ -1,12 +1,11 @@
-### void/bench/wrk — driving wrk/wrk2 and reading their output
-### (SPEC.md §8.3, ADR-0014).
+### void/bench/wrk — driving wrk/wrk2 and reading their output.
 ###
 ### wrk2 (fixed -R rate) is the only honest latency source — wrk's
 ### latency numbers under max throughput suffer coordinated omission
 ### and are parsed but only ever compared against themselves. Both
 ### tools print a `--latency` percentile block and a Requests/sec
 ### line; `parse` reads those plus the error counters, `summarize`
-### folds the per-run tables into medians (методика: median of 3×60s).
+### folds the per-run tables into medians (the method: median of 3×60s).
 
 (def- pct-line
   "A percentile row of either tool's --latency block:

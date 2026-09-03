@@ -1,4 +1,4 @@
-### void/dash — the dev dashboard as a projection (ROADMAP wave 7).
+### void/dash — the dev dashboard as a projection (wave 7).
 ###
 ### Phoenix has LiveDashboard and Clojure has Portal; void's kernel
 ### already answers everything either of them shows — plugin/inspect,
@@ -31,11 +31,10 @@
 ### behind `[:dash :allow-actions]` (true in :dev).
 ###
 ### **Live is an experiment the fallback does not wait for.** With
-### void/datastar in the composition the overview and the log page
-### ride a morph-stream — the page re-renders whole, Datastar morphs
-### the delta (ADR-0037's idiom, on its first real consumer). Without
-### it, htmx polls every 5 seconds, which is the same data a moment
-### later.
+### void/datastar in the composition the overview and the log page ride a
+### morph-stream — the page re-renders whole, Datastar morphs the delta
+### — the Datastar idiom, on its first real consumer. Without it, htmx
+### seconds, which is the same data a moment later.
 
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)

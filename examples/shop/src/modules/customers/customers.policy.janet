@@ -1,10 +1,9 @@
 ### shop/customers/policy — the role, and where a decision gets it from.
 ###
-### A policy is a **pure function of a context** (ADR-0024 §1), which
-### is why it lives next to the model it is about rather than in the
-### routes that enforce it: `test/policy-test.janet` runs the ones in
-### this application as a table of cases with no database, no HTTP and
-### no system anywhere.
+### A policy is a **pure function of a context**, which is why it lives
+### next to the model it is about rather than in the routes that enforce
+### it: `test/policy-test.janet` runs the ones in this application as a
+### table of cases with no database, no HTTP and no system anywhere.
 (import void/authz :as authz)
 (import void/auth :as auth)
 (import ./customers.repository :as repo)
@@ -22,7 +21,7 @@
    :doc "The role and address of the customer behind the subject, read when a policy asks and not before"
    :fn
    (fn customer-attrs [ctx]
-     ``Attributes are **pulled** (ADR-0024 §2), and this provider is
+     ``Attributes are **pulled**, and this provider is
      why that matters here.
 
      A session identity already carries `role` as a claim: void/auth-db

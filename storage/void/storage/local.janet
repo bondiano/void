@@ -1,4 +1,4 @@
-### void/storage/local — the disk store (ADR-0039 §3).
+### void/storage/local — the disk store.
 ###
 ### The default backend, and the one `void new && void dev` starts
 ### with: a root directory, keys as relative paths under it, nothing to
@@ -19,12 +19,11 @@
 ###
 ### **`url` is a relative URL, and only when there is a route.** The
 ### local store serves through void/storage-http (the existing static
-### machinery: etag, range — ADR-0039 §4); its URL is `[:storage :serve
-### :prefix]` + the encoded key, plus `exp`/`sig` query parameters when
-### the caller asked for a temporary one (./sign). A composition
-### without void/storage-http still stores and reads files — `url`
-### answering a path nothing serves would be a lie, so without the
-### serve prefix it is nil.
+### machinery: etag, range); its URL is `[:storage :serve :prefix]` + the
+### encoded key, plus `exp`/`sig` query parameters when the caller asked
+### for a temporary one (./sign). A composition without void/storage-http
+### still stores and reads files — `url` answering a path nothing serves
+### would be a lie, so without the serve prefix it is nil.
 
 (import void/http/static :as static)
 (import void/http/wire :as wire)

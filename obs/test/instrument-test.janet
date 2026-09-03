@@ -23,7 +23,7 @@
 
 (def empty-boot @{:system (system/init [] {}) :hooks (hooks/registry)})
 
-# -- needs that this composition does not have --------------------------
+# -- needs that this composition does not have ---------------------------
 
 (var installed-count 0)
 (def missing
@@ -36,7 +36,7 @@
 (assert (zero? installed-count)
         "quietly: 'observe the database if there is one' is the whole point, and a boot that failed because obs is present and Postgres is not would be an anti-feature")
 
-# -- an instrumentation with nothing to need ----------------------------
+# -- an instrumentation with nothing to need -----------------------------
 
 (var torn-down false)
 (def simple
@@ -60,7 +60,7 @@
 (assert (empty? (instrument/install! empty-boot [simple] [:test/other]))
         "and only those")
 
-# -- a broken instrumentation is not a broken boot ----------------------
+# -- a broken instrumentation is not a broken boot -----------------------
 
 (def broken {:name :test/broken :install (fn [_] (error "no"))})
 (assert (empty? (instrument/install! empty-boot [broken]))
@@ -96,7 +96,7 @@
 (assert (= 1 (metrics/value instrument/job-events ["enqueued" "-" "-"]))
         "a record with neither queue nor name still counts, under a constant label")
 
-# -- cache: a real component through its own public stats ---------------
+# -- cache: a real component through its own public stats ----------------
 
 (test/with-system [boot {:plugins [:void/cache]
                          :config {:cli {:log {:level :error}}}}]
@@ -121,9 +121,9 @@
   (assert (= 1 (value-of :void.cache/misses-total)))
   (assert (= 1 (value-of :void.cache/puts-total)))
 
-  # a component may be restarted under the instrumentation (the dev
-  # reload path, ADR-0002): the collector has to follow the new
-  # instance, not go on reporting the closed one
+  # a component may be restarted under the instrumentation (the dev reload
+  # path): the collector has to follow the new instance, not go on
+  # reporting the closed one
   (system/restart (boot :system) :cache/store)
   (def restarted (metrics/snapshot))
   (assert (zero? (get-in (first (filter |(= :void.cache/hits-total ($ :name)) restarted))

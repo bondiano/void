@@ -1,5 +1,4 @@
-### void/tls/stream — a TLS session as a stream-shaped table
-### (ADR-0038).
+### void/tls/stream — a TLS session as a stream-shaped table.
 ###
 ### The whole trick is that SSL never sees a socket. Each session gets
 ### a pair of memory BIOs: SSL reads ciphertext out of one and writes
@@ -7,18 +6,18 @@
 ### those BIOs and the real stream underneath. Every `SSL_*` call
 ### therefore returns immediately — plaintext, or WANT_READ — and the
 ### fiber parks exactly where it always parked: on the underlying
-### stream's read and write. The event-loop discipline of ADR-0010 is
+### stream's read and write. The event-loop discipline is
 ### untouched by construction.
 ###
 ### What comes back from `wrap`/`connect` is a table with `:read`,
-### `:write` and `:close` methods carrying the same signatures janet's
-### own streams answer to — `(:read s n buf timeout)` appends into
-### `buf` and returns it, nil on EOF, and a timeout surfaces as the
-### same "timeout" error `net/read` raises, because it *is* that
-### error, propagated from the raw read the fiber was parked on. A
-### consumer that switched from `(net/read s ...)` to `(:read s ...)`
-### stops knowing whether a socket or a TLS session is underneath;
-### that is the entire integration contract (ADR-0038 §4).
+### `:write` and `:close` methods carrying the same signatures janet's own
+### streams answer to — `(:read s n buf timeout)` appends into `buf` and
+### returns it, nil on EOF, and a timeout surfaces as the same "timeout"
+### error `net/read` raises, because it *is* that error, propagated from
+### the raw read the fiber was parked on. A consumer that switched from
+### `(net/read s ...)` to `(:read s ...)` stops knowing whether a socket
+### or a TLS session is underneath; that is the entire integration
+### contract.
 ###
 ### Verification is part of the handshake, not an afterthought:
 ### `SSL_VERIFY_PEER` plus `SSL_set1_host` before a single byte moves,
@@ -45,8 +44,7 @@
 (defn context
   ``Build an SSL_CTX.
 
-    :server?      accept side (test-support; ADR-0038 keeps inbound
-                  TLS at the proxy) — default false
+    :server?      accept side (test-support; keeps inbound TLS at the proxy) — default false
     :verify       check the peer's certificate chain (default true;
                   the :prod gate against false lives in the plugin)
     :ca-file      PEM bundle to trust instead of the library's default
@@ -324,8 +322,8 @@
       :raw raw
       :peer-name (or host "accept side")
       :closed false
-      # per-session scratch, allocated once (§8.5): ciphertext out,
-      # ciphertext in, plaintext out, and the size_t out-parameter
+      # per-session scratch, allocated once: ciphertext out, ciphertext
+      # in, plaintext out, and the size_t out-parameter
       :enc-buf (buffer/new-filled chunk-size)
       :raw-buf (buffer/new chunk-size)
       :plain-buf (buffer/new-filled chunk-size)
@@ -355,7 +353,7 @@
   `opts` are `wrap`'s; `:host` defaults to the host connected to —
   passing a different one is for a peer reached by IP whose
   certificate names something else. This function's shape (host, port,
-  opts -> stream) is what the consumer seams of ADR-0038 §4 hold.``
+  opts -> stream) is what the consumer seams hold.``
   [host port &opt opts]
   (default opts {})
   (def raw (net/connect host (string port) :stream))

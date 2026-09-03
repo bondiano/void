@@ -1,11 +1,11 @@
-### counter/app — the wave-5 example: the Biff idiom on void/datastar
-### (ADR-0037). One view function renders the whole page; every action
-### handler returns that same page, and the plugin answers a Datastar
-### client with the two morph events (<title> + <body>) instead of the
-### document. The live half: the page opens /live on mount, the stream
-### parks in the :counter room, and every mutation poke!s the room —
-### each open tab re-renders its own view and converges on the count.
-### "What exactly changed" is a question no code here answers.
+### counter/app — the wave-5 example: the Biff idiom on void/datastar.
+### One view function renders the whole page; every action handler returns
+### that same page, and the plugin answers a Datastar client with the two
+### morph events (<title> + <body>) instead of the document. The live
+### half: the page opens /live on mount, the stream parks in the :counter
+### room, and every mutation poke!s the room — each open tab re-renders
+### its own view and converges on the count. "What exactly changed" is a
+### question no code here answers.
 (import void/core/plugin :as plugin)
 (import void/http/router :as router)
 (import void/html :as html)
@@ -25,8 +25,8 @@
      # the <title> is state too — the morph patches it by selector,
      # the one piece of a document id-matching cannot reach
      [:title (string "counter — " (state :n))]
-     # datastar.js is an asset of the application, not the plugin
-     # (ADR-0037), the same way guestbook brings its own htmx
+     # datastar.js is an asset of the application, not the plugin, the
+     # same way guestbook brings its own htmx
      [:script {:type "module"
                :src "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.7/bundles/datastar.js"}]]
     [:body content]))
@@ -98,6 +98,6 @@
   (GET "/live" live {:name :counter/live}))
 
 (plugin/defplugin counter/app
-  :doc "counter application plugin — the Biff idiom (ADR-0037)."
+  :doc "counter application plugin — the Biff idiom."
   :version "0.1.0"
   :requires {:void/http ">=0.0.1" :void/html ">=0.0.1" :void/datastar ">=0.0.1"})

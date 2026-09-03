@@ -1,5 +1,4 @@
-### void/obs/log — what obs adds to the logger (SPEC.md §3.7 and
-### §5.13, ADR-0018).
+### void/obs/log — what obs adds to the logger.
 ###
 ### The logger itself is core and has been since wave 1: records are
 ### plain tables, levels are a per-namespace tree, the context is a
@@ -10,7 +9,7 @@
 ###                `:trace-id` and `:span-id`. There is no code for it
 ###                *here* — `trace/with-span` binds them into the log
 ###                context (`log/with-context`), which is exactly the
-###                seam ADR-0018 left for this. What this module adds
+###                seam the logger left for this. What this module adds
 ###                is the *use*: a sampling decision that keeps a
 ###                sampled trace's records whole.
 ###   sampling     a rate below a severity floor. A service at ten
@@ -25,18 +24,18 @@
 ###   file sinks   records to a file, from a writer fiber behind a
 ###                buffered channel, dropping (and counting) rather
 ###                than back-pressuring a request fiber — the jdn-sink
-###                bargain of ADR-0018, pointed at a path. Rotation is
+###                bargain of the logger, pointed at a path. Rotation is
 ###                the deployment's (logrotate + copytruncate, or
 ###                `reopen!` after a move); a log writer that renames
 ###                its own files is a second, worse cron.
 ###
 ### **There is no OTLP log sink, and that is now a choice.** The HTTP
-### client that spans and metrics needed exists (`void/http/client`,
-### ADR-0027 §7), so nothing technical is in the way: every log line
-### that reaches a file here reaches a collector through the agent
-### already reading it (vector, fluent-bit, promtail), which is how
-### most deployments would ship it anyway. The day that argument stops
-### holding, the sink is one contribution to `:void.core/log-sink`.
+### client that spans and metrics needed exists (`void/http/client`), so
+### nothing technical is in the way: every log line that reaches a file
+### here reaches a collector through the agent already reading it (vector,
+### fluent-bit, promtail), which is how most deployments would ship it
+### anyway. The day that argument stops holding, the sink is one
+### contribution to `:void.core/log-sink`.
 ###
 ### **Sampling replaces the sink list rather than adding to it.**
 ### Contributed sinks are *additive* (plugin/start! appends them), and
@@ -72,8 +71,8 @@
     {:doc "Log records dropped by obs log sampling"}))
 
 (def file-dropped
-  "Records a full file-sink buffer dropped (ADR-0018's bargain: logs
-  never take the service down, and every loss is counted)."
+  ``Records a full file-sink buffer dropped — the bargain: logs never
+  take the service down, and every loss is counted.``
   (metrics/counter :void.obs/log-file-dropped-total
     {:doc "Log records dropped by a full file-sink buffer"}))
 
@@ -125,7 +124,7 @@
 (var- installed-gate
   ``The gate function currently in the sink list, if it is still
   there. `log/configure!` replaces the whole list on every boot
-  (ADR-0018), so "what was under the gate" is only meaningful while
+, so "what was under the gate" is only meaningful while
   the gate is what the logger holds — a second boot in one process
   (a test suite, a REPL) starts from the new list, not from the one
   the previous boot wrapped.``
@@ -194,10 +193,10 @@
 
 (defn file-sink
   ``A sink writing one line per record to `:path`, from its own fiber
-  behind a buffered channel (ADR-0018): a full buffer drops the record
-  and counts it instead of back-pressuring the request fiber that
-  logged it, and `:fatal` is written synchronously because the process
-  may not be there for the next take.
+  behind a buffered channel: a full buffer drops the record and counts it
+  instead of back-pressuring the request fiber that logged it, and
+  `:fatal` is written synchronously because the process may not be there
+  for the next take.
 
   Options: `:path` (required), `:format` :jdn (default) or :json,
   `:buffer` (records, default 1024).

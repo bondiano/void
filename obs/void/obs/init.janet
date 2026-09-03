@@ -1,8 +1,8 @@
-### void/obs — observability (SPEC.md §5.13 and §8.4).
+### void/obs — observability.
 ###
 ### The three signals, and what each one is here:
 ###
-###   logs     the logger is core and has been since wave 1 (ADR-0018).
+###   logs     the logger is core and has been since wave 1.
 ###            obs adds trace correlation, sampling and file sinks —
 ###            ./log.
 ###   metrics  counters, gauges and histograms with a cardinality cap,
@@ -13,9 +13,9 @@
 ###            as an extension point — ./trace.
 ###
 ### plus the two things a single-threaded ev process cannot be run
-### without: an event-loop lag histogram (§8.4's "main health
-### indicator") and pool/queue instrumentation of whatever else is in
-### the composition — ./runtime, ./instrument.
+### without: an event-loop lag histogram (the "main health indicator") and
+### pool/queue instrumentation of whatever else is in the composition —
+### ./runtime, ./instrument.
 ###
 ### **Two plugins, and the seam is the HTTP kernel.**
 ###
@@ -45,7 +45,7 @@
 ### carrying the trace id of the span it happened in.
 ###
 ###   void/obs-otlp  OTLP/HTTP export of the spans and the metrics to
-###                  a collector — ./otlp, wave 4 (ADR-0027). It
+###                  a collector — ./otlp, wave 4. It
 ###                  arrived as a *contribution* to `:void.obs/exporter`
 ###                  and a second projection of `metrics/snapshot`, so
 ###                  nothing in the tracer or the registry changed to
@@ -53,9 +53,9 @@
 ###
 ### **What is deliberately not here.** An OTLP sink for *logs*. The
 ### HTTP client the other two signals needed exists now, so this is a
-### choice and not a gap (ADR-0027 §7): every record that reaches the
-### file reaches a collector through the agent already reading it,
-### which is how most deployments would ship logs anyway.
+### choice and not a gap: every record that reaches the file reaches a
+### collector through the agent already reading it, which is how most
+### deployments would ship logs anyway.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -91,7 +91,7 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.obs/instrument
-  :doc "Auto-instrumentation (SPEC §5.13): {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition"
+  :doc "Auto-instrumentation: {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition"
   :schema {:name :keyword
            :needs [:optional [:vector :keyword]]
            :install :function
@@ -149,8 +149,8 @@
   *collector* asks for, and that is where the number belongs once one
   exists.
 
-  `[:trace :always]` is false, and it is the decision behind SPEC
-  §8.2's ≤ 7% instrumentation budget. A request's root span is built
+  `[:trace :always]` is false, and it is the decision behind the
+  ≤ 7% instrumentation budget. A request's root span is built
   when something will consume it — an exporter, or a caller who sent
   a `traceparent` — and not otherwise, because a span table, two ids
   and an attribute map per request that no code ever reads is the
@@ -209,11 +209,11 @@
 
 # -- logs ----------------------------------------------------------------
 #
-# The logger is configured by plugin/start! before any component runs
-# (ADR-0018), and contributed sinks are installed there too — so the
-# file sink is a delegating contribution whose target this hook
-# supplies once the config is in, and the sampling gate wraps whatever
-# the list holds by then (obs's own sinks included).
+# The logger is configured by plugin/start! before any component runs,
+# and contributed sinks are installed there too — so the file sink is a
+# delegating contribution whose target this hook supplies once the config
+# is in, and the sampling gate wraps whatever the list holds by then
+# (obs's own sinks included).
 
 (var file-sink
   "The file sink state ({:fn :close! :reopen! :path}), or nil."
@@ -221,7 +221,7 @@
 
 (plugin/contribute! :void.core/log-sink
   {:name :obs/file
-   :doc "Records to [:obs :log :file :path], written by their own fiber (ADR-0018); inert until that path is configured"
+   :doc "Records to [:obs :log :file :path], written by their own fiber; inert until that path is configured"
    :fn (fn obs-file-sink [rec]
          (when-let [s file-sink] ((s :fn) rec)))})
 
@@ -251,7 +251,7 @@
   `void obs ...` is a *new* process, and the file to reopen belongs to
   the running one. Either rotate with `copytruncate`, which needs
   nothing from the process, or call this through the netrepl the
-  process is already carrying (SPEC part II §1.6) — `void repl`, then
+  process is already carrying — `void repl`, then
 
       (obs/reopen-file-sink!)
 
@@ -355,10 +355,10 @@
 (def registry-component
   (system/component :obs/registry
     :doc "The metric registry's runtime half: the cardinality cap from
-    config, the event-loop lag sampler (SPEC §8.4 — the health
-    indicator every other number is downstream of on a single-threaded
-    loop) and the process gauges. The metrics themselves are
-    module-level and outlive a restart, the way a counter should."
+    config, the event-loop lag sampler (the health indicator every other
+    number is downstream of on a single-threaded loop) and the process
+    gauges. The metrics themselves are module-level and outlive a restart,
+    the way a counter should."
     :provides [:void/obs]
     :config {:key :obs :schema Config}
     :start

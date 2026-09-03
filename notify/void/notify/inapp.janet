@@ -1,4 +1,4 @@
-### void/notify-inapp — the bell (ADR-0040 §6).
+### void/notify-inapp — the bell.
 ###
 ### The channel that delivers into the application itself: a row in the
 ### one table void owns here (./store) and four ordinary routes that
@@ -17,13 +17,13 @@
 ### shows up there.
 ###
 ### **The recipient is the identity in the dyn, never a parameter.**
-### Every route here answers about `(dyn :void.auth/identity)` and
-### every function in ./store takes the recipient as its first
-### argument, so a listing keyed by somebody else's id is not a bug
-### that can be written — there is no code path that would take one.
-### The dyn is read by name rather than by importing `void/auth`, the
-### way `void/authz` reads it (ADR-0024): an application with its own
-### authentication binds the same key and gets the same bell.
+### Every route here answers about `(dyn :void.auth/identity)` and every
+### function in ./store takes the recipient as its first argument, so a
+### listing keyed by somebody else's id is not a bug that can be written —
+### there is no code path that would take one. The dyn is read by name
+### rather than by importing `void/auth`, the way `void/authz` reads it:
+### an application with its own authentication binds the same key and gets
+### the same bell.
 ###
 ### **The views are vars**, the `void/mail-auth` pose: `badge-view` and
 ### `list-view` are replaced by assignment, and a single notification
@@ -51,7 +51,7 @@
 
 (def identity-dyn
   ``The dyn key `void/auth` publishes the current identity under, read
-  by name rather than by importing the package (ADR-0024).``
+  by name rather than by importing the package.``
   :void.auth/identity)
 
 (def Config
@@ -216,8 +216,7 @@
 
 (defn- own-routes
   # a function of boot, not a value: the mount prefix is configuration,
-  # which is not known when this manifest freezes (the ADR-0029 §12
-  # form)
+  # which is not known when this manifest freezes (the form)
   [_boot]
   (def base (prefix))
   (router/routes (if-let [policy (settings :policy)]

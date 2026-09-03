@@ -1,4 +1,4 @@
-### void/notify-jobs — delivery off the request path (ADR-0040 §3).
+### void/notify-jobs — delivery off the request path.
 ###
 ### Composing this plugin is the whole of "send notifications through a
 ### queue". It installs one function on `notify/enqueue`, and from that
@@ -15,9 +15,9 @@
 ### to say which of them actually went out.
 ###
 ### **What is queued is the projection**, not the notification: the
-### letter was rendered inside the request that meant it — with its
-### locale and its identity — and the retry sends that same letter with
-### the same Message-ID (ADR-0026 §5, generalized in ADR-0040 §2).
+### letter was rendered inside the request that meant it — with its locale
+### and its identity — and the retry sends that same letter with the same
+### Message-ID (generalized in).
 ###
 ### **A final answer is recorded, not retried.** The job asks the
 ### channel whether the failure was the far end's last word
@@ -62,9 +62,9 @@
        :channel channel
        :id (get payload :id)
        # the far end's own words. A channel throws a value so that
-       # `permanent?` can read a status off it (ADR-0040), and this is
-       # the record somebody reads afterwards — `(string result)` put
-       # the struct's address here
+       # `permanent?` can read a status off it, and this is the record
+       # somebody reads afterwards — `(string result)` put the struct's
+       # address here
        :message (log/message-of result)})
     (error result)))
 
@@ -80,13 +80,13 @@
               (fn enqueue-notification [channel payload]
                 (jobs/enqueue :notify-deliver channel payload)))
          # What the delivery needs *open* is a fact about the channels,
-         # not about the queue: `:deliver` runs on a worker, a worker is
-         # a CLI command, and a command starts what it declared and
-         # nothing else. A channel that posts over https says `:tls/lib`
-         # and this is where that reaches the job — the union over the
-         # channels this process delivers on, so `void jobs work` opens
-         # them and a composed-but-unstarted TLS stack stops being five
-         # failed attempts and a message about libssl (ROADMAP 6.6)
+         # not about the queue: `:deliver` runs on a worker, a worker is a
+         # CLI command, and a command starts what it declared and nothing
+         # else. A channel that posts over https says `:tls/lib` and this
+         # is where that reaches the job — the union over the channels
+         # this process delivers on, so `void jobs work` opens them and a
+         # composed-but-unstarted TLS stack stops being five failed
+         # attempts and a message about libssl
          (def needs
            (distinct (mapcat |(get (notify/channel-named $) :needs [])
                              (notify/active))))

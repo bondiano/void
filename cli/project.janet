@@ -5,7 +5,7 @@
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
 # What has to be on the module path is a projection of the package graph
-# (scripts/packages.janet, ADR-0020), not prose: see
+# (scripts/packages.janet), not prose: see
 # test-support/paths.janet. The suite reaches
 # further than the CLI does: it runs `void new` and then boots the
 # generated project, which is the full wave-1 plugin list.

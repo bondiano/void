@@ -1,9 +1,8 @@
-### void/redis — the redis client plugin (SPEC.md §5.10).
+### void/redis — the redis client plugin.
 ###
-### RESP2 and RESP3 in pure Janet on the ev loop: a connection is a
-### `net/` stream and a buffer, so there is no native module here, no
-### thread pool, and no blocking call on the loop (ADR-0010). What
-### lives where:
+### RESP2 and RESP3 in pure Janet on the ev loop: a connection is a `net/`
+### stream and a buffer, so there is no native module here, no thread
+### pool, and no blocking call on the loop. What lives where:
 ###
 ###   ./resp      the wire format — the scanner and the PEG
 ###   ./config    [:redis] -> what one connection opens with
@@ -37,16 +36,15 @@
 ### CLI or a worker never drags the HTTP kernel in, exactly as
 ### void/db-http is to void/db.
 ###
-### What this plugin deliberately does not do: TLS (ADR-0010 — put a
-### proxy in front, or use a unix socket; `rediss://` says so rather
-### than pretending), Cluster and Sentinel (both are a different
-### client — MOVED/ASK redirection and a topology to track — and both
-### want their own ADR), and the `:void/cache` and
-### `:void/queue-backend` interfaces, which arrive with the plugins
-### that define them in 2.3 and 2.4. The primitives those are built out
-### of are all here: TTLs, atomic counters, `SET NX` locks, sorted sets
-### for delayed work, blocking pops, and Lua scripts for the steps that
-### must be one step.
+### What this plugin deliberately does not do: TLS (put a proxy in front,
+### or use a unix socket; `rediss:, ` says so rather than pretending),
+### Cluster and Sentinel (both are a different client — MOVED/ASK
+### redirection and a topology to track — and both want their own ADR),
+### and the `:void/cache` and `:void/queue-backend` interfaces, which
+### arrive with the plugins that define them in 2.3 and 2.4. The
+### primitives those are built out of are all here: TTLs, atomic counters,
+### `SET NX` locks, sorted sets for delayed work, blocking pops, and Lua
+### scripts for the steps that must be one step.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)

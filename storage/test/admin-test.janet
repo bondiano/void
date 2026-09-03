@@ -1,9 +1,8 @@
-### The upload widget through the whole admin (ADR-0017): a declared
-### resource with one `:file` field, and the four things that have to
-### be true of it — the form says multipart, the control is a file
-### input carrying the field's own :accept, a submitted file is stored
-### and its *key* saved, and an edit that chooses no file keeps what is
-### there.
+### The upload widget through the whole admin: a declared resource with
+### one `:file` field, and the four things that have to be true of it —
+### the form says multipart, the control is a file input carrying the
+### field's own :accept, a submitted file is stored and its *key* saved,
+### and an edit that chooses no file keeps what is there.
 ###
 ### The application below declares nothing about storage beyond the
 ### schema annotation. That is the claim being tested: a column added
@@ -96,7 +95,7 @@
                                "content-type" (enc :content-type)}
                     :body (enc :body)}))
 
-  # -- the widget was chosen, and it says why -----------------------------
+  # -- the widget was chosen, and it says why ----------------------------
 
   (def entries (admin-ctx/widget-entries :photos))
   (assert (= :void.storage/upload (get-in entries [:image :widget :name]))
@@ -106,7 +105,7 @@
   (assert (= :void.admin/form (get-in entries [:title :widget :name]))
           "and everything else still falls back to html/form's projection")
 
-  # -- the form -----------------------------------------------------------
+  # -- the form ----------------------------------------------------------
 
   (def new-page (test/inject c {:uri "/admin/photos/new"}))
   (assert (= 200 (new-page :status)))
@@ -118,7 +117,7 @@
           "carrying the media types the schema annotated")
   (def token (csrf-of new-page))
 
-  # -- creating with a file -----------------------------------------------
+  # -- creating with a file ----------------------------------------------
 
   (def created (upload "/admin/photos" token
                        [{:name "title" :value "a cat"}
@@ -135,7 +134,7 @@
   (assert (= "PNG-BYTES" (string (storage/get (row :image))))
           "with the bytes in the store")
 
-  # -- what the desk shows ------------------------------------------------
+  # -- what the desk shows -----------------------------------------------
 
   (def listing (text (test/inject c {:uri "/admin/photos"})))
   (assert (string/find (string "/files/" (row :image)) listing)
@@ -146,7 +145,7 @@
   (assert (string/find "storage-preview" detail)
           "the detail page draws the larger preview")
 
-  # -- editing without choosing a file ------------------------------------
+  # -- editing without choosing a file -----------------------------------
 
   (def edit-page (test/inject c {:uri (string "/admin/photos/" (row :id) "/edit")}))
   (def etoken (csrf-of edit-page))
@@ -164,7 +163,7 @@
   (assert (= (row :image) (after :image))
           "and an untouched file input did not erase the object")
 
-  # -- replacing ------------------------------------------------------------
+  # -- replacing ---------------------------------------------------------
 
   (def replaced (upload (string "/admin/photos/" (row :id)) etoken
                         [{:name "title" :value "the same cat"}
@@ -177,7 +176,7 @@
   (assert (= "PNG-BYTES" (string (storage/get (row :image))))
           "and the old object is still there — sweeping orphans is a decision, not a side effect")
 
-  # -- what the server refuses whatever the browser filtered --------------
+  # -- what the server refuses whatever the browser filtered -------------
 
   (def wrong-type (upload "/admin/photos" token
                           [{:name "title" :value "a script"}
@@ -201,7 +200,7 @@
   (assert (nil? (db/one Photo {:where [:= :title "a script"]}))
           "neither of them wrote a row")
 
-  # -- a file the schema did not ask for ----------------------------------
+  # -- a file the schema did not ask for ---------------------------------
 
   (def no-file (upload "/admin/photos" token [{:name "title" :value "no image"}]))
   (assert (index-of (no-file :status) [303 204])

@@ -11,7 +11,7 @@
 
 (log/set-level! "void" :error)
 
-# The claim ADR-0019 makes about the refusal — "503 through the
+# The claim this plugin makes about the refusal — "503 through the
 # standard error path: problem+json with void/rest, the ordinary
 # rendering without it" — is a claim about a plugin this package does
 # not depend on, so it is only true if something loads both and looks.

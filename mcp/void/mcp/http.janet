@@ -1,12 +1,10 @@
-### void/mcp-http — MCP over HTTP, as a route (SPEC.md §5.18,
-### ADR-0031).
+### void/mcp-http — MCP over HTTP, as a route.
 ###
 ### The second transport, and a separate plugin in this package: an
 ### agent talking to a jobs worker over stdio has no reason to compose
 ### an HTTP kernel — the void/cache — void/cache-http split.
 ###
-### **It is a route, and that is the whole security story** (the form
-### of ADR-0028): `POST /mcp` goes through routing, the phase chain,
+### **It is a route, and that is the whole security story** (the form of): `POST /mcp` goes through routing, the phase chain,
 ### `void/security`'s headers and limits, `void/pressure`'s shedding
 ### and whatever the application put in front of it. Nothing here
 ### re-implements any of that.
@@ -17,7 +15,7 @@
 ### pinned to a process — the server holds the stream, the client
 ### posts to it by session id, and the two must land on the same
 ### replica. That is a store outside one process's reach, which under
-### `[:deploy :shape] :fleet` is exactly what ADR-0030 refuses. So:
+### `[:deploy :shape] :fleet` is exactly what the shared-store rule refuses. So:
 ### Streamable HTTP, no `Mcp-Session-Id` issued, every POST
 ### self-contained. A `GET /mcp` gets 405 and a sentence saying why —
 ### which is the answer the specification prescribes for a server with
@@ -35,20 +33,19 @@
 ### to stream.
 ###
 ### **The gate has two settings, for two sizes of deployment.**
-### `[:mcp-http :auth] :token` is a shared bearer token compared
-### without leaking its prefix — one operator, one agent, one secret.
-### `:identity` is the real one: the request must arrive with an
-### authenticated identity, and with every scope `[:mcp-http :scopes]`
-### names. It is read from `void/auth`'s **dyn key** rather than by
-### importing the package (ADR-0023 §1) — so an OAuth access token
-### verified by `void/auth-oauth` (ADR-0032), a session cookie, or an
-### application's own authentication all satisfy it, and this plugin
-### knows about none of them. A refusal carries `WWW-Authenticate`
-### with the RFC 6750 code and, when `[:mcp-http :resource-metadata]`
-### names it, the pointer to this server's protected-resource
-### document: that pointer is how an MCP client discovers *which*
-### authorization server to go to, and it is the difference between
-### "401" and "401, and here is how to fix it".
+### `[:mcp-http :auth] :token` is a shared bearer token compared without
+### leaking its prefix — one operator, one agent, one secret. `:identity`
+### is the real one: the request must arrive with an authenticated
+### identity, and with every scope `[:mcp-http :scopes]` names. It is read
+### from `void/auth`'s **dyn key** rather than by importing the package —
+### so an OAuth access token verified by `void/auth-oauth`, a session
+### cookie, or an application's own authentication all satisfy it, and
+### this plugin knows about none of them. A refusal carries
+### `WWW-Authenticate` with the RFC 6750 code and, when `[:mcp-http
+### :resource-metadata]` names it, the pointer to this server's
+### protected-resource document: that pointer is how an MCP client
+### discovers *which* authorization server to go to, and it is the
+### difference between "401" and "401, and here is how to fix it".
 ###
 ### The Origin allowlist is the DNS-rebinding defence the
 ### specification asks for: a browser always sends `Origin`, an agent
@@ -102,7 +99,7 @@
 (def identity-dyn
   ``Where the current identity lives — `void/auth`'s dyn key, read by
   name rather than by importing the package. That indirection is
-  ADR-0023's and ADR-0024's, and it is what lets this plugin accept an
+  void/auth's and void/authz's, and it is what lets this plugin accept an
   OAuth access token (void/auth-oauth), a session cookie or an
   application's own authentication without knowing which is in the
   composition, or whether any of them is.``

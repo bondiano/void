@@ -1,7 +1,6 @@
-### void/kafka/bus — the :kafka contribution to `:void.bus/backend`
-### (ADR-0035, ADR-0012, SPEC.md §5.22).
+### void/kafka/bus — the :kafka contribution to `:void.bus/backend`.
 ###
-### The last backend from ADR-0012's list, and the test of its claim
+### The last backend on the list, and the test of its claim
 ### that the contract was already shaped for streams with consumer
 ### groups. It was: a bus group IS a Kafka consumer group, ack and
 ### nack are already "returned" and "threw", and the one thing that
@@ -86,7 +85,7 @@
   (unless (peg/match topic-peg s)
     (errorf (string "kafka bus backend: topic %q cannot travel — a Kafka "
                     "topic is [a-zA-Z0-9._-] and the / -> . mapping reserves "
-                    "the dot (ADR-0035)") topic))
+                    "the dot") topic))
   (string prefix (string/replace-all "/" "." s)))
 
 (defn bus-topic
@@ -256,7 +255,7 @@
 
 (plugin/contribute! :void.bus/backend
   {:name :kafka
-   :doc "Kafka through librdkafka's event API (ADR-0035): at-least-once with the offset moving behind the handler, durable because publish! returns on the broker's acknowledgement, shared because that is what a broker is. Payload travels as the message value, envelope id and meta as headers — readable by consumers that are not void."
+   :doc "Kafka through librdkafka's event API: at-least-once with the offset moving behind the handler, durable because publish! returns on the broker's acknowledgement, shared because that is what a broker is. Payload travels as the message value, envelope id and meta as headers — readable by consumers that are not void."
    :make (fn make-kafka-backend [_]
            (def kcfg (bus-state/config-slice :kafka))
            (def bcfg (slice (bus-state/config-slice :kafka-bus)))
@@ -277,7 +276,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/kafka-bus
-  :doc "The bus over Kafka: consumer groups are Kafka's own, publish! is the broker's acknowledgement, a nack redelivers in place while the offset waits, and the payload on the wire is readable by consumers that never heard of void (ADR-0035)."
+  :doc "The bus over Kafka: consumer groups are Kafka's own, publish! is the broker's acknowledgement, a nack redelivers in place while the offset waits, and the payload on the wire is readable by consumers that never heard of void."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/bus ">=0.0.1" :void/kafka ">=0.0.1"}
   :config-key :kafka-bus

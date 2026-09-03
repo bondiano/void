@@ -1,6 +1,6 @@
 ### The MCP methods over a server value — the protocol without a
-### transport (ADR-0031). Everything here is a table in and a table
-### out, which is the point of ./server holding no state.
+### transport. Everything here is a table in and a table out, which is the
+### point of ./server holding no state.
 
 (import ../test-support/paths)
 (import void/mcp/jsonrpc :as rpc)

@@ -1,4 +1,4 @@
-### void/storage/state — the active store (ADR-0039 §2).
+### void/storage/state — the active store.
 ###
 ### One store per process, the void/cache pose: the :storage/store
 ### component's :start sets `current-store`, a dyn overrides it for a
@@ -69,6 +69,6 @@
   (((active-store) :url) (key/check! k) (or opts {})))
 
 (defn shared?
-  "Does every replica see the objects of the active store? (ADR-0030)"
+  "Does every replica see the objects of the active store?"
   []
   (store/shared? (active-store)))

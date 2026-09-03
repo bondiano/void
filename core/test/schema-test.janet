@@ -27,7 +27,7 @@
 (expect-error "unknown head" "unknown schema head :strng"
               |(schema/normalize [:strng {}]))
 
-# -- the SPEC §3.3 example -----------------------------------------------
+# -- the worked example ---------------------------------------------------
 
 (schema/defschema CreateUser
   "A new user."
@@ -59,8 +59,8 @@
 
 # -- localizable messages ------------------------------------------------
 
-(with-dyns [:void.schema/messages {:min (fn [e] "слишком мало")}]
-  (assert (string/find "слишком мало"
+(with-dyns [:void.schema/messages {:min (fn [e] "too small")}]
+  (assert (string/find "too small"
                        (schema/error-str (first (errors-of [:int {:min 5}] 1))))
           "messages table from the dyn overrides the default text")
   (assert (string/find "expected" (schema/error-str (first (errors-of :int "x"))))

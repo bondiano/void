@@ -1,5 +1,4 @@
-### void/http/prefork — multi-core via preforked worker processes
-### (ADR-0010).
+### void/http/prefork — multi-core via preforked worker processes.
 ###
 ### N worker processes × SO_REUSEPORT: janet's net/listen already sets
 ### SO_REUSEPORT (and SO_REUSEADDR) on platforms that have it, so every
@@ -13,7 +12,7 @@
 ### seconds, stop sends SIGTERM (each worker's void/run! drains
 ### gracefully) and escalates to SIGKILL at the deadline.
 ###
-### ADR-0010 honesty: with workers > 1 nothing in-process is shared —
+### The honest part: with workers > 1 nothing in-process is shared —
 ### memory sessions, caches and rate limits must live in an external
 ### store; void/http/init refuses memory sessions in prefork mode.
 

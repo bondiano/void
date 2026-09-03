@@ -9,7 +9,7 @@
 
 (log/set-level! "void" :error)
 
-# The seam ADR-0012 asks for: "tracing continuation из HTTP" — a
+# The seam the design asks for — a trace continued out of HTTP: a
 # trace that starts in a request and continues in whatever consumes
 # the message that request published.
 #

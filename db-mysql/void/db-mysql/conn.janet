@@ -1,5 +1,4 @@
-### void/db-mysql/conn — one connection, seen from the ev loop
-### (ADR-0033, SPEC.md §5.10).
+### void/db-mysql/conn — one connection, seen from the ev loop.
 ###
 ### ./worker is the thread that owns the MYSQL*. This is the half that
 ### talks to it: `open` starts the thread and waits for it to say
@@ -236,7 +235,7 @@
   ``Run one statement and return {:rows [...] :count n}, plus
   :insert-id for a write. Parameters are the builder's — `?`
   placeholders, values out of band here and rendered into literals on
-  the far side (./types explains why, ADR-0033 decides it).``
+  the far side (./types explains why, decides it).``
   [h sql &opt params opts]
   (ask h [:execute (string sql) (or params []) (or opts {})]
        (string/format "running %s" (string/slice (string sql) 0 (min 120 (length (string sql)))))))

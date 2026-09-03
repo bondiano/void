@@ -1,5 +1,4 @@
-### void/proto/codec — a value against a descriptor (SPEC.md §5.7,
-### ADR-0013).
+### void/proto/codec — a value against a descriptor.
 ###
 ### Encode and decode, and the proto3 semantics that make the two
 ### asymmetric. What the format decided and this module obeys:

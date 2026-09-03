@@ -1,5 +1,4 @@
-### void/mail — mail as data, delivery as a composition decision
-### (SPEC.md §5.19, ADR-0026).
+### void/mail — mail as data, delivery as a composition decision.
 ###
 ### The shape of this package is one sentence: **a message is data, a
 ### body is a void/html view, a transport is a contribution, and
@@ -37,9 +36,9 @@
 ### like a deployment that works.
 ###
 ### What is deliberately not here: TLS of our own (a relay next to the
-### application remains the default — ADR-0010; with `:void/tls`
-### composed, [:mail :smtp :tls] turns on STARTTLS or smtps, ADR-0038),
-### IMAP/POP, and a connection pool (see ./smtp).
+### application remains the default; with `:void/tls` composed, [:mail
+### :smtp :tls] turns on STARTTLS or smtps), IMAP/POP, and a connection
+### pool (see ./smtp).
 
 (import void/core/plugin :as plugin)
 (import void/core/config :as config)
@@ -60,7 +59,7 @@
 # -- extension point -----------------------------------------------------
 
 (plugin/defextension-point :void.mail/transport
-  :doc "Mail transports (ADR-0026): {:name :smtp :send (fn [delivery] receipt) :doc string?}; [:mail :transport] names the one this process uses. A delivery is {:message :bytes :id :at}; a receipt is {:transport :id :accepted :rejected}"
+  :doc "Mail transports: {:name :smtp :send (fn [delivery] receipt) :doc string?}; [:mail :transport] names the one this process uses. A delivery is {:message :bytes :id :at}; a receipt is {:transport :id :accepted :rejected}"
   :schema {:name :keyword
            :doc [:optional :string]
            :send :function
@@ -153,7 +152,7 @@
   nil)
 
 (def sent-hook
-  "Core-hook name every receipt passes through. void/bus (3.6) turns
+  "Core-hook name every receipt passes through. void/bus turns
   these into events; obs can count them."
   :void.mail/sent)
 

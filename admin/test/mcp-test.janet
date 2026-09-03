@@ -1,11 +1,10 @@
-### The admin-as-MCP promise (ADR-0029), checked: the same
-### declarations become MCP tools and resources with the same ABAC
-### policies, and `void/admin` does not carry a line about MCP to make
-### it happen.
+### The admin-as-MCP promise, checked: the same declarations become MCP
+### tools and resources with the same ABAC policies, and `void/admin` does
+### not carry a line about MCP to make it happen.
 ###
 ### Two claims are worth more than the rest here. First, the input
 ### schema of the create tool **is** the resource's form schema — not a
-### copy that will drift, the same value. Second, the gate of ADR-0031
+### copy that will drift, the same value. Second, the gate
 ### applies unchanged: reading is exposed, writing waits for an
 ### operator to name it, and nothing about that is special-cased for
 ### the admin.
@@ -39,8 +38,8 @@
   :actions {:finish {:label "Finish"
                      :apply (fn [row req] (db/save! (put row :done true)))}})
 
-# a declaration written for the agent and for an inline: no section in
-# the menu, and every bit of it still readable here (ADR-0029 §1)
+# a declaration written for the agent and for an inline: no section in the
+# menu, and every bit of it still readable here
 (admin/defresource-admin hidden Note :mount false :form [:title])
 
 # a scope that needs an identity the call may not carry — what a tenant
@@ -84,7 +83,7 @@
     (db/execute-sql "INSERT INTO notes (owner, title, done) VALUES (?, ?, 0)"
                     [owner title] {:kind :write})))
 
-# -- the gate of ADR-0031, unchanged -------------------------------------
+# -- the gate, unchanged --------------------------------------------------
 
 (def b (boot))
 (defer (test/stop! b)
@@ -202,7 +201,7 @@
   (assert (string/find "admin.notes/show" (get out :text))
           "and it names the policy the declaration already published")
   (assert (not (string/find "tenant mismatch" (get out :text)))
-          "the *reason* is for the decision log, never for the caller (ADR-0024 §3)"))
+          "the *reason* is for the decision log, never for the caller"))
 (authz/register-policy! {:name :admin.notes/show :fn (fn [_] true)})
 
 # -- the start-time warning about a derived projection -------------------

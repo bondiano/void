@@ -1,10 +1,10 @@
-### void/i18n/message — message rendering (ADR-0036): named {param}
-### interpolation and plural-form selection. Positions were rejected in
-### the ADR — a translation reorders words, and with them printf's
-### argument order. "{{" escapes a literal brace; an absent parameter
-### stays "{name}" verbatim — visible on the page, never a crash: an
-### error message renders from an attacker-controlled value and has no
-### right to reach a 500.
+### void/i18n/message — message rendering: named {param} interpolation and
+### plural-form selection. Positions were rejected in the ADR — a
+### translation reorders words, and with them printf's argument order.
+### "{{" escapes a literal brace; an absent parameter stays "{name}"
+### verbatim — visible on the page, never a crash: an error message
+### renders from an attacker-controlled value and has no right to reach a
+### 500.
 
 (def- interp-peg
   (peg/compile

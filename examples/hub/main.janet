@@ -8,12 +8,11 @@
 ###   VOID_HUB_STORAGE=s3       delivery bodies in a bucket (a
 ###                             directory by default)
 ###
-### Everything else is identical between a laptop and the compose file
-### in ./docker-compose.yml. Both switches are the same switch really:
+### Everything else is identical between a laptop and the compose file in
+### ./docker-compose.yml. Both switches are the same switch really:
 ### `[:deploy :shape] :fleet` asks every store whether a second replica
-### would see its contents, and a file on one container's disk is the
-### one answer this application would otherwise get wrong (ADR-0030,
-### ADR-0039).
+### would see its contents, and a file on one container's disk is the one
+### answer this application would otherwise get wrong.
 (import void/cli :as cli)
 (import void/http)
 (import void/html)
@@ -43,7 +42,7 @@
 (import void/pressure)
 (import void/pressure/http)
 # and the sending end: a queue in the same database as the deliveries,
-# notifications over it, and the TLS an https bot API needs (ADR-0038)
+# notifications over it, and the TLS an https bot API needs
 (import void/jobs)
 (import void/jobs/db)
 (import void/notify)
@@ -62,7 +61,7 @@
   ``The `:void/db-driver` plugin per database. sqlite is imported at the
   top of this file — it is the laptop's default and the driver `jpm
   build` links into a binary — while postgres is *required* here, so a
-  process that never speaks to one never opens libpq at all (ADR-0011).``
+  process that never speaks to one never opens libpq at all.``
   {:sqlite (fn [] :void/db-sqlite)
    :postgres (fn [] (require "void/db-postgres/init") :void/db-postgres)})
 
@@ -71,7 +70,7 @@
   imported for the reason the driver is: a laptop keeping delivery
   bodies in ./storage never loads a signer. void/tls is imported
   regardless — the telegram channel needs it whatever the store is
-  (ADR-0038).``
+.``
   []
   (require "void/storage/s3")
   [:void/storage-s3])
@@ -95,44 +94,40 @@
   (filter
     |(or (not= :void/dev $) (not= :prod profile))
     [:void/http :void/html :void/htmx
-     # data, and the one driver this deployment names: the library
-     # sqlite needs is janet-lang/sqlite3, which the void bundle
-     # deliberately does not carry (ADR-0011) — hence the second line
-     # in ./project.janet
+     # data, and the one driver this deployment names: the library sqlite
+     # needs is janet-lang/sqlite3, which the void bundle deliberately
+     # does not carry — hence the second line in ./project.janet
      # void/db-http is two things this application asks of the same
      # plugin: the transaction the admin's writing routes declare with
-     # `:void.db/txn`, and the session store a fleet needs — a session
-     # in a process's heap is a login that works on one replica
+     # `:void.db/txn`, and the session store a fleet needs — a session in
+     # a process's heap is a login that works on one replica
      :void/db :void/db-http (load-driver)
-     # every hash and every one-time code is minted in
-     # void/crypto (ADR-0022); the identity, the session and the
-     # stores read the tables ./auth declared; void/security is
-     # the CSRF token the forms already carry (ADR-0025)
+     # every hash and every one-time code is minted in void/crypto; the
+     # identity, the session and the stores read the tables ./auth
+     # declared; void/security is the CSRF token the forms already carry
      :void/crypto
      :void/auth :void/auth-http :void/auth-db
      # who is asking is void/auth's answer; what they may do is
-     # void/authz's, and the two never import each other — the
-     # identity travels on a dyn key (ADR-0024). `[:admin
-     # :access] :hub/operator` is the one line that opens the
-     # desk, and ./admin.janet is where that policy is written
+     # void/authz's, and the two never import each other — the identity
+     # travels on a dyn key. `[:admin :access] :hub/operator` is the one
+     # line that opens the desk, and ./admin.janet is where that policy is
+     # written
      :void/authz :void/authz-http
      :void/security
-     # a challenge nobody delivered is an error rather than a
-     # link into the void (ADR-0023 §7), so the deliverer is
-     # part of the composition and not an afterthought
+     # a challenge nobody delivered is an error rather than a link into
+     # the void, so the deliverer is part of the composition and not an
+     # afterthought
      :void/mail :void/mail-auth
-     # the raw body of every delivery, kept verbatim: a disk
-     # directory on a laptop, a bucket where there is more than
-     # one replica (ADR-0030, ADR-0039)
+     # the raw body of every delivery, kept verbatim: a disk directory on
+     # a laptop, a bucket where there is more than one replica
      :void/storage
-     # ...and the route that hands those bytes back is the disk
-     # store's half of the contract, so it is composed with it:
-     # void/storage-http serves the local root under `[:storage
-     # :serve :signed] true`, and with a bucket behind the
-     # contract the same link is S3's own query auth, minted by
-     # the store and pointed at the bucket (ADR-0039 §4-§5). A
-     # deployment on a bucket that also mounted this route would
-     # be publishing a directory it does not use
+     # ...and the route that hands those bytes back is the disk store's
+     # half of the contract, so it is composed with it: void/storage-http
+     # serves the local root under `[:storage :serve :signed] true`, and
+     # with a bucket behind the contract the same link is S3's own query
+     # auth, minted by the store and pointed at the bucket. A deployment
+     # on a bucket that also mounted this route would be publishing a
+     # directory it does not use
      ;(if (get opts :bucket) (bucket-plugins) [:void/storage-http])
      # deliveries arrive in bursts — a push to a busy repository
      # is a dozen events in a second — and shedding is the
@@ -142,28 +137,26 @@
      # sentence needs: /health is what an orchestrator asks, and
      # void/pressure-http never sheds it — so the answer arrives
      # *while* the process is refusing everything else, which is
-     # exactly when it is being asked (ADR-0019). /metrics comes
-     # with it, behind a token
+     # exactly when it is being asked. /metrics comes with it, behind a
+     # token
      :void/obs :void/obs-http
      :void/pressure :void/pressure-http
-     # the queue lives in the same database as the deliveries,
-     # which is what lets a delivery and the work it caused
-     # commit together (ADR-0012)
+     # the queue lives in the same database as the deliveries, which is
+     # what lets a delivery and the work it caused commit together
      :void/jobs :void/jobs-db
-     # one event, however many channels the composition holds —
-     # here exactly one, and it is this application's own
-     # (ADR-0040). :void/notify-jobs is what moves delivery off
-     # the request fiber: a job per channel, retried with the
-     # value the request projected
+     # one event, however many channels the composition holds — here
+     # exactly one, and it is this application's own. :void/notify-jobs
+     # is what moves delivery off the request fiber: a job per channel,
+     # retried with the value the request projected
      :void/notify :void/notify-jobs
-     # api.telegram.org is https, and outgoing TLS is a plugin
-     # rather than an assumption (ADR-0038)
+     # api.telegram.org is https, and outgoing TLS is a plugin rather than
+     # an assumption
      :void/tls
      # the desk. void/admin projects ./admin.janet's one
      # declaration into routes; void/admin-jobs brings the
      # section that shows the queue — which is this
      # application's main screen rather than a demo of one
-     # (ROADMAP 6.6)
+     #
      :void/admin :void/admin-jobs
      :void/dev
      :hub/app]))
@@ -182,7 +175,7 @@
   directory, nothing to install), on in the compose file — where the
   web tier is more than one process, and a body written to one
   replica's disk is a 404 on the next for the operator who came to read
-  it (ADR-0030, ADR-0039).``
+  it.``
   []
   (truthy? (let [v (os/getenv "VOID_HUB_STORAGE")]
              (and v (= "s3" (string/ascii-lower v))))))

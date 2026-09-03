@@ -26,7 +26,7 @@
 (def [no-crypto] (protect (plugin/dry-run {:plugins ["void/http/init" "void/security/init"]
                                            :profile :test :config (config {})})))
 (assert (not no-crypto)
-        "void/security does not compose without void/crypto: every token it issues is signed (ADR-0022 §6)")
+        "void/security does not compose without void/crypto: every token it issues is signed")
 
 (each [slice reason]
   [[{:security {:csp {:policy {:scripts-src [:self]}}}} "a misspelled CSP directive"]

@@ -1,5 +1,4 @@
-### void/grpc/mount — a method is a route (SPEC.md §5.8, ADR-0005,
-### ADR-0013).
+### void/grpc/mount — a method is a route.
 ###
 ### The projection, and the whole architectural claim of this package.
 ### Every registered method becomes a real route in the one route
@@ -13,7 +12,7 @@
 ### `:void.db/txn` opens the same transaction. void/obs' RED metrics
 ### label it by route name. void/security's headers and limits are in
 ### front of it. void/pressure sheds it. **Nothing in this package
-### re-implements any of that**, which is the payoff ADR-0013 promised
+### re-implements any of that**, which is the payoff this design promised
 ### for choosing Connect over HTTP/1.1 instead of a second server.
 ###
 ### A method's route metadata is the service's layer merged with the
@@ -61,7 +60,7 @@
   []
   (dyn call-dyn))
 
-# -- one call -------------------------------------------------------------
+# -- one call ------------------------------------------------------------
 
 (defn- run-handler
   ``Call the handler, honouring the client's `Connect-Timeout-Ms`.
@@ -69,7 +68,7 @@
   With a deadline the call runs as its own task, so the deadline
   cancels *that* and never the fiber underneath — the same shape
   void/http's `run-handler` uses, and for the same upstream reason
-  (ADR-0015, janet-lang/janet#1337).``
+  (janet-lang/janet#1337).``
   [call handler message req timeout]
   (defn invoke [] (with-dyns [call-dyn call] (handler message req)))
   (if (nil? timeout)
@@ -156,19 +155,19 @@
 (defn handler-for
   "The route handler of one method — a closure over the service, the
   method and the handler resolved against the declaring module's
-  environment (late binding, ADR-0002)."
+  environment (late binding)."
   [svc m]
   (def handler (resolve-handler svc m))
   (fn rpc-route [req] (answer svc m handler req)))
 
-# -- the route table ------------------------------------------------------
+# -- the route table -----------------------------------------------------
 
 (defn method-meta
   ``The metadata one method's *route* carries. The service's own layer
   is not merged in here: it is the route group's, and merging it is
   the router's job — with provenance, and with `:restrict` keys that
-  may only be tightened (ADR-0005). Two merges that could disagree is
-  one merge too many.``
+  may only be tightened. Two merges that could disagree is one merge too
+  many.``
   [svc m]
   (merge {:name (m :route-name)
           :void.grpc/service (svc :name)

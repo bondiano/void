@@ -1,4 +1,4 @@
-### void/auth/token — API tokens (ADR-0023 §5).
+### void/auth/token — API tokens.
 ###
 ### A token is `<prefix><id>.<secret>`:
 ###
@@ -10,10 +10,10 @@
 ### the digest is enough to check one.
 ###
 ### **Why SHA-256 and not scrypt.** The secret is already uniform
-### randomness; a KDF exists to make *guessable* inputs expensive to
-### try, and there is nothing to guess here. Running scrypt would cost
-### 25 ms on every API request (ADR-0022 §5) and buy no bits. Passwords
-### are the exact opposite case, which is why they cost what they cost.
+### randomness; a KDF exists to make *guessable* inputs expensive to try,
+### and there is nothing to guess here. Running scrypt would cost 25 ms on
+### every API request and buy no bits. Passwords are the exact opposite
+### case, which is why they cost what they cost.
 ###
 ### **Why the id is separate from the secret.** Without it, checking a
 ### token means scanning every row, or indexing the digest and giving
@@ -107,7 +107,7 @@
                    {:via :bearer
                     # a bearer token is not carried by a cookie, so a
                     # request holding one is not subject to CSRF
-                    # (ADR-0025 §1)
+                    #
                     :cookie false
                     :claims (merge (get record :claims {})
                                    {:scopes (get record :scopes [])

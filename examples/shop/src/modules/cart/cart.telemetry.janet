@@ -1,10 +1,9 @@
 ### shop/cart/telemetry — the one number this module is judged on.
 ###
-### void/obs already answers "how many requests, how fast, how many
-### 500s" from the route table (ADR-0021): nothing in a `*.telemetry`
-### file is about HTTP. What is here is the half only the application
-### knows, and it is declared at module load so the hot path does no
-### work but the write.
+### void/obs already answers "how many requests, how fast, how many 500s"
+### from the route table: nothing in a `*.telemetry` file is about HTTP.
+### What is here is the half only the application knows, and it is
+### declared at module load so the hot path does no work but the write.
 ###
 ### This one is **pull-based**. "How many carts are open" is a property
 ### of the database, not a count of events this process saw, so it is a

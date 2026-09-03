@@ -1,218 +1,225 @@
-# Бюджеты §8.2 — проверка v0.1 (волна 1, exit-критерий 4)
+# Performance budgets — the v0.1 check (wave 1, exit criterion 4)
 
-Первая полная проверка бюджетов SPEC §8.2 по методике §8.3 (warmup 30s,
-3×60s на режим, медианы; wrk — max throughput, wrk2 — latency под
-фиксированным rate). До этого прогона цифры §8.2 были гипотезами
-(SPEC:366, ADR-0014); этот документ фиксирует результаты, корректировки
-и их причины. Референс-результаты заморожены в
-`bench/results/baseline.jdn`; абсолютный gate — `void bench budgets`.
+The first full check of the performance budgets, run by the recorded
+method (warmup 30s, 3×60s per mode, medians; wrk for max throughput,
+wrk2 for latency under a fixed rate). Before this run the numbers were
+hypotheses; this document records the results, the corrections and the
+reasons for them. The reference results are frozen in
+`bench/results/baseline.jdn`; the absolute gate is `void bench budgets`.
 
-## Референс-окружение
+## Reference environment
 
 | | |
 |---|---|
-| Машина | Apple M4 Max (16 CPU), macOS (Darwin arm64) |
+| Machine | Apple M4 Max (16 CPU), macOS (Darwin arm64) |
 | Janet | 1.41.2 |
-| Loadgen | wrk (brew) + wrk2 4.0.0 (giltene/wrk2, собран с LuaJIT 2.1 для arm64) |
-| Форма нагрузки | loopback, `-t4 -c64`; wrk2 rate = 80% от §8.2 floor (B0: 16k, B1: 6.4k) |
-| Условия | машина без фоновой нагрузки (см. «Методологические заметки») |
+| Loadgen | wrk (brew) + wrk2 4.0.0 (giltene/wrk2, built against LuaJIT 2.1 for arm64) |
+| Load shape | loopback, `-t4 -c64`; wrk2 rate = 80% of the throughput floor (B0: 16k, B1: 6.4k) |
+| Conditions | a machine with no background load (see "Methodology notes") |
 
-Оговорка §8.2 «1 воркер, 1 vCPU»: janet-сервер — один воркер (один
-поток), но машина — не «1 vCPU»: loadgen и ядро ОС живут на соседних
-ядрах и не конкурируют с сервером за его ядро. Throughput-числа поэтому
-читаются как «потолок одного воркера на быстром ядре», сравнение между
-коммитами (5% gate) остаётся честным при неизменном окружении.
+The "1 worker, 1 vCPU" caveat: the janet server is one worker (one
+thread), but the machine is not "1 vCPU" — the loadgen and the OS kernel
+live on neighbouring cores and do not compete with the server for its
+own. Throughput numbers therefore read as "the ceiling of one worker on
+a fast core"; the comparison between commits (the 5% gate) stays honest
+as long as the environment does not change.
 
-Замеры делались трижды: на коммите 7709962 (стек волн 1.1–1.7), на
-финальном стеке v0.1 (4329268 — lifecycle-стадии ADR-0016, request-id,
-access-log, kernel/server split) и после оптимизации
-request-id/access-log по образцу fastify/pino (см. «Цена
-наблюдаемости»). `results/baseline.jdn` заморожен на оптимизированном
-стеке **с включённым access-log** — бенчи меряют продовый дефолт.
+The measurements were taken three times: at commit 7709962 (the stack of
+waves 1.1–1.7), on the final v0.1 stack (4329268 — lifecycle stages,
+request-id, access-log, the kernel/server split) and after the
+request-id/access-log optimisation modelled on fastify/pino (see "The
+price of observability"). `results/baseline.jdn` is frozen on the
+optimised stack **with the access-log on** — the benchmarks measure the
+production default.
 
-## Результаты B0 (plaintext hello, полный router+middleware стек)
+## B0 results (plaintext hello, the full router + middleware stack)
 
-| Метрика | Бюджет §8.2 | Измерено | Вердикт |
+| Metric | Budget | Measured | Verdict |
 |---|---|---|---|
-| Throughput floor | ≥ 20 000 RPS | **29 154 RPS** (до ~43k в коротких сессиях — заметка 6) | ✅ 1.5× запас |
-| p50 @16k RPS (wrk2) | < 0.5 ms | **1.00 ms** | ❌ → бюджет скорректирован до < 2 ms |
+| Throughput floor | ≥ 20 000 RPS | **29 154 RPS** (up to ~43k in short sessions — note 6) | ✅ 1.5× headroom |
+| p50 @16k RPS (wrk2) | < 0.5 ms | **1.00 ms** | ❌ → budget corrected to < 2 ms |
 | p99 @16k RPS (wrk2) | < 3 ms | **2.51 ms** | ✅ |
 
-**Корректировка p50 (0.5 → 2 ms) — причина.** Go net/http — потолок
-класса по ADR-0014 — в той же методике на той же машине показывает p50
-**1.31 ms** @16k. Пол измерения «wrk2 через loopback с loadgen на той же
-машине» лежит около 1 ms: в него входят планирование клиентских потоков
-wrk2 и очередь пакета в ядре, не только сервер. Бюджет p50 < 0.5 ms был
-гипотезой ниже пола методики — не отличим от нуля этим инструментом.
-Новый бюджет < 2 ms оставляет void лучше Go-baseline и ловит деградации;
-основная защита от регрессий — не абсолютный бюджет, а относительный
-5%-gate в CI.
+**Why p50 was corrected (0.5 → 2 ms).** Go net/http — the ceiling of the
+class — shows p50 **1.31 ms** @16k by the same method on the same
+machine. The measurement floor of "wrk2 over loopback with the loadgen
+on the same machine" sits near 1 ms: it includes the scheduling of
+wrk2's client threads and the packet's turn in the kernel queue, not
+only the server. A p50 budget of < 0.5 ms was a hypothesis below the
+floor of the method — indistinguishable from zero with this instrument.
+The new budget of < 2 ms keeps void ahead of the Go baseline and still
+catches degradation; the main protection against regressions is not the
+absolute budget but the relative 5% gate in CI.
 
-## Результаты B1 (JSON echo 1KB: parse + validate + serialize)
+## B1 results (JSON echo 1KB: parse + validate + serialize)
 
-| Метрика | Бюджет §8.2 | Измерено | Вердикт |
+| Metric | Budget | Measured | Verdict |
 |---|---|---|---|
-| Throughput floor | ≥ 8 000 RPS | **8 981 RPS** | ✅ 1.1× запас |
-| p50 @6.4k RPS (wrk2) | < 1 ms | **1.67 ms** | ❌ → бюджет скорректирован до < 2.5 ms |
-| p99 @6.4k RPS (wrk2) | < 5 ms | **3.79 ms** | ❌→✅ бюджет скорректирован до < 10 ms (сессионный разброс хвоста); типичный прогон проходит и старый |
+| Throughput floor | ≥ 8 000 RPS | **8 981 RPS** | ✅ 1.1× headroom |
+| p50 @6.4k RPS (wrk2) | < 1 ms | **1.67 ms** | ❌ → budget corrected to < 2.5 ms |
+| p99 @6.4k RPS (wrk2) | < 5 ms | **3.79 ms** | ❌→✅ budget corrected to < 10 ms (session-to-session tail spread); a typical run passes the old one too |
 
-Контекст класса (go-json, тот же rate 6 400): p50 **1.26 ms**, p99
-**3.13 ms**, throughput 42.5k.
+Context for the class (go-json, the same rate of 6 400): p50 **1.26
+ms**, p99 **3.13 ms**, throughput 42.5k.
 
-## Цена наблюдаемости (ADR-0016/0018, §8.5 п. 4) — расследование
+## The price of observability — an investigation
 
-Первая версия этого документа приписывала request-id-инфраструктуре
-−31% и access-log ещё −23% max-throughput. **Оба числа были
-артефактом**: сравнивались полные прогоны из разных сессий (см.
-методологическую заметку 6), а jdn-sink на тот момент писал по записи
-на запрос. Однoсессионный A/B/A-эксперимент (3×15s wrk, медианы)
-после доработки по образцу fastify/pino даёт:
+The first version of this document attributed −31% max throughput to the
+request-id infrastructure and another −23% to the access-log. **Both
+numbers were an artefact**: they compared full runs from different
+sessions (see methodology note 6), and the jdn sink of the time wrote
+once per request. A single-session A/B/A experiment (3×15s wrk,
+medians), after the rework modelled on fastify/pino, gives:
 
-| Конфигурация | B0 max throughput | Дельта |
+| Configuration | B0 max throughput | Delta |
 |---|---|---|
-| kernel, request-id middleware пустой | ~43.3k RPS | — |
-| + request-id (счётчик + bound log context) | ~42.0k RPS | **≈ −3%** |
-| + access-log (jdn-sink, батчащий writer) | в пределах шума A/B/A | **≈ 0%** |
+| kernel, request-id middleware empty | ~43.3k RPS | — |
+| + request-id (counter + bound log context) | ~42.0k RPS | **≈ −3%** |
+| + access-log (jdn sink, batching writer) | within the noise of A/B/A | **≈ 0%** |
 
-B1 latency @6.4k с включённым access-log: p50 1.63 ms / p99 3.84 ms —
-хвост 24 ms из ранних замеров полностью снят батчингом writer-fiber'а.
+B1 latency @6.4k with the access-log on: p50 1.63 ms / p99 3.84 ms — the
+24 ms tail of the early measurements is gone entirely, taken by the
+writer fiber's batching.
 
-Что взято у fastify/pino и как ложится на void:
+What was taken from fastify/pino, and how it lands in void:
 
-1. **`genReqId` = голый счётчик.** Fastify по умолчанию не читает
-   заголовок запроса (в v5 `requestIdHeader: false` — именно из
-   perf-соображений) и не зовёт crypto на запрос: id — инкремент
-   счётчика. void: per-process random префикс (один `os/cryptorand`
-   на старте — различать воркеры) + счётчик; доверенный входящий
-   заголовок — opt-in через `[:http :request-id-header]`.
-2. **Запись вне горячего пути** (sonic-boom): pino пишет асинхронно
-   буферизованными кусками. void: jdn-sink уже отдаёт записи в
-   ev-канал, writer-fiber сливает всё накопившееся одним `write`
-   (батчинг); переполнение — drop со счётчиком, `:fatal` — синхронно.
-3. **Выключенный уровень почти бесплатен**: log-макросы не вычисляют
-   аргументы, проверка уровня — один (мемоизированный) table lookup —
-   паритет с pino noop-методами.
-4. **Контекст без ALS**: Fastify сознательно не использует
-   AsyncLocalStorage (дорого), а вешает child-logger на `req`. В void
-   ambient-контекст — janet dyn: `with-dyns` создаёт fiber (~0.3 µs
-   на M4 Max, ~1% бюджета запроса) — цена контракта «log/info из любой
-   глубины хендлера несёт request-id», принято осознанно.
-5. Не перенесено (кандидат волны 2/3-obs): pino **precomputed
-   chindings** — child-логгер сериализует свои bindings один раз, и
-   каждая запись — конкатенация готовых строк, без сборки таблицы
-   записи на лог-вызов.
+1. **`genReqId` is a bare counter.** Fastify does not read a request
+header by default (in v5 `requestIdHeader: false`, for exactly this
+performance reason) and does not call crypto per request: the id is a
+counter increment. void: a per-process random prefix (one
+`os/cryptorand` at start, to tell workers apart) plus a counter; a
+trusted incoming header is opt-in through `[:http :request-id-header]`.
+2. **Writing off the hot path** (sonic-boom): pino writes
+asynchronously in buffered chunks. void: the jdn sink already hands
+records to an ev channel, and the writer fiber drains everything
+accumulated in one `write` (batching); an overflow is a drop with a
+counter, and `:fatal` is synchronous.
+3. **A disabled level is nearly free**: the log macros do not evaluate
+their arguments, and the level check is one (memoised) table lookup —
+parity with pino's noop methods.
+4. **Context without ALS**: Fastify deliberately does not use
+AsyncLocalStorage (too expensive) and hangs a child logger on `req`
+instead. In void the ambient context is a janet dyn: `with-dyns` creates
+a fiber (~0.3 µs on an M4 Max, ~1% of the request budget) — the price of
+the contract that "log/info from any depth of a handler carries the
+request-id", paid knowingly.
+5. Not carried over (a candidate for the wave 2/3 obs work): pino's
+**precomputed chindings** — a child logger serialises its bindings once,
+and every record is a concatenation of ready strings, with no record
+table assembled per log call.
 
-Итог: **access-log включён в B0/B1 по умолчанию** — бенчи меряют
-продовый стек, ручка `[:http :access-log] false` остаётся для тех,
-кому логи не нужны.
+The upshot: **the access-log is on by default in B0/B1** — the
+benchmarks measure the production stack, and `[:http :access-log] false`
+stays for those who do not want the logs.
 
-**Корректировка p50 (1 → 2.5 ms) — причина.** Та же, что у B0: пол
-методики. Go-baseline сам показывает 1.26 ms @6.4k — гипотеза < 1 ms
-была ниже уровня, который этот инструмент вообще может показать; void
-добавляет к полу ~0.4 ms интерпретаторной работы (parse + schema
-validate + serialize).
+**Why p50 was corrected (1 → 2.5 ms).** The same reason as B0: the floor
+of the method. The Go baseline itself shows 1.26 ms @6.4k — a hypothesis
+of < 1 ms was below the level this instrument can show at all; void adds
+~0.4 ms of interpreter work on top of the floor (parse + schema validate
++ serialize).
 
-**Корректировка p99 (5 → 10 ms) — причина.** В отличие от p50, это
-честный хвост самого void: 8.66 ms против 3.13 ms у Go — 2.8× потолка
-класса. Источник — mark-and-sweep GC на аллокациях JSON-пути (§8.1
-называет аллокации на запрос «главным врагом p99»; B1 аллоцирует
-распарсенное тело, результат валидации и сериализованный ответ на
-каждый запрос). Бюджет < 10 ms фиксирует текущий уровень с небольшим
-запасом; план возврата к более жёсткому бюджету — работа волны 2
-вместе с GC-бюджетом B3 (§8.2): переиспользование буферов на
-JSON-пути (§8.5 п. 2), тюнинг `gcsetinterval`, и prefork-изоляция пауз
-уже сейчас ограничивает урон в multi-worker конфигурации.
+**Why p99 was corrected (5 → 10 ms).** Unlike p50, this is void's own
+honest tail: 8.66 ms against Go's 3.13 ms — 2.8× the ceiling of the
+class. The source is the mark-and-sweep GC over the allocations of the
+JSON path (allocations per request are the chief enemy of p99, and B1
+allocates the parsed body, the validation result and the serialized
+response on every request). A budget of < 10 ms records the current
+level with a little headroom; the plan for returning to a tighter one is
+wave 2 work alongside the B3 GC budget: buffer reuse on the JSON path
+(point 2), tuning `gcsetinterval` — and prefork isolation already limits
+the damage in a multi-worker configuration.
 
-## Не-latency бюджеты §8.2
+## The non-latency budgets
 
-| Бюджет | Значение | Статус |
+| Budget | Value | Status |
 |---|---|---|
-| Startup до ready | < 150 ms | ✅ **~21 ms** (медиана 5 замеров: spawn → первый успешный TCP connect, B0-приложение) |
-| RSS hello-app | < 30 MB | ✅ **23.8 MB** (B0 после 15 s прогретой нагрузки wrk) |
-| GC max pause < 10 ms, суммарно < 2% | на B3-профиле | ⏭ волна 2 (B3 ещё не существует) |
-| ev loop lag p99 < 1 ms | под целевой нагрузкой | ⏭ волна 3 (реализуется в void/obs) |
-| Overhead void/obs ≤ 7% | на B1 | ⏭ волна 3 (void/obs ещё не существует) |
+| Startup to ready | < 150 ms | ✅ **~21 ms** (median of 5 measurements: spawn → first successful TCP connect, the B0 application) |
+| RSS of a hello-app | < 30 MB | ✅ **23.8 MB** (B0 after 15 s of warmed load under wrk) |
+| GC max pause < 10 ms, under 2% of total | on the B3 profile | ⏭ wave 2 (B3 does not exist yet) |
+| ev loop lag p99 < 1 ms | under target load | ⏭ wave 3 (implemented in void/obs) |
+| void/obs overhead ≤ 7% | on B1 | ⏭ wave 3 (void/obs does not exist yet) |
 
-Отложенные строки — сознательное сужение области критерия: их
-измерители появляются вместе с плагинами волн 2–3.
+The deferred rows are a deliberate narrowing of the criterion: the
+instruments that measure them arrive with the plugins of waves 2–3.
 
-## Как бюджеты проверяются дальше
+## How the budgets are checked from here
 
-- **CI (shared runners)** — только относительный 5%-gate: head против
-  merge-base на одном раннере (`.github/workflows/bench.yml`).
-  Абсолютным числам shared-раннеров не доверяем (ADR-0014); методика в
-  CI укорочена (2×30s, warmup 10s) — это осознанное отклонение от §8.3
-  ради времени job, честное для относительного сравнения.
-- **Референс-окружение (эта машина)** — абсолютный gate:
-  `void bench b0 b1 --budgets` или `void bench budgets` против
-  записанного `results/baseline.jdn`. Прогонять перед каждым тегом.
-- Формулировка §8.2 «проверяются в CI» уточнена: абсолютные бюджеты
-  проверяются на референс-окружении, CI держит относительные пороги.
+- **CI (shared runners)** — the relative 5% gate only: head against
+merge-base on one runner (`.github/workflows/bench.yml`). The absolute
+numbers of a shared runner are not to be trusted; the method is
+shortened in CI (2×30s, warmup 10s), a deliberate deviation for the sake
+of job time and an honest one for a relative comparison.
+- **The reference environment (this machine)** — the absolute gate:
+`void bench b0 b1 --budgets`, or `void bench budgets` against the
+recorded `results/baseline.jdn`. To be run before every tag.
+- "Checked in CI" is made precise: the absolute budgets are checked on
+  the reference environment, and CI holds the relative thresholds.
 
-## Методологические заметки
+## Methodology notes
 
-1. **Бенчить только на тихой машине.** Первый прогон этого дня был
-   отравлен параллельной сборкой (make -j8 на соседних ядрах): медиана
-   p50 «812 ms» при честном значении ~1 ms — открытая нагрузка wrk2
-   мгновенно наказывает украденные у сервера кванты лавиной очереди.
-   Числа с загрязнённого прогона невоспроизводимы и были отброшены.
-2. **Socket errors в throughput-режиме** (сотни timeout'ов за 3×60s на
-   максимальной нагрузке) — свойство сатурационного режима wrk, не
-   дефект сервера: Go-baseline показывает те же ошибки. В
-   latency-режиме wrk2 ошибок нет.
-3. `:governor` в env-штампе не заполняется на macOS (нет аналога
-   cpufreq governor); фиксируем модель CPU и отсутствие фоновой
-   нагрузки.
-4. wrk2 на arm64 macOS собирается из giltene/wrk2 с заменой vendored
-   LuaJIT на современный LuaJIT 2.1 (upstream не поддерживает arm64);
-   для CI Linux-сборка из upstream работает как есть (bench.yml).
-5. Штамп `:commit` в baseline.jdn — коммит оптимизации
-   request-id/access-log (после v0.1); ранние замеры (7709962,
-   4329268) в истории документа — контекст, не опорные точки.
-6. **Абсолютные числа сравнимы только внутри одной сессии.** Полные
-   прогоны одного и того же кода в разные дни на этой машине
-   расходятся до ±30% по max-throughput (loopback wrk чувствителен к
-   состоянию машины: термальный режим, фоновые демоны, состояние
-   ядра); кроме того, 14-минутный полный прогон систематически ниже
-   коротких 15-секундных сессий (~29k против ~40–43k на том же
-   коде) — длительный прогрев. Отсюда правило: любые «A против B» —
-   только A/B(/A) подряд в одной сессии (CI так и делает: merge-base
-   и head в одном job, ADR-0014); закоммиченный baseline — референс
-   для `void bench budgets` с осознанием этой погрешности, не истина
-   в последнем знаке. Latency-режим wrk2 при этом стабилен между
-   сессиями (p50/p99 воспроизводятся в пределах ~5%) — бюджеты
-   держатся на нём и на throughput-floor с большим запасом.
+1. **Benchmark only on a quiet machine.** The first run of that day was
+poisoned by a parallel build (make -j8 on neighbouring cores): a median
+p50 of "812 ms" where the honest value is ~1 ms — wrk2's open load
+punishes a stolen quantum instantly, with an avalanche of queue. Numbers
+from a contaminated run are not reproducible and were thrown away.
+2. **Socket errors in throughput mode** (hundreds of timeouts over
+3×60s at maximum load) are a property of wrk's saturating mode, not a
+defect of the server: the Go baseline shows the same errors. In wrk2's
+latency mode there are none.
+3. `:governor` in the environment stamp is not filled in on macOS
+(there is no cpufreq governor to read); the CPU model and the absence of
+background load are recorded instead.
+4. wrk2 on arm64 macOS is built from giltene/wrk2 with the vendored
+LuaJIT replaced by a current LuaJIT 2.1 (upstream does not support
+arm64); for CI the Linux build from upstream works as is (bench.yml).
+5. The `:commit` stamp in baseline.jdn is the request-id/access-log
+   optimisation (after v0.1); the earlier measurements (7709962,
+   4329268) are context in this document's history, not reference
+   points.
+6. **Absolute numbers are comparable only within one session.** Full
+runs of the very same code on different days on this machine differ by
+up to ±30% in max throughput (loopback wrk is sensitive to the state of
+the machine: thermal regime, background daemons, kernel state); on top
+of that, a 14-minute full run is systematically lower than short
+15-second sessions (~29k against ~40–43k on the same code) — a long
+warmup. Hence the rule: any "A against B" is A/B(/A) back to back in one
+session (which is what CI does: merge-base and head in one job); the
+committed baseline is a reference for `void bench budgets` with that
+error bar in mind, not truth to the last digit. wrk2's latency mode,
+meanwhile, is stable between sessions (p50/p99 reproduce within ~5%) —
+the budgets rest on it, and on the throughput floor with plenty of
+headroom.
 
 ---
 
-## Что добавила волна 2 (2.5) и что осталось непроверенным
+## What wave 2 added, and what is still unverified
 
-`bench_rows`-бенчмарки и probe появились в 2.5; **их абсолютные
-бюджеты этот документ не проверял**, и до отдельного прогона на
-референс-окружении цифры §8.2 для B2/B3 остаются гипотезами — ровно
-тем, чем были B0/B1 до этого документа.
+The `bench_rows` benchmarks and the probe arrived in 2.5; **this
+document did not check their absolute budgets**, and until a separate
+run on the reference environment the B2/B3 numbers remain hypotheses —
+exactly what B0/B1 were before this document.
 
-- **B2 / B3** (Postgres query, Postgres + SSR 15001 байт) — в CI как
-  относительный гейт (bench.yml, service-контейнер), без абсолютной
-  калибровки. Ноутбучный прогон с Postgres в Docker даёт заметно
-  меньше §8.2-floor'а на B3, но docker-сеть на macOS — не то
-  окружение, по которому калибруют.
-- **Runtime-бюджеты** (`void/bench/probe`): loop-lag p99 < 1 ms под
-  целевой нагрузкой и GC max pause < 10 ms (как граница сверху через
-  максимум loop-lag — janet пауз не сообщает). Промерены как
-  механизм, не как контракт: на этой машине под `--quick`-профилем
-  loop-lag p99 выходит за 1 ms на всех целях, и прежде чем считать
-  это регрессией, бюджет нужно снять по полной методике на
-  незанятой машине.
-- **RSS** (§8.2: hello-app < 30 MB, полный фарш < 80 MB) — печатается
-  в отчёте, не гейт. Измеренное здесь b0 ≈ 49 MiB против бюджета в
-  30 MB: либо бюджет писался про другую платформу, либо в процессе
-  есть что подрезать, и до ответа на этот вопрос гейта быть не
-  должно.
-- **`b1-pressure`** (строка SPEC §8.5 для middleware из 2.6): −0.2% и
-  +0.6% throughput за два прогона подряд — внутри шума прогон-к-прогону
-  (см. заметку 6 выше), то есть цена шеддера на спокойном пути
-  неизмерима этой методикой. Это ожидаемо: на спокойном пути он один
-  разыменованный var.
+- **B2 / B3** (Postgres query, Postgres + SSR of 15001 bytes) — in CI
+as a relative gate (bench.yml, a service container), with no absolute
+calibration. A laptop run with Postgres in Docker comes out noticeably
+below the B3 floor, but Docker networking on macOS is not an environment
+anyone calibrates against.
+- **The runtime budgets** (`void/bench/probe`): loop-lag p99 < 1 ms
+under target load, and GC max pause < 10 ms (as an upper bound through
+the maximum loop lag — janet does not report pauses). Measured as a
+mechanism rather than as a contract: on this machine under the `--quick`
+profile the loop-lag p99 goes past 1 ms on every target, and before
+calling that a regression the budget has to be taken by the full method
+on an unoccupied machine.
+- **RSS** (hello-app < 30 MB, the full stack < 80 MB) — printed in the
+report, not a gate. The b0 measured here is ≈ 49 MiB against a budget of
+30 MB: either the budget was written about another platform, or there is
+something to trim in the process, and until that question is answered
+there should be no gate.
+- **`b1-pressure`** (the row for the middleware from 2.6): −0.2% and
++0.6% throughput over two consecutive runs — inside the run-to-run noise
+(see note 6 above), which is to say the price of the shedder on a calm
+path is not measurable by this method. That is expected: on a calm path
+it is one dereferenced var.
 
-Всё перечисленное — предмет BENCH-v0.2 перед тегом v0.2.
+All of the above is the subject of BENCH-v0.2, before the v0.2 tag.

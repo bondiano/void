@@ -4,11 +4,11 @@
 ### has no meaning without the cart it is in, and nothing outside this
 ### module ever addresses a `cart_items` row directly.
 ###
-### `lines` is the one query in the application with a `:preload` on
-### it, and it is explicit because the alternative is an N+1 nobody
-### notices until the cart page is the slowest page in the shop
-### (ADR-0009). The suite runs the guard at `:strict`, so a relation
-### touched without one is a failure rather than a warning.
+### `lines` is the one query in the application with a `:preload` on it,
+### and it is explicit because the alternative is an N+1 nobody notices
+### until the cart page is the slowest page in the shop. The suite runs
+### the guard at `:strict`, so a relation touched without one is a failure
+### rather than a warning.
 (import void/db :as db)
 (import ../../shared/values :as values)
 (import ./cart.model :as model)

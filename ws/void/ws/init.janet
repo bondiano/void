@@ -1,5 +1,4 @@
-### void/ws — WebSocket (RFC 6455) over the HTTP kernel (SPEC §5.6,
-### ADR-0028).
+### void/ws — WebSocket (RFC 6455) over the HTTP kernel.
 ###
 ### **A websocket is a route.** `ws/accept` is called from an ordinary
 ### handler, so the handshake has already been routed, has already had
@@ -33,11 +32,11 @@
 ### template engine in.
 ###
 ### **What it does not do.** No `permessage-deflate` (an extension is a
-### negotiation, a compressor and a second set of framing rules, and
-### void has no compressor); no cross-worker fan-out (see ./rooms — it
-### is three lines of `void/bus` and they are the application's);
-### no TLS (ADR-0010, the same relay next to the process that serves
-### `https://`, which is where `wss://` terminates too).
+### negotiation, a compressor and a second set of framing rules, and void
+### has no compressor); no cross-worker fan-out (see ./rooms — it is three
+### lines of `void/bus` and they are the application's); no TLS (the same
+### relay next to the process that serves `https:, `, which is where
+### `wss:, ` terminates too).
 
 (import spork/json)
 (import void/core/plugin :as plugin)
@@ -56,7 +55,7 @@
 (var current-registry
   "The registry of the running :ws/registry component — one per
   process, like plugin/current-boot. With prefork workers each has its
-  own, and that boundary is ADR-0010's (see ./rooms)."
+  own, and that boundary is the worker's (see ./rooms)."
   nil)
 
 (defn registry
@@ -337,12 +336,12 @@
   {:name :void.ws/rooms
    :what "websocket rooms"
    :needs [:ws/registry]
-   :doc "The room registry is per process, and that is the design (ADR-0028) — not something a fleet check should ask anyone to fix"
+   :doc "The room registry is per process, and that is the design — not something a fleet check should ask anyone to fix"
    :ask (fn ask-rooms [boot]
           (when (get-in boot [:system :instances :ws/registry])
             {:store :process
              :shared? :by-design
-             :why "a connection lives in the process holding its socket, so a registry that spanned processes could not reach it anyway; fan-out across replicas is a void/bus subscriber that broadcasts locally (ADR-0028)"}))})
+             :why "a connection lives in the process holding its socket, so a registry that spanned processes could not reach it anyway; fan-out across replicas is a void/bus subscriber that broadcasts locally"}))})
 
 (plugin/defplugin void/ws
   :doc "WebSocket (RFC 6455) over the void/http kernel: the handshake answered from an ordinary route handler, framing, ping/pong and the close handshake, a fiber per connection with a bounded outbound queue, plus rooms and broadcast."

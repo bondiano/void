@@ -1,4 +1,4 @@
-### void/authz-http — enforcement from route metadata (ADR-0024 §5, §6).
+### void/authz-http — enforcement from route metadata.
 ###
 ### The half of void/authz that needs the HTTP kernel: two metadata
 ### keys and one middleware in the reserved phase **5000** — after auth
@@ -16,20 +16,20 @@
 ### inside one policy, where a reader can see it.
 ###
 ### **The 403 goes out through the error renderers**, not by raising
-### past them: `authz/ensure!` raises a value carrying `:http/status
-### 403`, and this wrapper catches it to answer with the renderers the
+### past them: `authz/ensure!` raises a value carrying `:http/status 403`,
+### and this wrapper catches it to answer with the renderers the
 ### composition has (problem+json under void/rest, the dev page in dev).
-### The reason never reaches the body (ADR-0024 §3).
+### The reason never reaches the body.
 ###
-### **`:void.authz/resource` is a function, not a symbol.** ADR-0024
-### wrote "symbol" for late binding (ADR-0002), and that turned out to
-### be unimplementable at this seam: a route entry does not carry the
+### **`:void.authz/resource` is a function, not a symbol.** The design
+### wrote "symbol" for late binding, and that turned out to be
+### unimplementable at this seam: a route entry does not carry the
 ### environment of the module that declared it, so a bare symbol has
-### nothing to resolve against at request time. The value is a
-### `(fn [req] resource)`, and the dev watcher rebuilds the route table
-### on reload anyway, so a redefinition still takes effect. Row-level
-### checks that need the row itself stay where they always belonged —
-### in the handler, next to the query that loaded it:
+### nothing to resolve against at request time. The value is a `(fn [req]
+### resource)`, and the dev watcher rebuilds the route table on reload
+### anyway, so a redefinition still takes effect. Row-level checks that
+### need the row itself stay where they always belonged — in the handler,
+### next to the query that loaded it:
 ###
 ###     (defn edit [req]
 ###       (def post (db/find! Post (get-in req [:params :id])))
@@ -90,7 +90,7 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.authz/policy
    :schema [:or :keyword [:vector :keyword]]
-   :doc "Policy (or policies) enforced before the handler (SPEC part II §2.5). :concat — a group's policy and a route's are both enforced, and every one of them must allow"
+   :doc "Policy (or policies) enforced before the handler. :concat — a group's policy and a route's are both enforced, and every one of them must allow"
    :merge :concat})
 
 (plugin/contribute! :void.http/route-meta-key

@@ -1,4 +1,4 @@
-### void/obs/metrics — the metric registry (SPEC.md §5.13).
+### void/obs/metrics — the metric registry.
 ###
 ### Three instrument kinds, the Prometheus data model and nothing
 ### else: a counter only goes up, a gauge is a number right now, a
@@ -14,7 +14,7 @@
 ### tuple of label values and a number update: no name parsing, no
 ### registry lookup, no allocation per observation once a label set has
 ### been seen. Re-declaring the same metric (a REPL redefinition, a
-### `dofile` reload from the dev watcher, ADR-0002) returns the
+### `dofile` reload from the dev watcher) returns the
 ### *existing* handle with its values intact, rather than resetting a
 ### counter because a file was saved.
 ###
@@ -52,7 +52,7 @@
 (def default-buckets
   ``Default histogram boundaries, in **seconds** — Prometheus base
   units, so an exporter never converts and a dashboard never guesses.
-  The spread covers a void request end to end: the §8.2 budgets live
+  The spread covers a void request end to end: the budgets live
   between 1 and 20 ms, so the resolution is there, and the tail runs
   out to 10 s because a request that takes that long is the one being
   investigated.``

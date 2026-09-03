@@ -1,6 +1,6 @@
 # Deploying void: one file
 
-SPEC §9 promises a single binary under 5 MB. This is how it is produced,
+void promises a single binary under 5 MB. This is how it is produced,
 what it can and cannot contain, and the four things an application has
 to do to be one. Everything here is measured on the project `void new`
 generates, not estimated.
@@ -109,19 +109,18 @@ is not a detail:
   `found native ...` for each; if a module you expect is not on that
   list, it is not in the file.
 - **`ffi/`-opened libraries** (`libcrypto` for `void/crypto`,
-  `libpq` for `void/db-postgres`, `libmysqlclient` for `void/db-mysql`)
-  are opened at `:start` from a
-  configured path (ADR-0011, ADR-0022). They are *not* in the binary and
-  never will be: the target must have them, exactly as it must for a
-  source deploy.
+`libpq` for `void/db-postgres`, `libmysqlclient` for `void/db-mysql`)
+are opened at `:start` from a configured path. They are *not* in the
+binary and never will be: the target must have them, exactly as it must
+for a source deploy.
 
 ## sqlite in a single binary
 
 `void/db-sqlite` resolves `janet-lang/sqlite3` with `require` on first
 use, deliberately: the bundle does not depend on it, so an application
-that never lists the plugin never pays for it (ADR-0020). Rule 2 makes
-that lazy `require` unreachable in a binary, so the application hands
-the module over instead — two lines, in this order:
+that never lists the plugin never pays for it. Rule 2 makes that lazy
+`require` unreachable in a binary, so the application hands the module
+over instead — two lines, in this order:
 
 ```janet
 (import void/db-sqlite :as db-sqlite)
@@ -143,10 +142,10 @@ bundle:
 `jpm build` then prints `found native .../sqlite3.so` and the binary
 carries its own database engine.
 
-Postgres and MySQL need none of this: `void/db-postgres` opens `libpq`
-— and `void/db-mysql` opens `libmysqlclient`, inside each of its worker
-threads (ADR-0033) — through
-`ffi/`, so the binary is unchanged and the target provides the library.
+Postgres and MySQL need none of this: `void/db-postgres` opens `libpq` —
+and `void/db-mysql` opens `libmysqlclient`, inside each of its worker
+threads — through `ffi/`, so the binary is unchanged and the target
+provides the library.
 
 ## OTLP protobuf in a single binary
 
@@ -205,9 +204,9 @@ run time — so ship `db/migrations/` beside the binary, or run
     ./build/myapp plugins check
 
 `deploy check` matters more here than anywhere else: `[:deploy :shape]`
-defaults to `:fleet` in `:prod`, and a composition holding a store in one
-process's heap is refused at boot with the replacement named (ADR-0030).
-A single-replica deployment says so in one line — the one in the
+defaults to `:fleet` in `:prod`, and a composition holding a store in
+one process's heap is refused at boot with the replacement named. A
+single-replica deployment says so in one line — the one in the
 environment block above.
 
 ## What this does not do

@@ -1,5 +1,4 @@
-### void/db-postgres/listener — LISTEN/NOTIFY on a connection of its
-### own (SPEC.md §5.10).
+### void/db-postgres/listener — LISTEN/NOTIFY on a connection of its own.
 ###
 ### Postgres delivers a notification to the *session* that ran LISTEN.
 ### That single sentence is why this cannot live on the pool: LISTEN
@@ -9,9 +8,9 @@
 ### connection, outside the pool, for as long as it is subscribed.
 ###
 ### The connection is otherwise idle, which is what makes it cheap: the
-### listening fiber parks in fdwait on the socket and costs nothing
-### until the server actually says something (ADR-0011). One fiber, one
-### connection, any number of channels.
+### listening fiber parks in fdwait on the socket and costs nothing until
+### the server actually says something. One fiber, one connection, any
+### number of channels.
 ###
 ###     (def l (listener/open conninfo))
 ###     (listener/start! l)

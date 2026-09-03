@@ -1,4 +1,4 @@
-### void/datastar/ds — data-* attribute helpers (ADR-0037).
+### void/datastar/ds — data-* attribute helpers.
 ###
 ### Builders for Datastar attributes as plain hiccup attribute tables,
 ### the pose void/htmx/hx struck in wave 1: keywords become data-*

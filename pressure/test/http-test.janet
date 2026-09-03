@@ -36,8 +36,8 @@
                                :routes app-routes
                                :env (router/env-ref (curenv))}]
      # what a plugin that knows something the sampler cannot measure
-     # contributes (ADR-0019): a pool at its ceiling, a queue growing
-     # faster than it drains
+     # contributes: a pool at its ceiling, a queue growing faster than it
+     # drains
      :void.pressure/check [{:name :test/pool
                             :fn (fn [] {:ok (not (dyn :pool-exhausted))
                                         :reason "pool exhausted"})}]}))
@@ -82,7 +82,7 @@
   (assert (= 2 (length (st :checks)))
           "with the contributed check wired in next to the built-in :db/pool one")
 
-  # -- what an exempt route pays ----------------------------------------
+  # -- what an exempt route pays -----------------------------------------
 
   (def shed-able (http/explain-route "/work"))
   (def exempt (http/explain-route "/ops/health"))

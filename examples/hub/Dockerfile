@@ -8,7 +8,7 @@
 ### (docker-compose.yml does that for you.) An application outside this
 ### repository replaces the two `jpm` lines below with one dependency in
 ### its own project.janet — `https://github.com/bondiano/void.git`, the
-### whole framework as one bundle (ADR-0020).
+### whole framework as one bundle.
 ###
 ### **This image is what this example already claims to be.** The hub
 ### has no test-support/paths.janet: it imports `void/...` from an
@@ -46,7 +46,7 @@ RUN git clone --depth 1 https://github.com/janet-lang/jpm /tmp/jpm \
 # The framework, out of the checkout: one `jpm install` of the
 # repository root installs every package's void/ tree into one merged
 # module path, builds void/fdwait's native module and puts the `void`
-# binary on PATH (ADR-0020). janet-lang/sqlite3 is separate on purpose
+# binary on PATH. janet-lang/sqlite3 is separate on purpose
 # — void/db-sqlite is a plugin an application opts into, so the bundle
 # does not depend on it, and this image carries it because the hub runs
 # on either engine (project.janet says the same thing about the same
@@ -71,11 +71,11 @@ RUN cd /src && jpm install
 # -------------------------------------------------------------- runtime
 FROM debian:bookworm-slim
 
-# libpq5   — void/db-postgres opens it through ffi/ at :start (ADR-0011)
+# libpq5   — void/db-postgres opens it through ffi/ at :start
 # libssl3  — two plugins open it the same way: void/crypto for the
-#            HMAC every delivery is verified with (ADR-0022) and
+#            HMAC every delivery is verified with and
 #            void/tls for the two https clients this application has,
-#            api.telegram.org and the bucket (ADR-0038)
+#            api.telegram.org and the bucket
 # ca-certificates — what those two clients verify against; without it
 #            every telegram delivery fails with a certificate error and
 #            retries until the queue gives up
@@ -110,7 +110,7 @@ EXPOSE 8080
 
 # /health is an operator endpoint: void/pressure-http never sheds it, so
 # it answers *while* the process is refusing deliveries — which is
-# exactly when an orchestrator is asking (ADR-0019)
+# exactly when an orchestrator is asking
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
   CMD curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1
 

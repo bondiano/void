@@ -1,5 +1,5 @@
 ### void/db-postgres/conn — one Postgres connection on the ev loop
-### (ADR-0011, SPEC.md Appendix A).
+### (Appendix A).
 ###
 ### libpq has a complete non-blocking API: PQconnectStart/PQconnectPoll
 ### to connect, PQsendQuery* / PQflush to send, PQconsumeInput /
@@ -117,9 +117,7 @@
 (defn- with-deadline
   ``Run (f) under a wall-clock limit, in a supervised CHILD task —
   never `ev/with-deadline` on the caller, which cancels its root
-  task; for a request fiber that is the whole request (ADR-0015, and
-  the same reason void/db's pool spells its checkout timeout out this
-  way).``
+  task; for a request fiber that is the whole request (and the same reason void/db's pool spells its checkout timeout out this way).``
   [seconds f on-timeout]
   (if (or (nil? seconds) (not (pos? seconds)))
     (f)

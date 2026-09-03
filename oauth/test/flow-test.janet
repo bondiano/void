@@ -1,5 +1,5 @@
 # void/oauth without a socket: PKCE against the RFC's own vector, the
-# boot gates of ADR-0034 (the ones whose text is the point), and the
+# boot gates (the ones whose text is the point), and the
 # three requests of the flow as data — what would go out, asserted
 # before anything can go out.
 
@@ -13,7 +13,7 @@
 
 (crypto/load!)
 
-# -- PKCE (RFC 7636) ------------------------------------------------------
+# -- PKCE (RFC 7636) -----------------------------------------------------
 
 (assert (= "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
            (pkce/challenge "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"))
@@ -22,7 +22,7 @@
         "a verifier is 43 characters — 32 bytes of randomness in the unreserved alphabet")
 (assert (not= (pkce/verifier) (pkce/verifier)) "and fresh every time")
 
-# -- boot gates -----------------------------------------------------------
+# -- boot gates ----------------------------------------------------------
 
 (defn- build [spec]
   (provider/build-settings {:config {:values {:oauth spec}}}))
@@ -44,9 +44,8 @@
                              :authorization-endpoint "http://idp.test/authorize"}}}
          "nowhere to exchange the code")
 
-# the back channel is called by void/http/client, which speaks TLS
-# only when :void/tls is composed (ADR-0038) — without it the refusal
-# names the ways out
+# the back channel is called by void/http/client, which speaks TLS only
+# when :void/tls is composed — without it the refusal names the ways out
 (refused {:providers {:acme {:client-id "app"
                              :issuer "http://idp.test"
                              :token-endpoint "https://idp.test/token"}}}
@@ -116,7 +115,7 @@
 (assert (and (not ok) (string/find "acme" err))
         "an unknown provider is named next to the known ones")
 
-# -- the authorization request --------------------------------------------
+# -- the authorization request -------------------------------------------
 
 (def ring (provider/make-ring))
 (def pend (flow/pending acme))
@@ -144,7 +143,7 @@
 (def url2 (flow/authorize-url plain (flow/pending plain) cfg ring))
 (assert (string/has-prefix? "http://idp.test/authorize?tenant=t1&" url2))
 
-# -- the exchanges, as data -----------------------------------------------
+# -- the exchanges, as data ----------------------------------------------
 
 (def treq (flow/token-request acme "code-123" pend cfg ring))
 (assert (= :post (treq :method)))

@@ -1,14 +1,14 @@
-### void/admin — the back office as a projection of what the
-### application already declared (SPEC.md §5.21, ADR-0029).
+### void/admin — the back office as a projection of what the application
+### already declared.
 ###
-### The promise of §5.21 in one line: the admin is *another projection
-### of the schema layer*, the way OpenAPI is. Everything it needs was
-### written by wave 4 and already describes the domain — `defentity`
-### knows the table, the primary key, the columns and the relations
-### (ADR-0009); `void/core/schema` knows the types and the bounds
-### (ADR-0008); `void/html/form` projects a map schema into controls;
-### `void/authz` decides who may do what (ADR-0024); `void/htmx`
-### answers with a fragment on the same route that answers with a page.
+### The promise in one line: the admin is *another projection of
+### the schema layer*, the way OpenAPI is. Everything it needs was written
+### by wave 4 and already describes the domain — `defentity` knows the
+### table, the primary key, the columns and the relations;
+### `void/core/schema` knows the types and the bounds; `void/html/form`
+### projects a map schema into controls; `void/authz` decides who may do
+### what; `void/htmx` answers with a fragment on the same route that
+### answers with a page.
 ###
 ### So there is no code generation and no second model. A field added
 ### to `defentity` shows up in the form on the next request, because
@@ -24,9 +24,8 @@
 ### other, and there is one place a resource is described.
 ###
 ### **Every action is a real route** named `:admin.<resource>/<action>`
-### — so `void routes`, `explain-route`, `:void.db/txn`, CSRF and the
-### 403 renderers all work here without anybody teaching them about the
-### admin (ADR-0028's shape, for ADR-0028's reason).
+### — so `void routes`, `explain-route`, `:void.db/txn`, CSRF and the 403
+### renderers all work here without anybody teaching them about the admin.
 ###
 ### **The gate is shut.** `[:authz :default]` is `:allow` for a good
 ### reason, and for a back office that reason does not apply. Every
@@ -58,7 +57,7 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.admin/widget
-  :doc "Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget, ADR-0039 §6). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why"
+  :doc "Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why"
   :schema {:name :keyword
            :render :function
            :doc [:optional :string]
@@ -145,7 +144,7 @@
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.admin/history
-  :doc "Where the history tab of a row comes from: {:name :fn (fn [{:resource :id :request}] [{:at :actor :detail} ...])}. Nobody contributes one by default, so there is no history tab by default — the admin announces changes (:void.admin/changed) and does not keep them (ADR-0029 §8)"
+  :doc "Where the history tab of a row comes from: {:name :fn (fn [{:resource :id :request}] [{:at :actor :detail} ...])}. Nobody contributes one by default, so there is no history tab by default — the admin announces changes (:void.admin/changed) and does not keep them"
   :cardinality :single
   :schema {:name :keyword :fn :function :doc [:optional :string]}
   :reduce first)
@@ -191,7 +190,7 @@
   mount/access-policy)
 
 (def gate
-  ``Closed by default (ADR-0029 §3). Until `[:admin :access]` names a
+  ``Closed by default. Until `[:admin :access]` names a
   policy, this one refuses everybody and the refusal says which config
   key opens it. It is a policy name and not a boolean on purpose: the
   line an application writes to open the admin is the line that says
@@ -212,7 +211,7 @@
   where the application has not defined one. It exists so the *name*
   is already on the route: narrowing an action later is a `defpolicy`
   and nothing else — no change to the declaration, no change to the
-  routes (ADR-0029 §3).``
+  routes.``
   []
   (def added @[])
   (each rname (resources)
@@ -429,7 +428,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/admin
-  :doc "The back office as a projection of the entity and schema layers (ADR-0029): defresource-admin registers a frozen declaration, every action becomes a real route named :admin.<resource>/<action> with the shut-by-default :void.admin/access gate plus its own policy, lists filter/search/sort/page through the URL, bulk actions go through a confirmation page that counts the rows on the server, inlines are guarded by the child's own policies, and changes are announced through :void.admin/changed rather than written to a table this package would have had to migrate."
+  :doc "The back office as a projection of the entity and schema layers: defresource-admin registers a frozen declaration, every action becomes a real route named :admin.<resource>/<action> with the shut-by-default :void.admin/access gate plus its own policy, lists filter/search/sort/page through the URL, bulk actions go through a confirmation page that counts the rows on the server, inlines are guarded by the child's own policies, and changes are announced through :void.admin/changed rather than written to a table this package would have had to migrate."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/http ">=0.0.1" :void/html ">=0.0.1"
              :void/htmx ">=0.0.1" :void/db ">=0.0.1" :void/db-http ">=0.0.1"

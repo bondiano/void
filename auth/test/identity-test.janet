@@ -5,7 +5,7 @@
                                   :claims {:roles [:admin]} :at 1000}))
 (assert (= "user:42" (id :subject)))
 (assert (= :password (id :via)))
-(assert (id :cookie) "the strategy records whether the credential rode on a cookie — void/security asks (ADR-0025 §1)")
+(assert (id :cookie) "the strategy records whether the credential rode on a cookie — void/security asks")
 (assert (identity/identity? id))
 (assert (not (identity/identity? {:sub "x"})) "a subject is required, and it is spelled :subject")
 

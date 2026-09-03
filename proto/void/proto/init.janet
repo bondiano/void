@@ -1,10 +1,10 @@
-### void/proto — protobuf, in Janet (SPEC.md §5.7, ADR-0013).
+### void/proto — protobuf, in Janet.
 ###
-### The foundation of the protocol branch, and the one ADR-0013 says
-### to write first: void/grpc needs it to speak Connect's binary
-### codec, and OTLP has a protobuf encoding waiting behind
-### `[:obs-otlp :encoding]` for the day somebody wants it (ADR-0027
-### shipped the JSON one without this package on purpose).
+### The foundation of the protocol branch, and the one to
+### write first: void/grpc needs it to speak Connect's binary codec, and
+### OTLP has a protobuf encoding waiting behind `[:obs-otlp :encoding]`
+### for the day somebody wants it (shipped the JSON one without this
+### package on purpose).
 ###
 ###     (proto/defproto "protos/orders.proto")
 ###
@@ -34,7 +34,7 @@
 ### which means `[:ref :orders/Order]`, `void schemas`, void/openapi's
 ### document, void/rest's body validation and void/admin's forms all
 ### work on a protobuf message, and none of them learned anything.
-### That is SPEC §3.3's "one declaration, many projections" collecting
+### That is "one declaration, many projections" collecting
 ### on an investment made in wave 1.
 ###
 ### **What it does not do.** No proto2: `required`, groups and field
@@ -172,10 +172,9 @@
   `:paths` — except `google/protobuf/*.proto`, which ./wkt already
   has. Parsing happens
   while the module compiles and the descriptors are baked into it as
-  values, so a running application never reads a `.proto` (SPEC §8.5
-  rule 3: what can happen at build time does).
+  values, so a running application never reads a `.proto` (rule 3: what can happen at build time does).
 
-  This is the codegen macro SPEC §5.7 asks for, and the code it
+  This is the codegen macro, and the code it
   generates is data — there are no message classes to generate.``
   [path &opt opts]
   (default opts {})

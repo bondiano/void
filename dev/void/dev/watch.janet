@@ -1,13 +1,13 @@
-### void/dev/watch — file watcher for the reloaded workflow (SPEC.md §4).
+### void/dev/watch — file watcher for the reloaded workflow.
 ###
 ### A polling watcher (no native deps): snapshot the mtimes of every
-### .janet file under the watched paths, and on change (1) re-evaluate
-### the file into its existing module env table — same table, so
-### symbol-resolved references pick up the new definitions (late
-### binding, ADR-0002) — and (2) restart the stateful components of
-### every plugin whose manifest :source is that file (the
-### file->component map; `defplugin` records :source). Stateless code
-### needs no restart: the env reload is the whole story.
+### .janet file under the watched paths, and on change (1) re-evaluate the
+### file into its existing module env table — same table, so
+### symbol-resolved references pick up the new definitions (late binding)
+### — and (2) restart the stateful components of every plugin whose
+### manifest :source is that file (the file->component map; `defplugin`
+### records :source). Stateless code needs no restart: the env reload is
+### the whole story.
 
 (import void/core/system :as system)
 (import void/core/plugin :as plugin)

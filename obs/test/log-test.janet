@@ -68,7 +68,7 @@
 (assert (= 1 (length seen)) "re-applying does not nest gates — the record is written once")
 
 # a second boot in one process: log/configure! replaces the whole sink
-# list (ADR-0018), and the gate has to start from the new one
+# list, and the gate has to start from the new one
 (obslog/install-sampling! 0 :warn)
 (def fresh @[])
 (log/set-sinks! [(fn [r] (array/push fresh (r :msg)))])

@@ -110,9 +110,9 @@
 
 # -- file fields, and what they do to the form ---------------------------
 #
-# The :file type is void/storage's (ADR-0039); this projection is
-# void/html's, and it works on any schema that uses one — the type is
-# registered here so the assertions stand without that package.
+# The :file type is void/storage's; this projection is void/html's, and it
+# works on any schema that uses one — the type is registered here so the
+# assertions stand without that package.
 
 (schema/register-type! :file {:validate (fn [v _] (string? v))})
 

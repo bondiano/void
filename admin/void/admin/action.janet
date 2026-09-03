@@ -1,5 +1,4 @@
-### void/admin/action — the handlers behind the routes (ADR-0029 §2,
-### §3, §5, §7).
+### void/admin/action — the handlers behind the routes.
 ###
 ### Every one of these is an ordinary handler on an ordinary route, so
 ### the transaction is declared in metadata (`:void.db/txn`), the
@@ -10,12 +9,12 @@
 ### **The row is loaded once and shown to its policy.** The route's
 ### `:void.authz/resource` calls the same loader the handler calls, and
 ### the loader memoizes on the request — the second echelon behind
-### `:scope` costs one policy call, not one extra query (§3).
+### `:scope` costs one policy call, not one extra query.
 ###
 ### **A change is announced, never written.** `:void.admin/changed`
-### carries {:resource :action :id :before :after :subject}; who keeps
-### it — a bus consumer, a log sink, nobody — is not this plugin's
-### business, and no migration ships with it (§8, ADR-0012).
+### carries {:resource :action :id :before :after :subject}; who keeps it
+### — a bus consumer, a log sink, nobody — is not this plugin's business,
+### and no migration ships with it.
 
 (import void/core/hooks :as hooks)
 (import void/core/schema :as schema)
@@ -90,7 +89,7 @@
   ``Is this request asking for the fragment rather than the page? htmx
   answers that itself in HX-Request-Type: a swap into an element is
   "partial", a swap into the body — a boosted link, a history restore —
-  is "full" (ADR-0041).``
+  is "full".``
   [req]
   (htmx/partial-request? req))
 
@@ -136,9 +135,9 @@
   A widget whose `:encoding` is `:multipart` is asked even when the
   field is absent from `(req :form)`, because that is where its value
   always is — the parsing middleware folds only the *non-file* parts
-  into the form (ADR-0039 §6). Such a widget answering nil means "no
-  file was chosen", and the field stays out of the update rather than
-  overwriting what is stored with nothing.
+  into the form. Such a widget answering nil means "no file was chosen",
+  and the field stays out of the update rather than overwriting what is
+  stored with nothing.
 
   Returns `[values errors]`: a widget may refuse what was submitted
   (`widget/refuse!`), and a refusal is a message on its field, in the
@@ -176,8 +175,8 @@
   ``The attributes of a create, plus the columns the declaration says
   the server fills: a created-at, an owner, a tenant. They are not form
   fields — nobody types a timestamp — and they are not entity callbacks
-  either, because entities have none (ADR-0009). A value already
-  submitted is never overwritten by one.``
+  either, because entities have none. A value already submitted is never
+  overwritten by one.``
   [desc req values]
   (def out (merge (table) values))
   (eachp [k f] (desc :defaults)
@@ -358,7 +357,7 @@
   parent's `:show` are on the route; the child's own action policy is
   enforced here, because it decides about the *child* — an inline that
   ran on the parent's authority would be a way around authorization,
-  and half the value of TabularInline would be a hole (ADR-0029 §5).``
+  and half the value of TabularInline would be a hole.``
   [child action row]
   (authz/ensure! (res/policy-name (child :name) action)
                  {:resource row :action action}))
@@ -370,7 +369,7 @@
                  (errorf (string "admin resource %q: inline %q points at resource %q, "
                                  "which is not declared — an inline needs its target's "
                                  "own declaration so the child's fields and policies "
-                                 "exist exactly once (ADR-0029 §5)")
+                                 "exist exactly once")
                          (desc :name) iname (inline :resource))))
   [inline child])
 
@@ -460,7 +459,7 @@
   declared. The action is part of the *path*, so its policy cannot be
   written on the route the way the other six are — it is enforced here
   instead, once for the page and then again per row when the rows are
-  known (ADR-0029 §7).``
+  known.``
   [desc req name]
   (def action
     (cond
@@ -522,10 +521,10 @@
 
 (defn- apply-one!
   "One row through one action — and one policy decision per row, which
-  is exactly why a big bulk belongs in a job (ADR-0029 §7)."
+  is exactly why a big bulk belongs in a job."
   [req desc action row]
   # the gate was decided once, on the route; what is decided per row is
-  # the action's own policy, with the row in :resource (ADR-0029 §7)
+  # the action's own policy, with the row in :resource
   (authz/ensure! (res/policy-name (desc :name) (action :name))
                  {:resource row :action (action :name)})
   (def id (get row (get-in desc [:entity :pk])))

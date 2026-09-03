@@ -14,9 +14,8 @@ header):
 They live inside the module tree (not next to it) because
 `../otlp-proto.janet` bakes them into descriptors with `proto/defproto`
 at module compile, and a module compiles wherever the package is
-installed — the files travel with it. Only a composition that
-configures `[:obs-otlp :encoding] :protobuf` ever loads that module
-(ADR-0027).
+installed — the files travel with it. Only a composition that configures
+`[:obs-otlp :encoding] :protobuf` ever loads that module .
 
 To bump the pin: replace the files from the new tag, update the version
 above and in `../otlp-proto.janet`'s docstring, and run

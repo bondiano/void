@@ -1,5 +1,5 @@
 ### void/authz/context — the decision context, with attributes that are
-### pulled rather than pushed (ADR-0024 §2).
+### pulled rather than pushed.
 ###
 ### A context is `{:subject <identity> :action :resource :env}` plus a
 ### memo table. Policies do not read those fields directly; they ask:
@@ -45,8 +45,7 @@
   ``The dyn key `void/auth` publishes the current identity under. Read
   by name rather than by importing the package: an application with
   its own authentication binds the same key and gets the same
-  authorization (ADR-0024, the trick `void/pressure-http` uses for
-  `:void.obs/endpoint`).``
+  authorization (the trick `void/pressure-http` uses for `:void.obs/endpoint`).``
   :void.auth/identity)
 
 (def providers

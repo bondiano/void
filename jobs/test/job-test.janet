@@ -120,7 +120,7 @@
 #
 # A worker is a CLI command and a command starts what it declared. The
 # queue is what the worker needs; `:tls/lib` is what an https delivery
-# needs, and only the job knows that (examples/hub, ROADMAP 6.6).
+# needs, and only the job knows that (examples/hub, 6.6).
 
 (job/defjob posts-somewhere {:queue :notify :needs [:tls/lib]} [x] x)
 (job/defjob writes-a-row {:queue :notify :needs [:db/pool]} [x] x)

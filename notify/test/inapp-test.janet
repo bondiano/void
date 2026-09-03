@@ -1,8 +1,8 @@
-### The in-app channel end to end (ADR-0017): a real sqlite database
-### under the store, the four routes driven through test/inject, and
-### the one claim that matters more than the markup — **every answer is
-### about the identity in the dyn**, so another recipient's row is not
-### reachable by knowing its id.
+### The in-app channel end to end: a real sqlite database under the store,
+### the four routes driven through test/inject, and the one claim that
+### matters more than the markup — **every answer is about the identity in
+### the dyn**, so another recipient's row is not reachable by knowing its
+### id.
 
 (import ../test-support/paths)
 (import void/core/log :as log)

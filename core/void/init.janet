@@ -1,4 +1,4 @@
-### void — application entrypoint (SPEC.md §3.6).
+### void — application entrypoint.
 ###
 ### (void/run! {:plugins [...] :profile :prod}) = bootstrap phases 1-5,
 ### start phases 6-7, then park on a stop channel until a POSIX signal

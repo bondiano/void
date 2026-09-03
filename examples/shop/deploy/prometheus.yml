@@ -1,10 +1,10 @@
 # What prometheus scrapes in `docker compose --profile obs up`.
 #
 # Both void processes expose the same endpoint: /metrics is a pure
-# projection of the metric registry (ADR-0021), so the exposition is
-# built at scrape time and costs nothing between scrapes. The token is
-# the only thing standing in front of it — /metrics is not a public
-# endpoint, and void/obs-http answers a wrong bearer with a 401.
+# projection of the metric registry, so the exposition is built at scrape
+# time and costs nothing between scrapes. The token is the only thing
+# standing in front of it — /metrics is not a public endpoint, and
+# void/obs-http answers a wrong bearer with a 401.
 
 global:
   scrape_interval: 15s

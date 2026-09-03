@@ -1,4 +1,4 @@
-### void/db/pool — fiber-aware connection pool (SPEC.md §5.9).
+### void/db/pool — fiber-aware connection pool.
 ###
 ### One pool per :db/pool component, fed by the configured
 ### :void/db-driver. Connections are created lazily up to :size; a
@@ -11,11 +11,11 @@
 ### cache.
 ###
 ### The wait deadline runs in a child task, never `ev/with-deadline` on
-### the caller: that cancels the *root task*, which for a request fiber
-### is the whole request (the bug class documented in ADR-0015 /
-### http/server run-handler). A waiter that times out re-checks both
-### its slot and its channel before giving up, so a connection handed
-### over in the cancellation window is never lost.
+### the caller: that cancels the *root task*, which for a request fiber is
+### the whole request (the bug class documented in / http/server
+### run-handler). A waiter that times out re-checks both its slot and its
+### channel before giving up, so a connection handed over in the
+### cancellation window is never lost.
 ###
 ### The dyn side (checkout into :void.db/conn, auto-return) lives in
 ### ./state — this module is mechanics plus metrics: checkouts,

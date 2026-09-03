@@ -1,4 +1,4 @@
-### void/htmx — htmx integration plugin (SPEC.md §5.5, ADR-0041).
+### void/htmx — htmx integration plugin.
 ###
 ### Three small pieces over void/http + void/html. Request side:
 ### predicates over the HX-* headers htmx sends. Response side: the

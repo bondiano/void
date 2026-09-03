@@ -1,4 +1,4 @@
-### void/http/negotiate — content negotiation (SPEC.md §5.1).
+### void/http/negotiate — content negotiation.
 ###
 ### Accept-header parsing and best-match selection over the media types
 ### a handler offers. Pure functions; the parsing middleware and

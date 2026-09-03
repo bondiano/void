@@ -1,4 +1,4 @@
-### void/core/system — component system (SPEC.md §3.1, ADR-0001).
+### void/core/system — component system.
 ###
 ### System = map of components; a component is plain data with
 ### :start/:stop/:health functions. Registry -> graph validation
@@ -24,7 +24,7 @@
     (string/format "plugin %q" p)
     "<unknown plugin>"))
 
-# -- component definitions ----------------------------------------------
+# -- component definitions -----------------------------------------------
 
 (defn component
   ``Build and validate a component definition (a plain struct).

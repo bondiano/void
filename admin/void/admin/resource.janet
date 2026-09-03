@@ -1,21 +1,18 @@
-### void/admin/resource — the declaration, as a frozen value
-### (SPEC.md §5.21, ADR-0029 §1).
+### void/admin/resource — the declaration, as a frozen value.
 ###
 ### `resource` builds a descriptor out of an entity plus options;
-### `defresource-admin` is one line of sugar over it (ADR-0004). The
-### descriptor is the *only* declaration: `./mount` projects it into
-### routes, `./mcp` projects the same value into MCP tools and
-### resources, and both read the same policy names. A second
-### declaration for the agent is a declaration that will drift, so
-### there is not one.
+### `defresource-admin` is one line of sugar over it. The descriptor is
+### the *only* declaration: `./mount` projects it into routes, `./mcp`
+### projects the same value into MCP tools and resources, and both read
+### the same policy names. A second declaration for the agent is a
+### declaration that will drift, so there is not one.
 ###
 ### Everything the descriptor knows about the domain it read from
-### somewhere that already knew it: columns, primary key, version
-### column and relations come from the entity descriptor (ADR-0009),
-### types and bounds from the schema node (ADR-0008). What the
-### declaration adds is what a schema cannot say — which fields belong
-### in a list, which are searched, which are filtered, who the rows
-### belong to.
+### somewhere that already knew it: columns, primary key, version column
+### and relations come from the entity descriptor, types and bounds from
+### the schema node. What the declaration adds is what a schema cannot say
+### — which fields belong in a list, which are searched, which are
+### filtered, who the rows belong to.
 ###
 ### The form schema is a **projection**, not a copy:
 ### `(schema/select entity form-fields)`, so the validation of the
@@ -34,7 +31,7 @@
 
 (def read-actions
   "The actions that only read — what the MCP projection may expose
-  without an operator naming it (ADR-0031's gate, asked here)."
+  without an operator naming it — the gate, asked here."
   {:index true :show true})
 
 (def- standard-set (tabseq [a :in standard-actions] a true))
@@ -44,7 +41,7 @@
   `:admin.articles/destroy`. It exists so that "only the owner may
   delete" has a name already written on the route — the application
   narrows the action by defining a policy under this name and touches
-  neither the declaration nor the routes (ADR-0029 §3).``
+  neither the declaration nor the routes.``
   [rname action]
   (keyword "admin." rname "/" action))
 
@@ -113,7 +110,7 @@
   "The belongs-to relation whose key is this field, or nil — a column
   is drawn as a link picker because the *entity* says it points
   somewhere, never because the admin declared a second time that it
-  does (ADR-0029 §5)."
+  does."
   [ent fname]
   (var out nil)
   (eachp [_ rel] (ent :rels)
@@ -215,7 +212,7 @@
     (or (get-in ent [:rels iname])
         (errorf (string "admin resource %q: inline %q is not a relation of %q "
                         "(relations: %s) — an inline is a projection of :db/rels, "
-                        "never a second declaration of the link (ADR-0029 §5)")
+                        "never a second declaration of the link")
                 rname iname (ent :name)
                 (string/join (map |(string/format "%q" $) (sorted (keys (ent :rels)))) " "))))
   (unless (in {:has-many true :has-one true} (rel :kind))
@@ -325,7 +322,7 @@
                     fills on create because the form does not carry
                     them (a created-at, an owner). This is where
                     Django's auto_now_add goes: entities have no
-                    callbacks by design (ADR-0009), so the value is
+                    callbacks by design, so the value is
                     supplied by whoever writes the row, and the admin
                     is one of the writers
   :widgets          {field widget} overriding widget resolution
@@ -376,8 +373,8 @@
      :detail-derived? (nil? (get opts :detail))
      :form form-fields
      # the form's validation schema and the MCP tool's input schema are
-     # this one value (ADR-0029 §1); the fields the declaration froze as
-     # read-only are not in it, so a forged field cannot reach `save!`
+     # this one value; the fields the declaration froze as read-only are
+     # not in it, so a forged field cannot reach `save!`
      :form-schema (schema/select (e :schema)
                                  (filter |(not (in readonly-set $)) form-fields))
      :form-fields (tuple ;(map |(field-descriptor e $) form-fields))
@@ -398,8 +395,9 @@
 # -- the registry --------------------------------------------------------
 #
 # Global mutable process state, like the schema, entity and policy
-# registries before it (ADR-0029, "Цена"). Re-declaring replaces, which
-# is what makes a REPL redefinition take effect (ADR-0002).
+# registries before it, and at the same price. Re-declaring replaces,
+# which is what
+# makes a REPL redefinition take effect.
 
 (def- registry @{})
 

@@ -1,7 +1,7 @@
 # The TLS this deployment does not terminate itself.
 #
 # void serves plain HTTP and a proxy in front of it holds the
-# certificate (ADR-0010): the hub's own listener is 8080 on the compose
+# certificate: the hub's own listener is 8080 on the compose
 # network, and everything a repository or a browser reaches goes through
 # here. On a laptop `HUB_DOMAIN` is unset and Caddy issues a certificate
 # from its own internal CA for `localhost`; on a real host it is the

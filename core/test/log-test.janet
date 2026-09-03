@@ -1,4 +1,4 @@
-# void/core/log — ADR-0018: lazy level macros, per-namespace prefix
+# void/core/log — lazy level macros, per-namespace prefix
 # tree, bound context, serializers, redaction, sinks (pretty format
 # snapshot + jdn drop policy), and the plugin/start! wiring of
 # [:log] config + contributed sinks/serializers.

@@ -1,4 +1,4 @@
-### void/http/multipart — multipart/form-data, both ways (SPEC.md §5.1).
+### void/http/multipart — multipart/form-data, both ways.
 ###
 ### Pure functions over a fully-read body buffer (the server enforces
 ### :void.http/max-body before anything lands here; streaming uploads

@@ -1,4 +1,4 @@
-### void/mail/mime — a message as bytes (RFC 5322, 2045-2047, ADR-0026).
+### void/mail/mime — a message as bytes (RFC 5322, 2045-2047).
 ###
 ### A pure projection: message data in, the octets of a mail out. No
 ### socket, no clock and no randomness that is not handed in — so the
@@ -38,7 +38,7 @@
   including the CRLF; the hard limit below in SMTP is 1000."
   76)
 
-# -- RFC 2047 encoded words ---------------------------------------------
+# -- RFC 2047 encoded words ----------------------------------------------
 
 (defn- utf8-chunks
   ``Split bytes into pieces of at most `n` octets, never inside a

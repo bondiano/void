@@ -1,4 +1,4 @@
-### void/core/schema — schema layer (SPEC.md §3.3, ADR-0008).
+### void/core/schema — schema layer.
 ###
 ### One declaration, many projections. A schema is plain data:
 ###
@@ -649,7 +649,7 @@
   :void.core/schema-projection extension point (OpenAPI, protobuf,
   form hints, generators, docs...). f is (fn [normalized-schema & args])
   and must handle — or explicitly reject — every node type it may
-  receive (contract discipline, ADR-0008).``
+  receive (contract discipline).``
   [name f]
   (unless (keyword? name)
     (errorf "projection name must be a keyword, got %q" name))
@@ -681,7 +681,7 @@
   (freeze out))
 
 (defn db-annotations
-  ``Extract the optional :db/* props (ADR-0008): they are parsed and
+  ``Extract the optional :db/* props: they are parsed and
   stored on schema nodes but never consulted by validation. Returns
   {:schema {...} :fields {key {...}}} — top-level annotations
   (:db/table ...) and per-field ones (:db/pk, :db/type ...); a schema

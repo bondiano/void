@@ -1,6 +1,6 @@
 (declare-project
   :name "void-jobs"
-  :description "void/jobs — background jobs: defjob, retries with backoff, priorities, delayed and unique jobs, flows, rate limiting, a dead letter queue and cron schedules (SPEC §5.12, ADR-0012)."
+  :description "void/jobs — background jobs: defjob, retries with backoff, priorities, delayed and unique jobs, flows, rate limiting, a dead letter queue and cron schedules."
   :version "0.0.1"
   :dependencies ["https://github.com/janet-lang/spork.git"])
 
@@ -11,7 +11,7 @@
 # keeps its queue in one process pays for neither.
 #
 # What has to be on the module path is a projection of the package graph
-# (scripts/packages.janet, ADR-0020), not prose: see
+# (scripts/packages.janet), not prose: see
 # test-support/paths.janet.
 
 (declare-source

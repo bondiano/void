@@ -1,4 +1,4 @@
-### void/mail/render — a mail body is a view (ADR-0026 §4).
+### void/mail/render — a mail body is a view.
 ###
 ### There is no template engine here. A mail body is rendered through
 ### the `:void.html/engine` the composition already selected, so

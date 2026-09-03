@@ -1,4 +1,4 @@
-### void/html/temple — the temple view engine (SPEC.md §5.4).
+### void/html/temple — the temple view engine.
 ###
 ### spork/temple as the alternative to the hiccup pipeline, behind the
 ### same :void.html/engine extension point: a view is a compiled

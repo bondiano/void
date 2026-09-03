@@ -1,5 +1,5 @@
-### The shop as an MCP server (ADR-0031): the same thirty-plugin
-### composition, read through the projection an agent connects to.
+### The shop as an MCP server: the same thirty-plugin composition, read
+### through the projection an agent connects to.
 ###
 ### Nothing is started here. `plugin/bootstrap` plus the two hooks is
 ### exactly the state `void mcp serve` begins in — the graph exists,
@@ -67,7 +67,7 @@
             "admin-products-delete" "admin-products-archive"
             "admin-orders-ship" "admin-customers-update"]
   (assert (not (index-of name tools))
-          (string "the shop withholds " name " — it changes something (ADR-0031)")))
+          (string "the shop withholds " name " — it changes something")))
 
 # -- what it does not get ------------------------------------------------
 #

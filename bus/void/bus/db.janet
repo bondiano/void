@@ -1,6 +1,5 @@
 ### void/bus-db — the message log, the cursors and the transactional
-### outbox, in the application's own database (SPEC.md §5.22,
-### ADR-0012).
+### outbox, in the application's own database.
 ###
 ### The piece of void/bus that needs void/db, kept a separate plugin so
 ### an application whose messages never leave the process never loads a
@@ -29,15 +28,15 @@
 ### migration and never a change at the publisher.
 ###
 ### **One reader per group at a time, by lease.** A group is claimed
-### with a token and a deadline in `void_bus_leases`; the holder reads
-### a batch, delivers it and advances the cursor. Two processes of the
-### same service therefore do not double-deliver, and a process that
-### dies holding the lease costs the group one `[:bus-db :lease-ttl]`
-### of latency rather than a lost cursor. This is deliberately *not*
-### `FOR UPDATE SKIP LOCKED`: the row would have to stay locked for as
-### long as a handler runs, which means a transaction open across
-### arbitrary application code, which is the thing void/db exists to
-### keep from happening by accident (ADR-0009).
+### with a token and a deadline in `void_bus_leases`; the holder reads a
+### batch, delivers it and advances the cursor. Two processes of the same
+### service therefore do not double-deliver, and a process that dies
+### holding the lease costs the group one `[:bus-db :lease-ttl]` of
+### latency rather than a lost cursor. This is deliberately *not* `FOR
+### UPDATE SKIP LOCKED`: the row would have to stay locked for as long as
+### a handler runs, which means a transaction open across arbitrary
+### application code, which is the thing void/db exists to keep from
+### happening by accident.
 ###
 ### **A failed delivery stops the group's cursor.** Ordering per group
 ### is a promise (`:ordering :per-group`), and a promise that skips the
@@ -67,7 +66,7 @@
 ### has to work the same way when the backend is Kafka — the forwarder
 ### is the seam where "committed in my database" becomes "published to
 ### something else", and a pattern that exists only when the two happen
-### to be the same database is not the pattern ADR-0012 asked for.
+### to be the same database is not the pattern the outbox asks for.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -546,7 +545,7 @@
                                   rows)
                         [])}))
 
-   # -- the outbox, which is not part of the backend contract ----------
+   # -- the outbox, which is not part of the backend contract ------------
    #
    # The broker installs these two on itself: `publish-tx!` is the
    # writer, and the forwarder component is the reader. They are here

@@ -1,12 +1,12 @@
 ### shop/audit/consumer — the trail, and nothing that produces it.
 ###
-### This file subscribes to the bus and writes rows. That is all it
-### does, and the interesting part is what it does *not* need: no
-### controller calls it, no entity has a callback (ADR-0009 says they
-### have none), and no middleware is wrapped around anything. Delete
-### the audit module and the trail stops and nothing else in the shop
-### changes — which is the whole claim behind having a bus rather than
-### a function everybody remembers to call.
+### This file subscribes to the bus and writes rows. That is all it does,
+### and the interesting part is what it does *not* need: no controller
+### calls it, no entity has a callback (says they have none), and no
+### middleware is wrapped around anything. Delete the audit module and the
+### trail stops and nothing else in the shop changes — which is the whole
+### claim behind having a bus rather than a function everybody remembers
+### to call.
 ###
 ### It subscribes to `:*`, so one table ends up holding three kinds of
 ### thing that arrive by three different routes:

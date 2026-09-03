@@ -1,4 +1,4 @@
-### void/bus/memory — the in-process backend (SPEC.md §5.22).
+### void/bus/memory — the in-process backend.
 ###
 ### A channel per consumer group and a fiber draining it. That is the
 ### whole implementation, and it is the same answer

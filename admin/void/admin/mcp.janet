@@ -1,7 +1,6 @@
-### void/admin-mcp — the same declarations, read by an agent
-### (ADR-0029 §1, ADR-0031).
+### void/admin-mcp — the same declarations, read by an agent.
 ###
-### This is the payoff of deciding, in §1, that a resource is a
+### This is the payoff of deciding that a resource is a
 ### **value** and not a function that builds routes. Nothing here
 ### re-describes anything: the fields come from the descriptor, the
 ### input schema of `create` *is* `(desc :form-schema)` — the same
@@ -18,15 +17,15 @@
 ### **The gate is the admin's gate.** An agent reaching a resource
 ### goes through `:void.admin/access` exactly as a browser does, so
 ### `[:admin :access]` closes both doors or neither. On top of it,
-### `:void.mcp/tool`'s own gate applies (ADR-0031): `list`, `get` and
-### `describe` declare themselves read-only and are exposed; `create`,
-### `update`, `delete` and every declared action do not, so an
-### operator has to name them in `[:mcp :tools]` before an agent can
-### call one. Silence means "unknown", and unknown is never offered.
+### `:void.mcp/tool`'s own gate applies: `list`, `get` and `describe`
+### declare themselves read-only and are exposed; `create`, `update`,
+### `delete` and every declared action do not, so an operator has to name
+### them in `[:mcp :tools]` before an agent can call one. Silence means
+### "unknown", and unknown is never offered.
 ###
 ### **`:mount false` is not `:hidden`.** A resource declared without
 ### top-level routes is still a resource here — that is the shape of a
-### declaration written for the agent, and ADR-0029 §1 names it.
+### declaration written for the agent.
 
 (import spork/json)
 (import void/core/plugin :as plugin)
@@ -83,7 +82,7 @@
   reach the model as a sentence, and `ensure!` raises the value the
   HTTP renderers turn into a 403 — a model handed that reads
   `<struct 0x…>`. The reason still goes only to the decision log
-  (ADR-0024 §3); what the agent is told is that it was refused, and by
+; what the agent is told is that it was refused, and by
   which named policy, which the declaration resource already tells it.``
   [desc action &opt row]
   (def names [mount/access-policy (res/policy-name (desc :name) action)])
@@ -310,6 +309,6 @@
              (mapcat |(resources-for (res/lookup $)) (res/resources)))})
 
 (plugin/defplugin void/admin-mcp
-  :doc "The admin's declarations, projected into MCP tools and resources with the same ABAC policies: list/get/describe are read-only and exposed, create/update/delete and every declared action are not, so an operator names them in [:mcp :tools] before an agent may call one. The input schema of create is the resource's form schema — one value, two readers (ADR-0029 §1, ADR-0031)."
+  :doc "The admin's declarations, projected into MCP tools and resources with the same ABAC policies: list/get/describe are read-only and exposed, create/update/delete and every declared action are not, so an operator names them in [:mcp :tools] before an agent may call one. The input schema of create is the resource's form schema — one value, two readers."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/admin ">=0.0.1" :void/mcp ">=0.0.1"})

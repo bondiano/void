@@ -1,16 +1,14 @@
-### void/http/session — cookie sessions over a pluggable store
-### (SPEC.md §5.1).
+### void/http/session — cookie sessions over a pluggable store.
 ###
 ### The store contract behind the :void.http/session-store extension
-### point: {:load (fn [sid] data|nil) :save (fn [sid data ttl])
-### :delete (fn [sid]) :sweep (fn [])}. The memory store lives here;
-### redis/db stores come from their plugins. The contribution also
-### says whether the store is `:shared?`, and that is the honest form
-### of what used to be a `:workers > 1` check: an in-memory store is
-### one process's heap, so a prefork family *and* a second machine
-### both lose sessions on it. `[:deploy :shape] :fleet` refuses it at
-### start, with prefork as one of the ways to be a fleet (ADR-0030,
-### ADR-0010).
+### point: {:load (fn [sid] data|nil) :save (fn [sid data ttl]) :delete
+### (fn [sid]) :sweep (fn [])}. The memory store lives here; redis/db
+### stores come from their plugins. The contribution also says whether the
+### store is `:shared?`, and that is the honest form of what used to be a
+### `:workers > 1` check: an in-memory store is one process's heap, so a
+### prefork family *and* a second machine both lose sessions on it.
+### `[:deploy :shape] :fleet` refuses it at start, with prefork as one of
+### the ways to be a fleet.
 ###
 ### The middleware (phase 3000) puts a mutable table at (req :session);
 ### a handler mutates it, or replaces it via (resp :session), or
@@ -21,13 +19,13 @@
 ### a fresh one is issued on first save.
 ###
 ### **Why rotation is part of the contract.** A session id that survives
-### a change of privilege is session fixation: an attacker who can set
-### the cookie before a login (a subdomain, a shared machine, a link
-### with a session in it) holds a valid id afterwards. The only fix is
-### a new id at that moment, so `void/auth` (ADR-0023 §8) rotates on
-### every login, and it needs the session layer to be able to do it.
-### `rotate!` marks the *request*, because whoever logs a user in is
-### usually deep inside a handler and does not build the response.
+### a change of privilege is session fixation: an attacker who can set the
+### cookie before a login (a subdomain, a shared machine, a link with a
+### session in it) holds a valid id afterwards. The only fix is a new id
+### at that moment, so `void/auth` rotates on every login, and it needs
+### the session layer to be able to do it. `rotate!` marks the *request*,
+### because whoever logs a user in is usually deep inside a handler and
+### does not build the response.
 
 (import ./ring :as ring)
 

@@ -24,6 +24,12 @@ jpm_tree/
 # Anchored: scripts/site/ is the generator's own source
 /site/
 
+# the design record kept out of the published repository: the
+# specification, the wave plan and the decision records. They stay on disk
+# under docs/internal/ — written and read locally, never part of what the
+# repository or the docs site ships.
+docs/internal/
+
 # OMC session state
 .omc/
 

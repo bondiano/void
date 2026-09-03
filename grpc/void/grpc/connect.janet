@@ -1,5 +1,4 @@
-### void/grpc/connect — the Connect protocol, unary, over HTTP/1.1
-### (SPEC.md §5.8, ADR-0013).
+### void/grpc/connect — the Connect protocol, unary, over HTTP/1.1.
 ###
 ### Connect is what lets void speak to the gRPC ecosystem without
 ### HTTP/2. A unary call is one POST:
@@ -10,16 +9,15 @@
 ###
 ###     <the encoded request message>
 ###
-### and the answer is the encoded response with status 200, or an
-### error with the status its code maps to and a JSON body naming it.
-### There are no length prefixes, no trailers to parse and no frames:
-### the body *is* the message. That is the whole reason this protocol
-### exists, and the reason it fits on a server that has HTTP/1.1 and
-### intends to keep it (ADR-0010).
+### and the answer is the encoded response with status 200, or an error
+### with the status its code maps to and a JSON body naming it. There are
+### no length prefixes, no trailers to parse and no frames: the body *is*
+### the message. That is the whole reason this protocol exists, and the
+### reason it fits on a server that has HTTP/1.1 and intends to keep it.
 ###
 ### **Streaming is not here, and does not pretend to be.** Connect's
 ### streaming variants use the same envelope machinery gRPC does and
-### need a transport that can keep two directions open; ADR-0013 puts
+### need a transport that can keep two directions open; that puts
 ### that in v2 with its own decision. A `.proto` that declares a
 ### `stream` is refused when the service is *declared*, not when a
 ### client calls it — the failure belongs where somebody can fix it.
@@ -72,7 +70,7 @@
   [v]
   (and (dictionary? v) (v response-key)))
 
-# -- codecs ---------------------------------------------------------------
+# -- codecs --------------------------------------------------------------
 
 (defn- normalize-ct [ct]
   (def s (string/ascii-lower (string (or ct ""))))
@@ -103,7 +101,7 @@
   [codecs]
   (sorted (distinct (map |($ :content-type) codecs))))
 
-# -- reading a call -------------------------------------------------------
+# -- reading a call ------------------------------------------------------
 
 (defn- base64url-decode [s]
   # Connect's GET form uses the URL-safe alphabet without padding
@@ -229,7 +227,7 @@
                                 (if (string? value) value (string/format "%q" value)))))
   value)
 
-# -- writing an answer ----------------------------------------------------
+# -- writing an answer ---------------------------------------------------
 
 (defn- trailer-headers [trailers]
   (tabseq [[k v] :pairs (or trailers {})]

@@ -1,5 +1,4 @@
-### void/security/ip — the client address, computed rather than
-### believed (ADR-0025 §6).
+### void/security/ip — the client address, computed rather than believed.
 ###
 ### `X-Forwarded-For` is user input until proven otherwise: anybody can
 ### send one, and a rate limiter that keys on it limits whoever the
@@ -18,8 +17,8 @@
 ###
 ### The peer address itself is read from the connection lazily
 ### (`net/peername`) and memoized on the request: on the inject path
-### (ADR-0017) there is no socket, and a test that sets the header is
-### exactly the test that should work there.
+### there is no socket, and a test that sets the header is exactly the
+### test that should work there.
 
 (def defaults
   "Defaults of the address half of the [:security] slice."

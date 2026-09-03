@@ -1,4 +1,4 @@
-### void/db — the database kernel plugin (SPEC.md §5.9, ADR-0009).
+### void/db — the database kernel plugin.
 ###
 ### The kernel owns no driver: it declares the :void/db-driver
 ### interface and starts a pool over whichever component provides it
@@ -279,7 +279,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/db
-  :doc "Database kernel: the :void/db-driver contract, a fiber-aware connection pool, SQL as data, dyn-scoped transactions, migrations and the Data Mapper entity layer with thin AR sugar (ADR-0009)."
+  :doc "Database kernel: the :void/db-driver contract, a fiber-aware connection pool, SQL as data, dyn-scoped transactions, migrations and the Data Mapper entity layer with thin AR sugar."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
   :config-key :db

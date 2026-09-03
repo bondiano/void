@@ -1,23 +1,23 @@
 ### auth/service — what an account *is*, in the two directions this
 ### application needs it.
 ###
-### An identity is `{:subject "user:42" ...}` and nothing more
-### (ADR-0023): void does not know what a user is, and this file is
-### where this application says so — the subject string, the row behind
-### it, and the three things that may happen to an account.
+### An identity is `{:subject "user:42" ...}` and nothing more: void does
+### not know what a user is, and this file is where this application says
+### so — the subject string, the row behind it, and the three things that
+### may happen to an account.
 ###
 ### Nothing here sees a request. The signed-in identity arrives on a dyn
-### key rather than as an argument (ADR-0024), which is why
-### `current-record` is a service function and not a controller one;
-### what is left for the controller is the session — `login!` and
-### `logout!` are the only things that need the request itself.
+### key rather than as an argument, which is why `current-record` is a
+### service function and not a controller one; what is left for the
+### controller is the session — `login!` and `logout!` are the only things
+### that need the request itself.
 ###
 ### **Reset and verification are one flow.** `auth/challenge!` mints a
 ### single-use code and hands it to whatever delivers (`:void/mail-auth`
-### is one; a challenge nobody delivered is an error, ADR-0023 §7).
-### There is **one** route that redeems, because a deliverer builds one
-### URL — from `[:mail-auth :link-path]` — and which of the two the link
-### was for is a claim that travelled on the challenge.
+### is one; a challenge nobody delivered is an error). There is **one**
+### route that redeems, because a deliverer builds one URL — from
+### `[:mail-auth :link-path]` — and which of the two the link was for is a
+### claim that travelled on the challenge.
 (import void/auth :as auth)
 (import ./auth.repository :as repo)
 
@@ -95,9 +95,9 @@
   used.
 
   `redeem!` takes the challenge out of the store *before* it checks the
-  code (ADR-0023 §7), so a link works once and a wrong one is spent: the
-  visitor asks for another, which costs them a click and an attacker a
-  full guess per try.``
+  code, so a link works once and a wrong one is spent: the visitor asks
+  for another, which costs them a click and an attacker a full guess per
+  try.``
   [handle code]
   (auth/redeem! handle code))
 

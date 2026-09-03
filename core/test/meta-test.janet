@@ -1,6 +1,6 @@
 (import ../void/core/meta :as meta)
 
-# -- :concat over dictionaries (per-slot concat, ADR-0016) ---------------
+# -- :concat over dictionaries (per-slot concat) -------------------------
 
 (do
   (def decls (meta/declarations

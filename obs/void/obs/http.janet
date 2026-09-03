@@ -1,11 +1,11 @@
-### void/obs-http — RED per route, the root span, and the three
-### endpoints an operator needs (SPEC.md §5.13, §8.4 and part II §2.5).
+### void/obs-http — RED per route, the root span, and the three endpoints
+### an operator needs.
 ###
 ### The half of obs that needs the HTTP kernel, kept a separate plugin
 ### so a jobs worker or a CLI never drags it in — what void/cache-http
 ### is to void/cache and void/pressure-http to void/pressure.
 ###
-### **RED comes off the route table, never off the path.** SPEC §8.4
+### **RED comes off the route table, never off the path.** The design
 ### asks for rate, errors and duration "per route, from route
 ### metadata, automatically", and the reason it says route and not
 ### path is cardinality: `/orders/8f21…` is an unbounded label and the
@@ -34,7 +34,7 @@
 ###                    where a wrapper inside the chain would only see
 ###                    a raised error and have to guess.
 ###
-### **Queue time is the measurable half of §8.4's accept→handler.**
+### **Queue time is the measurable half of accept→handler.**
 ### void/http stamps `:arrived` when a request's first bytes are in
 ### hand (the accept for the first request on a connection, the moment
 ### the loop got back to the socket for the ones after it), and the
@@ -67,16 +67,15 @@
 ###                 database becomes an outage.
 ###
 ### **Prefork is the one deployment shape that needs a word.** With
-### `[:http :workers] > 1` (ADR-0010) every worker is its own process
-### with its own registry, and a scrape reaches whichever worker the
-### kernel handed the connection to: the numbers jump between workers,
-### and a counter that jumps is not a counter. The answer is the
-### ordinary one for prefork and Prometheus — one process per scrape
-### target: run a single worker per container and scale containers, or
-### read /metrics as a sample of one worker and nothing more.
-### `void_obs_process_info{pid="..."}` says which worker answered.
-### `/health` and `/ready` are per-worker by nature and are fine as
-### they are: that *is* what a load balancer needs to know.
+### `[:http :workers] > 1` every worker is its own process with its own
+### registry, and a scrape reaches whichever worker the kernel handed the
+### connection to: the numbers jump between workers, and a counter that
+### jumps is not a counter. The answer is the ordinary one for prefork and
+### Prometheus — one process per scrape target: run a single worker per
+### container and scale containers, or read /metrics as a sample of one
+### worker and nothing more. `void_obs_process_info{pid="..."}` says which
+### worker answered. `/health` and `/ready` are per-worker by nature and
+### are fine as they are: that *is* what a load balancer needs to know.
 ###
 ### Their paths are fixed, because the route table is built from
 ### static contributions and a path from config would have to be read
@@ -85,10 +84,10 @@
 ### in its own route source and turns `[:obs-http :endpoints]` off.
 ###
 ### **`:void.obs/endpoint` is what keeps them answering under load.**
-### The routes declare it, and void/pressure-http treats a route
-### marked with it as exempt from shedding (ADR-0019): a `/health`
-### that 503s while the process sheds takes the worker out of the load
-### balancer at exactly the moment it was trying to stay useful.
+### The routes declare it, and void/pressure-http treats a route marked
+### with it as exempt from shedding: a `/health` that 503s while the
+### process sheds takes the worker out of the load balancer at exactly the
+### moment it was trying to stay useful.
 
 (import spork/json)
 (import void/core/plugin :as plugin)
@@ -127,7 +126,7 @@
      :labels [:route :method]}))
 
 (def queue-buckets
-  ``Bounds for queue time, in seconds. The §8.2 budgets live between 1
+  ``Bounds for queue time, in seconds. The budgets live between 1
   and 20 ms and a queue that long is already the whole budget, so the
   resolution sits below a millisecond and the tail is short.``
   [0.0001 0.00025 0.0005 0.001 0.0025 0.005 0.01 0.025 0.05 0.1 0.5 1])
@@ -147,7 +146,7 @@
   0)
 
 (def in-flight
-  "Requests being served right now — one fiber each (ADR-0010), which
+  "Requests being served right now — one fiber each, which
   makes this the closest thing janet lets void report to a fiber
   count."
   (metrics/gauge :void.http/requests-in-flight
@@ -165,13 +164,12 @@
 (def- route-info-cache
   ``Route name -> {:label :sample-rate :keys}. Computed once per route
   rather than per request, and keyed by the route's name so a rebuilt
-  table (a dev reload, ADR-0002) reuses the entry instead of growing
-  the cache.
+  table (a dev reload) reuses the entry instead of growing the cache.
 
   `:keys` memoizes the label tuples themselves — `[route method]` for
   the duration histogram and `[route method status]` for the counter.
   A route's method is fixed and its statuses are few, so the tuples a
-  request needs have been built before; SPEC §8.5 asks for exactly
+  request needs have been built before; the bench rule asks for exactly
   this — what can be computed once is, and the hot path looks it up.``
   @{})
 
@@ -206,8 +204,7 @@
   256)
 
 (defn forget-routes!
-  "Drop the memoized route labels — what a rebuilt route table (a dev
-  reload, ADR-0002) needs, since an edited `:void.obs/name` must not
+  "Drop the memoized route labels — what a rebuilt route table (a dev reload) needs, since an edited `:void.obs/name` must not
   keep reporting under the old one."
   []
   (table/clear route-info-cache)
@@ -312,7 +309,7 @@
   {:hook :before-stop
    :phase 50
    :name :obs-http/draining
-   :doc "Answer /ready with 503 before the server starts draining (ADR-0015)"
+   :doc "Answer /ready with 503 before the server starts draining"
    :fn (fn start-draining [_]
          (set ready false)
          (metrics/set-collector! connections nil))})

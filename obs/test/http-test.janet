@@ -1,6 +1,6 @@
-# void/obs-http through the inject path (ADR-0017): RED off the route
-# table, the root span continuing an inbound traceparent, queue time,
-# and the three operator endpoints.
+# void/obs-http through the inject path: RED off the route table, the root
+# span continuing an inbound traceparent, queue time, and the three
+# operator endpoints.
 
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
@@ -58,7 +58,7 @@
 
 (defn- body [resp] (string (or (resp :body) "")))
 
-# -- RED off the route table --------------------------------------------
+# -- RED off the route table ---------------------------------------------
 
 (def boot (start {}))
 (def c (test/client boot))
@@ -113,7 +113,7 @@
 # -- the root span -------------------------------------------------------
 
 (assert (not (obshttp/tracing? @{:headers @{}}))
-        "with no exporter configured and no inbound traceparent, a request gets no span: a span nothing reads is the largest single item in what instrumentation costs (SPEC §8.2)")
+        "with no exporter configured and no inbound traceparent, a request gets no span: a span nothing reads is the largest single item in what instrumentation costs")
 (assert (obshttp/tracing? @{:headers @{"traceparent" "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}})
         "and a caller who is tracing this request is a consumer")
 
@@ -127,7 +127,7 @@
 
 (test/stop! boot)
 
-# -- spans that something consumes --------------------------------------
+# -- spans that something consumes ---------------------------------------
 
 (def traced-boot (start {} {:trace {:always true}}))
 (def tc (test/client traced-boot))

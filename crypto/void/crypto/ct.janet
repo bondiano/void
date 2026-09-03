@@ -3,7 +3,7 @@
 ### `(= a b)` on strings stops at the first differing byte, and that is
 ### a side channel: an attacker who can submit guesses learns a token
 ### one byte at a time. The correct comparison is `CRYPTO_memcmp`, and
-### it is here rather than as a Janet loop for the reason ADR-0022
+### it is here rather than as a Janet loop for the reason the package
 ### gives about every other primitive — on a bytecode VM "this loop is
 ### constant-time" is not a claim anybody can honour. The VM decides
 ### when to check for interrupts, the GC decides when to run, and the

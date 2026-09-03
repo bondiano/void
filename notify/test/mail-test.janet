@@ -35,7 +35,7 @@
   (assert (deep= @[:mail] (notify/active))
           "[:notify :channels] unsaid is the composition read back: every contributed channel that delivers somewhere, and never :memory or :log")
 
-  # -- an ordinary notification -----------------------------------------
+  # -- an ordinary notification ------------------------------------------
 
   (def result (notify/send {:key :order/shipped
                             :title "Your order shipped"
@@ -53,7 +53,7 @@
   (assert (= (result :id) (get-in delivery [:message :headers "X-Void-Notification"]))
           "and the letter carries the notification's id, so a mailbox and a bell can be told to be one event")
   (assert (string/find "https://example.com/orders/1042" (get-in delivery [:message :html]))
-          "a relative :url is absolute in a letter — a mail has no origin (ADR-0026 §4)")
+          "a relative :url is absolute in a letter — a mail has no origin")
   (assert (string/find "Order #1042 is on its way." (get-in delivery [:message :text]))
           "and the plain-text half is generated, not forgotten")
 

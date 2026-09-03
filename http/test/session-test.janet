@@ -74,7 +74,7 @@
 (assert (string/find "Max-Age=0" (get-in resp6 [:headers "set-cookie"]))
         "cookie expired on the client")
 
-# -- rotation (session fixation, ADR-0023 §8) ----------------------------
+# -- rotation (session fixation) -----------------------------------------
 
 ((store :save) "fixated0fixated0fixated0fixated0" @{:visits 3} 60)
 

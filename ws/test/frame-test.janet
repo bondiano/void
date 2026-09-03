@@ -26,7 +26,7 @@
         "and a client with that key produces the RFC's masked bytes")
 
 # a 256-byte and a 65536-byte binary frame use the two extended length
-# forms (§5.7's last two examples: 0x7E + 2 bytes, 0x7F + 8 bytes)
+# forms (0x7E + 2 bytes, 0x7F + 8 bytes)
 (def big (frame/encode :binary (string/repeat "x" 256)))
 (assert (= 0x7E (in big 1)) "256 bytes take the 16-bit length form")
 (assert (= [0x01 0x00] [(in big 2) (in big 3)]))

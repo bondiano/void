@@ -32,9 +32,9 @@
 (assert (= "worker" ((config/parse-url "redis://h/1?client_name=worker") :client-name))
         "query parameters carry the settings a url customarily does")
 
-# rediss:// parses into {:tls true} — whether the composition can
-# honour that is decided where the socket opens (ADR-0038): with no
-# :void/tls the connection refuses loudly, it never downgrades
+# rediss:// parses into {:tls true} — whether the composition can honour
+# that is decided where the socket opens: with no :void/tls the connection
+# refuses loudly, it never downgrades
 (assert (deep= @{:host "cache" :tls true}
                (config/parse-url "rediss://cache"))
         "rediss:// is the same url with :tls true")

@@ -1,33 +1,31 @@
-### void/oauth/provider — the configured issuers, their metadata and
-### their keys (ADR-0034).
+### void/oauth/provider — the configured issuers, their metadata and their
+### keys.
 ###
 ### A provider is configuration, not a catalog entry: `[:oauth
 ### :providers]` names each one with its issuer, client credentials
 ### and scopes, and everything else — endpoints, keys — is discovered
 ### from the issuer's own metadata (RFC 8414 / OpenID Connect
-### discovery) and cached, the way ADR-0032 already reads the same
+### discovery) and cached, the way the resource server already reads the same
 ### documents for the resource-server half.
 ###
 ### **The two channels are not the same, and the boot check knows it**
-### (ADR-0010, ADR-0034). The authorization endpoint is where the
+### . The authorization endpoint is where the
 ### *browser* is redirected — the browser speaks TLS itself, so
-### `https://` is always legal there. The token endpoint, the
-### metadata, the JWKS and userinfo are called by `void/http/client`,
-### which speaks TLS exactly when the composition holds `:void/tls`
-### (ADR-0038). With the plugin, an https back channel just works —
-### a real IdP becomes reachable directly. Without it, `https://` in
-### any of those is a **boot error** naming the three ways out: the
-### plugin, an internal issuer reachable over http, or an egress
-### relay beside the process (the same relay `void/mail` stands
-### behind). An `https://` issuer then stays legal as the string
-### `iss` is compared against — but the back-channel endpoints must
-### be named explicitly, and discovery is off.
+### `https://` is always legal there. The token endpoint, the metadata,
+### the JWKS and userinfo are called by `void/http/client`, which speaks
+### TLS exactly when the composition holds `:void/tls`. With the plugin,
+### an https back channel just works — a real IdP becomes reachable
+### directly. Without it, `https://` in any of those is a **boot error**
+### naming the three ways out: the plugin, an internal issuer reachable
+### over http, or an egress relay beside the process (the same relay
+### `void/mail` stands behind). An `https://` issuer then stays legal as
+### the string `iss` is compared against — but the back-channel endpoints
+### must be named explicitly, and discovery is off.
 ###
-### The keys are the ADR-0032 ring again, one per provider: fetched
-### lazily (a process nobody signs into never calls its issuer), TTL'd,
-### one refetch per unknown `kid` behind a cooldown, and freed when
-### replaced or at :stop — the one place a key's lifetime ends
-### (ADR-0022).
+### The keys are the resource server's ring again, one per provider: fetched lazily
+### (a process nobody signs into never calls its issuer), TTL'd, one
+### refetch per unknown `kid` behind a cooldown, and freed when replaced
+### or at :stop — the one place a key's lifetime ends.
 
 (import spork/json)
 (import void/core/config :as config)
@@ -99,7 +97,7 @@
 
 (def- relay-text
   (string "This composition has no TLS, and the back channel is called by "
-          "void/http/client. Add :void/tls to :plugins (ADR-0038), or reach the "
+          "void/http/client. Add :void/tls to :plugins, or reach the "
           "issuer over http (an internal IdP), or put an egress relay beside this "
           "process and name its plaintext side."))
 
@@ -124,8 +122,8 @@
     (errorf "[:oauth :providers %q] has nowhere to send the browser: set :issuer (its metadata names the authorization endpoint) or :authorization-endpoint directly" name))
   (unless (or (resolved :issuer) (resolved :token-endpoint))
     (errorf "[:oauth :providers %q] has nowhere to exchange the code: set :issuer or :token-endpoint" name))
-  # with :void/tls composed the back channel speaks https itself
-  # (ADR-0038) and these gates have nothing to refuse
+  # with :void/tls composed the back channel speaks https itself and these
+  # gates have nothing to refuse
   (unless (client/tls-available?)
     (each key back-channel-keys
       (when (https? (resolved key))
@@ -159,7 +157,7 @@
                 (cfg :mount) "/" (p :name) "/callback"))))
 
 (defn build-settings
-  "The [:oauth] slice over the defaults, with every gate ADR-0034
+  "The [:oauth] slice over the defaults, with every gate the design
   names run before a single browser is redirected."
   [boot]
   (def raw (or (get-in boot [:config :values :oauth]) {}))
@@ -186,7 +184,7 @@
               (let [known (sorted (keys (get cfg :providers {})))]
                 (if (empty? known) "none" (string/join (map string known) " "))))))
 
-# -- the rings ------------------------------------------------------------
+# -- the rings -----------------------------------------------------------
 
 (var current-rings
   "The running :oauth/providers component — one ring per provider."
@@ -208,7 +206,7 @@
 
 (defn free-keys!
   "Free every opened key of a ring — replacement and :stop, the two
-  ends of a key's lifetime (ADR-0022)."
+  ends of a key's lifetime."
   [ring]
   (each entry (values (ring :keys))
     (protect (sign/free-key (entry :key))))
@@ -293,7 +291,7 @@
         (protect (discover ring p cfg))
         (get (or (ring :metadata) {}) :userinfo_endpoint))))
 
-# -- keys -----------------------------------------------------------------
+# -- keys ----------------------------------------------------------------
 
 (defn refresh-keys!
   "Fetch a provider's JWKS and open every usable key; replaced keys
@@ -348,7 +346,7 @@
       (when (and (nil? kid) (= 1 (length keys)))
         (first (values keys)))))
 
-# -- the id_token ---------------------------------------------------------
+# -- the id_token --------------------------------------------------------
 
 (defn- no [reason] {:ok false :reason reason})
 
@@ -370,7 +368,7 @@
         (nil? entry) (no (string/format "no key for kid %q" kid))
 
         # the key's own algorithm is the only one accepted for it —
-        # the same rule ADR-0032 states for access tokens, for the
+        # the same rule the resource server states for access tokens, for the
         # same reason: the header naming the algorithm is written by
         # whoever handed us the token
         (not (index-of (entry :alg) (get p :algs default-algs)))

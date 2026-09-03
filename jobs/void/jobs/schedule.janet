@@ -1,4 +1,4 @@
-### void/jobs/schedule — repeatable jobs (SPEC.md §5.12, ADR-0012).
+### void/jobs/schedule — repeatable jobs.
 ###
 ###     (jobs/defschedule nightly-report
 ###       "0 3 * * *"

@@ -1,5 +1,5 @@
 ### void/bus/router — `defhandler`, the subscription registry, and the
-### chain a delivered message runs through (SPEC.md §5.22, ADR-0012).
+### chain a delivered message runs through.
 ###
 ###     (bus/defhandler user-created
 ###       "Index a new user."
@@ -9,23 +9,22 @@
 ###
 ### A handler is a name, a topic pattern and a function. The name is a
 ### keyword and the function is held as a **binding** rather than as a
-### value (ADR-0002) — the defining module's environment plus the
-### symbol, read at delivery time — so a `defhandler` redefined in the
-### REPL, or reloaded by void/dev's watcher, is live for the next
-### message without a restart. `defjob` and void/http's symbol
-### handlers resolve the same way, for the same reason.
+### value — the defining module's environment plus the symbol, read at
+### delivery time — so a `defhandler` redefined in the REPL, or reloaded
+### by void/dev's watcher, is live for the next message without a restart.
+### `defjob` and void/http's symbol handlers resolve the same way, for the
+### same reason.
 ###
 ### **One consumer, many handlers.** The router registers a *single*
-### subscription with the backend — one consumer group for this
-### process — and fans the message out to every handler whose pattern
-### matches, in name order, on the consuming fiber. Which is what
-### makes the guarantees legible: a group's messages arrive in order
-### because there is one reader, and two handlers on the same topic
-### cannot interleave. It is also the cost: a handler that blocks
-### blocks the group, and a consumer that needs concurrency runs
-### `[:bus :groups]` of them or hands the work to void/jobs, which is
-### the layer whose whole subject is "do this, and take your time"
-### (ADR-0012).
+### subscription with the backend — one consumer group for this process —
+### and fans the message out to every handler whose pattern matches, in
+### name order, on the consuming fiber. Which is what makes the guarantees
+### legible: a group's messages arrive in order because there is one
+### reader, and two handlers on the same topic cannot interleave. It is
+### also the cost: a handler that blocks blocks the group, and a consumer
+### that needs concurrency runs `[:bus :groups]` of them or hands the work
+### to void/jobs, which is the layer whose whole subject is "do this, and
+### take your time".
 ###
 ### **A partial fan-out fails the message.** If two handlers match and
 ### the second throws, the message is nacked — and an at-least-once

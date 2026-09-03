@@ -1,4 +1,4 @@
-### void/html — server-side rendering plugin (SPEC.md §5.4).
+### void/html — server-side rendering plugin.
 ###
 ### The view layer over void/http: handlers return lazy view responses
 ### (html/page, html/fragment) carrying content + layout as data, and
@@ -269,14 +269,13 @@
 
   The download is the one thing in void/html that needs the network,
   and the network is somebody else's component: `:void/tls` publishes
-  an *interface* (ADR-0038) and a composition either has an
-  implementation of it or does not. A command's `:needs` are component
-  keys, resolved before the command runs and fatal when unknown, so
-  they cannot say "this one, if it is here" — hence this, which asks
-  the running boot the same question `:needs` would have asked and
-  leaves the answer to `run-command`'s stop. A composition without TLS
-  starts nothing and gets `install!`'s refusal, which names both ways
-  out.``
+  an *interface* and a composition either has an implementation of it or
+  does not. A command's `:needs` are component keys, resolved before the
+  command runs and fatal when unknown, so they cannot say "this one, if it
+  is here" — hence this, which asks the running boot the same question
+  `:needs` would have asked and leaves the answer to `run-command`'s stop.
+  A composition without TLS starts nothing and gets `install!`'s refusal,
+  which names both ways out.``
   []
   (def sys (get plugin/current-boot :system))
   (when sys

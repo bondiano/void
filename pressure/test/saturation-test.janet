@@ -9,12 +9,12 @@
 
 (log/set-level! "void" :error)
 
-# The wave-2 exit criterion (ADR-0019): a real server, a real
-# blocked loop, a real socket. Everything else in this suite feeds
-# samples in by hand — which is the only way to test a threshold
-# without testing a clock — so exactly one test has to close the loop
-# and show that the numbers the sampler reads are the ones the process
-# actually produces, and that the 503 comes out of a port.
+# The wave-2 exit criterion: a real server, a real blocked loop, a real
+# socket. Everything else in this suite feeds samples in by hand — which
+# is the only way to test a threshold without testing a clock — so exactly
+# one test has to close the loop and show that the numbers the sampler
+# reads are the ones the process actually produces, and that the 503 comes
+# out of a port.
 #
 # The overload is a fiber that holds the loop for ~25 ms at a time.
 # That is what saturation looks like from inside an ev process, whether

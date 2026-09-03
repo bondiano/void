@@ -9,9 +9,9 @@
 ### the `run-suite` line is engine-agnostic on purpose: if a single
 ### assertion needed a `case` on the dialect, the claim would be false.
 ###
-### Requests go through test/inject (ADR-0017) — the production stack
-### without a socket: routing, lifecycle stages, middleware, schema
-### validation, the :void.db/txn wrapper, rendering, wire bytes.
+### Requests go through test/inject — the production stack without a
+### socket: routing, lifecycle stages, middleware, schema validation, the
+### :void.db/txn wrapper, rendering, wire bytes.
 
 (import ../test-support/paths)
 (import ../test-support/postgres :as pg)
@@ -74,8 +74,8 @@
      :profile :test
      :config {:env @{}
               :cli (merge {# an unpreloaded relation is an error here,
-                           # not a warning: the application must not
-                           # have a single one (ADR-0009)
+                           # not a warning: the application must not have
+                           # a single one
                            :db {:n1-guard :strict
                                 :migrations {:dir "db/migrations"}}
                            :cache {:prefix (string "blog-test-" label ":")}}
@@ -143,10 +143,9 @@
             "and now the schema-driven publish form is on the page")
 
     # every non-GET request from here on carries the CSRF token: the
-    # session cookie makes the credential cookie-borne, which is
-    # exactly when void/security checks (ADR-0025 §1). The token is on
-    # the page because form/form splices it — the application asked for
-    # nothing
+    # session cookie makes the credential cookie-borne, which is exactly
+    # when void/security checks. The token is on the page because
+    # form/form splices it — the application asked for nothing
     (def token
       (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`)))
                         (text signed-in))))
@@ -195,7 +194,7 @@
     # the guard is real: reaching for an unpreloaded relation throws
     (def bare (db/find e/Article (article :id)))
     (assert (not (first (protect (db/rel bare :comments))))
-            "an unplanned relation is an error under :strict (ADR-0009)")
+            "an unplanned relation is an error under :strict")
     (def loaded (db/find e/Article (article :id) {:preload [:author :comments]}))
     (assert (deep= [] (db/rel loaded :comments))
             "and a preloaded one is a table lookup")

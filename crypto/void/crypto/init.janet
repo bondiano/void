@@ -1,12 +1,12 @@
-### void/crypto — every cryptographic primitive void has, from one
-### system library (SPEC.md §5.14 and §5.16, ADR-0022).
+### void/crypto — every cryptographic primitive void has, from one system
+### library.
 ###
 ### Janet 1.41 ships `os/cryptorand` and nothing else: no SHA-2, no
 ### HMAC, no key derivation, no signatures. Wave 3 needs all of them,
 ### in three different packages — passwords and API tokens in
 ### `void/auth`, the CSRF token in `void/security`, JWS verification in
 ### both — so they live here, once, and come from libcrypto rather
-### than from an implementation of our own. ADR-0022 has the argument;
+### than from an implementation of our own;
 ### the short version is that a web framework has no business writing
 ### SHA-2, on Janet or in C.
 ###
@@ -66,10 +66,9 @@
 
   `[:kdf :in-thread] true` keeps key derivation off the event loop.
   scrypt at the default cost is ~25 ms of uninterruptible CPU, and on
-  a single-threaded loop (ADR-0010) that is 25 ms during which the
-  worker answers nobody — measured in ADR-0022 §5. Set it false in
-  tests and one-shot scripts, where a worker thread per hash is the
-  larger cost.
+  a single-threaded loop that is 25 ms during which the worker answers
+  nobody — measured, not assumed. Set it false in tests and one-shot
+  scripts, where a worker thread per hash is the larger cost.
 
   `:require` is empty: void does not decide for an application which
   algorithms it may not live without.``
@@ -205,7 +204,7 @@
   (printf "version    %s" (or (inst :version-text) "—"))
   (printf "kdf        %s"
           (if (inst :kdf-in-thread)
-            "on a worker thread (ADR-0022 §5)"
+            "on a worker thread"
             "on the event loop — [:crypto :kdf :in-thread] is false"))
   (print "algorithms")
   (each [k v] (sorted (pairs (inst :algorithms)))

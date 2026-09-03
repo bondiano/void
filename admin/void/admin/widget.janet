@@ -1,5 +1,4 @@
-### void/admin/widget — the widget contract and its resolution
-### (ADR-0029 §4).
+### void/admin/widget — the widget contract and its resolution.
 ###
 ### A widget is a **table of functions**, one of them required. The
 ### other five exist because each answers a question that would
@@ -63,9 +62,9 @@
         (errorf "admin widget %q: %q must be a function, got %q"
                 (get w :name :anonymous) k f))))
   # :encoding is how a widget says its control cannot ride a urlencoded
-  # form: form-page flips the <form> to multipart when any resolved
-  # widget declares it, and `submitted` hands such a widget's :parse
-  # the request even when (req :form) never saw the field (ADR-0039 §6)
+  # form: form-page flips the <form> to multipart when any resolved widget
+  # declares it, and `submitted` hands such a widget's :parse the request
+  # even when (req :form) never saw the field
   (when-let [enc (get w :encoding)]
     (unless (= :multipart enc)
       (errorf "admin widget %q: :encoding must be :multipart, got %q"
@@ -160,11 +159,10 @@
 
 (def link-widget
   ``A belongs-to drawn by one widget that picks its own shape from the
-  size of the target (ADR-0029 §5): a select while the target is
-  small, an autocompleting input once it is not and the target
-  declares a :search, and a plain identifier otherwise. Django needs
-  three settings for this; the size is known where the decision is
-  made, so here it is one.``
+  size of the target: a select while the target is small, an
+  autocompleting input once it is not and the target declares a :search,
+  and a plain identifier otherwise. Django needs three settings for this;
+  the size is known where the decision is made, so here it is one.``
   (normalize
     {:name :void.admin/link
      :doc "belongs-to: select, autocomplete or identifier, chosen by the size of the target"
@@ -253,8 +251,8 @@
   `void admin widgets` prints. `contribs` are the :void.admin/widget
   contributions, highest priority first.
 
-  Order (ADR-0029 §4): the field's own :widget, a matching
-  contribution, the link widget for a foreign key, html/form.``
+  Order: the field's own :widget, a matching contribution, the link widget
+  for a foreign key, html/form.``
   [desc field contribs]
   (def declared (get-in desc [:widgets (field :name)]))
   (def hit (first (filter |(matches? $ field) contribs)))
@@ -334,7 +332,7 @@
   ``Refuse a submitted value from inside a widget's `:parse`. The
   message lands on the field, the form re-renders with a 422, and
   nothing else about the submission is lost — which is what separates
-  "you chose a .svg" from an exception (ADR-0029 §4, ADR-0039 §6).``
+  "you chose a .svg" from an exception.``
   [message]
   (error {field-error-key (string message)}))
 
@@ -357,7 +355,7 @@
   ``Does any of these resolved entries draw a control that cannot ride
   a urlencoded body? The enctype of a form is a consequence of the
   widgets on it: a file input in a form that forgot the attribute
-  submits its filename and drops the file, silently (ADR-0039 §6).``
+  submits its filename and drops the file, silently.``
   [entries]
   (truthy? (some |(= :multipart (get-in $ [:widget :encoding])) (or entries []))))
 

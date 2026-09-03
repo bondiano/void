@@ -8,13 +8,13 @@
  # the database, next to the data it is bookkeeping for.
  :void/jobs-backend {:impl :jobs/db}
 
- # -- what this application is deployed as --------------------------------
+ # -- what this application is deployed as -------------------------------
  #
- # One process. Saying so is what makes the rest of this file legal:
- # the session store, the cache and the rate limiter below all live in
- # this process's heap, and under `:fleet` — which is what the :prod
- # profile defaults to — void refuses to start with any of them
- # (ADR-0030). `void deploy check` prints the list.
+ # One process. Saying so is what makes the rest of this file legal: the
+ # session store, the cache and the rate limiter below all live in this
+ # process's heap, and under `:fleet` — which is what the :prod profile
+ # defaults to — void refuses to start with any of them. `void deploy
+ # check` prints the list.
  #
  # Turning this into a fleet is four lines, and they are all in this
  # file: {:http {:session {:store :db}}} with void/db-http composed,
@@ -69,13 +69,13 @@
  # route belongs on the sign-in page, not on a 401.
  :auth-http {:unauthenticated :redirect :login-path "/"}
 
- # Mail. In development every letter is written into tmp/mail as a
- # .eml — open one and it renders in a mail client, which is what the
- # sign-in link should be looked at in. In production this has to be
- # :smtp (or a transport the application contributes): a transport that
- # keeps mail rather than sending it is a boot error in the :prod
- # profile, because a deployment that silently mails nothing looks
- # exactly like one that works (ADR-0026 §2).
+ # Mail. In development every letter is written into tmp/mail as a .eml —
+ # open one and it renders in a mail client, which is what the sign-in
+ # link should be looked at in. In production this has to be :smtp (or a
+ # transport the application contributes): a transport that keeps mail
+ # rather than sending it is a boot error in the :prod profile, because a
+ # deployment that silently mails nothing looks exactly like one that
+ # works.
  #
  # :base-url is not optional decoration — a letter has no origin, so
  # the link in it must be absolute, and a relative one is an error at
@@ -93,9 +93,9 @@
  # -- wave 3.6 -----------------------------------------------------------
  #
  # The bus lives in the same database as the data, which is the whole
- # reason `bus/publish-tx!` is possible: the audit message and the row
- # it is about commit in one transaction (ADR-0012). :group is this
- # application's default consumer group; ./audit reads under its own
+ # reason `bus/publish-tx!` is possible: the audit message and the row it
+ # is about commit in one transaction. :group is this application's
+ # default consumer group; ./audit reads under its own
  # (:audit), so a slow trail never holds up the counter job.
  #
  # :codec :jdn rather than the default :json — nothing outside this
@@ -104,15 +104,15 @@
  # default alone, which is why it is the default.
  :bus {:backend :db :group :blog :codec :jdn}
 
- # Every route that is not explicitly public has to name a policy, and
- # a route that forgets one fails the *boot* rather than the request
- # (ADR-0024 §6). This is the posture an application takes on purpose.
+ # Every route that is not explicitly public has to name a policy, and a
+ # route that forgets one fails the *boot* rather than the request. This
+ # is the posture an application takes on purpose.
  :authz {:default :deny}
 
- # The back office (ADR-0029). One line opens it, and the line names a
- # policy rather than saying `true`: until it is here, every admin
- # route refuses everybody, including the person who just deployed it.
- # `:blog/staff` is defined in ./admin.janet, which is also the only
- # place to edit to narrow it.
+ # The back office. One line opens it, and the line names a policy rather
+ # than saying `true`: until it is here, every admin route refuses
+ # everybody, including the person who just deployed it. `:blog/staff` is
+ # defined in ./admin.janet, which is also the only place to edit to
+ # narrow it.
  :admin {:access :blog/staff
          :title "blog admin"}}

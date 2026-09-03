@@ -1,5 +1,4 @@
-### The bundle, installed — the other half of scripts/bootstrap.janet
-### (ADR-0020).
+### The bundle, installed — the other half of scripts/bootstrap.janet.
 ###
 ### bootstrap prepares a *checkout*: every package importable from where
 ### it is written, `scripts/void` as the CLI, nothing installed. This
@@ -10,13 +9,13 @@
 ###     janet scripts/install-tree.janet          # install (or reinstall)
 ###     eval "$(janet scripts/install-tree.janet --export)"
 ###
-### examples/hub is why this exists (ROADMAP 6.6). Every other example
-### runs off the checkout through its own test-support/paths.janet, so
-### no ordinary `jpm test` ever proves that the install works; CI's
-### "clean machine" job proves it once, for scaffolds. The hub imports
-### `void/...` like a stranger instead, which means a change to the
-### framework reaches it only after this script has run again. That is
-### the cost of the arrangement, and it is also the point of it.
+### examples/hub is why this exists. Every other example runs off
+### the checkout through its own test-support/paths.janet, so no ordinary
+### `jpm test` ever proves that the install works; CI's "clean machine"
+### job proves it once, for scaffolds. The hub imports `void/...` like a
+### stranger instead, which means a change to the framework reaches it
+### only after this script has run again. That is the cost of the
+### arrangement, and it is also the point of it.
 ###
 ### The tree is <root>/.void-tree by default (git-ignored), and
 ### `--tree=PATH` puts it anywhere. Nothing here touches the system

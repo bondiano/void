@@ -1,15 +1,15 @@
-### void/bench/probe — the runtime budgets of §8.2, measured from
+### void/bench/probe — the runtime budgets, measured from
 ### inside the process that is under load.
 ###
 ### The latency and throughput budgets are measured by wrk from
 ### outside. The other two are not measurable from out there at all:
 ###
-###   ev loop lag  p99 < 1 ms под целевой нагрузкой (§8.2, §8.4) —
+###   ev loop lag  p99 < 1 ms under target load —
 ###                "the main health indicator of an ev system". A
 ###                client sees the *consequence* of loop lag mixed
 ###                into every latency number; only the process itself
 ###                can see the lag.
-###   GC pauses    max < 10 ms on the B3 profile (§8.2).
+###   GC pauses    max < 10 ms on the B3 profile.
 ###
 ### So the mini-apps carry this plugin, a fiber samples the lag they
 ### actually experience while wrk is hammering them, and the runner
@@ -28,16 +28,16 @@
 ### bound, and `:max-loop-lag` in the budget table is what enforces
 ### "GC max pause < 10 ms" — conservatively, since a lag maximum over
 ### the bound may be the GC or may be a slow handler, and the check
-### does not pretend to know which. The other half of §8.2's GC
+### does not pretend to know which. The other half of the GC
 ### budget — "under 2% of total time" — has no such bound available
 ### (handler CPU is indistinguishable from collector CPU from in
 ### here) and stays unmeasured until janet reports its own.
 ###
-### It imports void/pressure's meter but not the plugin: `:requires`
-### would force `:void/pressure` into every app carrying a probe, and
-### an app that measures B0 must not be dragging a sampler nobody
-### asked for into the B0 numbers. What void/pressure costs is its own
-### bench row (`b1-pressure`, SPEC §8.5), not a tax on everyone else's.
+### It imports void/pressure's meter but not the plugin: `:requires` would
+### force `:void/pressure` into every app carrying a probe, and an app
+### that measures B0 must not be dragging a sampler nobody asked for into
+### the B0 numbers. What void/pressure costs is its own bench row
+### (`b1-pressure`), not a tax on everyone else's.
 ###
 ### Sampling costs: one fiber waking every :interval (10 ms by
 ### default) and one number appended. The B0/B1 rows measured with the
@@ -166,7 +166,7 @@
 
 (def component
   (system/component :bench/probe
-    :doc "The loop-lag sampler the §8.2 runtime budgets are read from."
+    :doc "The loop-lag sampler the runtime budgets are read from."
     :config {:key :bench-probe :schema Config}
     :start
     (fn start [_ cfg]
@@ -180,7 +180,7 @@
     :health (fn health [p] {:status :up :samples (length (p :samples))})))
 
 (plugin/defplugin bench/probe
-  :doc "Runtime budgets from inside the process under load (§8.2): an event-loop lag reservoir behind GET /void/bench/probe, sampled with the same meter void/pressure uses."
+  :doc "Runtime budgets from inside the process under load: an event-loop lag reservoir behind GET /void/bench/probe, sampled with the same meter void/pressure uses."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :bench-probe

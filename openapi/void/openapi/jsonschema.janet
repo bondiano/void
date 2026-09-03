@@ -1,5 +1,4 @@
-### void/openapi/jsonschema — normalized schema nodes -> JSON Schema
-### (SPEC.md §5.3, ADR-0008).
+### void/openapi/jsonschema — normalized schema nodes -> JSON Schema.
 ###
 ### The OpenAPI side of "one declaration, many projections": a walk
 ### over the node structs void/core/schema normalizes everything into,
@@ -10,11 +9,11 @@
 ### the schema registry to a fixpoint, so a spec ships every schema it
 ### mentions, transitively. What JSON Schema cannot express
 ### (:pred, custom types) degrades to an annotated permissive schema
-### instead of failing — contract discipline says handle every node
-### type, not reject the schema (ADR-0008). Registered with the schema
-### layer as the :openapi projection by init.janet, through the same
-### :void.core/schema-projection extension point third-party
-### projections would use.
+### instead of failing — contract discipline says handle every node type,
+### not reject the schema. Registered with the schema layer as the
+### :openapi projection by init.janet, through the same
+### :void.core/schema-projection extension point third-party projections
+### would use.
 
 (import void/core/schema :as schema)
 

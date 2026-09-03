@@ -1,4 +1,4 @@
-### void/db/builder — SQL as data (SPEC.md §5.9).
+### void/db/builder — SQL as data.
 ###
 ### honeysql-style: a statement is a plain map compiled per dialect
 ### into [sql params]:
@@ -16,7 +16,7 @@
 ### :values maps, whose right-hand sides are always parameters. [:raw
 ### "count(*)"] passes SQL through untouched (no parameters). Dialects
 ### only differ in placeholder style and quoting and live in a registry
-### so drivers (wave 2.2) can add their own.
+### so drivers can add their own.
 
 (def null
   "Explicit SQL NULL for value positions — Janet dictionaries cannot

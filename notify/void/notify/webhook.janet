@@ -1,12 +1,11 @@
-### void/notify-webhook — the notification as a signed POST (ADR-0040 §5).
+### void/notify-webhook — the notification as a signed POST.
 ###
-### §9 of the SPEC names "webhook and bot hubs" as a niche void is for,
+### "Webhook and bot hubs" is a niche void is for,
 ### and this is the half of it void owes: a notification leaves the
-### process as one JSON document over `void/http/client` (with
-### `void/tls` under it when the endpoint is https, ADR-0038). A bot —
-### Telegram, Slack, a colleague's inbox robot — is either this channel
-### pointed at a URL or twenty lines of an application's own channel;
-### void ships no vendor.
+### process as one JSON document over `void/http/client` (with `void/tls`
+### under it when the endpoint is https). A bot — Telegram, Slack, a
+### colleague's inbox robot — is either this channel pointed at a URL or
+### twenty lines of an application's own channel; void ships no vendor.
 ###
 ###     {"id": "ntf_9f3c...", "key": "order/shipped", "at": 1756400000,
 ###      "title": "Your order shipped", "body": "...",

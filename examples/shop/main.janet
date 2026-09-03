@@ -80,7 +80,7 @@
   ``The bucket, when this deployment has one. Required rather than
   imported, for the reason the driver is: a laptop keeping product
   pictures in ./storage never loads a signer, and never opens the TLS
-  stack that an https endpoint would need (ADR-0038, ADR-0039).``
+  stack that an https endpoint would need.``
   []
   (require "void/storage/s3")
   (require "void/tls/init")
@@ -90,7 +90,7 @@
   ``The three plugins that move state out of the process: sessions
   (:redis session store), the cache, and nothing else — the queue and
   the bus stay in the database on purpose, because both of them have
-  to commit with the data they are about (ADR-0012).``
+  to commit with the data they are about.``
   []
   (require "void/redis/init")
   (require "void/redis/http")
@@ -127,10 +127,9 @@
    :void/obs :void/obs-http
    :void/pressure :void/pressure-http
 
-   # who is asking, what they may do, and the four things a browser
-   # needs. void/authz never imports void/auth: it reads the identity
-   # from a dyn key, so the policies would work under somebody else's
-   # authentication (ADR-0024)
+   # who is asking, what they may do, and the four things a browser needs.
+   # void/authz never imports void/auth: it reads the identity from a dyn
+   # key, so the policies would work under somebody else's authentication
    :void/crypto
    :void/auth :void/auth-http :void/auth-db
    :void/authz :void/authz-http
@@ -146,58 +145,56 @@
 
    # the same application to an agent: `void mcp serve` speaks MCP on
    # stdin/stdout, and every tool it offers is a command an operator
-   # already runs — `void jobs stats`, `void bus tail`, `void db
-   # status` — because each of those declared itself read-only.
-   # Nothing that writes is there: `void db migrate` and this
-   # application's own `void shop seed` are withheld until somebody
-   # puts them in [:mcp :tools] (ADR-0031). The HTTP transport
+   # already runs — `void jobs stats`, `void bus tail`, `void db status` —
+   # because each of those declared itself read-only. Nothing that writes
+   # is there: `void db migrate` and this application's own `void shop
+   # seed` are withheld until somebody puts them in [:mcp :tools]. The
+   # HTTP transport
    # (:void/mcp-http) is deliberately *not* composed here: it is one
    # more line and one token, and an example should not hand out a
    # tool endpoint by default
    :void/mcp :void/mcp-obs
 
    # the back office, which is not a module of this application: every
-   # `src/modules/*/*.admin.janet` is declarations over the entities
-   # that module already had, and these three plugins are the three
-   # readers of them — void/admin mounts every action as an ordinary
-   # named route, void/admin-jobs runs the bulk that is too big for a
-   # request (and is refused at start if the queue is per-process),
-   # and void/admin-mcp projects the *same* declarations into tools,
-   # so the desk and the agent cannot drift apart (ADR-0029,
-   # ADR-0031). The gate is `[:admin :access] :staff` in
-   # config/default.janet — one line, naming the policy the shop
-   # already had
+   # `src/modules/*/*.admin.janet` is declarations over the entities that
+   # module already had, and these three plugins are the three readers of
+   # them — void/admin mounts every action as an ordinary named route,
+   # void/admin-jobs runs the bulk that is too big for a request (and is
+   # refused at start if the queue is per-process), and void/admin-mcp
+   # projects the *same* declarations into tools, so the desk and the
+   # agent cannot drift apart. The gate is `[:admin :access] :staff` in
+   # config/default.janet — one line, naming the policy the shop already
+   # had
    :void/admin :void/admin-jobs :void/admin-mcp
 
-   # product pictures (ADR-0039): the contract, the route that serves
-   # what a disk store holds, and the admin widget that puts an upload
-   # behind the one `:file` field in catalog.model. Which store is
-   # behind them is the third thing a deployment changes — see
-   # `storage` below
+   # product pictures: the contract, the route that serves what a disk
+   # store holds, and the admin widget that puts an upload behind the one
+   # `:file` field in catalog.model. Which store is behind them is the
+   # third thing a deployment changes — see `storage` below
    :void/storage :void/storage-http :void/storage-admin
 
    ;(if (get opts :s3) (s3-plugins) [])
    ;(if (get opts :redis) (redis-plugins) [])
 
    # void/dev stays in the :prod composition of *this* application, and
-   # that is a decision rather than an oversight. The compose file
-   # deploys from source, where the netrepl costs a unix socket inside
-   # the container and buys `docker compose exec web void repl` — a
-   # REPL in the running web process, which is a thing void is for
-   # (SPEC §4); the watcher half is off in config/prod.janet, because
-   # nothing in a container changes on disk. A **single binary** is the
-   # case where it has to go: void/dev builds that repl's environment
-   # with `require`, and a marshalled image has no module tree to
-   # require from — so a `jpm build` of this application drops it from
-   # the list, which is one line and what examples/guestbook shows
+   # that is a decision rather than an oversight. The compose file deploys
+   # from source, where the netrepl costs a unix socket inside the
+   # container and buys `docker compose exec web void repl` — a REPL in
+   # the running web process, which is a thing void is for; the watcher
+   # half is off in config/prod.janet, because nothing in a container
+   # changes on disk. A **single binary** is the case where it has to go:
+   # void/dev builds that repl's environment with `require`, and a
+   # marshalled image has no module tree to require from — so a `jpm
+   # build` of this application drops it from the list, which is one line
+   # and what examples/guestbook shows
    # (docs/DEPLOY.md rule 2)
    :void/dev
 
-   # the dev dashboard (ADR-0043): six pages projected off the same
-   # boot value the REPL reads — composition, components, config with
-   # provenance, routes, logs with a live tail, and dash/tap. Open in
-   # :dev; any other profile refuses until [:dash :access] names a
-   # predicate, the same construction as the admin's gate
+   # the dev dashboard: six pages projected off the same boot value the
+   # REPL reads — composition, components, config with provenance, routes,
+   # logs with a live tail, and dash/tap. Open in :dev; any other profile
+   # refuses until [:dash :access] names a predicate, the same
+   # construction as the admin's gate
    :void/dash
    :shop/app])
 
@@ -214,7 +211,7 @@
   Off on a laptop (one process, nothing to install), on in the compose
   file, where the web tier is more than one process and an in-memory
   session store would be a login that works every other request
-  (ADR-0010).``
+.``
   []
   (truthy? (let [v (os/getenv "VOID_SHOP_REDIS")]
              (and v (not (index-of v ["" "0" "false" "no"]))))))
@@ -224,7 +221,7 @@
   directory, nothing to install), on in the compose file, where minio
   is the bucket and the web tier is more than one process — a picture
   uploaded to one replica's disk is a 404 on the next, which is what
-  `[:deploy :shape] :fleet` refuses to start with (ADR-0030).``
+  `[:deploy :shape] :fleet` refuses to start with.``
   []
   (truthy? (let [v (os/getenv "VOID_SHOP_STORAGE")]
              (and v (= "s3" (string/ascii-lower v))))))

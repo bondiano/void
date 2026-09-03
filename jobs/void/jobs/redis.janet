@@ -1,4 +1,4 @@
-### void/jobs-redis — the job queue in redis (SPEC.md §5.12, ADR-0012).
+### void/jobs-redis — the job queue in redis.
 ###
 ### The piece of void/jobs that needs void/redis, kept a separate
 ### plugin so an application whose jobs live in its heap — or in its

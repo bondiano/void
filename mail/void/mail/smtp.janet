@@ -1,25 +1,24 @@
-### void/mail/smtp — the SMTP client (RFC 5321, ADR-0026 §3).
+### void/mail/smtp — the SMTP client (RFC 5321).
 ###
 ### A connection is a `net/` stream and a buffer, the way a redis
 ### connection is: `net/read` and `net/write` park the fiber on the ev
-### loop, so a mail being sent costs a fiber and not a thread
-### (ADR-0010). The protocol is a conversation of lines, and the only
-### thing that is easy to get wrong is that a reply may be several of
-### them (`250-PIPELINING` … `250 8BITMIME`) — a client that reads one
-### line answers the next command with the tail of this one.
+### loop, so a mail being sent costs a fiber and not a thread. The
+### protocol is a conversation of lines, and the only thing that is easy
+### to get wrong is that a reply may be several of them (`250-PIPELINING`
+### … `250 8BITMIME`) — a client that reads one line answers the next
+### command with the tail of this one.
 ###
 ### **This client speaks plaintext by default, and says so.** The
-### default deployment stays ADR-0026's: a relay on the machine or
-### next to it (Postfix, msmtp, a sidecar) holds the credentials and
-### the TLS session, and the application talks to it over loopback.
-### With `:void/tls` composed (ADR-0038), `[:mail :smtp :tls]` opens
-### the second road: `:starttls` upgrades the session after EHLO and
-### fails the delivery when the server cannot, `:smtps` speaks TLS
-### from the first byte (the port-465 convention). Either setting
-### without the plugin is a boot error naming it — a channel that was
-### asked to be encrypted never quietly degrades to plaintext. A
-### provider reached over HTTPS is an application's own
-### `:void.mail/transport` contribution, as before.
+### default deployment is unchanged: a relay on the machine or next to
+### it (Postfix, msmtp, a sidecar) holds the credentials and the TLS
+### session, and the application talks to it over loopback. With
+### `:void/tls` composed, `[:mail :smtp :tls]` opens the second road:
+### `:starttls` upgrades the session after EHLO and fails the delivery
+### when the server cannot, `:smtps` speaks TLS from the first byte (the
+### port-465 convention). Either setting without the plugin is a boot
+### error naming it — a channel that was asked to be encrypted never
+### quietly degrades to plaintext. A provider reached over HTTPS is an
+### application's own `:void.mail/transport` contribution, as before.
 ###
 ### **AUTH over a plaintext connection to a remote host is refused.**
 ### Not warned about: refused, with the ways out named (`:tls`, a
@@ -59,7 +58,7 @@
    :helo nil
    # :none | :starttls (upgrade after EHLO, required once asked for) |
    # :smtps (TLS from the first byte — set :port 465 with it). Either
-   # needs :void/tls in the composition (ADR-0038)
+   # needs :void/tls in the composition
    :tls :none
    :timeout 60
    :connect-timeout 10
@@ -68,7 +67,7 @@
 (var tls-wrap
   ``How a connection is upgraded to TLS — `(fn [stream opts]
   tls-stream)` — or nil when this composition has none. `void/tls`
-  installs its wrap here on load (ADR-0038 §4); while it is nil, a
+  installs its wrap here on load; while it is nil, a
   [:mail :smtp :tls] other than :none is a boot error (see
   `tls-refusal`), never a silent plaintext session.``
   nil)
@@ -128,7 +127,7 @@
 
     (and (not= :none mode) (nil? tls-wrap))
     (string/format (string "[:mail :smtp :tls] is %q and this composition has no TLS — "
-                           "add :void/tls to :plugins (ADR-0038), or set it :none and "
+                           "add :void/tls to :plugins, or set it :none and "
                            "point [:mail :smtp] at a relay on loopback")
                    mode)))
 
@@ -199,7 +198,7 @@
                                max-reply-line)))
     (def before (length buf))
     # a method call, not net/read: after STARTTLS the stream is a TLS
-    # session (ADR-0038), which answers :read with the same signature
+    # session, which answers :read with the same signature
     (def [ok result] (protect (:read (c :stream) 4096 buf timeout)))
     (unless ok (fail nil (string "read failed: " result)))
     (when (or (nil? result) (= before (length buf)))
@@ -293,9 +292,7 @@
 (defn- secure!
   ``STARTTLS (RFC 3207): ask, hand the socket to void/tls, and forget
   everything learned before the handshake — capabilities *and* any
-  buffered bytes, because both predate the protection (§4.2; bytes a
-  server sent ahead of the handshake are exactly the injection the
-  RFC warns about).``
+  buffered bytes, because both predate the protection (bytes a server sent ahead of the handshake are exactly the injection the RFC warns about).``
   [c]
   (unless (get (c :caps) :starttls)
     (fail nil (string/format
@@ -347,8 +344,8 @@
   (cond
     (nil? p) nil
     (bytes? p) (string p)
-    # a resolved secret box (ADR-0007) unwraps through void/core/config,
-    # and the mailer does that before it gets here
+    # a resolved secret box unwraps through void/core/config, and the
+    # mailer does that before it gets here
     (errorf "[:mail :smtp :password] must be a string or an env reference, got %q" p)))
 
 (defn- mechanism [c]
@@ -383,12 +380,12 @@
              (not= :none (get cfg :auth :auto))
              (not (loopback? (get cfg :host "127.0.0.1")))
              # an encrypted session passes by construction: AUTH runs
-             # after the handshake :tls asked for (ADR-0038)
+             # after the handshake :tls asked for
              (= :none (get cfg :tls :none))
              (not (get cfg :allow-plaintext-auth)))
     (string/format
       (string "refusing to send the SMTP password to %s in the clear. Set "
-              "[:mail :smtp :tls] :starttls with :void/tls composed (ADR-0038), "
+              "[:mail :smtp :tls] :starttls with :void/tls composed, "
               "point [:mail :smtp] at a relay on loopback that holds the "
               "credentials, or set [:mail :smtp :allow-plaintext-auth] true if this "
               "network is trusted")
@@ -501,5 +498,5 @@
   time, so a REPL that changes [:mail :smtp] changes the next mail."
   [cfg-fn]
   {:name :smtp
-   :doc "Send over SMTP to the configured relay (plaintext: ADR-0010)"
+   :doc "Send over SMTP to the configured relay (plaintext:)"
    :send (fn smtp-send [delivery] (deliver! (cfg-fn) delivery))})

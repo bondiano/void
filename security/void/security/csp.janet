@@ -1,5 +1,4 @@
-### void/security/csp — a Content-Security-Policy built from data
-### (ADR-0025 §3).
+### void/security/csp — a Content-Security-Policy built from data.
 ###
 ### A CSP is a string in the end, but writing it as one gives up
 ### everything: it cannot be validated, it cannot be merged by layer,

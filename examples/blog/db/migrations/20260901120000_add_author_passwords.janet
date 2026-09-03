@@ -6,15 +6,15 @@
 # spending the same time it would have spent on a real check).
 #
 # The hash is a PHC string, so the column is text and its length is
-# whatever the configured hasher writes — the parameters travel inside
-# the value (ADR-0023 §4).
+# whatever the configured hasher writes — the parameters travel inside the
+# value.
 
 # The other two tables are not this application's at all: they are
 # void/auth-db's, and it ships their DDL as data rather than as a
 # migration of its own, because a migration timeline belongs to the
-# application (ADR-0023 §2). The blog does not issue API tokens or
-# magic links yet — it composes the stores, so the tables exist, and
-# the day it wants either there is nothing to remember.
+# application. The blog does not issue API tokens or magic links yet — it
+# composes the stores, so the tables exist, and the day it wants either
+# there is nothing to remember.
 (import void/auth/db :as auth-db)
 
 (defn up []

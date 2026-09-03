@@ -1,12 +1,11 @@
-### void/pressure/sample — the meters (SPEC.md §5.23 and §8.4,
-### ADR-0019).
+### void/pressure/sample — the meters.
 ###
 ### Two numbers, sampled on an interval, and both of them are about
 ### the same process, not the machine:
 ###
 ###   loop-lag  how much longer than it asked for a sleep took. On a
 ###             single-threaded ev-loop this is *the* saturation
-###             signal (SPEC §8.4): the loop only runs late when
+###             signal: the loop only runs late when
 ###             something else is running, so a lag of 200 ms means
 ###             every request in flight is already 200 ms behind, and
 ###             it says so before any latency percentile does.
@@ -14,7 +13,7 @@
 ###             the OOM killer and the container limit go by.
 ###
 ### **There is no heap meter, and that is a janet limit, not an
-### omission.** ADR-0019 asked for one from "janet GC statistics";
+### omission.** One was asked for from "janet GC statistics";
 ### janet 1.41 has exactly three GC bindings — `gccollect`,
 ### `gcinterval`, `gcsetinterval` — and none of them reports how much
 ### is on the heap right now. RSS is the memory signal until janet

@@ -1,5 +1,4 @@
-### void/rest/pagination — pagination/sorting/filtering conventions
-### (SPEC.md §5.2).
+### void/rest/pagination — pagination/sorting/filtering conventions.
 ###
 ### One convention across every list endpoint, all of it plain data:
 ### `?page=2&per-page=50` for page-based pagination, `?sort=-created-at,

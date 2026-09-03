@@ -1,9 +1,9 @@
 ### shop/orders/mailer — the letters, written the way the pages are.
 ###
-### A mail body in void is a **view** (ADR-0026 §4): the same hiccup,
-### the same components, rendered through the `:void.html/engine` the
-### composition already selected. There is no mail template language
-### here because there is no mail template language in void.
+### A mail body in void is a **view**: the same hiccup, the same
+### components, rendered through the `:void.html/engine` the composition
+### already selected. There is no mail template language here because
+### there is no mail template language in void.
 ###
 ### The one thing a letter has that a page does not is that it has no
 ### origin: `/orders/SH-1234` resolves against nothing in a mail

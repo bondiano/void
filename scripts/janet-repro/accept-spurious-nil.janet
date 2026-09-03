@@ -1,10 +1,9 @@
-# Minimal repro for janet 1.41.2 (ADR-0015; upstream doc-semantics
-# neighbour: janet-lang/janet#1523): closing a listener while a task
-# is parked in net/accept first delivers a nil "connection", and only
-# the NEXT accept errors with "stream is closed". net/accept's
-# docstring promises a stream; an accept loop that passes the result
-# straight to a handler dies later with
-# "bad slot #0, expected core/stream, got nil".
+# Minimal repro for janet 1.41.2 (upstream doc-semantics neighbour:
+# janet-lang/janet#1523): closing a listener while a task is parked in
+# net/accept first delivers a nil "connection", and only the NEXT accept
+# errors with "stream is closed". net/accept's docstring promises a
+# stream; an accept loop that passes the result straight to a handler dies
+# later with "bad slot #0, expected core/stream, got nil".
 #
 #     janet scripts/janet-repro/accept-spurious-nil.janet
 #

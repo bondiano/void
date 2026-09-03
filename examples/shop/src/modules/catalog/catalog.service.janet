@@ -56,7 +56,7 @@
   here more than anywhere else: this runs in a **worker** when the desk
   archives a selection through `void/admin-jobs`, and a per-process
   cache forgotten in the worker is a listing still cached in the web
-  tier (ADR-0030).``
+  tier.``
   [product]
   (when (= "active" (product :status))
     (repo/archive! (product :id))

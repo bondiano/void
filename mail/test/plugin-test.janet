@@ -31,13 +31,13 @@
 (assert (= 4 (get-in report [:extensions :void.mail/transport :contributions]))
         "the package ships :memory, :file, :log and :smtp")
 
-# -- what the boot refuses ----------------------------------------------
+# -- what the boot refuses -----------------------------------------------
 
 (each [extra reason]
   [[{:mail {:transport :postmark}} "a transport nobody contributed"]
    [{:mail {:transport :smtp :smtp {:host "smtp.example.com"
                                     :username "void" :password "s3cret"}}}
-    "credentials that would go out in the clear (ADR-0010: void has no TLS)"]]
+    "credentials that would go out in the clear (no TLS on this transport)"]]
   (assert (not (first (protect (start extra))))
           (string reason " stops the boot")))
 
@@ -74,7 +74,7 @@
   (assert (string/find "From: void <no-reply@example.com>" (get-in (mail/outbox) [0 :bytes]))
           "the [:mail :from] a message did not carry")
 
-  # the seam void/bus (3.6) takes and obs can count
+  # the seam void/bus takes and obs can count
   (def seen @[])
   (mail/listen! :test (fn [r] (array/push seen (r :id))))
   (def second (mail/send {:to "grace@example.com" :subject "hi" :text "body"}))
@@ -88,7 +88,7 @@
   (assert (= :memory (h :transport)))
   (assert (not (h :queued)))
 
-  # -- the CLI --------------------------------------------------------
+  # -- the CLI -----------------------------------------------------------
   (def cli (from-pairs (map |[($ :name) $] (plugin/extension boot :void.core/cli))))
   (assert (get cli :mail/status))
   (assert (get cli :mail/send))
@@ -99,14 +99,14 @@
   (((cli :mail/send) :fn) "ada@example.com")
   (assert (= 1 (length (mail/outbox))) "void mail send is how a deployment finds out whether it can mail at all")
 
-  # -- what a message inherits, and what it may override ---------------
+  # -- what a message inherits, and what it may override -----------------
   (assert (string/find "Reply-To: help@example.com"
                        (mail/preview {:to "a@b.co" :subject "s" :text "x"
                                       :reply-to "help@example.com"})))
   (assert (not (first (protect (mail/send {:subject "s" :text "x"}))))
           "a message with no recipient is a bug in the caller and is refused here, not silently dropped"))
 
-# -- the staging override, end to end -----------------------------------
+# -- the staging override, end to end ------------------------------------
 
 (def redirected (start {:mail {:transport :memory
                                :from "void <no-reply@example.com>"

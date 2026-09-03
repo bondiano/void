@@ -1,17 +1,17 @@
-### void/http — the HTTP kernel plugin (SPEC.md §5.1, ADR-0006).
+### void/http — the HTTP kernel plugin.
 ###
 ### The first and heaviest consumer of the plugin API: void/http owns
 ### the extension points other plugins hang HTTP behavior on —
 ### :void.http/middleware (phased wrappers), :void.http/route-meta-key
 ### (metadata contract declarations), :void.http/route-source (app
 ### modules contribute their routes here), :void.http/session-store,
-### :void.http/body-codec and :void.http/error-renderer. At
-### :before-start the whole route table is built and validated — meta
-### typos, unresolved handler symbols, restrict loosenings all fail the
-### boot before a port opens — and the :http/server component then just
-### serves it. With :workers > 1 the component becomes a prefork master
-### (ADR-0010) re-execing this same application per worker; each worker
-### binds the shared port via SO_REUSEPORT.
+### :void.http/body-codec and :void.http/error-renderer. At :before-start
+### the whole route table is built and validated — meta typos, unresolved
+### handler symbols, restrict loosenings all fail the boot before a port
+### opens — and the :http/server component then just serves it. With
+### :workers > 1 the component becomes a prefork master re-execing this
+### same application per worker; each worker binds the shared port via
+### SO_REUSEPORT.
 ###
 ### REPL/tools surface: (http/with-request {...}) runs a request
 ### through the full stack without a socket, (http/explain-route "/x")
@@ -76,7 +76,7 @@
   :reduce |(sorted-by |[($ :phase) ($ :name)] $))
 
 (plugin/defextension-point :void.http/hook
-  :doc "Global request-lifecycle hooks (ADR-0016): {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata"
+  :doc "Global request-lifecycle hooks: {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata"
   :schema {:stage [:enum :on-request :pre-parsing :pre-validation
                    :pre-handler :pre-serialization :on-send
                    :on-response :on-error :on-timeout]
@@ -88,7 +88,7 @@
   :reduce |(sorted-by (fn [c] [(c :stage) (c :name)]) $))
 
 (plugin/defextension-point :void.http/route-meta-key
-  :doc "Route metadata key declarations (ADR-0005): {:key :schema? :doc? :merge (:replace :concat :deep-merge :restrict)? :allow?}"
+  :doc "Route metadata key declarations: {:key :schema? :doc? :merge (:replace :concat :deep-merge :restrict)? :allow?}"
   :schema {:key :keyword
            :schema [:optional :any]
            :doc [:optional :string]
@@ -124,7 +124,7 @@
             (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
 
 (plugin/defextension-point :void.http/session-store
-  :doc "Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to \"would a second replica see this session\" (ADR-0030) — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is"
+  :doc "Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to \"would a second replica see this session\" — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is"
   :schema {:name :keyword
            :make :function
            :shared? [:optional :boolean]
@@ -148,7 +148,7 @@
   :validate (unique-by "error renderer" |($ :name))
   :reduce |(sorted-by (fn [c] [(get c :priority 1000) (c :name)]) $))
 
-# -- reserved metadata keys owned by the kernel (SPEC part II §2.5) ------
+# -- reserved metadata keys owned by the kernel --------------------------
 
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.http/middleware
@@ -173,7 +173,7 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.http/hooks
    :schema :dictionary
-   :doc "Route-level lifecycle hooks (ADR-0016): {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks"
+   :doc "Route-level lifecycle hooks: {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks"
    :merge :concat})
 
 # -- built-in middleware (through the same point other plugins use) ------
@@ -205,7 +205,7 @@
 (plugin/contribute! :void.http/middleware
   {:name :void.http/request-id
    :phase middleware/phase/observability
-   :doc "Mint the request id ((req :request-id)) and bind it to the log context (ADR-0018); config [:http :request-id-header] names a trusted inbound header to take instead (off by default, fastify-style)"
+   :doc "Mint the request id ((req :request-id)) and bind it to the log context; config [:http :request-id-header] names a trusted inbound header to take instead (off by default, fastify-style)"
    :wrap (fn [handler]
            # :wrap runs at table-build time — the context (and config)
            # already exist, so the header choice costs nothing per request
@@ -293,11 +293,11 @@
   one carried by a structured error.
 
   For middleware that *decides* on a status rather than failing at
-  one: load shedding (ADR-0019) answers 503 to requests it refuses,
-  and a throw there would buy a stacktrace per refused request at
-  exactly the moment the process has none to spare. Anything that is
-  genuinely an error still throws — the panic guard runs the
-  :on-error stage hooks, which this does not.``
+  one: load shedding answers 503 to requests it refuses, and a throw there
+  would buy a stacktrace per refused request at exactly the moment the
+  process has none to spare. Anything that is genuinely an error still
+  throws — the panic guard runs the :on-error stage hooks, which this does
+  not.``
   [err req &opt status]
   (def ctx (context))
   (errors/render (ctx :renderers) err req
@@ -318,11 +318,11 @@
           (errorf "unknown session store %q (contributed: %s)"
                   store-name
                   (string/join (map |(string/format "%q" $) (sorted (keys stores))) " "))))
-    # nothing here refuses the memory store any more: "sessions in a
-    # heap" is one instance of a class the deployment shape answers for
-    # everybody at once, and it is `[:deploy :shape] :fleet` that says
-    # no — with prefork workers as one of the ways to be a fleet
-    # (ADR-0030, ADR-0010). The declaration below is what it asks.
+    # nothing here refuses the memory store any more: "sessions in a heap"
+    # is one instance of a class the deployment shape answers for
+    # everybody at once, and it is `[:deploy :shape] :fleet` that says no
+    # — with prefork workers as one of the ways to be a fleet. The
+    # declaration below is what it asks.
     {:store ((contrib :make) scfg)
      :store-name store-name
      :shared? (truthy? (get contrib :shared?))
@@ -330,9 +330,8 @@
      :ttl (get scfg :ttl 86400)
      :cookie (get scfg :cookie "void-session")
      # [:http :session :cookie-opts] reaches wrap-session as-is, over
-     # one profile-shaped default: production is behind TLS (ADR-0010's
-     # relay), so its session cookie is Secure unless the config says
-     # otherwise
+     # one profile-shaped default: production is behind TLS (the relay),
+     # so its session cookie is Secure unless the config says otherwise
      :cookie-opts (merge (if (= :prod profile) {:secure true} {})
                          (get scfg :cookie-opts {}))}))
 
@@ -348,7 +347,7 @@
 
 (defn- resolve-global-hooks
   "The :void.http/hook contributions -> stage -> tuple of resolved
-  callables (symbols resolve against the contribution's :env, ADR-0002)."
+  callables (symbols resolve against the contribution's :env)."
   [contribs]
   (def by-stage @{})
   (each c (or contribs [])
@@ -457,9 +456,9 @@
      :stage-hooks global-hooks
      :strict (get cfg :strict-meta false)})
   (def table (router/build-table build-args))
-  # the :void.http/route-added app hook (ADR-0016): plugins see every
-  # entry at build time (validation, derived registrations) — a
-  # handler error fails the boot
+  # the :void.http/route-added app hook: plugins see every entry at build
+  # time (validation, derived registrations) — a handler error fails the
+  # boot
   (each e (table :routes)
     (corehooks/run! (boot :hooks) :void.http/route-added boot e))
   (def cell (router/cell table))
@@ -494,9 +493,9 @@
 
 (defn- request-from-raw
   "A whole raw HTTP request (bytes) -> request table, through the same
-  wire parser the server uses (ADR-0017 :raw mode: limits, smuggling
-  vectors, malformed input). The body is the bytes past the head —
-  no chunked decoding in the inject path."
+  wire parser the server uses (:raw mode: limits, smuggling vectors,
+  malformed input). The body is the bytes past the head — no chunked
+  decoding in the inject path."
   [raw]
   (def head (wire/parse-request-head raw))
   (cond
@@ -517,8 +516,8 @@
     :body (if (empty? body-bytes) nil body-bytes)})
 
 (defn make-request
-  ``An in-memory request table from an inject/with-request spec
-  (ADR-0017): :method (:get, or :post once a body sugar is present),
+  ``An in-memory request table from an inject/with-request spec:
+  :method (:get, or :post once a body sugar is present),
   :uri/:path, :headers, :body — plus sugar: :json <value> encodes and
   sets the content type, :form <dict> urlencodes, :raw <bytes> parses
   a whole HTTP request through the server's wire parser instead.``
@@ -548,12 +547,12 @@
         :http-version 1
         :received (os/clock :monotonic)
         # the queue-time base the server stamps in read-head: on the
-        # inject path (ADR-0017) a request arrives when it is made
+        # inject path a request arrives when it is made
         :arrived (os/clock :monotonic)
         :body body})))
 
 
-# -- the kernel and server components (ADR-0017) -------------------------
+# -- the kernel and server components ------------------------------------
 
 (defn- run-app-hook
   "Run an app-level http hook (:void.http/listening / :draining) on
@@ -568,8 +567,8 @@
   (system/component :http/kernel
     :doc "The socket-free HTTP kernel: route table, precompiled chains
     and lifecycle hooks, the composed handler — zero I/O. Tests start
-    :only [:http/kernel] (ADR-0017): the app is fully wired, no port
-    opens; test/inject and with-request run against it."
+    :only [:http/kernel]: the app is fully wired, no port opens;
+    test/inject and with-request run against it."
     :start
     (fn start [_ _]
       (def ctx (context))
@@ -731,8 +730,8 @@
 (defn rebuild!
   "Rebuild the route table and swap it atomically — after code changes
   that add routes or edit patterns/metadata (handler redefinitions are
-  live without this, ADR-0002). Route sources are re-read from the
-  live manifest registry, so a watcher/dofile reload of an app module
+  live without this). Route sources are re-read from the live manifest
+  registry, so a watcher/dofile reload of an app module
   is enough; the :void.dev/reloaded hook below calls this for you."
   []
   (def ctx (context))

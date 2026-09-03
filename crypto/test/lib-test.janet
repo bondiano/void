@@ -14,7 +14,7 @@
   (assert (string/find c (string err))
           "and the error says where it looked — a path missing from the message is a support ticket"))
 
-# -- the macOS trap (ADR-0022 §3) ----------------------------------------
+# -- the macOS trap ------------------------------------------------------
 #
 # `(ffi/native "libcrypto.dylib")` and "/usr/lib/libcrypto.dylib" abort
 # the process on macOS: the system LibreSSL shim calls abort(), protect
@@ -54,7 +54,7 @@
 (assert (number? patch))
 (assert (string/find "SSL" (lib/version-text)))
 
-# -- what this library can do -------------------------------------------
+# -- what this library can do --------------------------------------------
 
 (def algos (lib/algorithms))
 (each required [:sha256 :sha512 :hmac :scrypt :pbkdf2 :rs256 :es256]

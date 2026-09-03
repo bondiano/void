@@ -1,4 +1,4 @@
-### void/storage-http — serving the local store's files (ADR-0039 §4).
+### void/storage-http — serving the local store's files.
 ###
 ### The piece of void/storage that needs void/http, kept a separate
 ### plugin so a worker or a CLI process stores files without dragging
@@ -81,8 +81,7 @@
 
 (defn- own-routes
   # a function of boot, not a value: the mount prefix is configuration,
-  # which is not known when this manifest freezes (the ADR-0029 §12
-  # form)
+  # which is not known when this manifest freezes (the form)
   [_boot]
   (router/routes (if-let [policy (settings :policy)]
                    {:void.authz/policy policy}

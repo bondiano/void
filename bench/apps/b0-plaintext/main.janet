@@ -1,6 +1,5 @@
-### B0 — plaintext hello through the full router + middleware stack
-### (SPEC.md §8.2, ADR-0014). Budget: p50 < 2ms, p99 < 3ms,
-### ≥ 20k RPS (1 worker, 1 vCPU).
+### B0 — plaintext hello through the full router + middleware stack.
+### Budget: p50 < 2ms, p99 < 3ms, ≥ 20k RPS (1 worker, 1 vCPU).
 ###
 ### Deliberately nothing but void/http: the number this app produces
 ### is the price of the kernel itself — PEG routing, the precompiled
@@ -8,7 +7,7 @@
 ### (default 8100).
 ###
 ### The app carries `bench/probe` (void/bench/probe): a fiber sampling
-### this process's own event-loop lag, which is the only place §8.2's
+### this process's own event-loop lag, which is the only place the
 ### loop-lag and GC budgets can be measured from. `VOID_BENCH_PROBE=0`
 ### leaves it out — that is how its own cost gets measured.
 
@@ -21,7 +20,7 @@
 (require "void/bench/probe")
 
 (defn hello
-  "GET / — the §8.2 B0 handler."
+  "GET / — the B0 handler."
   [req]
   (ring/response 200 "Hello, World!"
                  @{"content-type" "text/plain; charset=utf-8"}))

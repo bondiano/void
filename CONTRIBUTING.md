@@ -1,11 +1,10 @@
 # Contributing to void
 
-Wave-based development: see [docs/ROADMAP.md](docs/ROADMAP.md) for what
-is in flight and [docs/SPEC.md](docs/SPEC.md) for the design. Every
-package tests with `jpm test` from its own directory; CI additionally
-dry-runs the full composition (`janet scripts/dry-run.janet`) and checks
-that [docs/CONTRACTS.md](docs/CONTRACTS.md) matches the declarations
-(`janet scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`).
+Every package tests with `jpm test` from its own directory; CI
+additionally dry-runs the full composition (`janet
+scripts/dry-run.janet`) and checks that
+[docs/CONTRACTS.md](docs/CONTRACTS.md) matches the declarations (`janet
+scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`).
 
 Bootstrap a checkout once — it installs the external dependencies every
 package declares and builds `void/fdwait`, the repository's one native
@@ -23,7 +22,7 @@ graph is the only place an edge between packages is written** — the
 bundle's source list, every suite's module path, the CI test steps and
 the dry-run gate all read it, and `janet scripts/packages.janet check`
 refuses a graph that disagrees with the tree on disk. A new package, or
-a new dependency between two, is one edit there (ADR-0020).
+a new dependency between two, is one edit there.
 
 The CLI runs off the checkout too, so there is no install/edit loop:
 
@@ -33,11 +32,10 @@ cd myapp && ../scripts/void routes
 ```
 
 One example does not work that way, on purpose. `examples/hub` (the
-wave-6 application, [ROADMAP 6.6](docs/ROADMAP.md)) has no
-`test-support/paths.janet`: it imports `void/...` from an **installed**
-tree, the way somebody who never cloned this repository does. A `jpm
-test` of the checkout therefore proves nothing about the install, and
-that is the gap it exists to close:
+wave-6 application) has no `test-support/paths.janet`: it imports
+`void/...` from an **installed** tree, the way somebody who never cloned
+this repository does. A `jpm test` of the checkout therefore proves
+nothing about the install, and that is the gap it exists to close:
 
 ```sh
 janet scripts/install-tree.janet              # bundle -> ./.void-tree
@@ -60,10 +58,9 @@ plugin's declarations) always runs.
 
 ## Frozen contracts and deprecation {#deprecation}
 
-Since v0.1 the Plugin API and Route Metadata contracts are **frozen**
-(SPEC part II §1.5). The normative registry is
-[docs/CONTRACTS.md](docs/CONTRACTS.md), generated from the declarations.
-What freezing means in practice:
+Since v0.1 the Plugin API and Route Metadata contracts are **frozen** .
+The normative registry is [docs/CONTRACTS.md](docs/CONTRACTS.md),
+generated from the declarations. What freezing means in practice:
 
 **Allowed without ceremony (additive):**
 
@@ -93,7 +90,7 @@ deprecation period for the old one:
 Reserved names (the "waves 2+" tables in CONTRACTS.md) are part of the
 freeze: don't repurpose them.
 
-## Performance rules (SPEC §8.5)
+## Performance rules
 
 Every plugin, before merge:
 
@@ -106,20 +103,18 @@ Every plugin, before merge:
    route tables, middleware chains, merged metadata are precompiled;
    nothing merges on the hot path.
 4. **A plugin that ships middleware ships a bench line**: run
-   `void bench b1` with and without the middleware and record
-   "B1 with my middleware = −X%" in the PR (see
-   [bench/README.md](bench/README.md); budgets and thresholds are
-   ADR-0014 / [docs/BENCH-v0.1.md](docs/BENCH-v0.1.md)).
+`void bench b1` with and without the middleware and record "B1 with my
+middleware = −X%" in the PR (see [bench/README.md](bench/README.md);
+budgets and thresholds are in [docs/BENCH-v0.1.md](docs/BENCH-v0.1.md)).
 
 CI runs B0/B1 with a 5% relative regression gate (merge-base vs head on
-the same runner); absolute §8.2 budgets are verified on the recorded
+the same runner); absolute budgets are verified on the recorded
 reference environment (`bench/results/baseline.jdn`).
 
 ## Commit style
 
-`feat:` / `fix:` / `refactor:` / `test:` / `chore:` / `docs:` /
-`style:` / `perf:` / `revert:` — one logical change per commit; the
-ROADMAP checkboxes update in the same commit that lands the work.
+`feat:` / `fix:` / `refactor:` / `test:` / `chore:` / `docs:` / `style:`
+/ `perf:` / `revert:` — one logical change per commit.
 
 ## Definition of Done (any plugin)
 
@@ -128,7 +123,7 @@ ROADMAP checkboxes update in the same commit that lands the work.
 2. Config schema + tests for invalid configs; secrets never print.
 3. `plugin/inspect` shows every contribution.
 4. Tests: unit + integration through `void/test` fixtures; middleware
-   ships its bench line (§8.5 rule 4).
+   ships its bench line.
 5. Docs: the plugin's declarations carry `:doc` strings — CONTRACTS.md
    regenerates from them.
-6. Nothing blocking on the ev loop (§8.5 rule 1).
+6. Nothing blocking on the ev loop.

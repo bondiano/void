@@ -1,4 +1,4 @@
-### The jobs dashboard (ROADMAP 6.3).
+### The jobs dashboard.
 ###
 ### Four claims. The section is a projection of the eight functions
 ### `:void/jobs-backend` already answers — the depth table is `counts`,
@@ -96,7 +96,7 @@
   (jobs/enqueue-in 600 :quiet)
   (def id (dead-id))
 
-  # -- the section ------------------------------------------------------
+  # -- the section -------------------------------------------------------
 
   (def index (GET "/admin/jobs"))
   (assert (= 200 (index :status)) (string "the section: " (index :status)))
@@ -118,7 +118,7 @@
           "a partial htmx request gets the body and no frame")
   (assert (string/find `id="admin-jobs"` (test/text frag)))
 
-  # -- the dead letter queue --------------------------------------------
+  # -- the dead letter queue ---------------------------------------------
 
   (def dlq (test/text (GET "/admin/jobs?state=dead")))
   (assert (string/find id dlq) "the filtered listing shows the record")

@@ -1,13 +1,13 @@
 ### `void make auth` — the scaffold, and the suite it generates
-### (ROADMAP 6.2).
+###.
 ###
 ### The examples are not rewritten to prove this command works: the
-### scaffold is checked by what it itself generates. So this file runs
-### the generator into a throwaway project and then runs the generated
-### suite — which boots the generated plugin on a real sqlite database
-### and drives register, sign in, sign out, reset and verify through
-### test/inject (ADR-0017). If the templates and the machinery under
-### them ever drift apart, they drift apart here.
+### scaffold is checked by what it itself generates. So this file runs the
+### generator into a throwaway project and then runs the generated suite —
+### which boots the generated plugin on a real sqlite database and drives
+### register, sign in, sign out, reset and verify through test/inject. If
+### the templates and the machinery under them ever drift apart, they
+### drift apart here.
 
 (import ../test-support/paths)
 (import void/cli/make :as make)
@@ -82,9 +82,9 @@
           "and say what happens without a deliverer, which is the one way to compose this wrong")
 
   # Everything the scaffold made necessary in a file it will not touch,
-  # said here rather than left to be found (ROADMAP 6.6): the driver's
-  # own dependency, and the policy line that the :void/security it just
-  # put in the composition needs for the htmx `void new` writes.
+  # said here rather than left to be found: the driver's own
+  # dependency, and the policy line that the :void/security it just put in
+  # the composition needs for the htmx `void new` writes.
   (assert (string/find "github.com/janet-lang/sqlite3" (string said))
           "the suite it generated boots a driver whose library the bundle does not carry — so it names it")
   (assert (string/find "project.janet" (string said))

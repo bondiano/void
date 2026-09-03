@@ -73,7 +73,7 @@
 (assert (backend/durable? b) "publish! is the broker's acknowledgement — the outbox may trust it")
 (assert (backend/shared? b) "a broker is the definition of shared")
 (assert (= :none (get-in b [:guarantees :ordering]))
-        "and :none is the honest word for cross-partition order (ADR-0035)")
+        "and :none is the honest word for cross-partition order")
 (assert (b :encoded?) "bytes on the wire, so a codec must produce some")
 
 # -- publish, then consume from the beginning of the log -----------------
@@ -170,10 +170,10 @@
 
 # -- interop: a foreign producer's message is still a message ------------
 #
-# Raw bytes onto the same Kafka topic a handler consumes, with no
-# void-id and no void-meta: the id is synthesized from the message's
-# coordinates and the payload decodes alone — the wire format's
-# promise (ADR-0035), tested from the outside in.
+# Raw bytes onto the same Kafka topic a handler consumes, with no void-id
+# and no void-meta: the id is synthesized from the message's coordinates
+# and the payload decodes alone — the wire format's promise, tested from
+# the outside in.
 
 (def foreign @[])
 (each n (router/defined) (router/forget! n))

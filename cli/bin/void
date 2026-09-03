@@ -1,11 +1,11 @@
-### The void binary — see void/cli (SPEC.md §5.17, ROADMAP 1.6).
+### The void binary — see void/cli.
 ###
 ### A thin launcher. An application pins its own void with
 ### `jpm --local deps`; this finds it. The syspath swap has to happen
 ### *before* (import void/cli): swap it after and the CLI itself stays
 ### the one from the global tree while the application's void/http comes
 ### from the local one — two copies of void/core in one process
-### (ADR-0020).
+###.
 ###
 ### No shebang here: jpm writes it on install (:is-janet true), and a
 ### second one would end up in the installed file verbatim.

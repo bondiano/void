@@ -1,11 +1,10 @@
-### void/redis/conn — one connection (SPEC.md §5.10).
+### void/redis/conn — one connection.
 ###
-### A redis connection is a plain `net/` stream and a buffer, which is
-### the whole reason this plugin has no native code and no thread pool:
-### `net/read` and `net/write` park the fiber on the ev loop, so N
-### fibers on N connections are N concurrent commands on one OS thread
-### (ADR-0010), and the only thing this module has to get right is the
-### framing.
+### A redis connection is a plain `net/` stream and a buffer, which is the
+### whole reason this plugin has no native code and no thread pool:
+### `net/read` and `net/write` park the fiber on the ev loop, so N fibers
+### on N connections are N concurrent commands on one OS thread, and the
+### only thing this module has to get right is the framing.
 ###
 ### Framing is where a redis client is usually wrong. Replies arrive in
 ### the order the commands were sent, so the connection is a queue, not
@@ -110,7 +109,7 @@
   ``Run `f` under a timeout without touching the caller's root task:
   the work runs in a supervised child task, and only that task is
   cancelled. `ev/deadline` on the caller would cancel the *request*
-  a pooled connection is serving — the bug class ADR-0015 documents.``
+  a pooled connection is serving — the bug class the kernel documents.``
   [timeout f on-timeout]
   (def slot @{})
   (def sup (ev/chan 1))
@@ -130,9 +129,9 @@
 (var tls-connect
   ``How a `{:tls true}` connection (a rediss:// URL) is opened —
   `(fn [host port opts] stream)` — or nil when this composition has
-  no TLS. `void/tls` installs its connector here on load (ADR-0038
-  §4); while it is nil, an encrypted target is refused with both ways
-  out named rather than quietly spoken to in plaintext.``
+  no TLS. `void/tls` installs its connector here on load; while it is nil,
+  an encrypted target is refused with both ways out named rather than
+  quietly spoken to in plaintext.``
   nil)
 
 (defn- connect-stream [opts]
@@ -146,7 +145,7 @@
       (error "redis: :tls over a :unix socket makes no sense — a unix socket does not cross a network"))
     (when (nil? tls-connect)
       (errorf (string "redis: %s asks for TLS and this composition has none — add "
-                      ":void/tls to :plugins (ADR-0038), or terminate the TLS in "
+                      ":void/tls to :plugins, or terminate the TLS in "
                       "front of redis and point [:redis :url] at the plaintext side")
               (string (get opts :host) ":" (get opts :port)))))
   (deadline-call
@@ -193,8 +192,8 @@
   (def buf (c :buf))
   (while (< (length buf) want)
     (def before (length buf))
-    # a method call, not net/read: the stream may be a TLS session
-    # (ADR-0038), which answers :read with the same signature
+    # a method call, not net/read: the stream may be a TLS session, which
+    # answers :read with the same signature
     (def [ok result]
       (protect (:read s (max default-read-size (- want before)) buf timeout)))
     (unless ok

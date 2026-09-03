@@ -1,5 +1,4 @@
-### void/redis/pubsub — publish/subscribe on a connection of its own
-### (SPEC.md §5.10).
+### void/redis/pubsub — publish/subscribe on a connection of its own.
 ###
 ### A subscribed connection is not a request/response connection any
 ### more. In RESP2 it accepts nothing but SUBSCRIBE, UNSUBSCRIBE and
@@ -8,10 +7,10 @@
 ### pooled connection is handed to whoever asks next, and whoever asks
 ### next wants to run GET.
 ###
-### So: one connection, one fiber parked in a read, and nothing else.
-### It costs nothing while idle — the fiber is suspended on the ev
-### loop, not spinning — and it is opened on the first subscription, so
-### an application that never subscribes never opens it (ADR-0010).
+### So: one connection, one fiber parked in a read, and nothing else. It
+### costs nothing while idle — the fiber is suspended on the ev loop, not
+### spinning — and it is opened on the first subscription, so an
+### application that never subscribes never opens it.
 ###
 ###     (pubsub/subscribe! l "cache-invalidation"
 ###                        (fn [m] (cache/forget! (m :payload))))

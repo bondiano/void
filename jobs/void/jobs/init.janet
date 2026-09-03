@@ -1,4 +1,4 @@
-### void/jobs — the background jobs plugin (SPEC.md §5.12, ADR-0012).
+### void/jobs — the background jobs plugin.
 ###
 ### Two interfaces and one runtime. `:void/jobs-backend` is storage —
 ### eight functions over records, one of which has to be atomic
@@ -34,13 +34,12 @@
 ###     {:jobs {:worker {:enabled true :concurrency 10}
 ###             :scheduler {:enabled true}}}
 ###
-### A job may also say what it needs *open* — `{:needs [:tls/lib]}` —
-### and `void jobs work` starts the union of that over the queues it
-### serves. `:jobs/queue` is what the **worker** needs; a delivery over
-### https needs the TLS stack, which the queue does not depend on and
-### which a command that named only the queue therefore leaves composed
-### and unstarted (./job, and ROADMAP 6.6 for how that reads from the
-### outside).
+### A job may also say what it needs *open* — `{:needs [:tls/lib]}` — and
+### `void jobs work` starts the union of that over the queues it serves.
+### `:jobs/queue` is what the **worker** needs; a delivery over https
+### needs the TLS stack, which the queue does not depend on and which a
+### command that named only the queue therefore leaves composed and
+### unstarted (./job, and the dashboard for how that reads from the outside).
 ###
 ### Adding void/jobs-db or void/jobs-redis puts a second component on
 ### `:void/jobs-backend`, which is the ambiguity the kernel refuses to

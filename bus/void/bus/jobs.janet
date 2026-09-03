@@ -1,9 +1,8 @@
-### void/bus-jobs — the queue's lifecycle events on the bus (ADR-0012).
+### void/bus-jobs — the queue's lifecycle events on the bus.
 ###
-### ADR-0012 ends with one sentence about how the two layers meet:
-### "jobs публикует свои lifecycle events (`:completed`, `:failed`) в
-### bus при его наличии" — jobs publishes its lifecycle events onto
-### the bus **when there is one**. This plugin is that "when there is
+### One sentence says how the two layers meet: jobs publishes its
+### lifecycle events (`:completed`, `:failed`) onto the bus **when there
+### is one**. This plugin is that "when there is
 ### one", and it is a plugin rather than a line in void/jobs for the
 ### reason void/mail-jobs is one: void/jobs must not import void/bus,
 ### because then every application with a queue would carry a message

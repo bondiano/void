@@ -14,8 +14,8 @@
 #     protoc --encode=t.Wide y.proto < y.txt | xxd -p
 #
 # so this file is not "the codec agrees with itself" — it is the codec
-# agreeing with the reference implementation, byte for byte, which is
-# the only claim worth making about a wire format (ADR-0013).
+# agreeing with the reference implementation, byte for byte, which is the
+# only claim worth making about a wire format.
 
 (proto/defenum :t/Kind {:KIND_UNSET 0 :KIND_ONE 1})
 (proto/defmessage :t/Inner {:s [1 :string]})
@@ -62,7 +62,7 @@
 (assert (= wide-golden (hex (proto/encode :t/Wide back)))
         "and re-encoding what protoc wrote produces what protoc wrote")
 
-# -- proto3 presence ------------------------------------------------------
+# -- proto3 presence -----------------------------------------------------
 
 (proto/defmessage :t/Presence
   {:n [1 :int32] :s [2 :string] :maybe [3 :optional :int32]
@@ -85,7 +85,7 @@
 (assert (nil? (empty-back :maybe)) "and an absent `optional` field decodes to nothing")
 (assert (nil? (empty-back :inner)) "as does an absent message")
 
-# -- a oneof holds one ----------------------------------------------------
+# -- a oneof holds one ---------------------------------------------------
 
 (def [ok err] (protect (proto/encode :t/Wide {:a 1 :bb "two"})))
 (assert (not ok))
@@ -94,7 +94,7 @@
 (assert (nil? ((proto/decode :t/Wide (unhex "b00101ba01047069636b")) :a))
         "on the wire the last member to arrive clears the others")
 
-# -- unknown fields survive -----------------------------------------------
+# -- unknown fields survive ----------------------------------------------
 
 (proto/defmessage :t/Old {:kept [1 :string]})
 (proto/defmessage :t/New {:kept [1 :string] :added [2 :int32] :also [3 :string]})
@@ -110,7 +110,7 @@
 (assert (= 7 (round-tripped :added)))
 (assert (= "b" (round-tripped :also)))
 
-# -- concatenation is the merge -------------------------------------------
+# -- concatenation is the merge ------------------------------------------
 
 (def first-half (proto/encode :t/Wide {:s "one" :packed [1] :in {:s "a"}}))
 (def second-half (proto/encode :t/Wide {:s "two" :packed [2]}))
@@ -119,7 +119,7 @@
 (assert (deep= @[1 2] (merged :packed)) "a repeated field accumulates")
 (assert (= "a" (get-in merged [:in :s])) "and a nested message merges rather than replacing")
 
-# -- what the encoder refuses ---------------------------------------------
+# -- what the encoder refuses --------------------------------------------
 
 (defn- refused [f why]
   (def [ok err] (protect (f)))
@@ -136,7 +136,7 @@
 (refused |(proto/encode :t/Wide {:packed 5}) "a repeated field refuses a scalar")
 (refused |(proto/encode :t/Wide {:in "not a message"}) "a message field refuses a string")
 
-# -- a message from the network is a stranger -----------------------------
+# -- a message from the network is a stranger ----------------------------
 
 (proto/defmessage :t/Nest {:next [1 :t/Nest]})
 (var deep @{})
@@ -147,7 +147,7 @@
 (loop [_ :range [0 100]] (set bomb (string "\x0a" (string/from-bytes (length bomb)) bomb)))
 (refused |(proto/decode :t/Nest bomb) "and so is a hundred levels arriving from outside")
 
-# -- the descriptor is checked when it is written, not when it is used ----
+# -- the descriptor is checked when it is written, not when it is used ---
 
 (refused |(desc/message :t/Bad {:a [1 :string] :b [1 :int32]})
          "two fields cannot claim one number")

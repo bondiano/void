@@ -6,7 +6,7 @@
 (lib/load!)
 
 (assert kdf/in-thread
-        "derivation goes to a worker thread by default — 25 ms on the ev loop is 25 ms of a worker answering nobody (ADR-0022 §5)")
+        "derivation goes to a worker thread by default — 25 ms on the ev loop is 25 ms of a worker answering nobody")
 
 (set kdf/in-thread false)
 
@@ -31,7 +31,7 @@
            (encode/hex (kdf/pbkdf2 "password" "salt"
                                    {:iterations 4096 :length 20 :digest :sha1}))))
 
-# -- argon2id, RFC 9106 §5.3 --------------------------------------------
+# -- argon2id, RFC 9106 §5.3 ---------------------------------------------
 
 (if (kdf/available? :argon2id)
   (do
@@ -80,7 +80,7 @@
 (def [ok] (protect (kdf/pbkdf2 "pw" "salt" {:digest :sha3})))
 (assert (not ok) "so is an unknown digest")
 
-# -- the thread and the loop (ADR-0022 §5) -------------------------------
+# -- the thread and the loop ---------------------------------------------
 
 (def opts {:n 16384 :r 8 :p 1 :length 32})
 (def inline-hash (kdf/scrypt "hunter2" "saltsaltsaltsalt" opts))

@@ -4,11 +4,11 @@
 ### differs from ./orders.controller is the DTO and two metadata keys.
 ###
 ### **A session cookie is not an API credential.**
-### `:void.auth/strategies [:bearer]` on the group means a browser that
-### is signed in cannot use its cookie here — which also means these
-### routes need no CSRF token, because a request that cannot be
-### authenticated by a cookie cannot be forged through one (ADR-0025
-### §1). Mint a token with `void auth token customer:1`.
+### `:void.auth/strategies [:bearer]` on the group means a browser that is
+### signed in cannot use its cookie here — which also means these routes
+### need no CSRF token, because a request that cannot be authenticated by
+### a cookie cannot be forged through one. Mint a token with `void auth
+### token customer:1`.
 ###
 ### **`:orders/own` is imported, not restated.** The policy and its
 ### resource loader are ./orders.policy, and the HTML page, this

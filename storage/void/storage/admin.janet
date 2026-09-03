@@ -1,6 +1,6 @@
-### void/storage-admin — the upload widget (ADR-0039 §6).
+### void/storage-admin — the upload widget.
 ###
-### The seam ADR-0029 §4 left open, used from the other side: a field
+### The seam the admin left open, used from the other side: a field
 ### whose schema says `:file` is drawn by this widget in every admin
 ### form, list and detail page — a file input with the field's own
 ### `:storage/accept` on it, a thumbnail where the value is an image, a

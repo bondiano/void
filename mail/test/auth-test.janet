@@ -14,7 +14,7 @@
 
 # The half of the wave-3 exit criterion that waited for this package:
 # void/auth issues magic links and one-time codes and deliberately does
-# not deliver them (ADR-0023 §7). This is the delivery.
+# not deliver them. This is the delivery.
 
 (def plugins ["void/http/init" "void/html/init" "void/crypto/init"
               "void/auth/init" "void/mail/init" "void/mail/auth"])
@@ -37,7 +37,7 @@
 (defer (test/stop! boot)
   (mail/clear-outbox!)
 
-  # -- a magic link, end to end ----------------------------------------
+  # -- a magic link, end to end ------------------------------------------
   (def issued (auth/challenge! "user:42" {:to "ada@example.com"}))
   (assert (nil? (issued :code))
           "the code is not in the return value: it exists inside the call and inside the letter, and nowhere a log can reach")
@@ -72,7 +72,7 @@
   (assert (nil? (auth/redeem! handle code))
           "and once — the second attempt has nothing left to take")
 
-  # -- a one-time code --------------------------------------------------
+  # -- a one-time code ---------------------------------------------------
   (mail/clear-outbox!)
   (auth/challenge! "user:7" {:to "grace@example.com" :kind :otp})
   (def otp-letter (get-in (mail/outbox) [0]))
@@ -81,7 +81,7 @@
                      (otp-letter :bytes))
           "six digits a person can type, in the text part")
 
-  # -- a challenge this plugin is not for -------------------------------
+  # -- a challenge this plugin is not for --------------------------------
   (mail/clear-outbox!)
   (assert (not (first (protect (auth/challenge! "user:9" {:kind :otp :channel :sms}))))
           "a challenge nobody delivered is an error: the visitor is waiting for a code that is not coming, and the alternative is a login page that spins with nothing in any log")
@@ -90,7 +90,7 @@
   (assert (not (first (protect (auth/challenge! "user:9" {}))))
           "including one with no address to mail it to")
 
-  # -- the letter is replaceable without an extension point -------------
+  # -- the letter is replaceable without an extension point --------------
   (mail/clear-outbox!)
   (def original mail-auth/link-view)
   (set mail-auth/link-view (fn [ch] [:p "our own letter: " (mail-auth/link-for ch)]))
@@ -98,7 +98,7 @@
   (assert (string/find "our own letter" (get-in (mail/outbox) [0 :bytes])))
   (set mail-auth/link-view original)
 
-  # -- a preview, for whoever has to look at it -------------------------
+  # -- a preview, for whoever has to look at it --------------------------
   (def preview (mail/preview (mail-auth/letter {:kind :link :handle "h" :code "c"
                                                 :to "ada@example.com"
                                                 :expires (+ (os/time) 900)})))
@@ -107,7 +107,7 @@
   (assert (string/find "15 more minutes" preview)
           "and the letter says how long it is good for"))
 
-# -- the path a deployment configures -----------------------------------
+# -- the path a deployment configures ------------------------------------
 
 (def elsewhere (start {:mail-auth {:link-path "/enter" :app-name "Blog"
                                    :subject "Your link"}}))

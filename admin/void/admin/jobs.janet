@@ -1,5 +1,5 @@
 ### void/admin-jobs — where the back office and the queue meet
-### (ADR-0029 §7, §10; ROADMAP 6.3).
+###.
 ###
 ### A separate plugin for the reason every other `-jobs` plugin in this
 ### repository is one: an admin with no queue must not drag one into
@@ -38,10 +38,10 @@
 ### seen inline.
 ###
 ### **A progress page on the second replica has to find the job.** So a
-### composition whose queue backend is per-process (`capabilities`
-### says `:shared false`) and whose deployment says `:fleet` is refused
-### at start — the same check, in the same words, as everything else
-### that would work on one machine and lie on two (ADR-0030).
+### composition whose queue backend is per-process (`capabilities` says
+### `:shared false`) and whose deployment says `:fleet` is refused at
+### start — the same check, in the same words, as everything else that
+### would work on one machine and lie on two.
 
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
@@ -141,13 +141,12 @@
 
 # -- the dashboard -------------------------------------------------------
 #
-# Horizon and Sidekiq-web (ROADMAP 6.3). The pages are ordinary
-# `:void.admin/page` contributions, so they are ordinary routes under
-# the admin prefix with the admin's own shut-by-default gate, and the
-# two actions are ordinary admin actions with policies of their own —
-# `:admin.jobs/retry` and `:admin.jobs/discard`, narrowed by a
-# `defpolicy` of that name and nothing else, exactly as an action of a
-# resource is (ADR-0029 §3).
+# Horizon and Sidekiq-web. The pages are ordinary `:void.admin/page`
+# contributions, so they are ordinary routes under the admin prefix with
+# the admin's own shut-by-default gate, and the two actions are ordinary
+# admin actions with policies of their own — `:admin.jobs/retry` and
+# `:admin.jobs/discard`, narrowed by a `defpolicy` of that name and
+# nothing else, exactly as an action of a resource is.
 #
 # The queue is not an entity, so this is not a `defresource-admin`:
 # there is no table, no primary key and no schema to project. What
@@ -247,7 +246,7 @@
 (defn- action-of
   ``Which action a URL names, with its policy enforced here rather
   than on the route: the action is part of the path, which is the same
-  shape and the same reason as a resource's bulk (ADR-0029 §7).``
+  shape and the same reason as a resource's bulk.``
   [req]
   (def a (keyword (get-in req [:params :action])))
   (unless (in {:retry true :discard true} a) (errors/abort 404))
@@ -436,6 +435,6 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/admin-jobs
-  :doc "The back office and the queue, joined: an action declared with :job — or a selection over [:admin :bulk :inline-limit] — is enqueued instead of run inline, the confirmation becomes a progress page over the job record's own state, and the identity that asked rides along so the per-row policies decide about the same subject they would have decided about inline (ADR-0029 §7); and a Jobs section under the admin prefix shows the queues, their depth, the records of one filter and one record in full, with retry and discard for the dead letter queue as ordinary admin actions under :admin.jobs/retry and :admin.jobs/discard. Both halves are readers of the eight functions :void/jobs-backend already answers — the contract grew nothing for either (ROADMAP 6.3)."
+  :doc "The back office and the queue, joined: an action declared with :job — or a selection over [:admin :bulk :inline-limit] — is enqueued instead of run inline, the confirmation becomes a progress page over the job record's own state, and the identity that asked rides along so the per-row policies decide about the same subject they would have decided about inline; and a Jobs section under the admin prefix shows the queues, their depth, the records of one filter and one record in full, with retry and discard for the dead letter queue as ordinary admin actions under :admin.jobs/retry and :admin.jobs/discard. Both halves are readers of the eight functions :void/jobs-backend already answers — the contract grew nothing for either."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/admin ">=0.0.1" :void/jobs ">=0.0.1"})

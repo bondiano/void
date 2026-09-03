@@ -1,4 +1,4 @@
-### void/mcp/jsonrpc — JSON-RPC 2.0 as data (SPEC.md §5.18, ADR-0031).
+### void/mcp/jsonrpc — JSON-RPC 2.0 as data.
 ###
 ### MCP is JSON-RPC 2.0 and nothing else, so this module is the whole
 ### wire format: bytes in, a message table out; a message table in,

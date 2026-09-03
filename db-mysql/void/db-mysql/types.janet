@@ -1,5 +1,4 @@
-### void/db-mysql/types — MySQL values in and out (ADR-0033,
-### SPEC.md §5.10).
+### void/db-mysql/types — MySQL values in and out.
 ###
 ### The text protocol, for the reason void/db-postgres/types gives and
 ### one more. The reason it shares: text is what the `mysql` client
@@ -9,7 +8,7 @@
 ### out MYSQL_BIND — a struct whose *tail* MySQL and MariaDB have
 ### genuinely diverged on. A driver with no compile step cannot check a
 ### struct layout, and a wrong one is a segfault rather than an error.
-### ADR-0033 is where that trade is written down.
+### That trade is the reason this module exists.
 ###
 ### Going in, that has a consequence with a name: a parameter is not
 ### sent out of band, it is rendered into the statement. Which is why

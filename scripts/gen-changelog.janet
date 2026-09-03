@@ -1,8 +1,7 @@
-### Generate CHANGELOG.md from the git history — a projection, not
-### prose (ROADMAP, волна 7).
+### Generate CHANGELOG.md from the git history — a projection, not prose.
 ###
 ### The history is already the changelog: every commit here is written
-### as `type: subject (wave, ADR-nnnn)`, one commit per landed piece,
+### as `type: subject`, one commit per landed piece,
 ### and the tags v0.1..v0.4 mark the wave boundaries. So the changelog
 ### is not a second document somebody keeps in sync — it is this
 ### script's output, grouped by release and by type, with every
@@ -68,6 +67,35 @@
 (defn- tag-date [tag]
   (git "log" "-1" "--format=%as" tag))
 
+(def- subjects-en
+  ``The English of the subjects of a stretch of history that was
+  written in Russian. Keyed by hash, so the file stays a projection —
+  the entries are labels for commits that already exist, never a place
+  to say something the commit does not.``
+  {"d32eeaa" "feat: the service pages — an operator's dark theme, and the real reason they looked broken: the dash and admin asset routes answered with an immutable struct, so the CSRF middleware could not add its cookie header and the stylesheet 500'd in any composition with void/security"
+   "e60d751" "fix: false \"server is under pressure\" 503s — both causes were in the scheduler: a connection fiber that never parks starves the timers, and the sampler recorded the whole busy period as loop lag; a yield budget and a heartbeat stamp fix both"
+   "0b6b9b1" "fix: the password is hashed outside the transaction — the register routes in shop and blog drop :void.db/txn, because a KDF under BEGIN IMMEDIATE holds sqlite's single writer"
+   "162d8d1" "feat: void/dash in the shop composition — the dashboard over the forty plugins of a real application; :plugins-for reads its three environment switches at call time"
+   "41cb70d" "fix: sqlite waits cooperatively — the busy-wait moved out of the C call, where it blocked the whole ev loop, into the driver: retry plus ev/sleep within the same busy timeout"
+   "b72b692" "fix: :plugins-for — a composition as a function of the profile becomes an explicit boot-option contract; run! and every CLI command resolve it, and guessing the plugins binding out of main by name is gone"
+   "922fc35" "docs: the roadmap for wave 7, and the idea-to-deploy walkthrough checked against the nine files the template writes"
+   "c77154d" "docs: the site — Getting Started with output taken from a real run, an API reference over 39 packages projected from manifests and docstrings, a cookbook off the examples, and an honest comparison page"
+   "10ec63e" "feat: a start without friction — void new writes a dev compose file, a smoke suite and a prod profile; void doctor names what the machine is missing, in sentences and in an exit code; void services prints compose rather than editing it"
+   "e9d369b" "feat: pressure knows about the pool — a built-in :void.pressure/check for an exhausted :db/pool (a waiter threshold with a grace period up to the checkout timeout), and a test of the obs pool gauges against a live pool"
+   "82f8c06" "feat: void/dash — the dev dashboard as a fourth projection: six reader pages over plugin/inspect, config/explain, boot and the route table, a ring sink of logs with a live tail, and history with sparklines"
+   "fd277a5" "fix: the site and the registries — tables and links inside emphasis finally render (with a smoke test in the generator), the site builds in CI, and gen-contracts became a projection of packages.janet"
+   "51e33fe" "fix: admin/MCP — the list tool reads :list rather than :detail (the examples' password hashes stop reaching an agent), nil from :scope means nothing, resource declarations go through the same ensure!, and a secret column warns"
+   "0499b6b" "fix: the security layer — introspection without aud/iss is refused (the confused deputy is closed on both branches), and the webhook channel neither reaches private ranges nor carries configured headers to somebody else's URL"
+   "597ff08" "fix: the kernel cleans up after itself — a late start! failure stops the system, component data schemas are validated, a failed restart is retried by the watcher; netrepl only outside :prod, with a 0700 socket"
+   "095ff8e" "fix: the response cache moves inside authz (phase 5500) and steps aside for a Cookie (opt-in :vary-cookie false), single-flight survives recursion; storage — SigV4 encodes the path exactly once"
+   "7c20ee0" "fix: redis — a scanner/grammar disagreement no longer poisons the pool (parse under protect plus mark-broken), an unclean connection (MULTI/WATCH/pending) is closed on checkin"
+   "6251bb8" "fix: the queue — token fencing for settle!/touch! on every backend, a SAVEPOINT around the unique insert, _locks cleanup and honest docstrings for the cron guarantees"
+   "fd6d26d" "fix: a connection abandoned mid-protocol no longer returns to the pool — :reusable? on the driver, a cancellation-proof handoff of waiters, db/detached for ev/go, and drained collect/stream"
+   "0873b48" "fix: HTTP wire hygiene — CRLF in outgoing headers, the empty chunk, a strict Content-Length, query with [ ] and UTF-8, Secure on the session cookie, deadlines against slowloris, Origin on WS"
+   "4eff2c1" "chore: LICENSE (MIT) and SECURITY.md — a repository that can be used, and told about a vulnerability"
+   "7031e6b" "chore: the changelog for v0.5 — and a tag the history does not contain stops pretending to be a boundary"
+   "6736d4b" "docs: README v0.5 — waves 0-6 closed, the application deployed"})
+
 (defn- commits
   "Commits of one range as {:hash :subject}, newest first; merge
   commits are skipped (there are none, but a projection should not
@@ -78,49 +106,38 @@
     @[]
     (seq [line :in (string/split "\n" raw)
           :let [[hash subject] (string/split "\t" line 0 2)]]
-      {:hash hash :subject subject})))
+      {:hash hash :subject (get subjects-en hash subject)})))
 
-(def- adr-files
-  "ADR number -> filename, scanned once from docs/adr."
-  (do
-    (def m @{})
-    (each f (os/dir "docs/adr")
-      (when-let [num (first (peg/match ~(* '(repeat 4 :d) "-") f))]
-        (put m num f)))
-    m))
-
-(defn- link-adrs
-  "Every ADR-nnnn mention becomes a link to the decision it names —
-  when the file exists; a dangling number stays plain text rather
-  than a broken link."
+(defn- strip-refs
+  ``A commit subject as the changelog prints it. Older subjects carry
+  a "(wave N, ADR-nnnn)" tail from when the design record lived in the
+  repository; the record does not any more, so the pointer goes and
+  the sentence stays.``
   [subject]
-  (def out @"")
-  (var pos 0)
-  (def matches (peg/match ~(any (+ (* ($) "ADR-" '(repeat 4 :d)) 1)) subject))
-  (each [at num] (partition 2 (or matches []))
-    (buffer/push out (string/slice subject pos at))
-    (if-let [f (get adr-files num)]
-      (buffer/push out (string "[ADR-" num "](docs/adr/" f ")"))
-      (buffer/push out (string "ADR-" num)))
-    (set pos (+ at 4 4)))
-  (buffer/push out (string/slice subject pos))
-  (string out))
+  (def cleaned
+    (peg/replace-all
+      ~(* "(" (any (if-not (set "()") 1)) "ADR-" (repeat 4 :d)
+          (any (if-not (set "()") 1)) ")")
+      ""
+      subject))
+  (def once (peg/replace-all ~(* "ADR-" (repeat 4 :d)) "" (string cleaned)))
+  (string/trimr (peg/replace-all ~(some " ") " " (string once)) " ,;"))
 
 # -- rendering -----------------------------------------------------------
 
 (def- sections
   "Commit type -> changelog section, in print order."
-  [["feat" "Добавлено"]
-   ["fix" "Исправлено"]
-   ["perf" "Производительность"]
-   ["docs" "Документация"]
-   [nil "Прочее"]])   # chore/refactor/test/style/revert and anything else
+  [["feat" "Added"]
+   ["fix" "Fixed"]
+   ["perf" "Performance"]
+   ["docs" "Documentation"]
+   [nil "Other"]])    # chore/refactor/test/style/revert and anything else
 
 (def- known-types (map first (filter first sections)))
 
 (defn- split-subject
   "\"feat: void/tls — ...\" -> [\"feat\" \"void/tls — ...\"]; a subject
-  without a known prefix goes to «Прочее» whole."
+  without a known prefix goes to \"Other\" whole."
   [subject]
   (if-let [colon (string/find ": " subject)]
     (let [t (string/slice subject 0 colon)]
@@ -130,14 +147,13 @@
     [nil subject]))
 
 (def- release-themes
-  ``One line per checkpoint — mirrors «Контрольные точки релизов» in
-  docs/ROADMAP.md, which remains the source; a drift here is a wrong
-  label, not a wrong history.``
-  {"v0.1" "конец волны 1 — «можно строить HTMX-приложения, есть что показать»; контракты Plugin API и Route Metadata заморожены"
-   "v0.2" "конец волны 2 — продуктовый минимум, Laravel-паритет по ядру"
-   "v0.3" "конец волны 3 — enterprise-вертикаль: obs/auth/authz/bus"
-   "v0.4" "конец волны 4 — killer-фичи: admin + MCP; кандидат в публичный анонс"
-   "v0.5" "конец волны 6 — паритет и первое приложение: хранилище, auth-скаффолд, jobs-дашборд, нотификации, tailwind без node, htmx 4 — и examples/hub, задеплоенный"})
+  ``One line per release checkpoint. A drift here is a wrong label,
+  not a wrong history.``
+  {"v0.1" "end of wave 1 — HTMX applications can be built on it, and there is something to show; the Plugin API and Route Metadata contracts are frozen"
+   "v0.2" "end of wave 2 — the product minimum, core parity with Laravel"
+   "v0.3" "end of wave 3 — the enterprise vertical: obs / auth / authz / bus"
+   "v0.4" "end of wave 4 — the killer features: admin + MCP"
+   "v0.5" "end of wave 6 — parity and the first application: storage, the auth scaffold, the jobs dashboard, notifications, tailwind without node, htmx 4 — and examples/hub, deployed"})
 
 (defn- render-release [buf title date theme cs]
   (buffer/push buf "## " title)
@@ -145,7 +161,7 @@
   (buffer/push buf "\n\n")
   (when theme (buffer/push buf theme "\n\n"))
   (if (empty? cs)
-    (buffer/push buf "*(нет коммитов)*\n\n")
+    (buffer/push buf "*(no commits)*\n\n")
     (do
       (def grouped @{})
       (each c cs
@@ -156,7 +172,7 @@
         (when-let [items (get grouped t)]
           (buffer/push buf "### " header "\n\n")
           (each item items
-            (buffer/push buf "- " (link-adrs (item :text))
+            (buffer/push buf "- " (strip-refs (item :text))
                          " (`" (item :hash) "`)\n"))
           (buffer/push buf "\n"))))))
 
@@ -167,28 +183,27 @@
   (def buf @"")
   (buffer/push buf
     "# Changelog\n\n"
-    "> Проекция git-истории (`scripts/gen-changelog.janet`), не рукопись: "
-    "каждый коммит репозитория уже назван по форме `type: что (волна, ADR)`, "
-    "теги отмечают границы релизов, ADR-ссылки ведут к решениям. "
-    "Файл регенерируется на релизе; правки руками сюда не вносятся — "
-    "они вносятся туда, откуда он собран.\n\n")
+    "> A projection of the git history (`scripts/gen-changelog.janet`), "
+    "not a manuscript: every commit in this repository is already named "
+    "`type: what`, and the tags mark the release boundaries. The file is "
+    "regenerated at a release; it is not edited by hand — the edit goes "
+    "where it was projected from.\n\n")
   # the same sentence the script prints to stderr, put where a reader
   # of the file is: a heading that is missing needs to say so, or the
   # next person goes looking for a bug in the projection
   (unless (empty? skipped)
     (buffer/push buf
-      "> " (string/join skipped " и ") " здесь нет: репозиторий однажды "
-      "пересобрал историю, и эти теги остались указывать на коммиты, "
-      "которых в ней больше нет. Тег, которого история не содержит, не "
-      "может быть границей — поэтому релиз ниже охватывает всё, что "
-      "накопилось с предыдущего *живого* тега, а границы волн живут в "
-      "[ROADMAP](docs/ROADMAP.md).\n\n"))
+      "> " (string/join skipped " and ") " are missing here: the repository "
+      "once rebuilt its history, and those tags still point at commits it "
+      "no longer contains. A tag the history does not hold cannot be a "
+      "boundary, so the release below covers everything that accumulated "
+      "since the previous *live* tag.\n\n"))
   # unreleased first, newest release next
   (def newest (last ts))
   (def pending (commits (string newest "..HEAD")))
   (unless (empty? pending)
     (render-release buf "Unreleased" nil
-                    (string "после " newest " (ROADMAP)")
+                    (string "after " newest "")
                     pending))
   (loop [i :down-to [(dec (length ts)) 0]]
     (def tag (in ts i))

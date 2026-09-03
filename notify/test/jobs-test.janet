@@ -107,10 +107,10 @@
 #
 # `:project` runs on the request fiber, inside an application whose
 # components are all up. `:deliver` runs on a worker, and a worker is a
-# CLI command: it starts what it declared and nothing else. A channel
-# that posts over https is the only thing that knows it needs the TLS
-# stack, so it says so, and this is where that reaches the job the
-# worker reads (examples/hub, ROADMAP 6.6).
+# CLI command: it starts what it declared and nothing else. A channel that
+# posts over https is the only thing that knows it needs the TLS stack, so
+# it says so, and this is where that reaches the job the worker reads
+# (examples/hub, 6.6).
 
 (def over-https
   (plugin/manifest 'test/over-https

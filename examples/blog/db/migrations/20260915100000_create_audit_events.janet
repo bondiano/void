@@ -1,4 +1,4 @@
-### The audit trail (wave 3.6). Written by nothing that knows about it:
+### The audit trail. Written by nothing that knows about it:
 ### the handlers publish facts on the bus, and blog/audit — a consumer
 ### like any other — turns them into rows. Deleting that one file stops
 ### the trail and changes no handler.

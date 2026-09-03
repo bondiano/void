@@ -4,7 +4,7 @@
 ### unique, because a retry is the same delivery and not a second one —
 ### and `body-key` says where the bytes went rather than holding them:
 ### hundreds of kilobytes of somebody else's JSON belong in a store and
-### not in a row (ADR-0039).
+### not in a row.
 (import void/db :as db)
 
 (db/defentity Delivery

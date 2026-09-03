@@ -1,7 +1,6 @@
-### void/obs/otlp-proto — the protobuf half of the OTLP seam
-### (ADR-0027).
+### void/obs/otlp-proto — the protobuf half of the OTLP seam.
 ###
-### ADR-0027 shipped the exporter on OTLP/JSON and left
+### The exporter shipped on OTLP/JSON and left
 ### `[:obs-otlp :encoding]` as a seam with one legal value, promising
 ### that the binary encoding would land as a second projection of the
 ### same payload data and that `encode` would be the only function to
