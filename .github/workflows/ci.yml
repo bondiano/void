@@ -153,12 +153,20 @@ jobs:
         # the steps are a projection of scripts/packages.janet, in
         # topological order, with the examples last — a package added to
         # the graph is tested here without touching this file
+        # every package runs even after one fails: a red suite early in
+        # the order must not hide the ones behind it, or a fix costs a
+        # full run per package to find the next
         run: |
+          failed=()
           while IFS=$'\t' read -r name dir; do
             echo "::group::jpm test $name ($dir)"
-            ( cd "$dir" && jpm test )
+            ( cd "$dir" && jpm test ) || failed+=("$name")
             echo "::endgroup::"
           done < <(janet scripts/packages.janet ci)
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::failing packages: ${failed[*]}"
+            exit 1
+          fi
 
       - name: Dry-run the full plugin composition
         run: janet scripts/dry-run.janet
