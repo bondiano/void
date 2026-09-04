@@ -161,7 +161,7 @@
     # what the SERVER says is the server's business: ER_DUP_ENTRY quotes
     # the offending value by design, and every MySQL client shows it.
     # The driver adds nothing to that and takes nothing away
-    (assert (string/find "a-very-secret-value" (string secret-err))
+    (assert (string/find "a-very-secret-value" (get secret-err :message))
             "while the server's own message still says what collided")
 
     (assert (not (first (protect (exec h "SELECT * FROM `no_such_table_here`"))))
