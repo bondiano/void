@@ -19,7 +19,9 @@
 ### most.
 
 (defn- which [program]
-  (def p (os/spawn ["/bin/sh" "-c" (string "command -v " program)] :px {:out :pipe :err :pipe}))
+  # :p, not :px — an absent program is exit 127, which is the answer
+  # this asks for and not an error to raise
+  (def p (os/spawn ["/bin/sh" "-c" (string "command -v " program)] :p {:out :pipe :err :pipe}))
   (def out (ev/read (p :out) 4096))
   (ev/read (p :err) 4096)
   (if (zero? (os/proc-wait p)) (string/trim (string out)) nil))
