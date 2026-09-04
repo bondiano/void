@@ -246,7 +246,7 @@
   {:name true :doc true :void-api true :version true :requires true
    :config-key true :config-schema true :config-defaults true
    :when true :components true :contributes true :extension-points true
-   :on-load true :source true})
+   :hooks true :on-load true :source true})
 
 (defn- plugin-name [name]
   (cond
@@ -350,6 +350,12 @@
     :contributes      {point [contribution ...]} into other plugins'
                       extension points
     :extension-points {name point} — this plugin's own points
+    :hooks            tuple of the core-hook names this plugin *fires*
+                      (hooks/run! on the boot registry, or its own walk
+                      over hooks/handlers): the declaration that lets a
+                      :void.core/hooks contribution for a misspelt name
+                      be reported at boot, and a fire of an undeclared
+                      name warn
     :on-load          (fn [ctx]) load-time hook (codegen etc.); ctx is
                       {:name :manifest :plugins :profile}
     :source           path of the defining file — `defplugin` fills it
@@ -394,6 +400,9 @@
   (when-let [src (get opts :source)]
     (unless (string? src)
       (errorf "plugin %q: :source must be a string, got %q" pname src)))
+  (def fired (get opts :hooks []))
+  (unless (and (indexed? fired) (all keyword? fired))
+    (errorf "plugin %q: :hooks must be a tuple of keywords, got %q" pname fired))
   (freeze
     {:name pname
      :doc (get opts :doc)
@@ -407,6 +416,7 @@
      :components (normalize-components pname (get opts :components []))
      :contributes (normalize-contributes pname (get opts :contributes {}))
      :extension-points (normalize-points pname (get opts :extension-points {}))
+     :hooks (tuple ;fired)
      :on-load (get opts :on-load)
      :source (get opts :source)}))
 
@@ -861,12 +871,23 @@
   nil)
 
 (defn- build-hooks
-  "Fold the :void.core/hooks contributions into a hooks/registry, each
-  handler attributed to its source plugin."
-  [extensions]
-  (def reg (hooks/registry))
+  ``Fold the :void.core/hooks contributions into a hooks/registry, each
+  handler attributed to its source plugin. The registry is declared
+  with every hook the active plugins say they fire (plus the lifecycle
+  hooks) and owned by the active plugins' namespaces; a handler for a
+  suspect name — undeclared, in a namespace an active plugin owns — is
+  reported here with a did-you-mean, since it would otherwise wait
+  forever. A handler for an absent plugin's hook is not suspect.``
+  [active extensions]
+  (def declared (tabseq [h :in hooks/lifecycle-hooks] h true))
+  (each m active
+    (each h (get m :hooks []) (put declared h true)))
+  (def reg (hooks/registry (keys declared) (map |($ :name) active)))
   (each c (get-in extensions [:void.core/hooks :contributions] [])
     (def v (c :value))
+    (when (hooks/suspect? reg (v :hook))
+      (eprintf "warning: plugin %q registers a handler for hook %q, which no active plugin declares — it will never run%s"
+               (c :plugin) (v :hook) (suggest (v :hook) (keys declared))))
     (hooks/add! reg (v :hook) (v :fn)
                 :phase (get v :phase 1000)
                 :name (get v :name)
@@ -922,7 +943,7 @@
       :inactive (tuple ;(map |($ :name) inactive))
       :config cfg
       :extensions extensions
-      :hooks (build-hooks extensions)
+      :hooks (build-hooks active extensions)
       :system sys})
   (when track?
     (set current-boot boot))

@@ -19,6 +19,7 @@
 ### form and the input schema of the MCP tool are literally one value.
 
 (import void/core/schema :as schema)
+(import void/html/form :as form)
 (import void/db/entity :as entity)
 
 # -- actions -------------------------------------------------------------
@@ -69,11 +70,7 @@
               rname k
               (string/join (map |(string/format "%q" $) (sorted (keys allowed-opts))) " ")))))
 
-(defn- humanize [k]
-  (def s (string/replace-all "-" " " (string k)))
-  (if (empty? s)
-    s
-    (string (string/ascii-upper (string/slice s 0 1)) (string/slice s 1))))
+(defn- humanize [k] (form/humanize k))
 
 (defn- titleize [k]
   (humanize k))
@@ -95,16 +92,6 @@
 # the entity layer already parsed, and the relation this column is the
 # foreign key of. A widget that had to re-derive any of this would be
 # re-deriving it per render.
-
-(defn- unwrap
-  "Strip :optional/:ref wrappers -> [inner-node required?]."
-  [node]
-  (case (node :type)
-    :optional (let [[inner _] (unwrap (first (node :children)))] [inner false])
-    :ref (let [name (get-in node [:props :name])]
-           (unwrap (or (schema/lookup name)
-                       (errorf "schema %q is not registered" name))))
-    [node true]))
 
 (defn- fk-relation
   "The belongs-to relation whose key is this field, or nil — a column
@@ -131,7 +118,7 @@
   (def node
     (or (first (seq [[k sub] :in child :when (= k fname)] sub))
         (errorf "%q: field %q is not in its schema" (ent :name) fname)))
-  (def [inner required?] (unwrap node))
+  (def [inner required?] (schema/unwrap node))
   (freeze
     {:name fname
      :label (humanize fname)

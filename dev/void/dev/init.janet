@@ -75,6 +75,7 @@
   # space: whatever the :plugins list says, this plugin has no business
   # being active in :prod
   :when (fn [_] (not= :prod (dyn :void/profile)))
+  :hooks [:void.dev/reloaded]
   :config-key :dev
   :config-schema Config
   :config-defaults {:netrepl {:enabled true :unix netrepl/default-unix-path}

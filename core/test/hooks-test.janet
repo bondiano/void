@@ -69,53 +69,24 @@
 (assert (= [:first :third] (freeze eorder))
         "run-protected! keeps going past a failing handler")
 
-# -- bus: delivery, wildcard, ordering per subscriber --------------------
+# -- declarations --------------------------------------------------------
 
-(def b (hooks/bus))
-(def got @[])
-(hooks/subscribe! b :user/created |(array/push got [:direct ($ :payload)]) {:name :direct})
-(hooks/subscribe! b :* |(array/push got [:audit ($ :topic)]) {:name :audit})
+# an undeclared registry runs anything silently
+(assert (hooks/declared? (hooks/registry) :anything))
+(assert (= "void.http" (hooks/namespace-of :void.http/listening)))
+(assert (= "void.http" (hooks/owner-namespace :void/http)))
+(assert (nil? (hooks/namespace-of :after-start)))
 
-(assert (= 2 (hooks/publish! b :user/created {:id 1}))
-        "publish! counts topic + wildcard subscribers")
-(assert (= 1 (hooks/publish! b :order/paid {:id 2}))
-        "unrelated topic reaches only the wildcard")
-(ev/sleep 0.05)
-(assert (deep= got @[[:direct {:id 1}] [:audit :user/created] [:audit :order/paid]])
-        "handlers received their events in publish order")
-
-# a failing handler does not kill the subscriber fiber
-(def bus-errors @[])
-(def b2 (hooks/bus {:on-error (fn [sub event err] (array/push bus-errors [(sub :name) err]))}))
-(def seen @[])
-(hooks/subscribe! b2 :t
-                  (fn [e]
-                    (when (= :boom (e :payload)) (error "handler boom"))
-                    (array/push seen (e :payload)))
-                  {:name :fragile})
-(hooks/publish! b2 :t :boom)
-(hooks/publish! b2 :t :fine)
-(ev/sleep 0.05)
-(assert (= [:fine] (freeze seen)) "subscriber survives its own error")
-(assert (deep= bus-errors @[[:fragile "handler boom"]]) ":on-error observes the failure")
-
-# unsubscribe by subscription value and by name
-(def tmp-sub (hooks/subscribe! b2 :t (fn [_] nil) {:name :tmp}))
-(assert (hooks/unsubscribe! b2 tmp-sub))
-(assert (nil? (hooks/unsubscribe! b2 :t :tmp)) "already removed")
-(hooks/publish! b2 :t :fine2)
-(ev/sleep 0.05)
-(assert (= [:fine :fine2] (freeze seen)))
-
-# -- bus: validation and close -------------------------------------------
-
-(expect-error "bad topic" "keyword" |(hooks/publish! b2 "t" 1))
-(expect-error "bad handler" "function" |(hooks/subscribe! b2 :t 42))
-(expect-error "bad bus option" "unknown option" |(hooks/bus {:bufer 1}))
-
-(hooks/close! b)
-(hooks/close! b2)
-(expect-error "publish after close" "closed" |(hooks/publish! b2 :t 1))
-(expect-error "subscribe after close" "closed" |(hooks/subscribe! b2 :t (fn [_] nil)))
+(def dreg (hooks/registry [:void.x/fired] [:void/x]))
+(assert (hooks/declared? dreg :void.x/fired))
+(assert (hooks/declared? dreg :after-start) "lifecycle hooks are always declared")
+(assert (not (hooks/declared? dreg :void.x/typo)))
+(assert (hooks/suspect? dreg :void.x/typo) "undeclared in an owned namespace: suspect")
+(assert (not (hooks/suspect? dreg :void.y/event)) "an absent plugin's hook is not suspect")
+(hooks/add! dreg :void.x/typo (fn [&] nil) :name :h)
+(assert (deep= @[:void.x/typo] (keys dreg)) "the declaration set is not a hook of the registry")
+(assert (= 1 (length (hooks/handlers dreg))) "nor does it show among the handlers")
+# firing a suspect name warns (on stderr) and still runs the handlers
+(assert (= 1 (hooks/run! dreg :void.x/typo)) "a suspect hook still runs its handlers")
 
 (print "hooks-test: all assertions passed")

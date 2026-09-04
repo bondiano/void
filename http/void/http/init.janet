@@ -518,9 +518,11 @@
 (defn make-request
   ``An in-memory request table from an inject/with-request spec:
   :method (:get, or :post once a body sugar is present),
-  :uri/:path, :headers, :body — plus sugar: :json <value> encodes and
-  sets the content type, :form <dict> urlencodes, :raw <bytes> parses
-  a whole HTTP request through the server's wire parser instead.``
+  :uri/:path, :headers, :body, :remote-addr (the peer's address as a
+  string, what the server reads off the socket once per connection) —
+  plus sugar: :json <value> encodes and sets the content type, :form
+  <dict> urlencodes, :raw <bytes> parses a whole HTTP request through
+  the server's wire parser instead.``
   [spec]
   (if (get spec :raw)
     (request-from-raw (get spec :raw))
@@ -544,7 +546,8 @@
         :query-string qs
         :query (or (wire/parse-query qs) @{})
         :headers headers
-        :http-version 1
+        :http-version [1 1]
+        :remote-addr (get spec :remote-addr)
         :received (os/clock :monotonic)
         # the queue-time base the server stamps in read-head: on the
         # inject path a request arrives when it is made
@@ -796,6 +799,7 @@
   :doc "HTTP kernel: net/ev server (keep-alive, limits, chunked, SSE, graceful drain), PEG router with symbol handlers and metadata merge, phased middleware, sessions, static files, prefork workers."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
+  :hooks [:void.http/route-added :void.http/listening :void.http/draining]
   :config-key :http
   :config-schema Config
   :config-defaults {:host "127.0.0.1"

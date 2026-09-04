@@ -65,7 +65,7 @@
   (def status (get resp :status 200))
   (def headers (merge @{} (get resp :headers {})))
   (when close? (put headers "connection" "close"))
-  (when (and (not close?) (= 0 (req :http-version)))
+  (when (and (not close?) (= [1 0] (req :http-version)))
     (put headers "connection" "keep-alive"))
   (def body (resp :body))
   (def head? (= :head (req :method)))
@@ -311,11 +311,18 @@
   (and (not (state :draining))
        (not= "close" (when (dictionary? resp)
                        (get-in resp [:headers "connection"])))
-       (if (= 1 (head :http-version))
+       (if (= [1 1] (head :http-version))
          (not= "close" conn-h)
          (= "keep-alive" conn-h))))
 
-(defn- build-request [conn head body info]
+(defn- peer-address
+  "The peer's address of a socket, or nil when it has none to give (a
+  unix socket, a closed one)."
+  [conn]
+  (def [ok peer] (protect (net/peername conn)))
+  (when (and ok (indexed? peer)) (first peer)))
+
+(defn- build-request [head body info]
   (def raw (head :path))
   (def [path qs] (wire/split-path raw))
   @{:method (keyword (string/ascii-lower (head :method)))
@@ -328,7 +335,10 @@
     :body body
     :received (os/clock :monotonic)      # access-log duration base
     :arrived (get info :arrived)         # queue-time base (see read-head)
-    :connection conn})
+    # the peer, read once per connection — the request carries the
+    # address and not the socket, so the inject path can carry the
+    # same key and nothing downstream can write to the wire
+    :remote-addr (get info :remote-addr)})
 
 (defn- run-handler
   "Run the handler; with a :void.http/timeout it runs as its own task
@@ -360,7 +370,7 @@
 (defn- serve-connection [state conn opts]
   (def buf @"")
   (def wbuf @"")
-  (def info @{:busy true})
+  (def info @{:busy true :remote-addr (peer-address conn)})
   (put (state :conns) conn info)
   (defer (do
            (put (state :conns) conn nil)
@@ -404,12 +414,12 @@
 
             # RFC 9110 §10.1.1: acknowledge Expect: 100-continue
             (when-let [expect (header-str (head :headers) "expect")]
-              (when (and (= 1 (head :http-version))
+              (when (and (= [1 1] (head :http-version))
                          (= "100-continue" (string/ascii-lower (string/trim expect))))
                 (:write conn "HTTP/1.1 100 Continue\r\n\r\n")))
 
             (def [body consumed] (read-body conn buf head max-body opts))
-            (def req (build-request conn head body info))
+            (def req (build-request head body info))
             (def resp (run-handler handler req (get limits :timeout)
                                    (opts :on-timeout)))
             (unless (and (dictionary? resp) (int? (resp :status)))

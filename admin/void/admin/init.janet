@@ -45,6 +45,7 @@
 (import void/authz/policy :as policy)
 (import ./context :as ctx)
 (import ./mount :as mount)
+(import ./action :as action)
 (import ./resource :prefix "" :export true)
 (import ./view :as view)
 (import ./widget :as widget)
@@ -433,6 +434,7 @@
   :requires {:void/core ">=0.0.1" :void/http ">=0.0.1" :void/html ">=0.0.1"
              :void/htmx ">=0.0.1" :void/db ">=0.0.1" :void/db-http ">=0.0.1"
              :void/authz ">=0.0.1" :void/authz-http ">=0.0.1"}
+  :hooks [action/changed-hook]
   :config-key :admin
   :config-schema Config
   :config-defaults defaults

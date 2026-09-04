@@ -469,6 +469,7 @@
   :doc "Mail as data: a message is a table, a body is a void/html view rendered by the engine the composition already selected, a transport is a contribution (:memory, :file, :log, :smtp or an application's own), and a transport that keeps mail rather than sending it is a boot error in production."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/html ">=0.0.1"}
+  :hooks [sent-hook]
   :config-key :mail
   :config-schema Config
   :config-defaults defaults)

@@ -36,18 +36,11 @@
   [sch form &opt opts]
   (schema/check sch (params form) (merge {:coerce true} (or opts {}))))
 
-(defn- unwrap
-  "Strip :optional/:ref wrappers -> [inner-node required?]."
-  [node]
-  (case (node :type)
-    :optional (let [[inner _] (unwrap (first (node :children)))]
-                [inner false])
-    :ref (let [name (get-in node [:props :name])]
-           (unwrap (or (schema/lookup name)
-                       (errorf "schema %q is not registered" name))))
-    [node true]))
-
-(defn- humanize [k]
+(defn humanize
+  "A field key as a label: :first-name -> \"First name\". The one
+  reading of a key as words the framework has; void/admin uses it for
+  its titles too."
+  [k]
   (def s (string/replace-all "-" " " (string k)))
   (if (empty? s)
     s
@@ -98,7 +91,7 @@
     (errorf "field-specs expects a map schema, got %q" (n :type)))
   (def overrides (get opts :fields {}))
   (seq [[k child] :in (n :children)]
-    (def [inner required?] (unwrap child))
+    (def [inner required?] (schema/unwrap child))
     (def base (control-spec inner))
     (def over (get overrides k {}))
     (merge {:name k

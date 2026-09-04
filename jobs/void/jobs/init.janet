@@ -584,6 +584,7 @@
   :doc "Background jobs: the :void/jobs-backend contract, an in-process backend, defjob with retries/backoff/priorities/delays/uniqueness, flows, per-queue rate limiting and concurrency, a dead letter queue, and cron schedules that fire once across a fleet."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
+  :hooks [state/event-hook]
   :config-key :jobs
   :config-schema Config
   :config-defaults defaults

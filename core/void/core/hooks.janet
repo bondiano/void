@@ -1,16 +1,18 @@
-### void/core/hooks — lifecycle hooks + in-process pub/sub.
+### void/core/hooks — lifecycle hooks.
 ###
-### Two mechanisms, one module. Lifecycle hooks are synchronous and
-### ordered: handlers are registered per hook name (:config-loaded,
-### :before-start, ... or any custom keyword), sorted by :phase then
-### :name and run on the caller's fiber — bootstrap wiring, not
-### messaging. The event bus is the opposite: an ev-based in-process
-### pub/sub for application events (:user/created ...). Every
-### subscriber owns a buffered channel drained by its own fiber, so
-### publish! never runs handlers inline; a slow subscriber
-### back-pressures the publisher only once its buffer fills. Not
-### Kafka: delivery is in-process, at-most-once, and queued events are
-### dropped on unsubscribe!/close!.
+### Synchronous and ordered: handlers are registered per hook name
+### (:config-loaded, :before-start, ... or any custom keyword), sorted by
+### :phase then :name and run on the caller's fiber — bootstrap wiring,
+### not messaging. Application events (:user/created ...) are void/bus's
+### business (ADR-0012); the in-process pub/sub that used to live here
+### had no consumer left.
+###
+### A hook is *declared* by the plugin that fires it — `:hooks [...]` in
+### its manifest — so a registry built by bootstrap knows every name
+### that can ever run. Firing an undeclared name is a warning rather
+### than an error (a hook is a notification, and a typo in it must not
+### take the process down), and a handler registered for one is
+### reported at boot with a did-you-mean, the way extension points are.
 
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
@@ -29,10 +31,68 @@
 
 (def- allowed-handler-opts {:phase true :name true :plugin true :doc true})
 
+(defn namespace-of
+  "The namespace of a hook name: :void.http/listening -> \"void.http\";
+  a bare :after-start -> nil."
+  [hook]
+  (def s (string hook))
+  (when-let [slash (string/find "/" s)]
+    (string/slice s 0 slash)))
+
+(defn owner-namespace
+  "The hook namespace a plugin name owns: :void/http -> \"void.http\",
+  :shop/app -> \"shop.app\"."
+  [plugin]
+  (string/replace-all "/" "." (string plugin)))
+
 (defn registry
-  "Create an empty hook registry: hook name -> handler name -> entry."
-  []
-  @{})
+  ``Create an empty hook registry: hook name -> handler name -> entry.
+
+  Bootstrap builds one with two sets, and a test's bare
+  `(hooks/registry)` has neither and runs anything silently:
+
+    declared  the hook names that can be fired through this registry —
+              the lifecycle hooks plus every `:hooks` an active plugin
+              declares
+    owners    the active plugins (names), whose hook namespaces are
+              thereby *owned*: :void/http owns :void.http/*
+
+  A name is suspect when its namespace is owned and nobody declared
+  it — :void.http/listenng with void/http active. A name in a namespace
+  nobody owns (:void.dev/reloaded in a composition without void/dev)
+  is a hook of a plugin that is simply not here, and neither firing it
+  nor handling it is a mistake. The sets live on the table's prototype
+  so that `keys`/`values`/`each` over the registry still see hooks alone.``
+  [&opt declared owners]
+  (if (and (nil? declared) (nil? owners))
+    @{}
+    (table/setproto @{} @{:hooks/declared (tabseq [h :in (or declared [])] h true)
+                          :hooks/owned (tabseq [o :in (or owners [])]
+                                         (owner-namespace o) true)
+                          :hooks/warned @{}})))
+
+(defn declared?
+  "Is `hook` declared on this registry — or is the registry undeclared,
+  in which case every name is. Lifecycle hooks always are."
+  [reg hook]
+  (def d (get reg :hooks/declared))
+  (or (nil? d) (in d hook) (not (nil? (index-of hook lifecycle-hooks)))))
+
+(defn suspect?
+  "An undeclared hook in a namespace an active plugin owns — the
+  shape of a typo, or of a plugin firing what it never declared."
+  [reg hook]
+  (and (not (declared? reg hook))
+       (let [ns (namespace-of hook)]
+         (and ns (in (get reg :hooks/owned {}) ns)))))
+
+(defn- warn-undeclared! [reg hook]
+  (when (suspect? reg hook)
+    (def warned (get reg :hooks/warned))
+    (unless (in warned hook)
+      (put warned hook true)
+      (eprintf "warning: hook %q is fired but no active plugin declares it (:hooks in the manifest) — handlers registered for it run, and a typo in the name never will"
+               hook))))
 
 (defn add!
   ``Register a synchronous handler for a hook:
@@ -103,6 +163,7 @@
   with the handler and plugin named. Returns the number of handlers
   run."
   [reg hook & args]
+  (warn-undeclared! reg hook)
   (var n 0)
   (each entry (handlers reg hook)
     (def [ok e] (protect ((entry :fn) ;args)))
@@ -115,6 +176,7 @@
   — for teardown paths (:before-stop/:after-stop must not block a
   shutdown). Returns the tuple of error messages (empty on success)."
   [reg hook & args]
+  (warn-undeclared! reg hook)
   (def errors @[])
   (each entry (handlers reg hook)
     (def [ok e] (protect ((entry :fn) ;args)))
@@ -122,132 +184,3 @@
       (def [_ msg] (protect (fail entry e)))
       (array/push errors msg)))
   (tuple ;errors))
-
-# -- event bus -----------------------------------------------------------
-
-(defn- default-on-error [sub event err]
-  (eprintf "bus subscriber %q failed on %q: %s"
-           (sub :name) (event :topic)
-           (if (string? err) err (describe err))))
-
-(def- allowed-bus-opts {:buffer true :on-error true})
-(def- allowed-sub-opts {:name true :buffer true})
-
-(defn bus
-  ``Create an in-process event bus.
-
-  Options:
-    :buffer    default per-subscriber channel capacity (default 32)
-    :on-error  (fn [sub event err]) called when a handler throws;
-               default prints to stderr — a handler error never kills
-               the subscriber``
-  [&opt opts]
-  (default opts {})
-  (eachk k opts
-    (unless (in allowed-bus-opts k)
-      (errorf "bus: unknown option %q (allowed: %s)"
-              k (names-str (keys allowed-bus-opts)))))
-  (def buffer (get opts :buffer 32))
-  (unless (and (number? buffer) (pos? buffer))
-    (errorf "bus: :buffer must be a positive number, got %q" buffer))
-  @{:topics @{}
-    :buffer buffer
-    :on-error (get opts :on-error default-on-error)
-    :closed false})
-
-(defn subscribe!
-  ``Subscribe a handler to a topic; the topic :* receives every event.
-  The handler runs on its own fiber and receives the event struct
-  {:topic :payload}. Options: :name (keyword; re-subscribing the same
-  name on a topic replaces the handler), :buffer (channel capacity
-  override). Returns the subscription.``
-  [b topic handler &opt opts]
-  (default opts {})
-  (when (b :closed) (error "bus is closed"))
-  (unless (keyword? topic)
-    (errorf "bus topic must be a keyword, got %q" topic))
-  (unless (callable? handler)
-    (errorf "bus subscriber for %q must be a function, got %q" topic handler))
-  (eachk k opts
-    (unless (in allowed-sub-opts k)
-      (errorf "bus subscribe: unknown option %q (allowed: %s)"
-              k (names-str (keys allowed-sub-opts)))))
-  (def name (get opts :name (keyword (gensym))))
-  (unless (keyword? name)
-    (errorf "bus subscribe: :name must be a keyword, got %q" name))
-  (def chan (ev/chan (get opts :buffer (b :buffer))))
-  (def done (ev/chan 1))
-  (def sub @{:topic topic :name name :chan chan :done done})
-  (when-let [prev (get-in b [:topics topic name])]
-    (ev/chan-close (prev :chan)))
-  (def topic-subs (or (get-in b [:topics topic])
-                      (let [t @{}] (put (b :topics) topic t) t)))
-  (put topic-subs name sub)
-  (ev/go
-    (fn bus-subscriber []
-      (var running true)
-      (while running
-        (def event (ev/take chan))
-        (if (nil? event)
-          (set running false)
-          (try (handler event)
-            ([e] ((b :on-error) sub event e)))))
-      (ev/give done true)))
-  sub)
-
-(defn unsubscribe!
-  "Remove a subscription by topic and name (or a subscription value).
-  Events still queued in its buffer are dropped. Returns the removed
-  subscription or nil."
-  [b topic &opt name]
-  (def [t n] (if (dictionary? topic)
-               [(topic :topic) (topic :name)]
-               [topic name]))
-  (when-let [sub (get-in b [:topics t n])]
-    (put (get-in b [:topics t]) n nil)
-    (ev/chan-close (sub :chan))
-    sub))
-
-(defn- topic-subs [b topic]
-  (def subs (get-in b [:topics topic] {}))
-  (seq [name :in (sorted (keys subs))] (subs name)))
-
-(defn publish!
-  "Publish an event to every subscriber of `topic` plus the :*
-  wildcard subscribers. Blocks only when a subscriber's buffer is full
-  (backpressure). Returns the number of subscribers the event was
-  delivered to."
-  [b topic payload]
-  (when (b :closed) (error "bus is closed"))
-  (unless (keyword? topic)
-    (errorf "bus topic must be a keyword, got %q" topic))
-  (def event (freeze {:topic topic :payload payload}))
-  (var n 0)
-  (each sub (topic-subs b topic)
-    (ev/give (sub :chan) event)
-    (++ n))
-  (unless (= topic :*)
-    (each sub (topic-subs b :*)
-      (ev/give (sub :chan) event)
-      (++ n)))
-  n)
-
-(defn close!
-  "Close the bus: no more publishes, every subscriber channel is
-  closed (dropping queued events) and each subscriber fiber is awaited
-  for up to `timeout` seconds (default 5). Throws naming the
-  subscribers that did not stop in time."
-  [b &opt timeout]
-  (default timeout 5)
-  (put b :closed true)
-  (def subs (mapcat |(values $) (values (b :topics))))
-  (each sub subs (ev/chan-close (sub :chan)))
-  (def stuck @[])
-  (each sub subs
-    (def [ok _] (protect (ev/with-deadline timeout (ev/take (sub :done)))))
-    (unless ok (array/push stuck (sub :name))))
-  (table/clear (b :topics))
-  (unless (empty? stuck)
-    (errorf "bus subscribers did not stop within %d s: %s"
-            timeout (names-str stuck)))
-  b)

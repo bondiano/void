@@ -246,4 +246,22 @@
 (assert (= "users" (get-in (schema/db-annotations dto) [:schema :db/table]))
         "a DTO selected from an entity keeps its provenance data")
 
+# -- reading back: unwrap, fields, annotations under a prefix ------------
+(def ufields (schema/fields User))
+(assert (= [:brand :email :id] (tuple ;(map first ufields))) "fields in the normalized (sorted) order")
+(assert (= [false true true] (tuple ;(map last ufields))) ":optional makes a field not required")
+(assert (= :int (get-in ufields [0 1 :type])) "the inner node is what is under the wrapper")
+(schema/register! :test/ref-target [:string {:format :email}])
+(def [ref-inner ref-req] (schema/unwrap (schema/normalize [:optional [:ref :test/ref-target]])))
+(assert (and (= :string (ref-inner :type)) (not ref-req)) "a :ref is followed into the registry")
+(def [ref-kept _] (schema/unwrap (schema/normalize [:ref :test/ref-target]) true))
+(assert (= :ref (ref-kept :type)) "keep-refs? leaves the reference in place")
+(expect-error "unwrap of an unregistered ref" "not registered"
+              |(schema/unwrap (schema/normalize [:ref :test/nowhere])))
+(expect-error "fields of a scalar" "expected a map" |(schema/fields :int))
+(def pann (schema/annotations [:map {:x/a 1} {:k [:optional [:int {:x/b 2 :db/pk true}]]}] "x/"))
+(assert (= 1 (get-in pann [:schema :x/a])))
+(assert (= 2 (get-in pann [:fields :k :x/b])) "prefix annotations are found under :optional")
+(assert (nil? (get-in pann [:fields :k :db/pk])) "only the asked-for prefix")
+
 (print "void/core/schema test OK")

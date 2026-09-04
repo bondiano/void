@@ -304,6 +304,7 @@
   :doc "ABAC: policies as pure functions registered under names, attributes pulled through providers only when a policy asks for them, decisions as values that explain themselves, roles as sugar over the same machinery, and a decision hook void/bus turns into an audit trail."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
+  :hooks [decide/decision-hook]
   :config-key :authz
   :config-schema Config
   :config-defaults defaults

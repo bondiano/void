@@ -15,7 +15,7 @@
 (assert (table? req) "well-formed request head parses to a table")
 (assert (= "GET" (req :method)) "method is captured")
 (assert (= "/users?id=1&name=ann" (req :path)) "path keeps the query string")
-(assert (= 1 (req :http-version)) "HTTP/1.1 minor version is captured")
+(assert (= [1 1] (req :http-version)) "HTTP/1.1 is captured as [major minor]")
 (assert (= "example.com" (get-in req [:headers "host"]))
         "header names are lowercased")
 (assert (= "text/html" (get-in req [:headers "accept"]))
@@ -25,7 +25,7 @@
 (assert (= (req :head-size) (- (length raw-request) (length "leftover-bytes")))
         "head-size stops at the terminator; leftover bytes are not consumed")
 
-(assert (= 0 ((wire/parse-request-head @"GET / HTTP/1.0\r\n\r\n") :http-version))
+(assert (= [1 0] ((wire/parse-request-head @"GET / HTTP/1.0\r\n\r\n") :http-version))
         "HTTP/1.0 minor version is captured")
 
 (assert (nil? (wire/parse-request-head @"GET / HTTP/1.1\r\nHost: x\r\n"))
@@ -51,7 +51,7 @@
 (assert (table? res) "well-formed response head parses to a table")
 (assert (= 204 (res :status)) "status is scanned to a number")
 (assert (= "No Content" (res :message)) "reason phrase is captured")
-(assert (= 1 (res :http-version)) "response minor version is captured")
+(assert (= [1 1] (res :http-version)) "response version is captured")
 (assert (= "void" (get-in res [:headers "server"])) "response headers parse")
 
 (assert (nil? (wire/parse-response-head @"HTTP/1.1 200 OK\r\n"))

@@ -142,25 +142,11 @@
    :proto/int64 :int64 :proto/uint64 :uint64})
 
 (defn annotations
-  ``The `:proto/*` props of a schema, the way `schema/db-annotations`
-  reads the `:db/*` ones: they are stored on the nodes and never consulted
-  by validation. Returns {:schema {...} :fields {key {...}}}.``
+  ``The `:proto/*` props of a schema — `(schema/annotations sch "proto/")`:
+  stored on the nodes, never consulted by validation. Returns
+  {:schema {...} :fields {key {...}}}.``
   [sch]
-  (defn proto-props [props]
-    (freeze (tabseq [[k v] :pairs props
-                     :when (and (keyword? k) (string/has-prefix? "proto/" k))]
-              k v)))
-  (def n (schema/normalize sch))
-  (def fields @{})
-  (when (= :map (n :type))
-    (each [k sub] (n :children)
-      (def inner (if (= :optional (sub :type)) (first (sub :children)) sub))
-      (def props (proto-props (inner :props)))
-      (unless (empty? props) (put fields k props))))
-  {:schema (proto-props (n :props)) :fields (freeze fields)})
-
-(defn- unwrap [node]
-  (if (= :optional (node :type)) [(first (node :children)) true] [node false]))
+  (schema/annotations sch "proto/"))
 
 (defn- entry-type [name key node]
   (def props (node :props))
@@ -204,7 +190,9 @@
                 (error "proto: this projection needs a name — (schema/project :proto s {:name :example/Order})")))
   (def fields @{})
   (each [key sub] (n :children)
-    (def [node optional] (unwrap sub))
+    # a :ref stays a :ref here: the field's type is the message it names
+    (def [node required?] (schema/unwrap sub true))
+    (def optional (not required?))
     (def props (node :props))
     (def number (get props (keyword "proto/field")))
     (unless number
