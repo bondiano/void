@@ -75,8 +75,9 @@
 (plugin/contribute! :void.admin/history
   {:name :shop/history
    :doc "The history tab of a row, over the audit trail this application already writes"
+   # the rows about *this* id, selected where they live: the newest
+   # fifty of the whole trail would lose a change under a busy queue
    :fn (fn history [{:resource rname :id id}]
-         (seq [row :in (service/trail {:limit 50})
-               :when (string/find (string ":id " id) (or (row :detail) ""))
+         (seq [row :in (service/trail {:limit 50 :match (string ":id " id)})
                :when (string/find (string rname) (or (row :detail) (row :topic)))]
            {:at (row :at) :actor (row :actor) :detail (row :topic)}))})
