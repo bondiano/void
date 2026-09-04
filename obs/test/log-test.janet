@@ -81,7 +81,7 @@
 
 # -- the file sink -------------------------------------------------------
 
-(def dir (string (os/getenv "TMPDIR" "/tmp") "obs-log-test-" (os/time)))
+(def dir (string (os/getenv "TMPDIR" "/tmp") "/obs-log-test-" (os/time)))
 (os/mkdir dir)
 (def path (string dir "/app.jdn"))
 
