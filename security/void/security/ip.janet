@@ -15,10 +15,10 @@
 ### limit anybody can step around with a header, and nobody would ever
 ### notice.
 ###
-### The peer address itself is read from the connection lazily
-### (`net/peername`) and memoized on the request: on the inject path
-### there is no socket, and a test that sets the header is exactly the
-### test that should work there.
+### The peer address is the request's `:remote-addr` — read off the
+### socket once per connection by the server, given in the spec on the
+### inject path — so a test that sets a peer and a header is exactly
+### the test that works without a socket.
 
 (def defaults
   "Defaults of the address half of the [:security] slice."
@@ -91,17 +91,15 @@
          same)))
 
 (defn peer-address
-  ``The socket peer of a request, memoized. nil on the inject path,
-  where there is no socket — which is why every rule below treats a
-  missing peer as "no trusted hop" rather than as an error.``
+  ``The peer of a request: `:remote-addr`, which the server reads off
+  the socket once per connection and the inject path takes from its
+  spec. A test may also plant `:void.security/peer` directly. nil when
+  there is none — which is why every rule below treats a missing peer
+  as "no trusted hop" rather than as an error.``
   [req]
   (if (in req :void.security/peer)
     (get req :void.security/peer)
-    (let [conn (get req :connection)
-          [ok peer] (if conn (protect (net/peername conn)) [false nil])
-          address (when (and ok (indexed? peer)) (first peer))]
-      (put req :void.security/peer address)
-      address)))
+    (get req :remote-addr)))
 
 (defn forwarded-chain
   "The X-Forwarded-For chain of a request, left to right, trimmed."

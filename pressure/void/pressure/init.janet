@@ -279,6 +279,7 @@
   :doc "Load shedding: an event-loop lag and RSS sampler, thresholds with recovery hysteresis behind one boolean, :void.pressure/check contributions for what the runtime cannot measure, and :high / :recovered events."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
+  :hooks [state/event-hook]
   :config-key :pressure
   :config-schema Config
   :config-defaults defaults

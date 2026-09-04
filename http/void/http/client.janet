@@ -406,7 +406,7 @@
     # whether the next request may reuse it
     :close (truthy?
              (or (string/find "close" conn-header)
-                 (and (= 0 (head :http-version))
+                 (and (= [1 0] (head :http-version))
                       (not (string/find "keep-alive" conn-header)))
                  (and (nil? cl) (nil? te) (not (bodyless? status method)))))})
 

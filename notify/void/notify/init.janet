@@ -452,6 +452,7 @@
   :doc "One notification, several channels: a notification is a table, a channel is a contribution (:memory and :log here, mail/in-app/webhook in the plugins beside it), projection happens where send was called and delivery where the network is — so a queue fits between them — and in production a composition that delivers nowhere is a boot error."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
+  :hooks [sent-hook]
   :config-key :notify
   :config-schema Config
   :config-defaults defaults)

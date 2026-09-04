@@ -671,29 +671,73 @@
   (fn validator-projection [sch &opt opts]
     (fn [value] (validate sch value opts))))
 
-# -- db annotations ------------------------------------------------------
+# -- reading a schema back -----------------------------------------------
+#
+# Everything that projects a schema — a form, an admin resource, a
+# protobuf message, a table — asks the same two questions: what is
+# under the :optional / :ref wrappers of a field, and which props with
+# a given prefix are hung on it. These are those questions, asked once.
 
-(defn- db-props [props]
-  (def out @{})
-  (eachp [k v] props
-    (when (and (keyword? k) (string/has-prefix? "db/" k))
-      (put out k v)))
-  (freeze out))
+(defn unwrap
+  ``Strip the :optional and :ref wrappers off a normalized node ->
+  [inner-node required?]: :optional makes the field not required, :ref
+  is followed into the registered schema (an unregistered name is an
+  error). With `keep-refs?` a :ref node is returned as it is, for a
+  reader to which the *name* matters more than the shape behind it —
+  void/proto, where a reference is a message type.``
+  [node &opt keep-refs?]
+  (case (node :type)
+    :optional (let [[inner _] (unwrap (first (node :children)) keep-refs?)]
+                [inner false])
+    :ref (if keep-refs?
+           [node true]
+           (let [name (get-in node [:props :name])]
+             (unwrap (or (lookup name)
+                         (errorf "schema %q is not registered" name))
+                     keep-refs?)))
+    [node true]))
 
-(defn db-annotations
-  ``Extract the optional :db/* props: they are parsed and
-  stored on schema nodes but never consulted by validation. Returns
-  {:schema {...} :fields {key {...}}} — top-level annotations
-  (:db/table ...) and per-field ones (:db/pk, :db/type ...); a schema
-  without any is a plain DTO, with them it feeds the entity layer,
-  void/admin and migrations-diff (wave 2+).``
-  [sch]
+(defn fields
+  ``The fields of a map schema in the schema's own order (a map is
+  normalized with its keys sorted), each unwrapped: a tuple of
+  [key inner-node required?] (see `unwrap`; `keep-refs?` passes
+  through). Anything but a map is an error — a projection of
+  fields has nothing to say about a scalar.``
+  [sch &opt keep-refs?]
+  (def n (normalize sch))
+  (unless (= :map (n :type))
+    (errorf "schema/fields: expected a map schema, got %q" (n :type)))
+  (tuple ;(seq [[k sub] :in (n :children)]
+            (def [inner required?] (unwrap sub keep-refs?))
+            [k inner required?])))
+
+(defn- props-under [prefix props]
+  (freeze (tabseq [[k v] :pairs props
+                   :when (and (keyword? k) (string/has-prefix? prefix k))]
+            k v)))
+
+(defn annotations
+  ``The props under one namespace prefix — "db/", "proto/", or any
+  other a projection reserves — as {:schema {...} :fields {key {...}}}:
+  the top-level props of the schema and, for a map, those of each field
+  looked at under its :optional wrapper (a :ref is left alone: the
+  annotation belongs to the field, not to the schema it points at).
+  Annotations are parsed and stored on nodes and never consulted by
+  validation; a schema without any is a plain DTO.``
+  [sch prefix]
   (def n (normalize sch))
   (def fields @{})
   (when (= :map (n :type))
     (each [k sub] (n :children)
-      (def inner (if (= :optional (sub :type)) (first (sub :children)) sub))
-      (def dp (db-props (inner :props)))
-      (unless (empty? dp) (put fields k dp))))
-  {:schema (db-props (n :props))
+      (def [inner _] (unwrap sub true))
+      (def ps (props-under prefix (inner :props)))
+      (unless (empty? ps) (put fields k ps))))
+  {:schema (props-under prefix (n :props))
    :fields (freeze fields)})
+
+(defn db-annotations
+  ``The :db/* annotations of a schema — `(annotations sch "db/")`:
+  :db/table at the top, :db/pk, :db/type ... per field. They feed the
+  entity layer, void/admin and migrations-diff.``
+  [sch]
+  (annotations sch "db/"))

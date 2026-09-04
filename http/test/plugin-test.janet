@@ -26,13 +26,17 @@
   (put (req :session) :seen (inc (get (req :session) :seen 0)))
   (ring/text 200 (string "seen " (get-in req [:session :seen]))))
 
+(defn peer [req]
+  (ring/text 200 (string "peer " (or (req :remote-addr) "none"))))
+
 (def app-routes
   (router/routes {:void.http/timeout 30}
     (router/GET "/" 'home {:name :home})
     (router/GET "/orders/:id" 'show-order
       {:name :orders/show :void.http/timeout 5 :app/audited true})
     (router/POST "/orders" 'create-order {:name :orders/create})
-    (router/GET "/whoami" 'whoami {:name :whoami})))
+    (router/GET "/whoami" 'whoami {:name :whoami})
+    (router/GET "/peer" 'peer {:name :peer})))
 
 (def app-manifest
   (plugin/manifest 'test/app
@@ -91,7 +95,7 @@
 
   # the table was built at :before-start
   (def table (http/routes-table))
-  (assert (= 4 (length (table :routes))))
+  (assert (= 5 (length (table :routes))))
 
   # -- with-request: full stack without a socket -------------------------
 
@@ -158,6 +162,14 @@
                               :headers {"cookie" (string "void-session=" sid)}}))
   (assert (= "seen 2" (s2 :body)) "session persists across requests")
 
+  # the peer is a request key, not a socket: absent on the inject path
+  # unless the spec names one — the same key the server fills
+  (assert (= "peer none" ((http/with-request {:uri "/peer"}) :body)))
+  (assert (= "peer 10.0.0.9" ((http/with-request {:uri "/peer" :remote-addr "10.0.0.9"}) :body))
+          ":remote-addr in an inject spec reaches the handler")
+  (assert (nil? ((http/make-request {:uri "/peer"}) :connection))
+          "the request carries no socket")
+
   # -- explain-route and url-for over the booted table -------------------
 
   (def ex (http/explain-route "/orders/7"))
@@ -182,6 +194,14 @@
   (assert (= 200 (head :status)))
   (assert (string/find "order 42" buf))
   (:close conn)
+
+  # over a real socket the server reads the peer once per connection
+  (def conn2 (net/connect "127.0.0.1" (string port)))
+  (:write conn2 "GET /peer HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+  (def buf2 @"")
+  (while (net/read conn2 4096 buf2 2))
+  (assert (string/find "peer 127.0.0.1" buf2) "the socket's peer address is the request's :remote-addr")
+  (:close conn2)
 
   # component health
   (def health ((plugin/why boot :http/server) :state))

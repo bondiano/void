@@ -87,7 +87,9 @@
   otherwise a table with:
   * `:method` - HTTP method, as a string.
   * `:path` - raw request target, query string included.
-  * `:http-version` - minor HTTP/1.x version as an integer (0 or 1).
+  * `:http-version` - [major minor] as a tuple: [1 1] or [1 0]. The
+     wire here is HTTP/1.x only; the shape is what leaves room for
+     [2 0] without a second key.
   * `:headers` - table mapping lowercase header names to values;
      repeated headers accumulate into arrays.
   * `:head-size` - bytes consumed by the head, terminator included.
@@ -98,7 +100,7 @@
       (let [[method path version] matches]
         @{:method method
           :path path
-          :http-version version
+          :http-version [1 version]
           :headers (accum-key-values ;(array/remove matches 0 3))
           :head-size end})
       :error)))
@@ -114,7 +116,7 @@
       (let [[version status message] matches]
         @{:status status
           :message message
-          :http-version version
+          :http-version [1 version]
           :headers (accum-key-values ;(array/remove matches 0 3))
           :head-size end})
       :error)))
