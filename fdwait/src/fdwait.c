@@ -39,6 +39,23 @@
  *      watcher's lifetime from the library's: closing a watcher never
  *      closes the socket libpq is still using.
  *
+ *      The dup() has a residue on Linux. epoll keys an interest by
+ *      (fd number, open file description), and closing the fd removes
+ *      the entry only once *every* fd of that description is closed —
+ *      the library's own is not. janet registers a stream on creation
+ *      and never issues EPOLL_CTL_DEL (it relies on close()), so a
+ *      closed watcher's entry outlives it; when the next dup() of the
+ *      same socket gets the same fd number back — which is what
+ *      dup() does — the ADD collides with the stale entry: EEXIST on
+ *      the *second* watcher of one socket, "File exists", and the
+ *      listener that re-arms its watch after every interrupt reads
+ *      that as a lost connection. So `close` unregisters the fd from
+ *      the loop's epoll instance first. The instance is found once
+ *      through /proc/self/fd (janet's VM struct is opaque to a
+ *      module); DEL on an instance that does not hold the fd is
+ *      ENOENT and ignored. kqueue keys on the description itself and
+ *      needs none of this.
+ *
  *   3. janet_async_start does not return (JANET_NO_RETURN): it must be
  *      the last thing a cfunction does.
  *
@@ -53,12 +70,53 @@
 #include <unistd.h>
 #include <errno.h>
 #endif
+#ifdef __linux__
+#include <sys/epoll.h>
+#include <dirent.h>
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 
 /* -- the watcher ------------------------------------------------------ */
 
 static JanetStream *fdwait_getstream(Janet *argv, int32_t n) {
     return janet_getabstract(argv, n, &janet_stream_type);
 }
+
+#ifdef __linux__
+/* The event loop's epoll instances (janet's, and any the process
+ * holds besides), found once: every fd under /proc/self/fd whose
+ * link reads anon_inode:[eventpoll]. See point 2 of the header. */
+#define FDWAIT_MAX_EPOLL 8
+static int fdwait_epolls[FDWAIT_MAX_EPOLL];
+static int fdwait_epoll_count = -1;
+
+static void fdwait_find_epolls(void) {
+    fdwait_epoll_count = 0;
+    DIR *d = opendir("/proc/self/fd");
+    if (!d) return;
+    struct dirent *e;
+    char path[64], target[64];
+    while ((e = readdir(d)) != NULL && fdwait_epoll_count < FDWAIT_MAX_EPOLL) {
+        if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+        snprintf(path, sizeof(path), "/proc/self/fd/%s", e->d_name);
+        ssize_t n = readlink(path, target, sizeof(target) - 1);
+        if (n <= 0) continue;
+        target[n] = 0;
+        if (strcmp(target, "anon_inode:[eventpoll]") == 0) {
+            fdwait_epolls[fdwait_epoll_count++] = atoi(e->d_name);
+        }
+    }
+    closedir(d);
+}
+
+static void fdwait_unregister(int fd) {
+    if (fdwait_epoll_count < 0) fdwait_find_epolls();
+    for (int i = 0; i < fdwait_epoll_count; i++) {
+        epoll_ctl(fdwait_epolls[i], EPOLL_CTL_DEL, fd, NULL);
+    }
+}
+#endif
 
 static Janet cfun_watch(int32_t argc, Janet *argv) {
     janet_fixarity(argc, 2);
@@ -104,7 +162,13 @@ static Janet cfun_watch(int32_t argc, Janet *argv) {
 
 static Janet cfun_close(int32_t argc, Janet *argv) {
     janet_fixarity(argc, 1);
-    janet_stream_close(fdwait_getstream(argv, 0));
+    JanetStream *stream = fdwait_getstream(argv, 0);
+#ifdef __linux__
+    if (!(stream->flags & JANET_STREAM_CLOSED) && stream->handle != -1) {
+        fdwait_unregister((int) stream->handle);
+    }
+#endif
+    janet_stream_close(stream);
     return janet_wrap_nil();
 }
 
