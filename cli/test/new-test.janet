@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/cli/new :as new)
+(import void/core :as core)
 (import void/cli :as cli)
 (import void/core/plugin :as plugin)
 (import void/http :as http)
@@ -67,6 +68,8 @@
   (def manifest (slurp "sample/project.janet"))
   (assert (string/find "https://github.com/bondiano/void.git" manifest)
           "project.janet depends on the void bundle")
+  (assert (string/find (string ":tag \"" core/release-tag "\"") manifest)
+          "the dependency is pinned to the tag of the void that generated it")
 
   # -- the generated project bootstraps ----------------------------------
   # load it the way the void binary would: project root on module/paths,

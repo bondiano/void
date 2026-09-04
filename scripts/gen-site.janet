@@ -4,7 +4,7 @@
 ###
 ### Two kinds of page, one principle:
 ###
-###   * the documents (README, CONTRACTS, DEPLOY, BENCH, CONTRIBUTING, every ADR) are rendered from their Markdown —
+###   * the documents (README, CONTRACTS, DEPLOY, BENCH, CONTRIBUTING, ...) are rendered from their Markdown —
 ###     CONTRACTS.md is itself generated from the declarations and
 ###     drift-checked in CI, so the site's contract reference is a
 ###     projection of a projection and cannot disagree with the code;
@@ -405,9 +405,9 @@
   (print "  " path))
 
 (defn- doc-lang
-  ``"ru" when the document is mostly Cyrillic prose (the ADRs),
-  "en" otherwise — measured, not listed, so a translated document
-  changes its own lang attribute.``
+  ``"ru" when the document is mostly Cyrillic prose, "en" otherwise —
+  measured, not listed, so a translated document changes its own lang
+  attribute.``
   [src]
   (def cyr (count |(or (= $ 0xD0) (= $ 0xD1)) src))
   (if (> (* 10 cyr) (length src)) "ru" "en"))

@@ -88,6 +88,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # the changelog gate below projects the file from the tags
+          fetch-depth: 0
 
       - name: Install Janet
         run: |
@@ -164,6 +167,12 @@ jobs:
         run: |
           janet scripts/gen-contracts.janet
           git diff --exit-code docs/CONTRACTS.md
+
+      - name: The changelog matches the tags, and the version is not behind them
+        # the released part of CHANGELOG.md is a projection of tagged
+        # history, and void/core's `version` is the one place the version
+        # is written; a tag without either regenerated fails here
+        run: janet scripts/gen-changelog.janet check
 
       - name: The docs site generates
         # site.yml builds and publishes only on push to main, so a PR
