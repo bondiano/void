@@ -29,10 +29,10 @@
 
 (plugin/contribute! :void.core/interface
   {:name :void/db-driver
-   :doc "A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint and :ping keys (see void/db/driver). A driver component declares :provides [:void/db-driver]; [:db :driver] picks between several."
+   :doc "A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint and :ping keys (see void/db/driver). A failing statement raises {:db/error <name> :message :sqlstate} — the SQLSTATE is what the kernel classifies into a :void.db/* error kind, the same on every engine. A driver component declares :provides [:void/db-driver]; [:db :driver] picks between several."
    :methods {:connect "(fn [] conn)"
              :close "(fn [conn])"
-             :execute "(fn [conn sql params opts] {:rows [...] :count n})"}})
+             :execute "(fn [conn sql params opts] {:rows [...] :count n}) — raises {:db/error :message :sqlstate ...}"}})
 
 # -- public surface (re-exports) -----------------------------------------
 

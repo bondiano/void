@@ -23,6 +23,7 @@
 ### websocket rooms, and the registry answers the fleet check the same
 ### way (:shared? :by-design).
 
+(import void/core/errors :as errors)
 (import spork/json)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -80,7 +81,7 @@
   (when raw
     (def [ok v] (protect (json/decode (string raw) true)))
     (unless (and ok (dictionary? v))
-      (error {:http/status 400 :message "malformed datastar signals"}))
+      (errors/raise :void.http/bad-request "malformed datastar signals" {} 400))
     v))
 
 # -- rendering and events ------------------------------------------------

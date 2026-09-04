@@ -1,4 +1,5 @@
 (import ../void/core/schema :as schema)
+(import ../void/core/errors :as errors)
 
 (defn expect-error [name pat thunk]
   (def [ok err] (protect (thunk)))
@@ -263,5 +264,15 @@
 (assert (= 1 (get-in pann [:schema :x/a])))
 (assert (= 2 (get-in pann [:fields :k :x/b])) "prefix annotations are found under :optional")
 (assert (nil? (get-in pann [:fields :k :db/pk])) "only the asked-for prefix")
+
+# -- check!: the same errors, raised as an envelope ----------------------
+(assert (= 42 (schema/check! :int "42" {:coerce true})) "check! returns the coerced value")
+(def [cok cerr] (protect (schema/check! [:map {:n :int}] {:n "x"})))
+(assert (not cok))
+(assert (= :void.schema/invalid (errors/kind cerr)))
+(assert (= 422 (errors/status cerr)))
+(assert (= 1 (length (get-in (errors/data cerr) [:errors]))) "the check errors ride in :data")
+(assert (= [:n] (get-in (errors/data cerr) [:errors 0 :path])))
+(assert (string/find "[:n]" (errors/message cerr)) "the message is the rendered errors")
 
 (print "void/core/schema test OK")

@@ -120,7 +120,7 @@
   {:hook :before-start
    :phase 400
    :name :i18n/install-catalog
-   :doc "Merge the :void.i18n/messages contributions in resolution order, run the boot gates and prebuild the :void.schema/messages tables"
+   :doc "Merge the :void.i18n/messages contributions in resolution order, run the boot gates and prebuild the :void.schema/messages and :void.errors/messages tables"
    :fn (fn install [boot]
          (catalog/install!
            (get-in boot [:config :values :i18n] {})
@@ -160,13 +160,14 @@
 (plugin/contribute! :void.http/middleware
   {:name :void.i18n/locale
    :phase 4500
-   :doc "Resolve the request's locale (hook -> cookie -> Accept-Language -> default) and bind it, with the matching :void.schema/messages table, for everything deeper in the chain — validation, the handler, the template render at phase 9000 and every fiber they spawn"
+   :doc "Resolve the request's locale (hook -> cookie -> Accept-Language -> default) and bind it, with the matching :void.schema/messages and :void.errors/messages tables, for everything deeper in the chain — validation, the handler, the error renderers, the template render at phase 9000 and every fiber they spawn"
    :wrap
    (fn [handler]
      (fn i18n-locale [req]
        (def loc (resolve-locale req))
        (with-dyns [catalog/locale-dyn loc
-                   :void.schema/messages (catalog/schema-messages loc)]
+                   :void.schema/messages (catalog/schema-messages loc)
+                   :void.errors/messages (catalog/error-messages loc)]
          (handler req))))})
 
 # -- the CLI -------------------------------------------------------------

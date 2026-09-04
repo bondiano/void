@@ -1,6 +1,7 @@
 (import ../test-support/paths)
 (import ../test-support/fake-driver :as fake)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
 (import void/db/state :as db)
@@ -109,7 +110,8 @@
                        (when (= "COMMIT" sql) (error "connection reset")))}))
 (def [ok8 err8] (protect (with-db p8 (db/with-tx :work))))
 (assert (not ok8) "a failed commit surfaces")
-(assert (string/find "transaction commit failed" err8) "with context")
+(assert (string/find "transaction commit failed" (errors/message err8)) "with context")
+(assert (= :void.db/transaction (errors/kind err8)))
 (assert (= 1 (st8 :closed)) "the connection is closed, not handed back")
 (assert (zero? ((pool/stats p8) :created)) "and its pool slot is freed")
 
@@ -166,5 +168,41 @@
     (def [ok-status _] (ev/take ok-sup))
     (assert (= :ok ok-status)
             "a detached child checks out a connection of its own")))
+
+# -- a driver's error becomes a kind ------------------------------------
+(def [pe ste]
+  (setup {:responder (fn [sql _]
+                       (cond
+                         (string/find "dup" sql)
+                         (error {:db/error :fake :message "duplicate key" :sqlstate "23505"
+                                 :constraint "users_email_key"})
+                         (string/find "gone" sql)
+                         (error {:db/error :fake :message "connection reset" :sqlstate "08006"})
+                         (string/find "mysql" sql)
+                         (error {:db/error :mysql :message "Duplicate entry" :sqlstate "23000" :code 1062})
+                         (string/find "bare" sql)
+                         (error "something went wrong")
+                         nil))}))
+(with-db pe
+  (def [_ dup] (protect (db/execute-sql "INSERT dup" [])))
+  (assert (= :void.db/unique-violation (errors/kind dup)) "23505 is a unique violation")
+  (assert (= 409 (errors/status dup)))
+  (assert (= "users_email_key" (get (errors/data dup) :constraint)) "the constraint rides along")
+  (assert (= "23505" (get (errors/data dup) :sqlstate)))
+  (assert (= "INSERT dup" (get (errors/data dup) :sql)) "and the SQL that caused it")
+  (assert (= "duplicate key" (errors/message dup)) "the driver's text is the message")
+  (def [_ gone] (protect (db/execute-sql "SELECT gone" [])))
+  (assert (= :void.db/connection (errors/kind gone)) "class 08 is a connection error")
+  (def [_ my] (protect (db/execute-sql "INSERT mysql" [])))
+  (assert (= :void.db/unique-violation (errors/kind my)) "mysql's 23000 + 1062 is a unique violation")
+  (def [_ bare] (protect (db/execute-sql "SELECT bare" [])))
+  (assert (= :void.db/error (errors/kind bare)) "a bare string classifies as the generic kind")
+  (assert (= "something went wrong" (errors/message bare))))
+
+(assert (= :void.db/constraint-violation (driver/classify {:sqlstate "23001"})))
+(assert (= :void.db/syntax (driver/classify {:sqlstate "42P01"})))
+(assert (= :void.db/deadlock (driver/classify {:db/error :mysql :sqlstate "40001" :code 1213})))
+(assert (= :void.db/serialization-failure (driver/classify {:db/error :postgres :sqlstate "40001"})))
+(assert (= :void.db/error (driver/classify {})))
 
 (print "state-test: ok")

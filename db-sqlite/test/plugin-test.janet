@@ -1,4 +1,5 @@
 (import ../test-support/paths)
+(import void/core/errors :as errors)
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/db :as db)
@@ -220,6 +221,17 @@
               "the second one sees the migrated schema and the rows"))
 
     # -- foreign keys are enforced, unlike sqlite's own default ----------
+    (def [dok derr] (protect (db/insert! User {:email "a@b.c"})))
+    (assert (not dok) "a second row with the same email is refused")
+    (assert (= :void.db/unique-violation (errors/kind derr))
+            "and refused as the kind every engine raises, off sqlite's own sentence")
+    (assert (= "users.email" (get (errors/data derr) :constraint)) "naming the column")
+    (def [fok ferr] (protect (db/insert! Post {:user-id 999 :title "orphan"})))
+    (assert (not fok))
+    (assert (= :void.db/foreign-key-violation (errors/kind ferr)))
+    (def [nok nerr] (protect (db/find! User 999)))
+    (assert (and (not nok) (= :void.db/not-found (errors/kind nerr)) (= 404 (errors/status nerr)))
+            "find! raises :void.db/not-found")
     (assert (not (first (protect (db/insert! Post {:user-id 999 :title "orphan"}))))
             "[:db-sqlite :foreign-keys] is on, so the reference is checked")
 

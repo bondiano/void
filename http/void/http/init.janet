@@ -33,6 +33,7 @@
 (import ./multipart :as multipart)
 (import ./static :as static)
 (import ./session :as session)
+(import void/core/errors :as core-errors)
 (import ./errors :as errors)
 (import ./server :as server)
 (import ./prefork :as prefork)
@@ -249,8 +250,9 @@
                            (unless ok
                              (if (and (dictionary? v) (get v :http/status))
                                (error v)
-                               (errors/abort 400 (string/format "malformed %s body"
-                                                                (c :content-type)))))
+                               (core-errors/raise :void.http/bad-request
+                                             (string/format "malformed %s body" (c :content-type))
+                                             {:content-type (c :content-type)})))
                            (put req :parsed-body v)))
                        (get (context) :codecs []))))
              (handler req)))})
@@ -300,12 +302,11 @@
   not.``
   [err req &opt status]
   (def ctx (context))
+  (def env (core-errors/of err))
   (errors/render (ctx :renderers) err req
-                 {:status (or status
-                              (when (and (dictionary? err) (int? (err :http/status)))
-                                (err :http/status))
-                              500)
-                  :dev (ctx :dev)}))
+                 {:status (or status (core-errors/status env))
+                  :dev (ctx :dev)
+                  :error env}))
 
 # -- context build (:before-start hook) ----------------------------------
 
@@ -365,21 +366,21 @@
   (var h
     (fn route-or-404 [req]
       (or (router/dispatch (router/current cell) req)
+          # no route: the refusal goes out through the error renderers
+          # like every other one — problem+json for an API client under
+          # void/rest, the page for a browser, the line for the rest —
+          # by rendering rather than raising, since a miss is not a panic
           (let [allowed (router/allowed-methods (router/current cell) (req :path))]
             (if (empty? allowed)
-              # a browser gets the presentable page, everything else the
-              # terse line — the same split the panic guard's floor makes
-              (if (errors/wants-html? req)
-                (errors/prod-page 404)
-                (ring/not-found))
+              (render-error (core-errors/make :void.http/not-found nil {:path (req :path)}) req)
               (let [allow (string/join
                             (map |(string/ascii-upper (string $)) allowed)
                             ", ")]
-                (if (errors/wants-html? req)
-                  (ring/header (errors/prod-page 405) "allow" allow)
-                  (ring/response 405 "405 Method Not Allowed"
-                                 @{"allow" allow
-                                   "content-type" "text/plain; charset=utf-8"}))))))))
+                (ring/header
+                  (render-error (core-errors/make :void.http/method-not-allowed nil
+                                             {:path (req :path) :allowed allowed})
+                                req)
+                  "allow" allow)))))))
   (when static-cfg
     (set h (static/wrap-static h {:root (static-cfg :root)
                                   :prefix (get static-cfg :prefix "/")

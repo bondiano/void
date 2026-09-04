@@ -264,6 +264,45 @@
       (set found [i v])))
   found)
 
+(def- synthetic-sqlstates
+  ``What the binding gives is `sqlite3_errmsg` — a sentence, never the
+  extended result code. These are sqlite's own sentences, and this is
+  the one place in void allowed to know them: it turns each into the
+  SQLSTATE of the same class, so the kernel classifies a sqlite error
+  the way it classifies a Postgres one. An extended code from the
+  binding would replace this table, not the contract.``
+  [["UNIQUE constraint failed" "23505"]
+   ["PRIMARY KEY constraint failed" "23505"]
+   ["FOREIGN KEY constraint failed" "23503"]
+   ["NOT NULL constraint failed" "23502"]
+   ["CHECK constraint failed" "23514"]
+   ["database is locked" "55P03"]
+   ["database table is locked" "55P03"]
+   ["interrupted" "57014"]
+   ["no such table" "42P01"]
+   ["no such column" "42703"]
+   ["syntax error" "42601"]
+   ["datatype mismatch" "22000"]
+   ["unable to open database" "08001"]])
+
+(defn- driver-error
+  ``The contract's error dictionary for a sqlite failure: the binding's
+  text as the message, a synthesized :sqlstate, and the constraint's
+  name (sqlite spells it "UNIQUE constraint failed: users.email") when
+  the sentence carries one.``
+  [e sql]
+  (def text (err-str e))
+  (def state (some (fn [[needle st]] (when (string/find needle text) st))
+                   synthetic-sqlstates))
+  (def constraint (when-let [c (string/find ": " text)]
+                    (when (and state (string/has-prefix? "23" state))
+                      (string/trim (string/slice text (+ c 2))))))
+  (freeze {:db/error :sqlite
+           :message (string "sqlite: " text)
+           :sqlstate state
+           :constraint constraint
+           :sql sql}))
+
 (defn- busy?
   "Is this sqlite error SQLITE_BUSY — a lock somebody else holds?"
   [e]
@@ -305,7 +344,7 @@
           (when-let [[i v] (unbindable params)]
             (errorf "sqlite: parameter %d is %q, which has no SQL type — pass a number, string, buffer, boolean or nil"
                     (inc i) v)))
-        (error r))))
+        (error (driver-error r sql)))))
   res)
 
 (defn- changed

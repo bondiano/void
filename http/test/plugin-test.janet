@@ -115,6 +115,15 @@
   (assert (= 404 (r404 :status)))
   (assert (= "custom 404" (r404 :body)) "contributed renderer wins by priority")
 
+  # an unrouted path is a refusal like any other: it goes through the
+  # same renderers, so the contributed one answers it too
+  (def rmiss (http/with-request {:uri "/nowhere"}))
+  (assert (= 404 (rmiss :status)))
+  (assert (= "custom 404" (rmiss :body)) "route-or-404 renders through the contributions")
+  (def rmethod (http/with-request {:method :delete :uri "/"}))
+  (assert (= 405 (rmethod :status)))
+  (assert (string/find "GET" (get-in rmethod [:headers "allow"])) "405 keeps its Allow header")
+
   # the same renderers, reached by calling instead of by throwing — what
   # middleware that decides on a status rather than failing at one uses
   # (load shedding)

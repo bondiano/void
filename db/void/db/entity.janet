@@ -22,6 +22,7 @@
 
 (import void/core/schema :as schema)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import ./builder :as builder)
 (import ./state :as state)
 
@@ -496,7 +497,9 @@
   "Like `find`, but throws when the row does not exist."
   [ent id &opt opts]
   (or (find ent id opts)
-      (errorf "%q %q not found" ((resolve ent) :name) id)))
+      (errors/raise :void.db/not-found
+                    (string/format "%q %q not found" ((resolve ent) :name) id)
+                    {:entity ((resolve ent) :name) :id id})))
 
 (defn count
   "How many rows match (no entity instances built). opts: :where."

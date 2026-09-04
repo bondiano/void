@@ -56,6 +56,11 @@
   bind as (dyn :void.schema/messages)."
   nil)
 
+(var error-tables
+  "locale -> {kind (fn [envelope] string)}, prebuilt for the middleware
+  to bind as (dyn :void.errors/messages)."
+  nil)
+
 # -- lookup and rendering ------------------------------------------------
 
 (defn current-locale
@@ -159,6 +164,42 @@
   [loc]
   (get (or schema-tables {}) loc {}))
 
+# -- the error-envelope bridge -------------------------------------------
+#
+# An error kind is a namespaced keyword (:void.db/not-found), and so is
+# a dictionary key: the key *is* the kind, no prefix to learn. A
+# dictionary that carries one translates every error of that kind —
+# the envelope's :data fields are the {params}, :message is {message}.
+
+(defn- env-params [env]
+  (def p @{:message (or (get env :message) "")})
+  (eachp [k v] (get env :data {})
+    (put p k (if (bytes? v) (string v) (q-str v))))
+  p)
+
+(defn- error-table [loc]
+  # every key the locale's fallback chain carries is a candidate kind:
+  # a kind is declared by the package that raises it, which a catalog
+  # built at boot need not have loaded — the dictionary's key is the
+  # whole of the declaration this side needs
+  (def tbl @{})
+  (def candidates @{})
+  (each l (chain loc)
+    (eachk k (get (or index {}) l {})
+      (when (keyword? k) (put candidates k true))))
+  (eachk kind candidates
+    (when-let [msg (lookup kind loc)]
+      (put tbl kind
+           (fn [env] (message/render msg (env-params env) (category-of loc))))))
+  tbl)
+
+(defn error-messages
+  "The prebuilt :void.errors/messages table for a locale; a kind the
+  catalog does not carry keeps the envelope's own message, the way
+  errors/message always worked."
+  [loc]
+  (get (or error-tables {}) loc {}))
+
 # -- install -------------------------------------------------------------
 
 (defn- merge-contributions [contribs]
@@ -201,6 +242,7 @@
   (set source-hook locale-source)
   (table/clear warned)
   (set schema-tables (tabseq [l :in locales] l (schema-table l)))
+  (set error-tables (tabseq [l :in locales] l (error-table l)))
   nil)
 
 (defn coverage

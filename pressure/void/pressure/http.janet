@@ -54,6 +54,7 @@
 
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import void/http :as http)
 (import void/http/ring :as ring)
 (import void/http/prefork :as prefork)
@@ -151,6 +152,10 @@
 
 (var- logged-episode nil)
 
+
+(errors/define! :void.pressure/shed
+  {:status 503 :doc "load shedding refused the request; :data {:signals [...]} names what is saturated"})
+
 (defn- log-shed [st reasons]
   (def mode (settings :log))
   (when (and (not= :none mode)
@@ -168,14 +173,17 @@
   (def status (settings :status))
   (def resp
     (http/render-error
-      {:http/status status
-       :message (settings :message)
-       # the one extension member that survives void/rest's 5xx rule:
-       # *what* is saturated, never the values — which resource is at
-       # its ceiling is what a caller's dashboard needs to tell this
-       # 503 apart from a dependency's, and the numbers behind it are
-       # an operator's business (health, logs, `void pressure status`)
-       :problem @{"signals" (map |(string (get $ :signal)) reasons)}}
+      (errors/make :void.pressure/shed (settings :message)
+                   # the one extension member that survives void/rest's
+                   # 5xx rule: *what* is saturated, never the values —
+                   # which resource is at its ceiling is what a caller's
+                   # dashboard needs to tell this 503 apart from a
+                   # dependency's, and the numbers behind it are an
+                   # operator's business (health, logs, `void pressure
+                   # status`)
+                   {:signals (map |(get $ :signal) reasons)
+                    :problem @{"signals" (map |(string (get $ :signal)) reasons)}}
+                   status)
       req status))
   (def retry (settings :retry-after))
   (when (number? retry)

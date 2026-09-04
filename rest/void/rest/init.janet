@@ -22,6 +22,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/schema :as schema)
 (import void/http/ring :as ring)
+(import void/core/errors :as errors)
 (import void/http/middleware :as middleware)
 (import spork/json)
 (import ./problem :as problem)
@@ -123,8 +124,14 @@
                (defn part [key slot value status put-back]
                  (when-let [form (get rmeta key)]
                    (def res (schema/check (normalized form) value {:coerce true}))
+                   # a violation is raised as data: the panic guard hands
+                   # it to the renderers, and the problem+json one reads
+                   # the schema errors off the envelope
                    (unless (empty? (res :errors))
-                     (return done (problem/validation status slot (res :errors))))
+                     (errors/raise :void.schema/invalid
+                                   (string/format "invalid request %s" (string slot))
+                                   {:in slot :errors (res :errors)}
+                                   status))
                    (when put-back
                      (put req slot (res :value)))))
                (part :void.schema/params :params
@@ -141,7 +148,8 @@
                                         value
                                         (if coerce {:coerce true} {})))
                  (unless (empty? (res :errors))
-                   (return done (problem/validation 422 :body (res :errors))))
+                   (errors/raise :void.schema/invalid "invalid request body"
+                                 {:in :body :errors (res :errors)} 422))
                  (put req :parsed-body (res :value)))
                (handler req))))})
 
@@ -242,10 +250,13 @@
       (rest/abort 409 "order is already shipped")
       (rest/abort 403 "forbidden" {"balance" 30})``
   [status &opt detail ext]
-  (error {:http/status status
-          :message detail
-          :problem (merge (or ext @{})
-                          (if detail @{"detail" (string detail)} @{}))}))
+  (errors/raise :void.rest/problem detail
+                {:problem (merge (or ext @{})
+                                 (if detail @{"detail" (string detail)} @{}))}
+                status))
+
+(errors/define! :void.rest/problem
+  {:doc "rest/abort — a problem the handler shaped itself: :data {:problem <extension members>}"})
 
 # -- context build (:before-start hook) ----------------------------------
 

@@ -9,8 +9,16 @@
 ### the structured throws of void/http/errors (abort, panics) onto a
 ### problem so the error-renderer contribution in init can answer API
 ### clients without ever leaking an HTML error page at them.
+###
+### An error envelope (void/core/errors) maps by its parts: the kind
+### becomes the "kind" extension member on a 4xx (a client branches on
+### it the way a handler does; a 5xx keeps its internals), the message
+### the "detail", `:data {:problem ...}` merges in as extension
+### members, and a :void.schema/invalid carries its schema errors in
+### `:data {:errors :in}`, which land in the conventional "errors".
 
 (import spork/json)
+(import void/core/errors :as errors)
 (import void/core/schema :as schema)
 (import void/http/wire :as wire)
 (import void/http/ring :as ring)
@@ -71,18 +79,30 @@
 
 (defn from-error
   ``Map a caught error value onto a problem response — the renderer
-  side of void/http/errors: a structured `(abort 422 "msg")` keeps its
-  status and message, a table with a :problem member merges it in, and
-  anything else is the bare status problem. 500 details stay hidden
-  unless ctx :dev.``
+  side of void/http/errors: an envelope (or a v1 `(abort 422 "msg")`)
+  keeps its status and message, a :problem member (on the value, or
+  under :data) merges in as extension members, a schema violation
+  becomes "errors", and anything else is the bare status problem. On a
+  4xx the kind travels as "kind"; 500 details stay hidden unless ctx
+  :dev.``
   [err ctx]
   (def status (ctx :status))
+  (def env (errors/of err))
+  (def kind (errors/kind env))
   (def ext @{})
-  (when (dictionary? err)
-    (when-let [p (err :problem)]
-      (merge-into ext p))
-    (when-let [m (err :message)]
-      (put ext "detail" (string m))))
+  (when-let [p (or (when (dictionary? err) (get err :problem))
+                   (get (errors/data env) :problem))]
+    (merge-into ext p))
+  (when (get env :message)
+    (put ext "detail" (errors/message env)))
+  (when (= :void.schema/invalid kind)
+    (def d (errors/data env))
+    (def in (string (get d :in "body")))
+    (put ext "detail" (string/format "invalid request %s" in))
+    (put ext "errors" (map |(merge $ @{"in" in})
+                           (validation-errors (get d :errors [])))))
+  (when (and (< status 500) (not= :void.http/abort kind) (not= :void/panic kind))
+    (put ext "kind" (string kind)))
   (when (and (>= status 500) (not (ctx :dev)))
     (put ext "detail" nil))
   (when (and (>= status 500) (ctx :dev) (nil? (ext "detail")))

@@ -42,6 +42,7 @@
 ### a route may only tighten, so there is no way to open a hole in a
 ### group's protection from inside it.
 
+(import void/core/errors :as errors)
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/core/system :as system)
@@ -337,11 +338,16 @@
                        (get cfg :cookie-opts {:path "/" :same-site :lax}))))
   resp)
 
+(errors/define! :void.security/csrf
+  {:status 403 :doc "the CSRF token was missing or wrong"})
+(errors/define! :void.security/rate-limited
+  {:status 429 :doc "a rate limit refused the request; :data {:limit :window}"})
+
 (defn refused
   "The 403 for a request whose CSRF token was missing or wrong — through
   the error renderers, like every other refusal in void."
   [req]
-  (http/render-error {:http/status 403 :message "invalid CSRF token"} req 403))
+  (http/render-error (errors/make :void.security/csrf "invalid CSRF token" {} 403) req 403))
 
 (plugin/contribute! :void.http/middleware
   {:name :void.security/csrf
@@ -398,8 +404,10 @@
     (client-ip req)))
 
 (defn- limited [req spec result]
-  (def resp (http/render-error {:http/status (get spec :status 429)
-                                :message (get spec :message "too many requests")}
+  (def resp (http/render-error (errors/make :void.security/rate-limited
+                                            (get spec :message "too many requests")
+                                            {:limit (get spec :limit) :window (get spec :window)}
+                                            (get spec :status 429))
                                req (get spec :status 429)))
   (eachp [name value] (limit/headers-for result)
     (ring/header resp name value))

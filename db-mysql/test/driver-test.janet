@@ -141,7 +141,7 @@
     (assert (= 1062 (conn/errno err))
             "carrying MySQL's own error number, so a caller can branch on it")
     (assert (= "23000" (conn/sqlstate err)) "and its SQLSTATE")
-    (assert (string/find "Duplicate" (string err)) "and the server's own text")
+    (assert (string/find "Duplicate" (get err :message)) "and the server's own text")
 
     # the error names the statement with its placeholders still in it,
     # never the rendered one: a failed INSERT must not carry the value

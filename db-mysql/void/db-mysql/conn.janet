@@ -50,35 +50,32 @@
   (string/join parts " "))
 
 (defn- raise
-  ``Re-raise the worker's error dictionary on this side. The message
-  is what a caller sees; the dictionary travels on it so
-  `error-info` can answer "was that a duplicate key" without anyone
-  parsing English.``
+  ``Re-raise the worker's error dictionary on this side as the
+  :void/db-driver contract's error form: {:db/error :mysql :message
+  :code :sqlstate :lost :context}. The message carries the errno and
+  the SQLSTATE so the value reads correctly wherever it is printed;
+  the keys are what a caller branches on — through the kernel, which
+  classifies the SQLSTATE and the errno into a :void.db/* kind.``
   [e]
-  (error (error-text e)))
-
-(var- error-details
-  "The last error dictionary raised, by its message. A weak map would
-  be better and janet has none; one entry is enough, because the only
-  caller reads it in the handler of the error just raised."
-  nil)
-
-(defn- remember-error [e]
-  (set error-details [(error-text e) e])
-  nil)
+  (error (freeze (merge e {:db/error :mysql :message (error-text e)}))))
 
 (defn error-info
   ``The structured form of the error `e` — {:message :code :sqlstate
-  :lost :context} — or nil when `e` did not come from this driver.
-  `sqlstate` and `code` are what a caller branches on:
+  :lost :context} — or nil when `e` did not come from this driver:
+  the driver's own dictionary, or the one riding under :data of the
+  envelope the kernel wrapped it in. `sqlstate` and `code` are what a
+  caller branches on:
 
       (try (repo/create! ...)
-        ([err] (if (= 1062 (get (mysql/error-info err) :code))
+        ([err] (if (= 1062 (mysql/errno err))
                  :duplicate
                  (propagate err))))``
   [e]
-  (when (and error-details (= (string e) (first error-details)))
-    (last error-details)))
+  (cond
+    (and (dictionary? e) (= :mysql (get e :db/error))) e
+    (and (dictionary? e) (= :mysql (get-in e [:data :driver])))
+    (get-in e [:data :driver-error])
+    nil))
 
 (defn sqlstate
   "The SQLSTATE of a driver error, or nil."
@@ -148,8 +145,7 @@
     (let [[status payload] message]
       (if (= :answer status)
         payload
-        (do (remember-error payload)
-            (put h :open (not (get payload :lost)))
+        (do (put h :open (not (get payload :lost)))
             (raise payload))))))
 
 (defn- ask
