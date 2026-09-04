@@ -65,6 +65,7 @@
 ### the ADR says (./schedule).
 
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import ./backend :as backend)
 (import ./job :as job)
 (import ./record :as record)
@@ -83,11 +84,8 @@
 
 (defn- now [] (os/clock :realtime))
 
-(def- deadline-error
-  # the exact value `ev/deadline` cancels a task with — matched whole,
-  # never as a substring: a job whose own error merely mentions a
-  # deadline is a failure, not a timeout
-  "deadline expired")
+(errors/define! :void.jobs/timeout
+  {:doc "the handler ran past the job's :timeout and was cancelled; :data {:timeout <seconds>}"})
 
 (defn- worker-id []
   (string "w-" (string/slice (record/new-id) 11)))
@@ -293,8 +291,13 @@
       (def value (fiber/last-value fib))
       (cond
         (= :ok sig) value
-        (= deadline-error value)
-        (errorf "timed out after %.3g s" timeout)
+        # the cancellation value matched whole (errors/deadline?), never
+        # as a substring: a job whose own error mentions a deadline is
+        # a failure, not a timeout
+        (errors/deadline? value)
+        (errors/raise :void.jobs/timeout
+                      (string/format "timed out after %.3g s" timeout)
+                      {:timeout timeout})
         (error value)))))
 
 (defn run-one!
@@ -320,7 +323,7 @@
         (do (log/debug "job completed" :ns log-ns
                        :job (r :job) :id (r :id) :us us)
             (settle-completed! w r res t))
-        (do (when (and (string? res) (string/find "timed out" res))
+        (do (when (errors/kind? res :void.jobs/timeout)
               (update (w :stats) :timeouts inc))
             (settle-failed! w r res t)))))
   (unless sok

@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/schema :as schema)
+(import void/core/errors :as errors)
 (import void/core/log :as log)
 (import void/i18n :as i18n)
 (import void/i18n/catalog :as catalog)
@@ -133,6 +134,23 @@
                      (ru-str (first ((schema/check {:name :string} {}) :errors)))))
 (assert (= "ожидается не меньше 18, получено 15"
            (ru-str (first ((schema/check [:int {:min 18}] 15) :errors)))))
+
+# -- error envelopes translate by kind: the dictionary key is the kind ----
+(catalog/install! {:locales [:en :ru] :default :en}
+                  [{:name :test/errors :locale :ru :precedence 100
+                    :messages {:void.db/not-found "{entity} с id {id} не найден"
+                               :void.http/not-found "по адресу {path} ничего нет"}}
+                   {:name :test/errors-en :locale :en :precedence 100
+                    :messages {:void.db/not-found "no {entity} with id {id}"
+                               :void.http/not-found "nothing at {path}"}}])
+(def nf (errors/make :void.db/not-found "User 7 not found" {:entity :User :id 7}))
+(assert (= "User 7 not found" (errors/message nf)) "without a binding the envelope speaks for itself")
+(with-dyns [:void.errors/messages (catalog/error-messages :ru)]
+  (assert (= "User с id 7 не найден" (errors/message nf)) "the :ru dictionary translates the kind, :data as params")
+  (assert (= "kaboom" (errors/message "kaboom")) "a kind the dictionary lacks keeps its own message"))
+(with-dyns [:void.errors/messages (catalog/error-messages :en)]
+  (assert (= "nothing at /x" (errors/message (errors/make :void.http/not-found nil {:path "/x"})))
+          "a string :data field is not quoted"))
 
 # a code the catalog does not carry falls through to the core default
 (catalog/install! {:locales [:xx] :default :xx} [])

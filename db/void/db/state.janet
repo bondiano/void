@@ -16,6 +16,7 @@
 ### the same funnel.
 
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import ./builder :as builder)
 (import ./driver :as driver)
 (import ./pool :as pool)
@@ -183,10 +184,13 @@
       (def us (math/round (* 1_000_000 (- (os/clock :monotonic) t0))))
       (pool/note-query! p us)
       (unless ok
+        # the one place a driver's error becomes void's: classified by
+        # SQLSTATE into a kind every consumer branches on
+        (def env (driver/wrap-error res sql))
         (log/error "db query failed" :ns log-ns
                    :sql sql :params params :us us
-                   :err (if (string? res) res (describe res)))
-        (error res))
+                   :kind (errors/kind env) :err (errors/message env))
+        (error env))
       (log/debug "db query" :ns log-ns
                  :sql sql :params params :us us
                  :rows (length (get res :rows [])))
@@ -259,8 +263,10 @@
   # a failed COMMIT/ROLLBACK leaves the connection in an unknown state:
   # never hand it back to the pool
   (pool/discard! entry)
-  (errorf "db transaction %s failed: %s"
-          what (if (string? e) e (describe e))))
+  (def cause (driver/wrap-error e))
+  (errors/raise :void.db/transaction
+                (string/format "db transaction %s failed: %s" what (errors/message cause))
+                {:what what :cause cause}))
 
 (defn- run-tx [entry depth opts f]
   (def drv (driver))

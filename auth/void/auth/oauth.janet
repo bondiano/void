@@ -50,6 +50,8 @@
 ### is fixed by the RFC, and one an application can turn off with
 ### `[:auth-oauth :endpoints] false` when it publishes its own.
 
+(import void/http :as http)
+(import void/core/errors :as errors)
 (import spork/json)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -548,8 +550,11 @@
 
 (defn forbidden
   "The 403 for a valid token that may not do this."
-  [wanted]
-  (ring/header (ring/text 403 "insufficient scope")
+  [req wanted]
+  (ring/header (http/render-error
+                 (errors/make :void.auth/insufficient-scope "insufficient scope"
+                              {:scopes wanted} 403)
+                 req 403)
                "www-authenticate"
                (challenge-header "insufficient_scope"
                                  "the access token is missing a required scope"
@@ -577,14 +582,17 @@
              (cond
                (empty? wanted) (handler req)
                (nil? id)
-               (ring/header (ring/text 401 "unauthorized")
+               (ring/header (http/render-error
+                              (errors/make :void.auth/unauthenticated "no access token"
+                                           {:scopes wanted} 401)
+                              req 401)
                             "www-authenticate"
                             (challenge-header "invalid_token" "no access token" wanted))
                (not (has-scopes? wanted id))
                (do (log/debug "insufficient scope" :ns log-ns
                               :route (get rmeta :name)
                               :wanted wanted :have (scopes id))
-                   (forbidden wanted))
+                   (forbidden req wanted))
                (handler req))))})
 
 # -- the metadata document -----------------------------------------------

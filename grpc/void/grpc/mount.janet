@@ -98,6 +98,18 @@
     (if (string? err) err (string/format "%q" err))
     "the server failed to answer this call"))
 
+(defn error-response
+  ``The Connect error response for a raised value, or nil when the
+  value is not a failure an RPC client can be told about (a dictionary
+  that is neither ours nor an HTTP error — somebody else's). The one
+  map from void's errors to the wire: `answer` uses it for what a
+  handler raised, the :void.http/error-renderer contribution for what
+  the rest of the chain raised (a 403 from void/authz before the
+  handler ran).``
+  [err]
+  (when-let [failure (codes/failure err (panic-message err))]
+    (connect/error-response failure detail-encoder)))
+
 (defn answer
   ``Answer one Connect call against a service and a method. Public
   because it is the whole protocol in one function, and a test that
@@ -132,12 +144,11 @@
         (connect/ok-response codec (m :output) value meta))))
   (if ok
     result
-    (if-let [failure (codes/failure result (panic-message result))]
-      (connect/error-response failure detail-encoder)
-      # a raised dictionary that is neither an RPC failure nor an HTTP
-      # abort belongs to somebody else — the kernel's error renderers
-      # get their turn
-      (error result))))
+    (or (error-response result)
+        # a raised dictionary that is neither an RPC failure nor an HTTP
+        # abort belongs to somebody else — the kernel's error renderers
+        # get their turn
+        (error result))))
 
 (defn- env-of
   ``The declaring module's environment. `defservice` stores it wrapped

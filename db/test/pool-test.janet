@@ -1,4 +1,5 @@
 (import ../test-support/paths)
+(import void/core/errors :as errors)
 (import ../test-support/fake-driver :as fake)
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
@@ -57,7 +58,8 @@
 (def kept (pool/checkout p3))
 (def [ok err] (protect (pool/checkout p3)))
 (assert (not ok) "an unserved checkout throws")
-(assert (string/find "timed out" err) "the error names the timeout")
+(assert (string/find "timed out" (errors/message err)) "the error names the timeout")
+(assert (= :void.db/pool-timeout (errors/kind err)) "and is a kind a caller branches on")
 (assert (= 1 ((pool/stats p3) :timeouts)) "timeouts are counted")
 # the pool is still usable afterwards
 (pool/checkin p3 kept)

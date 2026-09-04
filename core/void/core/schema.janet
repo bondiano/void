@@ -21,6 +21,8 @@
 ### first projection is :validator. Optional :db/* props are parsed and
 ### stored but never consulted by validation (`db-annotations`).
 
+(import ./errors :as errors)
+
 (defn- callable? [x]
   (or (function? x) (cfunction? x)))
 
@@ -568,6 +570,21 @@
   (def errors @[])
   (def v (visit (normalize sch) value [] errors opts))
   {:value v :errors (tuple ;errors)})
+
+(defn check!
+  ``A `check` that raises: the coerced value when it validates, otherwise an
+  error envelope of kind :void.schema/invalid (status 422) whose
+  `:data` carries the same `:errors` `check` returns, plus the
+  `:value` as far as it got. What a route or a job calls when an
+  invalid value is not a branch but a refusal — the HTTP layer answers
+  it as problem+json or a page, the way it answers any envelope.``
+  [sch value &opt opts]
+  (def res (check sch value opts))
+  (if (empty? (res :errors))
+    (res :value)
+    (errors/raise :void.schema/invalid
+                  (string/join (map error-str (res :errors)) "; ")
+                  {:errors (res :errors) :value (res :value)})))
 
 (defn valid?
   "True when value matches schema (no coercion)."

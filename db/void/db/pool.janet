@@ -21,6 +21,9 @@
 ### ./state — this module is mechanics plus metrics: checkouts,
 ### blocking waits and their total wait time, query count/time.
 
+(import void/core/errors :as errors)
+(import ./driver :as driver)
+
 (defn make
   "Build a pool over a driver: opts {:size 10 :checkout-timeout 5}."
   [driver &opt opts]
@@ -59,8 +62,10 @@
   (def [ok conn] (protect (((pool :driver) :connect))))
   (unless ok
     (put pool :created (dec (pool :created)))
-    (errorf "db driver connect failed: %s"
-            (if (string? conn) conn (describe conn))))
+    (def cause (driver/wrap-error conn))
+    (errors/raise :void.db/connection
+                  (string "db driver connect failed: " (errors/message cause))
+                  {:cause cause}))
   (put pool :next-id (inc (pool :next-id)))
   @{:conn conn :stmts @{} :id (pool :next-id)})
 
@@ -168,9 +173,13 @@
       # rehome the connection we are about to return
       value (do (put slot :entry nil) value)
       (do (put s :timeouts (inc (s :timeouts)))
-          (errorf "db pool checkout timed out after %.1fs (size %d, in use %d, waiting %d)"
-                  (pool :checkout-timeout) (pool :size) (pool :in-use)
-                  (count |($ :live) (pool :waiters)))))))
+          (errors/raise :void.db/pool-timeout
+                        (string/format "db pool checkout timed out after %.1fs (size %d, in use %d, waiting %d)"
+                                       (pool :checkout-timeout) (pool :size) (pool :in-use)
+                                       (count |($ :live) (pool :waiters)))
+                        {:timeout (pool :checkout-timeout) :size (pool :size)
+                         :in-use (pool :in-use)
+                         :waiting (count |($ :live) (pool :waiters))})))))
 
 (defn checkout
   "Take a connection entry: an idle one, a fresh one while under

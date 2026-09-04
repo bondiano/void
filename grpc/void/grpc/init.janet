@@ -226,12 +226,7 @@
    :priority 800
    :fn (fn render-connect [err req _ctx]
          (when (get-in req [:void/route :meta :void.grpc/method])
-           (when-let [failure (codes/failure
-                                err
-                                (if (get settings :describe-errors)
-                                  (if (string? err) err (string/format "%q" err))
-                                  "the server failed to answer this call"))]
-             (connect/error-response failure encode-detail))))})
+           (mount/error-response err)))})
 
 # -- config --------------------------------------------------------------
 

@@ -15,6 +15,8 @@
 ### which. It is a judgement, so it is written down rather than
 ### inferred.
 
+(import void/core/errors :as errors)
+
 (def codes
   ``Every Connect/gRPC code: its number, and the HTTP status the
   Connect protocol sends it with.``
@@ -111,10 +113,15 @@
   (unless (code? code)
     (errorf "void/grpc: %q is not a Connect code (%s)"
             code (string/join (map string names) " ")))
-  (merge @{key code
-           :message (string message)
-           :http/status (http-status code)}
-         opts))
+  # an error envelope (void/core/errors) with the Connect code beside
+  # the kind; :details and :headers stay at the top, where the
+  # transport reads them, and in :data, where an envelope reader looks
+  (def status (get opts :http/status (http-status code)))
+  (freeze (merge (errors/make :void.grpc/failed message opts status)
+                 opts
+                 {key code
+                  :status status
+                  :http/status status})))
 
 (defn fail!
   ``Raise an RPC failure — what a handler calls instead of returning:
@@ -135,9 +142,13 @@
   [err &opt panic-message]
   (cond
     (and (dictionary? err) (err key)) err
-    (and (dictionary? err) (int? (err :http/status)))
-    (error-value (code-for-status (err :http/status))
-                 (or (err :message) (err :detail) "")
-                 (tabseq [k :in [:details] :when (err k)] k (err k)))
+    (and (dictionary? err) (or (int? (err :http/status)) (errors/error? err)))
+    (let [env (errors/of err)]
+      (error-value (code-for-status (errors/status env))
+                   (or (get env :message) (get err :detail) "")
+                   (tabseq [k :in [:details] :when (err k)] k (err k))))
     (dictionary? err) nil
     (error-value :internal (or panic-message (string err)))))
+
+(errors/define! :void.grpc/failed
+  {:doc "an RPC failure: the Connect code under :void.grpc/code, :details for the client"})

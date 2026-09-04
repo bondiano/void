@@ -252,6 +252,7 @@
       (def [ok e] (protect ((drv0 :begin) w)))
       ((drv0 :rollback) h)
       (assert (not ok) "a budget of 50 ms is not forever")
-      (assert (string/find "locked" (string e)) "and the error names the lock"))))
+      (assert (string/find "locked" (get e :message)) "and the error names the lock")
+      (assert (= "55P03" (get e :sqlstate)) "with the SQLSTATE the kernel classifies as a timeout"))))
 
 (print "driver-test: ok")

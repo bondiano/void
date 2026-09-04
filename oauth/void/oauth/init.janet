@@ -32,6 +32,7 @@
 ### https in any of them is a boot error naming the ways out (the plugin,
 ### an internal issuer over http, or an egress relay beside the process).
 
+(import void/core/errors :as errors)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
@@ -113,12 +114,15 @@
   # read as the same scheme-relative URL
   auth-http/local-path?)
 
+(errors/define! :void.oauth/refused
+  {:doc "the OAuth flow refused a callback or a start: a bad state, an unknown provider, a next that is not local"})
+
 (defn- refuse
   "A refusal through the error renderers — HTML for a browser,
   problem+json for an API — with the detail in the log, never in the
   body."
   [req status message]
-  (http/render-error {:http/status status :message message} req status))
+  (http/render-error (errors/make :void.oauth/refused message {} status) req status))
 
 (defn start-handler
   "GET <mount>/:provider — write the pending record and send the

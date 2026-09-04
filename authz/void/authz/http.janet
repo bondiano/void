@@ -143,9 +143,7 @@
   through the error renderers. The decision rides along on the error
   value for a custom renderer to read, and never reaches the body.``
   [req decision]
-  (http/render-error {:http/status (settings :status)
-                      :message (settings :message)
-                      :void.authz/decision decision}
+  (http/render-error (decide/forbidden decision (settings :message) (settings :status))
                      req (settings :status)))
 
 (plugin/contribute! :void.http/middleware

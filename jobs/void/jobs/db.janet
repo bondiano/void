@@ -54,6 +54,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import void/db :as db)
 (import void/db/builder :as builder)
 (import ./backend :as backend)
@@ -301,8 +302,10 @@
                ok (record/copy r)
                # the partial unique index caught what the check could
                # not: another process inserted between the two. That is
-               # not an error, it is the answer
-               (and k (unique-holder k now)) nil
+               # not an error, it is the answer — and only that one
+               # kind is; a lost connection under the same INSERT is
+               # still an error
+               (and k (errors/kind? e :void.db/unique-violation)) nil
                (error e)))))))
 
    :claim!
@@ -541,7 +544,7 @@
            # the race the SELECT could not, and on Postgres that
            # violation would otherwise abort the transaction it shares
            # (the 25P02 class push! documents)
-           (let [[ok _] (protect
+           (let [[ok e] (protect
                           (db/with-tx*
                             {}
                             (fn lock-insert-sp []
@@ -549,7 +552,11 @@
                                 (string "INSERT INTO " locks " (name, token, until) VALUES ("
                                         (phs 1 3) ")")
                                 [name token until] {:kind :write}))))]
-             (truthy? ok))
+             (cond
+               ok true
+               # lost the race for the row: somebody else holds the lock
+               (errors/kind? e :void.db/unique-violation) false
+               (error e)))
 
            (or (= token (get cur :token)) (<= (get cur :until 0) now))
            (pos? (get (db/execute-sql
@@ -590,7 +597,7 @@
 
                # a savepoint for the same reason lock! takes one: the
                # losing INSERT must not abort the transaction around it
-               (let [[ok _] (protect
+               (let [[ok e] (protect
                               (db/with-tx*
                                 {}
                                 (fn rate-insert-sp []
@@ -598,11 +605,13 @@
                                     (string "INSERT INTO " rates
                                             " (queue, window_start, n) VALUES (" (phs 1 3) ")")
                                     [(string queue) start 1] {:kind :write}))))]
-                 (if ok
-                   0
+                 (cond
+                   ok 0
                    # somebody inserted the window between our UPDATE and
                    # our INSERT: count against it on the next pass
-                   (max 0.001 (- (+ start duration) now))))))))))
+                   (errors/kind? e :void.db/unique-violation)
+                   (max 0.001 (- (+ start duration) now))
+                   (error e)))))))))
 
    :stats
    (fn db-stats []

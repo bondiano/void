@@ -71,6 +71,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import void/db :as db)
 (import void/db/builder :as builder)
 (import ./backend :as bus-backend)
@@ -314,13 +315,18 @@
     (if (pos? (get n :count 0))
       true
       # no row yet: the first taker inserts it, and a lost race there
-      # is a unique violation, which is an answer and not an error
-      (let [[ok _] (protect
+      # is a unique violation, which is an answer and not an error —
+      # the only kind that is: a connection that died under the INSERT
+      # propagates, rather than reading as "somebody else has it"
+      (let [[ok e] (protect
                      (db/execute-sql
                        (string "INSERT INTO " leases " (name, token, until) VALUES ("
                                (phs 1 3) ")")
                        [name tok (+ now ttl)] {:kind :write}))]
-        ok)))
+        (cond
+          ok true
+          (errors/kind? e :void.db/unique-violation) false
+          (error e)))))
 
   (defn release-lease! [name tok]
     (protect

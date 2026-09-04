@@ -1,23 +1,44 @@
 ### void/http/errors — exception -> response mapping.
 ###
 ### wrap-panic is the phase-0 panic guard: everything a route chain
-### throws becomes a response instead of a dropped connection. A
-### structured throw `(error {:http/status 422 :message "..."})` — the
-### `abort` helper — keeps its status; anything else is a 500. The
-### response is produced by the :void.http/error-renderer contributions
-### in priority order (first non-nil wins) with the built-in renderer
-### as the floor: a terse text/plain in prod, a full HTML page with the
-### stacktrace and request summary in dev. Renderer contract:
-### (fn [err req ctx] response|nil), ctx = {:status :dev :stacktrace}.
+### throws becomes a response instead of a dropped connection. An
+### error envelope (void/core/errors — `abort` builds one) keeps its
+### status; a v1 `{:http/status N}` dictionary is read the same way;
+### anything else is a 500. The response is produced by the
+### :void.http/error-renderer contributions in priority order (first
+### non-nil wins) with the built-in renderer as the floor: a terse
+### text/plain in prod, a presentable page for a browser, a full HTML
+### page with the stacktrace and request summary in dev. Renderer
+### contract: (fn [err req ctx] response|nil), ctx = {:status :dev
+### :stacktrace :error} — `err` is the value as raised (the v1
+### contract), `:error` its envelope (`errors/of`), so a renderer
+### branches on `(errors/kind (ctx :error))` without normalizing.
+###
+### This chain is the one negotiator of error format in void: rest
+### contributes problem+json, grpc the Connect status, the floor the
+### page or the line. Every refusal goes through it — the 404/405 of
+### an unrouted path (init's route-or-404), an auth challenge, a
+### shed request — which is what makes an API client see problem+json
+### on a path that does not exist, and not somebody's text/plain.
 
+(import void/core/errors :as errors)
 (import ./ring :as ring)
 (import ./wire :as wire)
 
+(errors/define! :void.http/not-found
+  {:status 404 :doc "no route matched the path"})
+(errors/define! :void.http/method-not-allowed
+  {:status 405 :doc "the path exists, the method does not; :data {:allowed [...]}"})
+(errors/define! :void.http/bad-request
+  {:status 400 :doc "the request could not be read: a body its codec cannot decode, malformed signals"})
+
 (defn abort
-  "Throw a structured HTTP error caught by wrap-panic:
-  (abort 404) (abort 422 \"invalid state\")."
-  [status &opt message]
-  (error {:http/status status :message message}))
+  ``Throw an HTTP error the panic guard answers with its status:
+  (abort 404) (abort 422 "invalid state"). An envelope of kind
+  :void.http/abort — `(errors/raise kind message data)` is the same
+  throw with a kind of one's own.``
+  [status &opt message data]
+  (errors/raise :void.http/abort message data status))
 
 (defn- html-escape [s]
   (->> (string s)
@@ -34,12 +55,10 @@
   (string out))
 
 (defn- err-message [err]
-  (cond
-    (and (dictionary? err) (err :message)) (string (err :message))
-    (dictionary? err) (get wire/status-messages
-                           (get err :http/status 500) "error")
-    (string? err) err
-    (describe err)))
+  (def env (errors/of err))
+  (if (or (get env :message) (get (dyn :void.errors/messages {}) (errors/kind env)))
+    (errors/message env)
+    (get wire/status-messages (errors/status env) "error")))
 
 (def- page-css
   ``The error pages' one style block — the control-room language of
@@ -95,6 +114,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
     (string
       "<p class=\"status\">" (ctx :status) "</p>"
       "<h1>" (html-escape (err-message err)) "</h1>"
+      "<p class=\"hint\">" (html-escape (string (errors/kind err))) "</p>"
       # an abort has no trace worth a panel — an empty box is noise
       (if (empty? trace) "" (string "<pre>" (html-escape trace) "</pre>"))
       "<dl><dt>method</dt><dd>" (html-escape (string (req :method))) "</dd>"
@@ -182,12 +202,10 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
         # a :void.http/timeout cancellation must reach the server's
         # deadline branch (503 + the :on-timeout stage), not the
         # renderers — re-propagate it
-        (when (and (string? err) (string/find "deadline expired" err))
+        (when (errors/deadline? err)
           (propagate err fib))
-        (def status
-          (if (and (dictionary? err) (int? (err :http/status)))
-            (err :http/status)
-            500))
+        (def env (errors/of err))
+        (def status (errors/status env))
         (def trace (when fib (stacktrace-str fib err)))
         (when (>= status 500)
           (log err req trace))
@@ -204,4 +222,5 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
             (render (opts :renderers) err req
                     {:status status
                      :dev (opts :dev)
-                     :stacktrace trace}))))))
+                     :stacktrace trace
+                     :error env}))))))

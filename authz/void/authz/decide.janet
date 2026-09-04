@@ -25,6 +25,7 @@
 ### disjunction is expressible as one policy, where it can be read,
 ### rather than as a shape in metadata where it cannot.
 
+(import void/core/errors :as errors)
 (import void/core/log :as log)
 (import void/core/hooks :as hooks)
 (import ./policy :as policy)
@@ -137,6 +138,20 @@
   [names &opt opts]
   ((decide names opts) :allow))
 
+(errors/define! :void.authz/forbidden
+  {:status 403 :doc "a policy denied the actor; :data {:decision <the decision value>}"})
+
+(defn forbidden
+  ``The error value for a denied decision: an envelope of kind
+  :void.authz/forbidden carrying the decision in :data — and under
+  :void.authz/decision on the value itself, where a renderer from
+  before the envelope reads it. The reason stays on the value for the
+  log and never reaches a body.``
+  [decision &opt message status]
+  (freeze (merge (errors/make :void.authz/forbidden (or message "forbidden")
+                              {:decision decision} (or status 403))
+                 {:void.authz/decision decision})))
+
 (defn ensure!
   ``Allow, or raise a 403 carrying the decision. The raised value has
   `:http/status 403` so the error renderers answer it the way they
@@ -146,9 +161,7 @@
   [names &opt opts]
   (def decision (decide names opts))
   (unless (decision :allow)
-    (error {:http/status 403
-            :message "forbidden"
-            :void.authz/decision decision}))
+    (error (forbidden decision)))
   decision)
 
 (defn explain

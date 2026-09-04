@@ -34,6 +34,7 @@
 ### rather trade freshness for a store read sets `:session`, and the
 ### claims then come from what the login put there.
 
+(import void/core/errors :as errors)
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/core/config :as config)
@@ -352,6 +353,11 @@
              (and (not= second (chr "/"))
                   (not= second (chr "\\")))))))
 
+(errors/define! :void.auth/unauthenticated
+  {:status 401 :doc "the route needs somebody and the request carried nobody"})
+(errors/define! :void.auth/insufficient-scope
+  {:status 403 :doc "the credential was fine, the grant was not: :data {:scopes [...]}"})
+
 (defn unauthorized
   ``The response for a request that needed somebody and had nobody:
   a redirect to the login page, or the configured status through the
@@ -367,8 +373,10 @@
     (let [target (get req :uri (get req :path "/"))]
       (ring/redirect (string (settings :login-path) "?next=" (wire/url-encode target))))
     (let [challenge (strategy/challenge req names)
-          resp (http/render-error {:http/status (settings :status)
-                                   :message "authentication required"}
+          resp (http/render-error (errors/make :void.auth/unauthenticated
+                                               "authentication required"
+                                               {:strategies names}
+                                               (settings :status))
                                   req (settings :status))]
       (when challenge
         (when-let [header (get-in challenge [:headers "www-authenticate"])]
