@@ -44,7 +44,7 @@
 
 # -- :file ---------------------------------------------------------------
 
-(def dir (string (os/getenv "TMPDIR" "/tmp") "void-mail-test-" (os/time)))
+(def dir (string (os/getenv "TMPDIR" "/tmp") "/void-mail-test-" (os/time)))
 (def file ((transport/file-transport dir) :send))
 (def file-receipt (file (delivery)))
 (assert (= :file (file-receipt :transport)))
