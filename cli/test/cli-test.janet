@@ -2,6 +2,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/deploy :as deploy)
+(import void/core/log :as log)
 (import void/cli :as cli)
 
 # -- command words / resolution ------------------------------------------
@@ -158,7 +159,18 @@
         "boot-opts asks :plugins-for with the effective profile")
 
 (def boot3 (cli/bootstrap-app {:plugins [surveyed] :profile :test}))
+# the :prod logger writes through a fiber; a command that leaves it
+# running leaves the process running — deploy check in a built binary
+# hung on exactly this
+(log/configure! {:level :info} :prod)
+(defn- writer-alive? []
+  (ev/sleep 0)
+  (truthy? (some (fn [t] (some |(= "jdn-writer" (get $ :name)) (debug/stack t)))
+                 (ev/all-tasks))))
+(assert (writer-alive?) "the :prod logger's writer fiber is up")
 (def entries (cli/deploy-check boot3))
+(assert (not (writer-alive?)) "deploy-check closes the log writers, so the process can exit")
+(log/configure! nil :test)
 
 (assert (deep= log @[:start-thing :stop-thing])
         "only what a store declaration needs starts — never the listener")

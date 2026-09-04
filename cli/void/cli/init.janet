@@ -131,12 +131,31 @@
   (hooks/run! (boot :hooks) :before-start boot)
   boot)
 
+(defn teardown!
+  ``The other half of the lifecycle `bootstrap-app` opened, for a
+  command that is done: the :before-stop and :after-stop hooks (a
+  plugin that allocated something in :before-start gets them on the
+  CLI path too), the system stopped, and the async log writers
+  closed. That last one is what lets the process exit: in :prod the
+  logger writes JDN through a fiber parked on a channel, and a
+  command that bootstrapped, printed and returned would otherwise
+  leave that fiber holding the event loop open forever — which is
+  exactly what `deploy check` did in a built binary.``
+  [boot]
+  (each e (hooks/run-protected! (boot :hooks) :before-stop boot)
+    (eprint e))
+  (system/stop (boot :system))
+  (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
+    (eprint e))
+  (log/close!)
+  nil)
+
 (defn run-command
   ``Run one contributed command against a bootstrapped app: start the
   :needs components (plus transitive dependencies), call :fn with those
   instances followed by the string arguments, then stop what was
-  started (reverse dependency order). Returns the command's return
-  value.``
+  started (reverse dependency order, `teardown!`). Returns the
+  command's return value.``
   [boot command args]
   (def f (command :fn))
   (when (symbol? f)
@@ -146,16 +165,7 @@
   (def sys (boot :system))
   (unless (empty? needs)
     (system/start sys needs))
-  # the other half of the lifecycle bootstrap-app opened: a plugin that
-  # allocated something in :before-start gets its stop hooks even on
-  # the CLI path, and the async log writers are flushed before exit
-  (defer (do
-           (each e (hooks/run-protected! (boot :hooks) :before-stop boot)
-             (eprint e))
-           (system/stop sys)
-           (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
-             (eprint e))
-           (log/close!))
+  (defer (teardown! boot)
     (f ;(map |(get-in sys [:instances $]) needs) ;args)))
 
 # -- deploy check --------------------------------------------------------
@@ -177,7 +187,7 @@
   (def wanted (deploy/needs boot))
   (unless (empty? wanted)
     (system/start sys wanted))
-  (defer (system/stop sys)
+  (defer (teardown! boot)
     (def entries (deploy/survey boot))
     (each l (deploy/report boot entries) (print l))
     (when (and (deploy/fleet?) (not (empty? (deploy/per-process entries))))
@@ -265,7 +275,8 @@
   (case (first words)
     nil (print-help nil)
     "help" (let [[ok boot] (protect (bootstrap-app (the-app) profile))]
-             (print-help (when ok (plugin/extension boot :void.core/cli))))
+             (print-help (when ok (plugin/extension boot :void.core/cli)))
+             (when ok (teardown! boot)))
     "version" (printf "void %s" core/version)
     "new" (new/create ;(drop 1 words))
     # a built-in because it runs *before* there is a composition to
