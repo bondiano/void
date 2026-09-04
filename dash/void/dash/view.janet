@@ -13,6 +13,7 @@
 (import void/html/hiccup :as hiccup)
 (import void/core/config :as config)
 (import void/datastar/ds :as ds)
+(import void/datastar/init :as datastar)
 (import ./context :as ctx)
 
 # -- the sheet -----------------------------------------------------------
@@ -304,7 +305,11 @@ document.addEventListener("input", function (e) {
        [:link {:rel "stylesheet" :href href}])
      (when-let [src (asset-url :script)]
        [:script {:src src :defer true}])
-     (htmx-tag)]
+     (htmx-tag)
+     # the live half: `live-attrs` hangs data-init on a page, and
+     # this is the script that reads it — one without the other is a
+     # page that polls while believing it streams
+     (when (ctx/setting :datastar?) (datastar/script-tag))]
     [:body
      [:header {:class "dash-bar"}
       [:span {:class "dash-title"} (ctx/setting :title "Dash")]

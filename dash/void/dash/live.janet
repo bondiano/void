@@ -4,7 +4,7 @@
 ### This module imports void/datastar — the package edge is real — but
 ### the *plugin* is the application's opt-in: when :void/datastar is
 ### not in :plugins there is no registry component, `active?` answers
-### false, the overview carries no data-on:load attribute and every
+### false, the overview carries no data-init attribute and every
 ### page falls back to the htmx poll of M1. When it is, the overview
 ### and the log page live on a morph-stream: each update re-renders
 ### the whole page and Datastar morphs the delta into the DOM — the

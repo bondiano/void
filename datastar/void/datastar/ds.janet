@@ -75,10 +75,13 @@
   (attrs (keyword "on:" event) expr))
 
 (defn load
-  "data-on:load — the attribute that opens a stream when the element
-  mounts: (ds/load (ds/action :get \"/live\"))."
+  ``data-init — the attribute Datastar runs when the element mounts,
+  which is how a page opens its stream: (ds/load (ds/action :get
+  "/live")). It is `data-init`, not `data-on:load`: the bundle has no
+  load event, and an attribute it does not know is a page that never
+  connects — which inject tests cannot see and a browser can.``
   [expr]
-  (on :load expr))
+  (attrs :init expr))
 
 (defn bind
   "data-bind — two-way binding between an input and a signal."

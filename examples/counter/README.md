@@ -9,6 +9,16 @@ experiment: a live counter on `void/datastar`, the Biff idiom.
 Open http://localhost:8080 in two windows and press the buttons: every
 tab converges on the same count.
 
+That sentence is the smoke test the suite cannot run: `test/smoke-test.janet`
+drives both representations of every handler through `test/inject` and
+pokes the real registry, but only a browser proves that `datastar.js`
+loads (pinned, with its integrity hash), that `data-init` opens `/live`,
+and that a click in one tab morphs the other. It was last run by hand
+against Datastar v1.0.0-RC.7 in Chrome — and it is how the attribute
+became `data-init`: the bundle has no `load` event, so the earlier
+`data-on:load` was a page that polled nothing and never connected,
+which every inject test passed.
+
 ## The idiom
 
 Every handler here returns the **same full page** — there is no code
@@ -26,12 +36,13 @@ answering "what exactly changed":
   same two events. Pokes coalesce by construction: the channel holds
   one wake-up, because the page is state, not a delta.
 
-The price is named in the ADR: every action renders and ships the
+The price is stated up front: every action renders and ships the
 whole page. Where that is too dear, the htmx idiom is one import away
 — both live on the same `void/html`.
 
-`datastar.js` is an asset of the application, not the plugin — the
-layout pulls it from a CDN the way guestbook brings its own htmx.
+`datastar.js` is loaded by the application's own layout — the plugin
+only supplies the tag, `(datastar/script-tag)`: the pinned file with
+its integrity hash, the way admin and dash carry htmx's.
 
 ## Replicas
 
