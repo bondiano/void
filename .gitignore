@@ -11,8 +11,10 @@ jpm_tree/
 *.a
 *.jimage
 
-# test sandboxes (cleaned up on success, left behind by a crash)
+# test sandboxes (cleaned up on success, left behind by a crash) and
+# whatever a local experiment leaves under tmp/
 .tmp-*/
+/tmp/
 
 # sqlite databases (void/db-sqlite's default path is db/void.sqlite3)
 *.sqlite3

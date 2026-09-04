@@ -11,11 +11,22 @@
 ###
 ### Run from the repository root:
 ###
-###     janet scripts/gen-changelog.janet     # -> CHANGELOG.md
+###     janet scripts/gen-changelog.janet         # -> CHANGELOG.md
+###     janet scripts/gen-changelog.janet check   # CI gate, writes nothing
 ###
 ### Commits after the newest tag land in an «Unreleased» section, so
 ### the file is regenerated at release time (tag first, generate
 ### second) and may be regenerated any day in between to preview.
+###
+### `check` is the same gate CONTRACTS.md has: the *released* part of
+### the file must equal what the history projects — a tag without a
+### regenerated changelog fails CI. The Unreleased section is left out
+### of the comparison on purpose: it contains the commit being checked,
+### which cannot have known its own hash. And the newest tag must not
+### be ahead of void/core's `version`, since that is the one place the
+### version is written and everything else reads it.
+
+(import ../core/void/core/init :as core)
 
 (defn- git
   "Run one git command, return its trimmed stdout."
@@ -176,7 +187,9 @@
                          " (`" (item :hash) "`)\n"))
           (buffer/push buf "\n"))))))
 
-(defn main [& _]
+(defn- render
+  "The whole file as a string, projected from the history now."
+  []
   (def ts (tags))
   (when (empty? ts)
     (error "no release tags — nothing to project"))
@@ -210,7 +223,57 @@
     (def range (if (zero? i) tag (string (in ts (dec i)) ".." tag)))
     (render-release buf tag (tag-date tag) (get release-themes tag)
                     (commits range)))
-  (spit "CHANGELOG.md" (string (string/trimr buf "\n") "\n"))
+  {:text (string (string/trimr buf "\n") "\n")
+   :tags ts
+   :pending pending})
+
+(defn- released-part
+  "Everything from the first release heading on — the part of the file
+  that is a function of tagged history alone."
+  [text]
+  (if-let [at (string/find "\n## v" text)]
+    (string/slice text (inc at))
+    text))
+
+(defn- tag<?
+  "vX.Y[.Z] numeric order."
+  [a b]
+  (defn parts [t] (map scan-number (string/split "." (string/slice t 1))))
+  (def [pa pb] [(parts a) (parts b)])
+  (var result nil)
+  (loop [i :range [0 (max (length pa) (length pb))] :until (not (nil? result))]
+    (def [x y] [(get pa i 0) (get pb i 0)])
+    (cond (< x y) (set result true)
+          (> x y) (set result false)))
+  (or result false))
+
+(defn- check
+  "Exit 1 with a sentence when the file on disk or the version in
+  void/core has fallen behind the tags."
+  []
+  (def {:text text :tags ts} (render))
+  (def newest (last ts))
+  (var failed false)
+  (when (tag<? core/release-tag newest)
+    (set failed true)
+    (eprintf (string "void/core says version %s (tag %s), but the history "
+                     "is already tagged %s — bump `version` in "
+                     "core/void/core/init.janet")
+             core/version core/release-tag newest))
+  (def on-disk (let [[ok s] (protect (slurp "CHANGELOG.md"))] (if ok (string s) "")))
+  (unless (= (released-part on-disk) (released-part text))
+    (set failed true)
+    (eprint (string "CHANGELOG.md is behind the tags: run "
+                    "`janet scripts/gen-changelog.janet` and commit the result")))
+  (if failed
+    (os/exit 1)
+    (printf "CHANGELOG.md matches the history through %s; version %s is not behind it"
+            newest core/version)))
+
+(defn main [&opt _ mode]
+  (when (= mode "check") (check) (os/exit 0))
+  (def {:text text :tags ts :pending pending} (render))
+  (spit "CHANGELOG.md" text)
   (printf "CHANGELOG.md written (%d releases%s)"
           (length ts) (if (empty? pending) "" " + unreleased"))
   (unless (empty? skipped)

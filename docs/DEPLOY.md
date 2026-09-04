@@ -93,7 +93,8 @@ or configure through the environment:
     ./myapp
 
 `__` separates nesting levels and `_` inside a segment becomes `-`, so
-`VOID_DB__POOL_SIZE` is `[:db :pool-size]`. Values are parsed as Janet
+`VOID_DB__POOL__SIZE` is `[:db :pool :size]` and `VOID_HTTP__MAX_BODY`
+is `[:http :max-body]`. Values are parsed as Janet
 data when they start with one of `{[(:@"` — which is why the shape above
 is `:single` and not `single`. A bare `single` is refused at boot, by
 name.

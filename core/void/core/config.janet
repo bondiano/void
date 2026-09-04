@@ -126,8 +126,9 @@
     s))
 
 (defn- env-var-path
-  "VOID_DB__POOL_SIZE -> [:db :pool-size]: strip the prefix, `__`
-  separates nesting levels, `_` inside a segment becomes `-`."
+  "VOID_DB__POOL__SIZE -> [:db :pool :size], VOID_HTTP__MAX_BODY ->
+  [:http :max-body]: strip the prefix, `__` separates nesting levels,
+  `_` inside a segment becomes `-`."
   [name prefix]
   (tuple ;(map |(keyword (string/replace-all "_" "-" (string/ascii-lower $)))
                (string/split "__" (string/slice name (length prefix))))))

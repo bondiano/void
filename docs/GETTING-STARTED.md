@@ -153,7 +153,7 @@ application that opts into the driver declares it. Add it to
 `:dependencies` in `project.janet` and fetch:
 
 ```janet
-:dependencies ["https://github.com/bondiano/void.git"
+:dependencies [{:url "https://github.com/bondiano/void.git" :tag "v0.5"}
                "https://github.com/janet-lang/sqlite3.git"]
 ```
 

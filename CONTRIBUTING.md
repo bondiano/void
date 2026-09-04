@@ -116,6 +116,18 @@ reference environment (`bench/results/baseline.jdn`).
 `feat:` / `fix:` / `refactor:` / `test:` / `chore:` / `docs:` / `style:`
 / `perf:` / `revert:` — one logical change per commit.
 
+## Language
+
+Code, docstrings, comments and everything under `docs/` are English.
+A commit subject is English or Russian — one of the two, not a mix;
+`scripts/gen-changelog.janet` carries the English of the Russian ones,
+keyed by hash, so the changelog reads in one language. The design
+record (the specification, the wave plan, the decision records) is
+kept outside the repository and is not something a contribution has
+to read or cite: what a decision settled is written into the code's
+docstrings and the documents here, which is where the reasons are
+expected to live.
+
 ## Definition of Done (any plugin)
 
 1. Manifest passes `plugin/dry-run`; removing the plugin from

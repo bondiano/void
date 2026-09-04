@@ -12,11 +12,13 @@
 ### installed, tested and documented without a second edit.
 
 (import ./scripts/packages :as packages)
+# the version lives in one place — void/core — and this is a reading of it
+(import ./core/void/core/init :as core)
 
 (declare-project
   :name "void"
   :description ``void — a batteries-included web framework for Janet: HTTP kernel, SSR + htmx, REST + OpenAPI, database, cache, jobs, load shedding, and the `void` CLI.``
-  :version "0.1.0"
+  :version core/version
   :url "https://github.com/bondiano/void"
   :repo "git+https://github.com/bondiano/void.git"
   # janet-lang/sqlite3 is deliberately absent: void/db-sqlite is a plugin
