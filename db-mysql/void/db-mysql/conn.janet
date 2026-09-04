@@ -153,16 +153,19 @@
   [h command what]
   (unless (h :open)
     (errorf "mysql: this connection is closed (%s)" what))
-  (when (h :pending)
-    (errorf (string "mysql: a previous statement's reply is still outstanding "
-                    "on this connection (%s) — it was abandoned mid-query (a "
-                    "cancel); the connection must be discarded, not reused")
-            what))
+  # :busy first: while a fiber is inside `ask`, :pending is set too, and
+  # the situation is a second fiber — not an abandoned query, which is
+  # :pending with nobody busy (the owner was cancelled out of `await`)
   (when (h :busy)
     (errorf (string "mysql: two fibers used one connection at once (%s) — a "
                     "connection is checked out to one fiber, and a query "
                     "started inside `db/with-conn` or `db/with-tx` has to "
                     "finish there")
+            what))
+  (when (h :pending)
+    (errorf (string "mysql: a previous statement's reply is still outstanding "
+                    "on this connection (%s) — it was abandoned mid-query (a "
+                    "cancel); the connection must be discarded, not reused")
             what))
   (put h :busy true)
   # a request is outstanding from the give until await consumes its
