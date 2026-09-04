@@ -25,14 +25,14 @@
      # the <title> is state too — the morph patches it by selector,
      # the one piece of a document id-matching cannot reach
      [:title (string "counter — " (state :n))]
-     # datastar.js is an asset of the application, not the plugin, the
-     # same way guestbook brings its own htmx
-     [:script {:type "module"
-               :src "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.7/bundles/datastar.js"}]]
+     # the layout is the application's, so loading datastar.js is its
+     # decision — the plugin supplies the pinned tag with its
+     # integrity hash, the way admin and dash carry htmx's
+     (datastar/script-tag)]
     [:body content]))
 
 (defn counter-view
-  "The page: signals declare the step, data-on:load opens the live
+  "The page: signals declare the step, data-init opens the live
   stream, and the buttons post to handlers that return this same view."
   []
   [:main (merge {:id "counter"}

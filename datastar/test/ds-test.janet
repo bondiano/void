@@ -29,7 +29,7 @@
 
 (assert (deep= @{"data-signals" `{"count":0}`} (ds/signals {:count 0})))
 (assert (deep= @{"data-on:click" "@post('/inc')"} (ds/on :click (ds/action :post "/inc"))))
-(assert (deep= @{"data-on:load" "@get('/live')"} (ds/load (ds/action :get "/live"))))
+(assert (deep= @{"data-init" "@get('/live')"} (ds/load (ds/action :get "/live"))))
 (assert (deep= @{"data-bind" "query"} (ds/bind :query)))
 (assert (deep= @{"data-text" "$count"} (ds/text "$count")))
 (assert (deep= @{"data-show" "$open"} (ds/show "$open")))

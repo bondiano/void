@@ -30,6 +30,35 @@
 (import void/html/hiccup :as hiccup)
 (import ./proto :as proto)
 
+# -- the script -----------------------------------------------------------
+
+(def script-src
+  "The pinned datastar.js — a URL that names the exact file, so a
+  reader can verify it against `script-integrity`; the same pin, for
+  the same reason, as the htmx tag in void/admin and void/dash."
+  "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.7/bundles/datastar.js")
+
+(def script-integrity
+  "sha384 of that file; pairs with `script-src` and only with it."
+  "sha384-NE/0J/WohApRHTAW47TIaqfDAzJuxnm3hT6ffCjkgj5rHhxc7MR+XVafripnCwF8")
+
+(defn script-tag
+  ``The <script> that loads Datastar, as hiccup for a layout's <head>:
+  the pinned file with its integrity hash, as a module (which is how
+  the bundle is built). Options: :src for a file served elsewhere (a
+  self-hosted copy), :integrity for its hash — a :src that is not the
+  pin gets no integrity unless one is given, since a hash for the
+  wrong file is a page that loads nothing.``
+  [&opt opts]
+  (default opts {})
+  (def src (get opts :src script-src))
+  (def integrity (or (get opts :integrity)
+                     (when (= src script-src) script-integrity)))
+  [:script (merge {:type "module" :src src}
+                  (if integrity
+                    {:integrity integrity :crossorigin "anonymous"}
+                    {}))])
+
 # -- request side --------------------------------------------------------
 
 (defn request?

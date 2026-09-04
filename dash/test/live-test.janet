@@ -1,7 +1,7 @@
 ### The Datastar mode (M3): the page as state, morphed over SSE.
 ###
 ### Claims. With :void/datastar composed the overview carries the
-### data-on:load attribute that opens its stream, /dash/live answers morph
+### data-init attribute that opens its stream, /dash/live answers morph
 ### events (<title> + <body> — the two cuts), a poke re-renders the
 ### stream's own page, and the logs stream shows a record emitted after
 ### connect — the ring sink pokes the room, so a log line reaches an open
@@ -15,6 +15,7 @@
 (import void/core/log :as log)
 (import void/http/init :as http)
 (import void/dash/live :as live)
+(import void/datastar/init :as datastar)
 
 (log/set-level! nil :error)
 
@@ -34,8 +35,12 @@
 
   # the overview opens its stream — and keeps its poll
   (def page (string ((http/with-request {:uri "/dash"}) :body)))
-  (assert (string/find "data-on:load" page)
+  (assert (string/find "data-init" page)
           "the page carries the stream opener")
+  (assert (string/find "datastar.js" page)
+          "and the script that acts on it")
+  (assert (string/find (string "integrity=\"" datastar/script-integrity) page)
+          "pinned, with its integrity hash")
   (assert (string/find "/dash/live" page))
   (assert (string/find "every 5s" page)
           "the htmx poll stays — the fallback does not wait for the experiment")
