@@ -54,6 +54,15 @@
 (assert (= "cache" ((config/options {:url "redis://cache:6380/0" :database 3}) :host))
         "and leaves the rest of the url alone")
 (assert (= "127.0.0.1" ((config/options {}) :host)) "an empty slice is a local server")
+# the slice a component actually receives has the plugin's defaults
+# merged in by the kernel — and the URL still has to win over those,
+# or `{:url "redis://cache.internal:6399/9"}` connects to localhost
+(let [o (config/options (merge config/defaults {:url "redis://cache.internal:6399/9"}))]
+  (assert (= "cache.internal" (o :host)) "a url beats the merged defaults on host")
+  (assert (= 6399 (o :port)) "on port")
+  (assert (= 9 (o :database)) "and on database"))
+(assert (not (has-key? config/defaults :port))
+        "which is why the server is not among the declared defaults")
 (assert (nil? ((config/options {:unix "/tmp/r.sock"}) :host))
         "a socket and a host are alternatives: the defaulted host is dropped")
 (assert (nil? ((config/options {}) :prefix))

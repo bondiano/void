@@ -68,16 +68,29 @@
 
    :session [:optional {:prefix [:optional :string]}]})
 
-(def defaults
-  ``Defaults of the [:redis] slice: a local server on the standard
-  port, RESP3 (redis 6+; a RESP2 server is detected at the handshake,
-  not configured for), and a pool of eight — a redis command is
-  sub-millisecond, so a pool exists to let fibers overlap round trips
-  rather than to hold work.``
+(def fallbacks
+  ``Where a connection goes when neither the slice nor its :url says: a
+  local server on the standard port, database 0.
+
+  These are deliberately NOT in `defaults`. The kernel merges a
+  plugin's :config-defaults into the slice before the plugin sees it,
+  and a merged default is indistinguishable from a choice — declaring
+  :port 6379 there would arrive looking exactly like a deployment that
+  meant 6379 and quietly beat the :6399 in its own :url. So the keys a
+  URL can also name live here, and `options` applies them last:
+  explicit key, then URL, then these (the arrangement void/db-mysql
+  documents for the same reason).``
   {:host "127.0.0.1"
    :port 6379
-   :database 0
-   :protocol 3
+   :database 0})
+
+(def defaults
+  ``Defaults of the [:redis] slice: RESP3 (redis 6+; a RESP2 server is
+  detected at the handshake, not configured for), and a pool of eight
+  — a redis command is sub-millisecond, so a pool exists to let fibers
+  overlap round trips rather than to hold work. The server itself is
+  not here — see `fallbacks` for why.``
+  {:protocol 3
    :connect-timeout 5
    :timeout 5
    # 64 MB: far above any value a cache or a session writes, far below
@@ -190,9 +203,9 @@
 
 (defn options
   ``The [:redis] slice as the option table ./conn opens with: the URL
-  taken apart first, explicit keys on top, and the connection keys
-  alone (the pool, the prefix and the codec belong to layers above a
-  socket).``
+  taken apart first, explicit keys on top, `fallbacks` underneath, and
+  the connection keys alone (the pool, the prefix and the codec belong
+  to layers above a socket).``
   [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (def from-url (if-let [u (get cfg :url)] (parse-url u) @{}))
@@ -200,6 +213,7 @@
   (each k connection-keys
     (def v (if (nil? (get cfg0 k)) (get from-url k) (get cfg0 k)))
     (def v (if (nil? v) (get cfg k) v))
+    (def v (if (nil? v) (get fallbacks k) v))
     (unless (nil? v) (put out k v)))
   # a unix socket and a host are alternatives, and libpq's habit of
   # letting a default quietly win is not one to copy: a slice that
