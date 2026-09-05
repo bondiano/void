@@ -59,6 +59,7 @@
 ### outbox creates — a forwarder that published and died before
 ### marking the row — and that duplicate arrives at the same group.
 
+(import void/core/errors :as errors)
 (import void/core/log :as log)
 (import void/core/schema :as schema)
 (import ./message :as message)
@@ -169,7 +170,10 @@
                       :topic (msg :topic) :id (msg :id)
                       :correlation-id (message/correlation-id msg)
                       :redelivery (message/redelivery msg)
-                      :err (if (string? err) err (describe err)))
+                      # errors/str, not describe: since 8.1 what a handler
+                      # raises is usually an envelope, and "<struct 0x…>"
+                      # is not a line anyone can act on
+                      :err (errors/str err))
            (propagate err fib)))))})
 
 (defn correlation

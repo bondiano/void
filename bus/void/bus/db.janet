@@ -439,7 +439,7 @@
                           :ns log-ns :group group
                           :topic (env :topic) :id (env :id)
                           :seq (env :seq) :redelivery (env :redelivery)
-                          :err (if (string? err) err (describe err)))))))
+                          :err (errors/str err))))))
         (when (or (not= position (get cur :position 0))
                   (not= stuck-seq (get cur :stuck_seq))
                   (not= stuck-attempts (get cur :stuck_attempts 0)))
