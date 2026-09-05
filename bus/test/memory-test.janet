@@ -1,9 +1,23 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
 (import void/bus/backend :as backend)
+(import void/bus/conformance/backend :as conformance)
 (import void/bus/memory :as memory)
 
 (log/set-level! "void.bus.memory" :fatal)
+
+# -- the contract --------------------------------------------------------
+#
+# Everything the in-process backend shares with a broker in a database
+# or a Kafka cluster, plus the branch that is its own: nothing survives
+# a moment with no consumer. What follows is what only this backend has.
+
+# the conformance suite's throwing handler is intended, and the router
+# says so at :error — true, and noise in a green run; the level comes
+# back afterwards so the rest of this file stays diagnosable
+(log/set-level! "void.bus" :fatal)
+(conformance/run! "memory" (fn [] (memory/store (memory/make))) {:settle 0.05})
+(log/set-level! "void.bus" :info)
 
 (defn- env [topic payload]
   @{:id (string "id-" payload) :topic topic :body payload :meta-body "{}"

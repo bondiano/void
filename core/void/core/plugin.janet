@@ -127,7 +127,7 @@
 
 (def- allowed-point-keys
   {:name true :doc true :schema true :cardinality true
-   :reduce true :validate true :aliases true})
+   :reduce true :validate true :aliases true :conformance true})
 
 (def- cardinalities {:many true :single true :single-required true})
 
@@ -153,6 +153,12 @@
     :aliases      deprecated former names of this point: contributions addressed to an alias fold into
                   this point with a deprecation warning — renaming a
                   point is new-point + alias, never mutation
+    :conformance  the module of the point's conformance suite
+                  ("void/bus/conformance/backend"), when the point is a
+                  contract several implementations answer to: a
+                  contract counts as frozen only with a suite every
+                  implementation runs (docs/CONTRACTS.md names the
+                  points that have none)
     :doc          docstring``
   [name & kvs]
   (unless (keyword? name)
@@ -181,6 +187,9 @@
             name aliases))
   (when (index-of name aliases)
     (errorf "extension point %q: cannot alias itself" name))
+  (when-let [c (get opts :conformance)]
+    (unless (string? c)
+      (errorf "extension point %q: :conformance must be a module name, got %q" name c)))
   (def sch
     (when-let [s (get opts :schema)]
       (def [ok n] (protect (schema/normalize s)))
@@ -566,10 +575,11 @@
 
      :void.core/interface
      (extension-point :void.core/interface
-       :doc "Interface declarations for component :provides: {:name :void/cache :doc ... :methods {...}}"
+       :doc "Interface declarations for component :provides: {:name :void/cache :doc ... :methods {...} :conformance \"void/cache/conformance/store\"} — :conformance names the module of the interface's conformance suite, the one every implementation runs"
        :schema {:name :keyword
                 :doc [:optional :string]
-                :methods [:optional :dictionary]}
+                :methods [:optional :dictionary]
+                :conformance [:optional :string]}
        :validate (unique-names "interface")
        :reduce (fn [contribs]
                  (freeze (tabseq [c :in contribs] (c :name) c))))

@@ -1,6 +1,7 @@
 (import ../test-support/paths)
-(import void/http/session :as session)
+(import void/http/conformance/session :as conformance)
 (import void/http/ring :as ring)
+(import void/http/session :as session)
 
 # -- sid -----------------------------------------------------------------
 
@@ -129,5 +130,12 @@
 (assert (string/find "HttpOnly" secure-cookie)
         "while the defaults underneath the merge survive")
 (assert (string/find "Path=/" secure-cookie))
+
+# -- the store contract, as every store keeps it -------------------------
+#
+# the assertions the memory store shares with redis' and the database's,
+# on a store of its own so the ids above are not disturbed
+
+(conformance/run! "memory" (session/memory-store))
 
 (print "session-test ok")

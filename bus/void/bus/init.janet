@@ -90,6 +90,7 @@
     (put seen (c :name) true)))
 
 (plugin/defextension-point :void.bus/backend
+  :conformance "void/bus/conformance/backend"
   :doc "Message-bus backends: {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend"
   :schema {:name :keyword
            :doc [:optional :string]

@@ -15,6 +15,7 @@
 (import void/core/log :as log)
 (import void/bus/backend :as backend)
 (import void/bus/codec :as codec)
+(import void/bus/conformance/backend :as conformance)
 (import void/bus/router :as router)
 (import void/bus/state :as state)
 (import void/kafka/config :as config)
@@ -59,13 +60,17 @@
                        :retry {:enabled false}}
                      (or cfg {}))))
 
-(defn- make-backend []
+(defn- make-backend
+  "A fresh raw backend over a producer of its own — what the
+  conformance suite's factory has to be, and what this file normalizes
+  once for its own scenarios."
+  []
   (def p (producer/make
            (config/properties kcfg {} {"message.timeout.ms" (config/message-timeout-ms kcfg)})
            {:library (get kcfg :library) :timeout (get kcfg :message-timeout 30)}))
-  (backend/normalize (kbus/store kcfg bcfg p)))
+  (kbus/store kcfg bcfg p))
 
-(def b (make-backend))
+(def b (backend/normalize (make-backend)))
 
 # -- what it promises, read back through the contract --------------------
 
@@ -75,6 +80,21 @@
 (assert (= :none (get-in b [:guarantees :ordering]))
         "and :none is the honest word for cross-partition order")
 (assert (b :encoded?) "bytes on the wire, so a codec must produce some")
+
+# -- the contract every backend answers ----------------------------------
+#
+# void/bus ships the suite (void/bus/conformance/backend) and it branches
+# on the declarations just read: durable, so the sections about a log
+# that outlives its consumer run; at-least-once, so redelivery is
+# asserted rather than assumed; :none ordering, so the one-reader-per-
+# group section is skipped there and stated below in Kafka's own terms —
+# two consumers of one group split partitions. `settle` is a second,
+# because what one pass costs against a broker is a group join.
+#
+# The suite builds its own backends through the factory and closes them,
+# so the stats read off `b` at the end of this file are this file's.
+
+(conformance/run! "kafka" make-backend {:settle 1})
 
 # -- publish, then consume from the beginning of the log -----------------
 

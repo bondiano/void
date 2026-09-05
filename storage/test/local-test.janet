@@ -4,9 +4,20 @@
 # controls.
 
 (import ../test-support/paths)
+(import void/crypto :as crypto)
+(import void/security/secret :as secret)
+(import void/storage/conformance/store :as conformance)
 (import void/storage/key :as key)
 (import void/storage/local :as local)
 (import void/storage/store :as store)
+
+# A local store that mints temporary URLs is a composition with
+# :void/security in it — ./sign refuses to sign without the keys, and
+# says which plugin carries them (test/sign-test.janet pins that). The
+# conformance suite asks for a temporary URL, so the composition here
+# is the whole one.
+(crypto/load!)
+(secret/configure! {:signing-key (string/repeat "k" 32)} :test)
 
 (def root (string "tmp/local-test-" (os/getpid)))
 
@@ -100,6 +111,20 @@
 
   (assert (not (store/shared? st)) "a disk is one machine's disk")
   (assert (string/find "storage-s3" (st :replacement))
-          "and it names what to compose instead"))
+          "and it names what to compose instead")
+
+  # -- the contract, from the suite that ships with it -------------------
+  #
+  # Everything above is about *this* store — the atomic rename, the
+  # traversal rules, the serve prefix. What every backend owes a caller
+  # is void/storage/conformance/store, run here in both compositions:
+  # with void/storage-http behind it, where `url` is a path, and
+  # without, where the contract's answer is nil.
+
+  (conformance/run! "local"
+                    (local/store (local/make {:local {:root root}
+                                              :serve {:prefix "/storage"}})))
+  (conformance/run! "local (no serve route)"
+                    (local/store (local/make {:local {:root root} :serve {}}))))
 
 (printf "local-test: ok")

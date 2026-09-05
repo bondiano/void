@@ -4,6 +4,7 @@
 (import void/core/plugin :as plugin)
 (import void/redis/codec :as rcodec)
 (import void/redis/state :as redis)
+(import void/cache/conformance/store :as conformance)
 (import void/cache/redis :as backend)
 (import void/cache/state :as state)
 (import void/cache/store :as store)
@@ -107,5 +108,17 @@
           (assert (= 1 (state/clear!)) "and it clears exactly its own"))
 
         (redis/call ["DEL" (string (client :prefix) "not-the-cache")])
+
+        # -- the contract, from the suite that ships with it -------------
+        #
+        # Everything above is about *this* backend — the codec, the
+        # server's own clock, INCRBY, the SCAN walk. What every store
+        # owes a caller is void/cache/conformance/store, run here
+        # against both codecs: :jdn is the store that declares
+        # :values :janet, :raw the one that declares :bytes, and the
+        # suite branches on the declaration rather than on the name.
+
+        (conformance/run! "redis (jdn)" (backend/make {:codec rcodec/jdn}))
+        (conformance/run! "redis (raw)" (backend/make {:codec rcodec/raw}))
 
         (printf "redis-test: ok")))))

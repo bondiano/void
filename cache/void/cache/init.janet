@@ -63,6 +63,7 @@
 
 (plugin/contribute! :void.core/interface
   {:name :void/cache-store
+   :conformance "void/cache/conformance/store"
    :doc "A cache backend: {:get :put :delete :clear} plus the optional :get-many/:put-many, :has?, :incr, :stats and :close keys (see void/cache/store). A store component declares :provides [:void/cache-store]; {:void/cache-store {:impl <key>}} picks between several."
    :methods {:get "(fn [key] value-or-nil)"
              :put "(fn [key value ttl])"

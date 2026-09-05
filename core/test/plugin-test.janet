@@ -65,6 +65,11 @@
   |(plugin/extension-point :x/p :schema [:wat]))
 (expect-error "bad reduce" ":reduce"
   |(plugin/extension-point :x/p :reduce 5))
+(expect-error "bad conformance" ":conformance"
+  |(plugin/extension-point :x/p :conformance :void.x/suite))
+(assert (= "void/x/conformance/p"
+           ((plugin/extension-point :x/p :conformance "void/x/conformance/p") :conformance))
+        "a point names the module of its conformance suite")
 
 # -- happy path: points, contributions, reduce, extension access ---------
 

@@ -125,6 +125,7 @@
             (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
 
 (plugin/defextension-point :void.http/session-store
+  :conformance "void/http/conformance/session"
   :doc "Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to \"would a second replica see this session\" — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is"
   :schema {:name :keyword
            :make :function

@@ -1,5 +1,5 @@
 (import ../test-support/paths)
-(import ../test-support/conformance :as conformance)
+(import void/bus/conformance/backend :as conformance)
 (import void/core/log :as log)
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
@@ -59,7 +59,10 @@
 
     # -- the contract ---------------------------------------------------
 
-    (conformance/run! "sqlite" {:settle 0.25})
+    (conformance/run! "sqlite"
+                      (fn [] (busdb/store {:poll-interval 0.05 :notify true
+                                           :stuck-interval 0.05 :stuck-max 0.2}))
+                      {:settle 0.25})
 
     # -- the outbox: exit criterion 2 of wave 3 -------------------------
     #

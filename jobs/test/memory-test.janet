@@ -1,5 +1,5 @@
 (import ../test-support/paths)
-(import ../test-support/conformance :as conformance)
+(import void/jobs/conformance/backend :as conformance)
 (import void/core/log :as log)
 (import void/jobs/backend :as backend)
 (import void/jobs/memory :as memory)

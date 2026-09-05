@@ -18,6 +18,7 @@
 (import void/crypto :as crypto)
 (import void/http/client :as client)
 (import void/storage :as storage)
+(import void/storage/conformance/store :as conformance)
 (import void/storage/state :as state)
 (import void/storage/s3 :as s3)
 (import void/storage/store :as store)
@@ -96,7 +97,17 @@
 
     # -- what it declares about replicas ---------------------------------
 
-    (assert (store/shared? st) "a bucket is what every replica sees"))
+    (assert (store/shared? st) "a bucket is what every replica sees")
+
+    # -- the contract, from the suite that ships with it -----------------
+    #
+    # Everything above is about *this* store — SigV4 against a real
+    # server, the HEAD behind `delete!`, the bytes a presigned path has
+    # to encode exactly once. What every backend owes a caller is
+    # void/storage/conformance/store, and the bucket store is one of the
+    # two implementations that has to answer it.
+
+    (conformance/run! "s3" (s3/store (s3/make (s3env/config)))))
 
   (printf "s3-test: ok (%s)" (s3env/endpoint)))
 

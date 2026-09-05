@@ -3,6 +3,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/http :as http)
+(import void/http/conformance/session :as conformance)
 (import void/http/router :as router)
 (import void/http/ring :as ring)
 (import void/redis :as redis)
@@ -80,6 +81,11 @@
       (assert (nil? ((store :sweep))) "which is what :sweep says by doing nothing")
       ((store :delete) "sid-1")
       (assert (nil? ((store :load) "sid-1")) "deleting a session deletes it")
+
+      # the assertions this store shares with the memory one and the
+      # database one — under keys of its own, in the test prefix that
+      # server/clean! takes away below
+      (conformance/run! "redis" store)
 
       # -- the full stack ------------------------------------------------
 

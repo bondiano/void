@@ -31,7 +31,11 @@
 ###   :get-many (fn [keys] values)        — falls back to a loop of :get
 ###   :put-many (fn [pairs ttl])          — falls back to a loop of :put
 ###   :has?     (fn [key] bool)           — falls back to (not (nil? get))
-###   :incr     (fn [key delta ttl] n)    — falls back to get/add/put
+###   :incr     (fn [key delta ttl] n)    — falls back to get/add/put,
+###             which reads the counter back as a number and so needs
+###             :values :janet; a :bytes store that wants a counter
+###             implements :incr itself (redis does, with INCRBY, which
+###             is also what makes it exact across processes)
 ###   :stats    (fn [] {...})             — falls back to {}
 ###   :close    (fn [])                   — falls back to nothing
 ###

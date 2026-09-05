@@ -70,6 +70,7 @@
 
 (plugin/contribute! :void.core/interface
   {:name :void/storage-store
+   :conformance "void/storage/conformance/store"
    :doc "A storage backend: {:put! :get :stream :delete! :url} plus the optional :stat and :close keys (see void/storage/store). A store component declares :provides [:void/storage-store]; {:void/storage-store {:impl <key>}} picks between several."
    :methods {:put! "(fn [key bytes opts] meta)"
              :get "(fn [key] bytes-or-nil)"

@@ -1,5 +1,5 @@
 (import ../test-support/paths)
-(import ../test-support/conformance :as conformance)
+(import void/jobs/conformance/backend :as conformance)
 (import void/core/log :as log)
 (import void/core/plugin :as plugin)
 (import void/redis/codec :as codec)

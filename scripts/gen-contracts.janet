@@ -207,6 +207,35 @@
 (p "key plus a deprecation alias for the old name, never a mutation.")
 (p "")
 
+# -- conformance -----------------------------------------------------------
+#
+# A contract counts as frozen only with a conformance suite every
+# implementation runs (CONTRIBUTING.md, "Frozen contracts"; Definition
+# of Done, item 7). The declaration names the suite's module under
+# :conformance, and this is where the claim is checked: the module has
+# to resolve on the package graph's path, and a contract with two or
+# more implementations — as many as the in-repo composition activates;
+# one that lives only outside it is not counted — and no
+# suite is named — in the registry, and on stderr, so the generation
+# that adds a second implementation also says what it owes.
+
+(def without-suite @[])
+
+(defn- conformance-line
+  "The registry line for a contract's suite: what it is, or that there
+  is none and how many implementations are waiting for one."
+  [what name module n-impls]
+  (cond
+    module
+    (do (unless (first (module/find module))
+          (errorf "%s %q names conformance suite %q, which is not a module on the path"
+                  what name module))
+        (string/format "- **conformance:** `%s`" module))
+    (>= n-impls 2)
+    (do (array/push without-suite (string/format "%s %q (%d implementations)" what name n-impls))
+        (string/format "- **conformance:** none — %d implementations, no suite" n-impls))
+    "- **conformance:** none (a single implementation)"))
+
 (p "## Extension points")
 (p "")
 (each name (sorted (keys (boot :extensions)))
@@ -230,6 +259,47 @@
         (p "  %s" (render-schema s))
         (p "  ```"))
     (p "- **contribution schema:** none (any value)"))
+  # only a point whose contributions are implementations of one
+  # contract owes a suite: one that declares a suite, or one whose
+  # contributions are factories (`:make` in the schema — session
+  # stores, bus backends). A point that collects routes or widgets
+  # says nothing here
+  (when (or (pt :conformance)
+            (and (dictionary? (pt :schema-source)) (has-key? (pt :schema-source) :make)))
+    (p "%s" (conformance-line "extension point" name (pt :conformance)
+                         (length (e :contributions)))))
+  (p ""))
+
+(p "## Interfaces")
+(p "")
+(p "A component's `:provides` names an interface declared through")
+(p "`:void.core/interface`; a dependency on the interface resolves to")
+(p "whichever provider the composition activates, and two active")
+(p "providers are the ambiguity `[:<pkg> :impl]` settles. Every")
+(p "interface with more than one provider is a contract, and a contract")
+(p "is frozen only with its conformance suite — the module named here,")
+(p "shipped with the package that owns the interface so a provider")
+(p "written elsewhere runs the same assertions.")
+(p "")
+(def interfaces (or (get-in boot [:extensions :void.core/interface :resolved]) {}))
+(def providers (or (get-in boot [:system :providers]) {}))
+(each name (sorted (keys interfaces))
+  (def decl (interfaces name))
+  (def provs (sorted (get providers name [])))
+  (p "### `%q`" name)
+  (p "")
+  (when-let [d (decl :doc)]
+    (p "- %s" d))
+  (when-let [ms (decl :methods)]
+    (p "- **methods:**")
+    (p "")
+    (each m (sorted (keys ms))
+      (p "  - `%q` — %s" m (ms m))))
+  (p "- **providers in this composition:** %s"
+     (if (empty? provs)
+       "none"
+       (string/join (map |(string/format "`%q`" $) provs) ", ")))
+  (p "%s" (conformance-line "interface" name (decl :conformance) (length provs)))
   (p ""))
 
 # The table is empty from 4.4 on: every reserved point now has a plugin
@@ -314,5 +384,8 @@
 (p "stay reserved for void/openapi.")
 
 (spit "docs/CONTRACTS.md" (string out))
-(printf "docs/CONTRACTS.md written (%d extension points, %d metadata keys)"
-        (length (keys (boot :extensions))) (length meta-contribs))
+(printf "docs/CONTRACTS.md written (%d extension points, %d interfaces, %d metadata keys)"
+        (length (keys (boot :extensions))) (length (keys interfaces)) (length meta-contribs))
+(unless (empty? without-suite)
+  (eprintf "contracts with two or more implementations and no conformance suite (Definition of Done, item 7):")
+  (each w without-suite (eprintf "  %s" w)))

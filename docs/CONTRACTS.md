@@ -149,6 +149,7 @@ key plus a deprecation alias for the old name, never a mutation.
   ```janet
   {:doc [:optional :string] :make :function :name :keyword}
   ```
+- **conformance:** `void/bus/conformance/backend`
 
 ### `:void.bus/codec`
 
@@ -213,11 +214,11 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/interface`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- Interface declarations for component :provides: {:name :void/cache :doc ... :methods {...}}
+- Interface declarations for component :provides: {:name :void/cache :doc ... :methods {...} :conformance "void/cache/conformance/store"} — :conformance names the module of the interface's conformance suite, the one every implementation runs
 - **contribution schema:**
 
   ```janet
-  {:doc [:optional :string] :methods [:optional :dictionary] :name :keyword}
+  {:conformance [:optional :string] :doc [:optional :string] :methods [:optional :dictionary] :name :keyword}
   ```
 
 ### `:void.core/log-serializer`
@@ -379,6 +380,7 @@ key plus a deprecation alias for the old name, never a mutation.
   ```janet
   {:make :function :name :keyword :replacement [:optional :string] :shared? [:optional :boolean]}
   ```
+- **conformance:** `void/http/conformance/session`
 
 ### `:void.i18n/locale-source`
 
@@ -509,6 +511,244 @@ key plus a deprecation alias for the old name, never a mutation.
   ```janet
   {:decode :function :encode :function :name :keyword}
   ```
+
+## Interfaces
+
+A component's `:provides` names an interface declared through
+`:void.core/interface`; a dependency on the interface resolves to
+whichever provider the composition activates, and two active
+providers are the ambiguity `[:<pkg> :impl]` settles. Every
+interface with more than one provider is a contract, and a contract
+is frozen only with its conformance suite — the module named here,
+shipped with the package that owns the interface so a provider
+written elsewhere runs the same assertions.
+
+### `:void/auth`
+
+- The resolved authentication: the stores this composition has, the strategies it registered and the hashing settings behind them.
+- **methods:**
+
+  - `:challenges` — the active store for magic links and one-time codes
+  - `:settings` — the [:auth] slice as it was resolved
+  - `:tokens` — the active API-token store
+  - `:users` — the active user store
+- **providers in this composition:** `:auth/registry`
+- **conformance:** none (a single implementation)
+
+### `:void/auth-challenge-store`
+
+- Magic links and one-time codes; :take must remove what it returns, or the code is not single-use.
+- **methods:**
+
+  - `:put` — (fn [handle record ttl])
+  - `:take` — (fn [handle] record|nil)
+- **providers in this composition:** `:auth.db/challenges`, `:auth/memory-challenges`
+- **conformance:** none — 2 implementations, no suite
+
+### `:void/auth-token-store`
+
+- API tokens, stored as digests — never as tokens.
+- **methods:**
+
+  - `:delete` — (fn [id] deleted?)
+  - `:find` — (fn [id] record|nil)
+  - `:put` — (fn [record])
+- **providers in this composition:** `:auth.db/tokens`, `:auth/memory-tokens`
+- **conformance:** none — 2 implementations, no suite
+
+### `:void/auth-user-store`
+
+- Who exists and what their password hash is — implemented by an application, or by void/auth-db over a void/db entity.
+- **methods:**
+
+  - `:claims` — (fn [record] {...})
+  - `:find` — (fn [{:by :email :value "a@b.c"}] record|nil)
+  - `:secret` — (fn [record] phc|nil)
+  - `:subject` — (fn [record] "user:42")
+- **providers in this composition:** `:auth.db/users`, `:auth/memory-users`
+- **conformance:** none — 2 implementations, no suite
+
+### `:void/authz`
+
+- The authorization registry: the policies, the attribute providers and the role table this composition resolved.
+- **methods:**
+
+  - `:default` — what an unmarked route means: :allow or :deny
+  - `:policies` — every registered policy name
+  - `:providers` — attribute providers, in resolution order
+  - `:roles` — the [:authz :roles] table
+- **providers in this composition:** `:authz/registry`
+- **conformance:** none (a single implementation)
+
+### `:void/bus`
+
+- The broker: the backend this process speaks, the codec its messages travel in, the middleware chain and the consumers it started. Depend on the interface rather than the key to let a test stand a bus of its own in its place.
+- **methods:**
+
+  - `:backend` — the backend underneath, with its declared guarantees
+  - `:codec` — the codec messages are encoded with
+  - `:consumers` — the groups this process is consuming
+  - `:group` — the consumer group handlers join when they name none
+- **providers in this composition:** `:bus/broker`
+- **conformance:** none (a single implementation)
+
+### `:void/cache`
+
+- A cache: the :cache/store component's value — a normalized store under a key prefix, with a default TTL, single-flight and an error policy. Depend on the interface rather than the key to let a test stand a stub in its place.
+- **methods:**
+
+  - `:prefix` — the string every key is prefixed with
+  - `:store` — the :void/cache-store backend (see void/cache/store)
+  - `:ttl` — the default time to live, in seconds (:none for no expiry)
+- **providers in this composition:** `:cache/store`
+- **conformance:** none (a single implementation)
+
+### `:void/cache-store`
+
+- A cache backend: {:get :put :delete :clear} plus the optional :get-many/:put-many, :has?, :incr, :stats and :close keys (see void/cache/store). A store component declares :provides [:void/cache-store]; {:void/cache-store {:impl <key>}} picks between several.
+- **methods:**
+
+  - `:clear` — (fn [key-prefix] n)
+  - `:delete` — (fn [key] deleted?)
+  - `:get` — (fn [key] value-or-nil)
+  - `:put` — (fn [key value ttl])
+- **providers in this composition:** `:cache/memory`, `:cache/redis`
+- **conformance:** `void/cache/conformance/store`
+
+### `:void/crypto`
+
+- The open cryptographic library: which one, which version and which algorithms it provides. Depend on the interface rather than on the component key to let a test stand something else in its place.
+- **methods:**
+
+  - `:algorithms` — algorithm -> available?
+  - `:path` — the library this process opened
+  - `:version` — [major minor patch]
+- **providers in this composition:** `:crypto/lib`
+- **conformance:** none (a single implementation)
+
+### `:void/db-driver`
+
+- A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint and :ping keys (see void/db/driver). A failing statement raises {:db/error <name> :message :sqlstate} — the SQLSTATE is what the kernel classifies into a :void.db/* error kind, the same on every engine. A driver component declares :provides [:void/db-driver]; [:db :driver] picks between several.
+- **methods:**
+
+  - `:close` — (fn [conn])
+  - `:connect` — (fn [] conn)
+  - `:execute` — (fn [conn sql params opts] {:rows [...] :count n}) — raises {:db/error :message :sqlstate ...}
+- **providers in this composition:** `:db.mysql/driver`, `:db.postgres/driver`, `:db.sqlite/driver`
+- **conformance:** `void/db/conformance/driver`
+
+### `:void/jobs`
+
+- A job queue: the :jobs/queue component's value — a backend plus the resolved policy layers (defaults, [:jobs], per-queue, per-job). Depend on the interface rather than the key to let a test stand a queue of its own in its place.
+- **methods:**
+
+  - `:backend` — the :void/jobs-backend underneath
+  - `:defaults` — the policy a job gets when nothing overrides it
+  - `:queues` — the per-queue configuration
+- **providers in this composition:** `:jobs/queue`
+- **conformance:** none (a single implementation)
+
+### `:void/jobs-backend`
+
+- Job persistence: {:push! :claim! :settle! :fetch :list :counts :remove! :clear!} plus the optional :reap!, :touch!, :lock!/:unlock!, :rate-take! and :release-parent! keys (see void/jobs/backend). A backend component declares :provides [:void/jobs-backend]; {:void/jobs-backend {:impl <key>}} picks between several.
+- **methods:**
+
+  - `:claim!` — (fn [opts] job-or-nil) — atomic, or the queue is not one
+  - `:counts` — (fn [] {queue {state n}})
+  - `:push!` — (fn [job] job-or-nil) — nil when a unique key is held
+  - `:settle!` — (fn [job] job) — write a record back in its new state
+- **providers in this composition:** `:jobs/db`, `:jobs/memory`, `:jobs/redis`
+- **conformance:** `void/jobs/conformance/backend`
+
+### `:void/mail`
+
+- The resolved mailer: the transports this composition has, the one it sends through and the [:mail] slice behind them.
+- **methods:**
+
+  - `:settings` — the [:mail] slice as it was resolved
+  - `:transport` — the active transport's name
+  - `:transports` — every contributed transport, by name
+- **providers in this composition:** none
+- **conformance:** none (a single implementation)
+
+### `:void/notify`
+
+- The resolved notifier: the channels this composition has, the ones it delivers on and the [:notify] slice behind them.
+- **methods:**
+
+  - `:active` — the channel names this process delivers on
+  - `:channels` — every contributed channel, by name
+  - `:settings` — the [:notify] slice as it was resolved
+- **providers in this composition:** none
+- **conformance:** none (a single implementation)
+
+### `:void/obs`
+
+- The observability registry: the metrics this process holds, the tracer behind them and the runtime sampler. Depend on the interface rather than the component key.
+- **methods:**
+
+  - `:render` — the Prometheus text exposition
+  - `:snapshot` — every metric as data
+  - `:status` — what the runtime sampler is seeing
+- **providers in this composition:** `:obs/registry`
+- **conformance:** none (a single implementation)
+
+### `:void/pressure`
+
+- The pressure state: the flag the shedding middleware reads, the thresholds behind it and the sampler that maintains them. Depend on the interface rather than the key to let a test stand a state in its place.
+- **methods:**
+
+  - `:reasons` — why — thresholds crossed and checks that said no
+  - `:samples` — the last sample of each signal
+  - `:under-pressure` — true while this process is shedding
+- **providers in this composition:** `:pressure/sampler`
+- **conformance:** none (a single implementation)
+
+### `:void/redis`
+
+- A redis client: the :redis/client component's value ({:pool :codec :prefix}), which void/redis's own functions reach through state/active-client. Depend on the interface rather than the key to let a test stand a stub in its place.
+- **methods:**
+
+  - `:codec` — the value codec named by [:redis :codec]
+  - `:pool` — the connection pool (see void/redis/pool)
+  - `:prefix` — the string every key is prefixed with
+- **providers in this composition:** `:redis/client`
+- **conformance:** none (a single implementation)
+
+### `:void/storage`
+
+- Files and uploads: the :storage/store component's value — the normalized active store. Depend on the interface rather than the key to let a test stand a stub in its place.
+- **methods:**
+
+  - `:get` — (fn [key] bytes-or-nil)
+  - `:put!` — (fn [key bytes opts] meta)
+  - `:url` — (fn [key opts] string-or-nil)
+- **providers in this composition:** `:storage/store`
+- **conformance:** none (a single implementation)
+
+### `:void/storage-store`
+
+- A storage backend: {:put! :get :stream :delete! :url} plus the optional :stat and :close keys (see void/storage/store). A store component declares :provides [:void/storage-store]; {:void/storage-store {:impl <key>}} picks between several.
+- **methods:**
+
+  - `:delete!` — (fn [key] deleted?)
+  - `:get` — (fn [key] bytes-or-nil)
+  - `:put!` — (fn [key bytes opts] meta)
+  - `:stream` — (fn [key] iterable-or-nil)
+  - `:url` — (fn [key opts] string-or-nil)
+- **providers in this composition:** `:storage/local`, `:storage/s3`
+- **conformance:** `void/storage/conformance/store`
+
+### `:void/tls`
+
+- Outbound TLS: which libssl is open and the shared client context built from [:tls]. Consumers reach it through their seams (https:// in the http client, rediss:// in redis, :starttls/:smtps in mail), not through this key.
+- **methods:**
+
+  - `:ctx` — the shared client SSL_CTX
+  - `:path` — the library this process opened
+  - `:version` — [major minor patch]
+- **providers in this composition:** `:tls/lib`
+- **conformance:** none (a single implementation)
 
 ## Request-lifecycle stages
 

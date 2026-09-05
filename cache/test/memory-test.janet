@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/cache/conformance/store :as conformance)
 (import void/cache/memory :as memory)
 (import void/cache/store :as store)
 
@@ -143,5 +144,14 @@
 
 ((st :close))
 (assert (= 0 (memory/entry-count sm)) "closing takes the entries with it")
+
+# -- the contract, from the suite that ships with it ---------------------
+#
+# Everything above is about *this* store — its LRU, its sweeper, its
+# recency list. What every backend owes a caller is
+# void/cache/conformance/store, and the memory store is one of the two
+# implementations that has to answer it.
+
+(conformance/run! "memory" (memory/store (memory/make {:sweep-interval 0})))
 
 (printf "memory-test: ok")

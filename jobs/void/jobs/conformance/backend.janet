@@ -1,19 +1,29 @@
-# The backend conformance suite: one set of assertions, run against
-# every `:void/jobs-backend` there is.
-#
-# Three stores — a table in this heap, rows in a database, hashes in
-# redis — answer the same eight questions, and the runtime above them
-# is written once. That is the whole claim the contract makes, and a
-# suite that only ever ran against the in-process backend would be a
-# suite that never checked it. So this file holds the assertions and
-# memory-test / db-test / redis-test each hand it a backend.
-#
-# What it does NOT test is the runtime: retries, timeouts, rate limits
-# and flows are decisions, they live above the contract, and they are
-# tested once in worker-test against the in-process backend.
+### void/jobs/conformance/backend — the :void/jobs-backend conformance
+### suite.
+###
+### One set of assertions, run against every backend there is. Three
+### stores — a table in this heap, rows in a database, hashes in redis —
+### answer the same questions, and the runtime above them is written
+### once. That is the whole claim the contract (void/jobs/backend)
+### makes, and a suite that only ever ran against the in-process backend
+### would be a suite that never checked it — so this file holds the
+### assertions, and each store's own test hands it a backend:
+###
+###     (import void/jobs/conformance/backend :as conformance)
+###     (conformance/run! "memory" (memory/store (memory/make)))
+###
+### It ships with void/jobs, not with the tests, so a backend written
+### outside this repository runs the same suite against the same runtime
+### it will be plugged into. The raw dictionary is what goes in: the
+### suite normalizes it itself, because "the kernel fills the rest in"
+### is part of what is being checked.
+###
+### What it does NOT test is the runtime: retries, timeouts, rate limits
+### and flows are decisions, they live above the contract, and they are
+### tested once in worker-test against the in-process backend.
 
-(import void/jobs/backend :as backend)
-(import void/jobs/record :as record)
+(import ../backend :as backend)
+(import ../record :as record)
 
 (defn- pending [job &opt extra]
   (record/make (merge {:job job :queue :default} (or extra {}))))
@@ -253,5 +263,5 @@
   (assert (zero? (rt rate-queue nil nil t)) (note "no limit means no wait"))
 
   ((b :clear!) {})
-  (printf "%s: backend conformance ok" name)
+  (printf "%s: jobs-backend conformance OK" name)
   true)

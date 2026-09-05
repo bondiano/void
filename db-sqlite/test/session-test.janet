@@ -7,6 +7,7 @@
 (import void/db :as db)
 (import void/db/http :as db-http)
 (import void/db/state :as state)
+(import void/http/conformance/session :as conformance)
 
 (log/set-level! "void.db" :error)
 
@@ -60,6 +61,9 @@
     ((store :save) "a" @{:who :a} 60)
     ((store :save) "b" @{:who :b} 60)
     (assert (= :a (get ((store :load) "a") :who)))
-    (assert (= :b (get ((store :load) "b") :who)))))
+    (assert (= :b (get ((store :load) "b") :who)))
+
+    # and the assertions it shares with the memory store and redis'
+    (conformance/run! "db (sqlite)" store)))
 
 (print "db-sqlite session-test ok")

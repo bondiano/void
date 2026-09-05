@@ -90,6 +90,22 @@ deprecation period for the old one:
 Reserved names (the "waves 2+" tables in CONTRACTS.md) are part of the
 freeze: don't repurpose them.
 
+**A contract with more than one implementation is frozen only with a
+conformance suite.** Without one CONTRACTS.md documents the contract;
+it does not check it. The suite is one module of assertions,
+`void/<package>/conformance/<contract>` — `void/db/conformance/driver`,
+`void/cache/conformance/store`, `void/storage/conformance/store`,
+`void/http/conformance/session`, `void/bus/conformance/backend`,
+`void/jobs/conformance/backend` — shipped with the package that owns the
+contract, so an implementation written outside this repository runs
+the same assertions against the same kernel. Every implementation's own
+test calls it (`(conformance/run! "postgres" driver)`), the declaration
+names it (`:conformance` on the interface or the extension point), and
+the generator renders it: an interface with two providers and no suite,
+or a factory point (`:make` in its schema) with two contributions and
+none, is listed as owing one — in CONTRACTS.md and on stderr when the
+registry regenerates.
+
 ## Performance rules
 
 Every plugin, before merge:
@@ -139,3 +155,7 @@ expected to live.
 5. Docs: the plugin's declarations carry `:doc` strings — CONTRACTS.md
    regenerates from them.
 6. Nothing blocking on the ev loop.
+7. A contract with two or more implementations has a conformance suite
+   (`void/<package>/conformance/<contract>`, see
+   [Frozen contracts](#deprecation)), and every implementation's test
+   runs it.

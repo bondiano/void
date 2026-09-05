@@ -83,6 +83,7 @@
 
 (plugin/contribute! :void.core/interface
   {:name :void/jobs-backend
+   :conformance "void/jobs/conformance/backend"
    :doc "Job persistence: {:push! :claim! :settle! :fetch :list :counts :remove! :clear!} plus the optional :reap!, :touch!, :lock!/:unlock!, :rate-take! and :release-parent! keys (see void/jobs/backend). A backend component declares :provides [:void/jobs-backend]; {:void/jobs-backend {:impl <key>}} picks between several."
    :methods {:push! "(fn [job] job-or-nil) — nil when a unique key is held"
              :claim! "(fn [opts] job-or-nil) — atomic, or the queue is not one"

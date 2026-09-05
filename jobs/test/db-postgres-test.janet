@@ -1,6 +1,6 @@
 (import ../test-support/paths)
 (import ../test-support/postgres :as server)
-(import ../test-support/conformance :as conformance)
+(import void/jobs/conformance/backend :as conformance)
 (import void/core/log :as log)
 (import void/db :as vdb)
 (import void/db/pool :as pool)

@@ -29,7 +29,11 @@
 ###            object. opts {:expires seconds} asks for a temporary URL
 ###            (signed; ./sign for the local store, SigV4 query auth for
 ###            s3); nil means this store cannot produce one and the
-###            caller serves the bytes itself
+###            caller serves the bytes itself. A store that *can* sign
+###            but was composed without the plugin carrying the keys
+###            raises instead of answering nil (./sign names
+###            :void/security) — a silent nil there is a download link
+###            that never appears and never says why
 ###
 ### Optional keys, each with a documented fallback, so a working store
 ### stays five functions:

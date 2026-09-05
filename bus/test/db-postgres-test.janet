@@ -1,5 +1,5 @@
 (import ../test-support/paths)
-(import ../test-support/conformance :as conformance)
+(import void/bus/conformance/backend :as conformance)
 (import ../test-support/postgres :as pg)
 (import void/core/log :as log)
 (import void/db/pool :as pool)
@@ -52,8 +52,9 @@
         (def listener (pg/listener))
         (defer ((get-in (require "void/db-postgres/listener") ['stop! :value]) listener)
           (conformance/run! "postgres"
-                            {:settle 0.4
-                             :store {:table tbl :poll-interval 5 :notify true}})
+                            (fn [] (store {:table tbl :poll-interval 5 :notify true
+                                           :stuck-interval 0.05 :stuck-max 0.2}))
+                            {:settle 0.4})
 
           # -- and the same suite with the wake-up taken away ---------
           #
@@ -66,7 +67,8 @@
               (db/execute-sql (string "DELETE FROM " t) [] {:kind :write :prepared false}))
             (db/execute-sql (string "DELETE FROM " tbl) [] {:kind :write :prepared false}))
           (conformance/run! "postgres (polling)"
-                            {:settle 0.4
-                             :store {:table tbl :poll-interval 0.05 :notify false}}))
+                            (fn [] (store {:table tbl :poll-interval 0.05 :notify false
+                                           :stuck-interval 0.05 :stuck-max 0.2}))
+                            {:settle 0.4}))
 
         (print "void/bus-db Postgres tests OK")))))
