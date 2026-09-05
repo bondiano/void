@@ -57,6 +57,18 @@
    "auth_challenges" "auth_tokens"
    "schema_migrations"])
 
+(defn- empty-backlog!
+  "The bus's log, cursors and outbox, and this suite's job queue, back
+  to empty before the application's tables are dropped — so nothing
+  left over from the last run on a shared database (a pending job, a
+  message the audit group failed on and holds its cursor at) is
+  delivered into the window between DROP TABLE audit_events and the
+  migration that recreates it. Emptied, not dropped: the broker and
+  the worker are running over them. See admin-test's empty-backlog!."
+  [jobs-table]
+  (each t ["void_bus" "void_bus_cursors" "void_bus_outbox" jobs-table]
+    (db/execute-sql (string "DELETE FROM " t) [] {:kind :write :prepared false})))
+
 (defn- drop-app-tables! []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
@@ -98,6 +110,7 @@
                                          :bus/broker :bus.db/schema]})]
 
     # -- migrations ------------------------------------------------------
+    (empty-backlog! (get-in engine [:config :jobs-db :table] "void_jobs"))
     (drop-app-tables!)
     (jobs/clear!)
 

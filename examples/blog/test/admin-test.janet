@@ -45,6 +45,25 @@
   ["audit_events" "comments" "articles" "authors"
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
+(defn- empty-backlog!
+  ``Take the bus's log, cursors and outbox, and this suite's job queue,
+  back to empty — emptied, not dropped, because the broker and the
+  worker are already running over them, and *before* the application's
+  tables go, not after.
+
+  What is left over from the last run on a shared database is not
+  inert: a job still pending is claimed the moment the worker starts
+  and its jobs/* event reaches the audit group, and a message the
+  audit group failed on holds the group's cursor, so it is delivered
+  again at the next boot. Either one landing between DROP TABLE
+  audit_events and the migration that recreates it fails the audit
+  handler, holds the cursor once more, and every assertion below about
+  the trail fails for the wrong reason (audit-test's reset-bus! is
+  the same thought, before its broker starts).``
+  [jobs-table]
+  (each t ["void_bus" "void_bus_cursors" "void_bus_outbox" jobs-table]
+    (db/execute-sql (string "DELETE FROM " t) [] {:kind :write :prepared false})))
+
 (defn- drop-app-tables! []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
@@ -83,6 +102,7 @@
   (test/with-http [c (merge opts {:only [:http/kernel :cache/store :jobs/queue
                                          :crypto/lib :auth/registry :authz/registry
                                          :bus/broker :bus.db/schema]})]
+    (empty-backlog! (get-in engine [:config :jobs-db :table] "void_jobs"))
     (drop-app-tables!)
     (db/migrate-up! {:dir "db/migrations"})
 
