@@ -265,6 +265,47 @@
 (assert (= 2 (get-in pann [:fields :k :x/b])) "prefix annotations are found under :optional")
 (assert (nil? (get-in pann [:fields :k :db/pk])) "only the asked-for prefix")
 
+# -- closed maps: an undeclared key is an error with a did-you-mean ------
+(assert (schema/valid? {:host :string} {:host "h" :hsot "typo"})
+        "a map is open by default: DTOs from the wire carry what they carry")
+(def unknown-errs (errors-of [:map {:closed true} {:host :string :port :int}]
+                             {:host "h" :port 1 :prot 2}))
+(assert (= 1 (length unknown-errs)) "under :closed the undeclared key is one error")
+(assert (= :unknown (get-in unknown-errs [0 :code])))
+(assert (= [:prot] (get-in unknown-errs [0 :path])))
+(assert (= [:host :port] (get-in unknown-errs [0 :known])) "the error carries the declared keys")
+(assert (string/find "did you mean :port?" (schema/error-str (first unknown-errs)))
+        "and the rendered text says which one was meant")
+(def far-errs (errors-of [:map {:closed true} {:host :string}] {:host "h" :zzzzzzzz 1}))
+(assert (not (string/find "did you mean" (schema/error-str (first far-errs))))
+        "no suggestion when nothing is close")
+(assert (= "expected :int, got \"x\""
+           (schema/message {:path [:a :b] :code :type :expected :int :value "x"}))
+        "message is the text without the path")
+
+# `closed` closes every map of a schema at once, nested ones included
+(def deep (schema/closed {:db {:pool {:size :int}}
+                          :tags [:optional [:vector {:name :string}]]
+                          :opt [:optional {:x :int}]
+                          :any [:optional [:map {:closed false} {:k :int}]]}))
+(assert (schema/valid? deep {:db {:pool {:size 1}} :tags [{:name "a"}] :opt {:x 1}
+                             :any {:k 1 :extra 2}}))
+(defn- unknown-of [errs] (first (filter |(= :unknown ($ :code)) errs)))
+(assert (= [:db :pool :sizee] (get (unknown-of (errors-of deep {:db {:pool {:sizee 1}}})) :path))
+        "a nested typo is caught with its full path")
+(assert (= [:tags 0 :nmae] (get (unknown-of (errors-of deep {:db {:pool {:size 1}} :tags [{:nmae "a"}]})) :path))
+        "maps under :vector are closed too")
+(assert (= [:opt :y] (get (unknown-of (errors-of deep {:db {:pool {:size 1}} :opt {:y 1}})) :path))
+        "maps under :optional are closed too")
+(assert (schema/valid? deep {:db {:pool {:size 1}} :any {:k 1 :whatever true}})
+        "{:closed false} is the explicit opt-out for a map with arbitrary keys")
+(assert (deep= (schema/closed deep) deep) "closed is idempotent")
+(assert (not (get-in (schema/normalize {:host :string}) [:props :closed]))
+        "closing is a property of the schema value; normalize does not close")
+(schema/register! :test/open-ref {:a :int})
+(assert (schema/valid? (schema/closed {:r [:ref :test/open-ref]}) {:r {:a 1 :b 2}})
+        "a [:ref name] is left as registered — the registered schema is shared")
+
 # -- check!: the same errors, raised as an envelope ----------------------
 (assert (= 42 (schema/check! :int "42" {:coerce true})) "check! returns the coerced value")
 (def [cok cerr] (protect (schema/check! [:map {:n :int}] {:n "x"})))

@@ -154,7 +154,6 @@
      :profile :test
      :config {:env @{}
               :cli {:log {:level :error}
-                    :db {:driver :db.sqlite/driver}
                     :db-sqlite {:path (string boot-sandbox "/app.sqlite3")}
                     :bus {:backend :db :group :booted
                           :dedup {:enabled false} :poison {:enabled false}}

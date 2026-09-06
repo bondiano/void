@@ -157,4 +157,55 @@
 (assert (= cfg (config/validate! cfg [{:key :database :schema |(number? (get $ :port))}]))
         "validate! returns the config when valid")
 
+# -- data schemas: closed maps, full paths and provenance -----------------
+
+# VOID_HTTP__PROT spells a path no schema declares: with the slice's
+# maps closed the typo is an error that names the env var and the key
+# that was meant, instead of a value nobody reads
+(def typo-cfg
+  (config/load {:dir "test-support/fixtures/nope"
+                :env {"VOID_HTTP__PROT" "8080"}
+                :cli ["db.hots=h"]
+                :defaults {:http {:port 80} :db {:host "x"} :open {:anything 1}}}))
+(def typo-specs
+  [{:key :http :plugin :void/http :schema {:port [:optional :int]}}
+   {:key :db :plugin :void/db :schema {:host :string}}
+   # a slice with a key and no schema stays open
+   {:key :open :plugin :void/open}])
+(def typo-errors (config/validate typo-cfg typo-specs))
+(assert (= 2 (length typo-errors)) (string/join typo-errors "\n"))
+(def env-typo (first (filter |(string/find "VOID_HTTP__PROT" $) typo-errors)))
+(assert env-typo "the env var that set the unknown key is named")
+(assert (string/find "[:http :prot]" env-typo) "with the path from the config root")
+(assert (string/find "did you mean :port?" env-typo) "and the key that was meant")
+(assert (string/find ":void/http" env-typo) "attributed to the plugin owning the slice")
+(def cli-typo (first (filter |(string/find "db.hots=h" $) typo-errors)))
+(assert (and cli-typo (string/find "did you mean :host?" cli-typo))
+        "a CLI override is reported the same way")
+
+# a type error carries its provenance too; a missing key has none
+(def type-cfg (config/load {:dir "test-support/fixtures/nope"
+                            :env {"VOID_HTTP__PORT" "eighty"}
+                            :defaults {:db {}}}))
+(def type-errors (config/validate type-cfg [{:key :http :schema {:port :int}}
+                                            {:key :db :schema {:host :string}}]))
+(def type-text (string/join type-errors "\n"))
+(assert (= 2 (length type-errors)) type-text)
+(assert (string/find "[:http :port]: expected :int, got \"eighty\" (from env var VOID_HTTP__PORT)"
+                     type-text)
+        type-text)
+(assert (string/find "[:db :host]: required key is missing" type-text) type-text)
+(assert (not (string/find "required key is missing (from" type-text))
+        "no layer set a missing key, so none is blamed")
+
+# {:closed false} in the schema is the opt-out for a map of arbitrary keys
+(assert (empty? (config/validate typo-cfg
+                                 [{:key :open :schema [:map {:closed false} {:x [:optional :int]}]}])))
+(assert (= 1 (length (config/validate typo-cfg [{:key :open :schema {:x [:optional :int]}}])))
+        "and without it the same slice is closed")
+
+# a spec whose :schema is not a schema is one error, not a crash
+(assert (string/find "invalid schema"
+                     (first (config/validate typo-cfg [{:key :db :schema [:wat]}]))))
+
 (print "void/core/config tests OK")

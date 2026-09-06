@@ -13,7 +13,11 @@
 ### :pred :peg :literal; any other value matches literally. Composition:
 ### `merge`, `select`, `optional`, `union`; recursion via [:ref :name].
 ### Validation collects every error with its path ([:tags 3]); messages
-### are localizable through (dyn :void.schema/messages). Coercion mode
+### are localizable through (dyn :void.schema/messages). A map is open
+### unless its props say `{:closed true}` — then an undeclared key is
+### an :unknown error naming the closest declared one (`closed` closes
+### every map of a schema at once; config slices are validated that
+### way, DTOs from the wire stay open). Coercion mode
 ### turns strings into ints/keywords/booleans for query params and
 ### forms. Custom types (`register-type!`) and projections
 ### (`register-projection!`) are the substrate for the plugin extension
@@ -378,7 +382,10 @@
                                 (util/names-str (e :values)) (e :value)))
    :union (fn [e] (string/format "no union branch matched %q" (e :value)))
    :missing (fn [_] "required key is missing")
-   :unknown (fn [_] "unknown key in a closed map")
+   # the error carries the map's declared keys as :known, so the text
+   # can say which one the writer probably meant
+   :unknown (fn [e] (string "unknown key in a closed map"
+                            (util/suggest (last (e :path)) (get e :known []))))
    :key (fn [e] (string/format "invalid key %q" (e :value)))
    :min (fn [e] (string/format "expected at least %q, got %q" (e :min) (e :value)))
    :max (fn [e] (string/format "expected at most %q, got %q" (e :max) (e :value)))
@@ -394,23 +401,29 @@
   [errors path code & kvs]
   (array/push errors (struct :path (tuple ;path) :code code ;kvs)))
 
-(defn error-str
-  ``Render one validation error: "[:tags 3]: expected :keyword, got 42".
-  A :message on the error (custom type / [:pred fn msg]) wins; otherwise
-  the code is looked up in (dyn :void.schema/messages), falling back to
-  `default-messages`.``
+(defn message
+  ``The text of one validation error without its path: "expected
+  :keyword, got 42". A :message on the error (custom type / [:pred fn
+  msg]) wins; otherwise the code is looked up in (dyn
+  :void.schema/messages), falling back to `default-messages`. For a
+  reader that prints the path its own way — config/validate prefixes
+  the slice's key to it.``
   [err]
   (def m (get err :message))
-  (def msg
-    (cond
-      (util/callable? m) (m err)
-      m m
-      (let [f (or (get (dyn :void.schema/messages {}) (err :code))
-                  (get default-messages (err :code)))]
-        (if f (f err) (string/format "invalid value %q" (err :value))))))
+  (cond
+    (util/callable? m) (m err)
+    m m
+    (let [f (or (get (dyn :void.schema/messages {}) (err :code))
+                (get default-messages (err :code)))]
+      (if f (f err) (string/format "invalid value %q" (err :value))))))
+
+(defn error-str
+  ``Render one validation error: "[:tags 3]: expected :keyword, got 42"
+  — the path, then `message`.``
+  [err]
   (if (empty? (err :path))
-    msg
-    (string (path-str (err :path)) ": " msg)))
+    (message err)
+    (string (path-str (err :path)) ": " (message err))))
 
 # -- validation ----------------------------------------------------------
 
@@ -537,9 +550,11 @@
           (do (def v2 (visit sub v p errors opts))
               (when out (put out k v2)))))
       (when (get (sch :props) :closed)
+        (def declared (tuple ;(map first (sch :children))))
         (eachk k value
           (unless (in known k)
-            (err! errors (tuple ;path k) :unknown :value (get value k)))))
+            (err! errors (tuple ;path k) :unknown
+                  :value (get value k) :known declared))))
       (if coerce?
         (if (struct? value) (freeze out) out)
         value))))
@@ -669,6 +684,30 @@
   full error batch. Sugar for (validate sch value {:coerce true})."
   [sch value]
   (validate sch value {:coerce true}))
+
+(defn closed
+  ``Normalize `form` with every map closed by default: a map whose
+  props do not say `:closed` gets `:closed true`, so an undeclared key
+  is one :unknown error with a did-you-mean instead of silence. A map
+  that takes arbitrary keys opts out explicitly — `[:map {:closed
+  false} {...}]` — or is a [:map-of ...]. The maps under :optional,
+  :vector, :union, :and and a :map-of's value are closed too; a [:ref
+  name] is left as registered, since the registered schema is shared.
+  Idempotent. This is what config/validate does to a plugin's
+  :config-schema; closedness is a property of the schema, so `check`
+  and `validate` themselves do not change.``
+  [form]
+  (def n (normalize form))
+  (def props
+    (if (and (= :map (n :type)) (nil? (get (n :props) :closed)))
+      (merge (n :props) {:closed true})
+      (n :props)))
+  (def children
+    (case (n :type)
+      :map (seq [[k sub] :in (n :children)] [k (closed sub)])
+      :ref (n :children)
+      (map closed (n :children))))
+  (node (n :type) props children))
 
 # -- composition ---------------------------------------------------------
 

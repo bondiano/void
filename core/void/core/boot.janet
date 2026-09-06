@@ -132,15 +132,14 @@
   (def [ok cfg] (protect (config/load copts)))
   (if ok
     (do
+      # a data schema goes through as it is: config/validate closes its
+      # maps and reports each failure with the layer that set the value
       (array/concat errors
                     (config/validate cfg
                                      (seq [m :in ms :when (m :config-schema)]
                                        {:plugin (m :name)
                                         :key (m :config-key)
-                                        :schema (let [s (m :config-schema)]
-                                                  (if (util/callable? s)
-                                                    s
-                                                    (fn [v] (schema/validate s v))))})))
+                                        :schema (m :config-schema)})))
       cfg)
     (do (array/push errors (util/err-str cfg))
         nil)))

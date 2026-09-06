@@ -8,7 +8,16 @@
 ### ({:secret "DB_PASSWORD"}) are resolved at load time into opaque
 ### boxes that never print their value. Errors (unreadable files,
 ### unresolvable secrets, schema failures) are collected in one batch —
-### fail fast, but with the full list.
+### fail fast, but with the full list. `validate` is the one place a
+### config slice meets its schema: bootstrap calls it for every
+### manifest's :config-key (and the core's own [:log] and [:deploy]),
+### the component system for a deprecated `:config :schema`. A data
+### schema's maps are closed there (schema/closed), so a key a layer
+### set that no schema declares — VOID_HTTP__PROT — is an error naming
+### the layer and the key that was meant.
+
+(import ./schema :as schema)
+(import ./util :as util)
 
 (defn- path-str
   "A config path as it reads in a message: `[:db :pool :size]`."
@@ -440,25 +449,78 @@
 
 # -- batch validation ----------------------------------------------------
 
+(defn- source-of
+  "The layer that set `path`, for an error message: the winning source
+  of the leaf itself or, when the path is a subtree (an unknown key
+  whose value is a map, a map where a scalar was expected), that of its
+  first leaf below. nil for a path no layer set — a missing key."
+  [cfg path]
+  (if-let [hist (get-in cfg [:provenance path])]
+    (last hist)
+    (let [kids (child-entries (get cfg :provenance {}) path)]
+      (when-let [k (first (sorted (keys kids)))]
+        (kids k)))))
+
+(defn- attribution
+  "The parenthesised owner of a spec in its error lines: the plugin,
+  the component, both or neither."
+  [spec]
+  (def parts
+    (seq [[k label] :in [[:plugin "plugin"] [:component "component"]]
+          :when (get spec k)]
+      (string/format "%s %q" label (spec k))))
+  (if (empty? parts) "" (string " (" (string/join parts ", ") ")")))
+
+(defn- data-schema-errors
+  "A data schema's failures on slice `k`, one string each: the path
+  from the config root, the message (with the did-you-mean of a closed
+  map) and the layer that set the value, so a typo reads as
+  `[:http :prot]: unknown key ... — did you mean :port? (from env var
+  VOID_HTTP__PROT)`. The schema's maps are closed here."
+  [cfg k sch who]
+  (def [ok res] (protect (schema/check (schema/closed sch) (get (cfg :values) k))))
+  (if (not ok)
+    [(string/format "config %s%s: invalid schema: %s" (path-str [k]) who (util/err-str res))]
+    (seq [e :in (res :errors)]
+      (def path (tuple k ;(e :path)))
+      (def src (source-of cfg path))
+      (string/format "config %s%s: %s%s"
+                     (path-str path) who (schema/message e)
+                     (if src (string/format " (from %s)" (describe-source src)) "")))))
+
+(defn- callable-schema-errors
+  "A validator function's verdict on slice `k` as error strings: none,
+  one for a false return, one for a throw."
+  [cfg k f who]
+  (def [ok res] (protect (f (get (cfg :values) k))))
+  (cond
+    (not ok)
+    [(string/format "config %s%s: %s" (path-str [k]) who (util/err-str res))]
+    (= res false)
+    [(string/format "config %s%s: schema validation failed" (path-str [k]) who)]
+    []))
+
 (defn validate
-  ``Validate config slices against per-plugin specs — all of them, not
-  first-fail. specs is indexed of {:key <config-key> :schema <callable>
-  :plugin <kw, optional>}; a schema fails by returning false or throwing.
-  Returns an array of error strings, empty when everything is valid.``
+  ``Validate config slices against their specs — all of them, not
+  first-fail. specs is indexed of {:key <config-key> :schema <schema>
+  :plugin <kw, optional> :component <kw, optional>}; :schema is a
+  void/core/schema form — its maps closed by default (schema/closed),
+  every failure reported with the path from the config root and the
+  layer that set the value — or a validator function that fails by
+  returning false or throwing. Returns an array of error strings,
+  empty when everything is valid. The one place a config slice meets
+  its schema: bootstrap phase 2 and the component system both call
+  it.``
   [cfg specs]
   (def errors @[])
   (each spec specs
-    (when-let [schema (get spec :schema)]
+    (when-let [sch (get spec :schema)]
       (def k (spec :key))
-      (def who (if-let [p (get spec :plugin)]
-                 (string/format " (plugin %q)" p)
-                 ""))
-      (def [ok res] (protect (schema (get (cfg :values) k))))
-      (cond
-        (not ok)
-        (array/push errors (string/format "config %q%s: %s" k who (describe res)))
-        (= res false)
-        (array/push errors (string/format "config %q%s: schema validation failed" k who)))))
+      (def who (attribution spec))
+      (array/concat errors
+                    (if (util/callable? sch)
+                      (callable-schema-errors cfg k sch who)
+                      (data-schema-errors cfg k sch who)))))
   errors)
 
 (defn validate!
