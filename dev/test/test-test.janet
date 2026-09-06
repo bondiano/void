@@ -143,6 +143,11 @@
     (string buf)))
 (assert (= "some-suite: SKIPPED (set VOID_TEST_TEST_SERVICE to a test:// url)\n" announced)
         "the skip line names the suite, the variable and what to set it to")
-(assert (nil? ((gate :skip) "quiet")) "and skip returns nil, so it can stand in an if")
+# captured like the line above: a real SKIPPED line on this suite's
+# stdout would be a hit for the CI grep the gate prints it for
+(def quiet
+  (let [buf @""]
+    (with-dyns [:out buf] ((gate :skip) "quiet"))))
+(assert (nil? quiet) "and skip returns nil, so it can stand in an if")
 
 (print "test-test: all assertions passed")

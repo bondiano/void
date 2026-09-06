@@ -21,9 +21,16 @@
 ### The wait deadline runs in a child task, never `ev/with-deadline` on
 ### the caller: that cancels the *root task*, which for a request fiber
 ### is the whole request (the bug class documented in http/server
-### run-handler). A waiter that times out or is cancelled re-checks both
-### its slot and its channel before leaving, so a resource handed over
-### in the cancellation window is rehomed, never lost.
+### run-handler). The resource itself never travels through the
+### waiter's channel: `release` writes it into the waiter record and
+### the channel carries only a wake-up. A value given to a parked
+### `ev/take` sits in the run queue until the taker runs, and a cancel
+### queued ahead of it supersedes it — so a resource in flight on the
+### channel would be lost whenever the waiter's caller was cancelled
+### while a release was already scheduled (a request deadline firing
+### under pool saturation). With the handover in the record, a
+### cancelled wake-up costs nothing: the waiter's exit reads the
+### record and rehomes what it finds, deterministically.
 ###
 ###     (def p (pool/make {:name "db"
 ###                        :connect (fn [] (open-a-connection))
@@ -73,9 +80,10 @@
                       always.
     :validate         (fn [resource] truthy) — asked of an *idle*
                       resource before it goes out: falsy means it died
-                      while it sat (closed; the checkout opens a fresh
-                      one in the freed slot); a throw closes it and
-                      reaches the caller. Default: none.
+                      while it sat (closed; the checkout decides again
+                      with the slot freed — the next idle one first, a
+                      fresh one only when none is left); a throw closes
+                      it and reaches the caller. Default: none.
     :size             resources at most (default 10).
     :checkout-timeout seconds a checkout waits for a free resource
                       (default 5).
@@ -162,19 +170,24 @@
         ok (do (close-resource pool res) nil)
         (do (close-resource pool res) (error v))))))
 
-(defn- take-with-deadline
-  ``Take from a channel under a timeout without touching the caller's
-  root task: the take runs in a supervised child task and lands in
-  `slot`. The child is cancelled on any non-normal exit of the caller
+(def- wake
+  "Wake-up marker: a release wrote a resource into the waiter record."
+  :void.core.pool/wake)
+
+(defn- wait-for-wake-up
+  ``Park on the waiter's channel under the checkout timeout without
+  touching the caller's root task: the take runs in a supervised child
+  task. Returns the marker taken (`wake` or `retry`), or nil on a
+  timeout. The child is cancelled on any non-normal exit of the caller
   (a cancelled checkout), so no orphaned taker is ever left parked on
-  the channel to swallow a later handover — the resource then still
-  waits in `slot` (the child took it before dying) or in the channel,
-  and `await` rehomes it.``
-  [ch timeout slot]
+  the channel. What the child takes is only ever a marker: the
+  resource is in the waiter record, and a cancel that supersedes the
+  child's scheduled value (see the module docstring) loses nothing
+  `await`'s exit cannot recover.``
+  [waiter timeout]
   (deadline/call timeout
-                 (fn waiter-task [] (put slot :value (ev/take ch)))
-                 (fn [] nil))
-  (get slot :value))
+                 (fn waiter-task [] (ev/take (waiter :chan)))
+                 (fn [] nil)))
 
 (defn- next-waiter
   "Pop the oldest waiter still parked (dropping any left non-live)."
@@ -226,7 +239,11 @@
         (wake-one pool))
 
     (if-let [w (next-waiter pool)]
-      (ev/give (w :chan) res)
+      # the record is the handover, the channel only the doorbell: a
+      # resource given to the channel would sit in the run queue, where
+      # a cancel of the waiter queued before us supersedes it
+      (do (put w :value res)
+          (ev/give (w :chan) wake))
       (array/push (pool :idle) res)))
   nil)
 
@@ -249,8 +266,7 @@
   [pool]
   (def s (pool :stats))
   (put s :waits (inc (s :waits)))
-  (def waiter @{:chan (ev/chan 1) :live true})
-  (def slot @{})
+  (def waiter @{:chan (ev/chan 1) :live true :value nil})
   (array/push (pool :waiters) waiter)
   (def t0 (os/clock :monotonic))
   (defer
@@ -258,34 +274,34 @@
     # cancelled waiter that lingered would grow (pool :waiters) without
     # bound (nothing else prunes it under a stall) and could still be
     # handed a resource. Then rehome any resource handed to us that
-    # the caller will not use (a cancelled checkout): it sits in `slot`
-    # (the child task took it) or in the channel (a release that raced
-    # our exit). This whole block runs with no ev yield, so no release
-    # interleaves between marking us dead and draining.
+    # the caller will not use (a cancelled checkout, a release that
+    # raced our exit): a release writes it into the record before it
+    # rings the channel, so the record is the one place to look, and
+    # whether the wake-up ever reached the child task does not matter.
+    # This whole block runs with no ev yield, so no release
+    # interleaves between marking us dead and reading the record.
     (do
       (put waiter :live false)
       (when-let [i (index-of waiter (pool :waiters))]
         (array/remove (pool :waiters) i))
-      (def stranded
-        (or (let [v (get slot :value)] (put slot :value nil) v)
-            (when (pos? (ev/count (waiter :chan)))
-              (ev/take (waiter :chan)))))
-      (when (and stranded (not= retry stranded))
+      (def stranded (waiter :value))
+      (put waiter :value nil)
+      (when stranded
         # the caller never reached acquire's own in-use increment, so
         # balance the decrement release is about to do
         (put pool :in-use (inc (pool :in-use)))
         (release pool stranded)))
-    (def handed (take-with-deadline (waiter :chan) (pool :checkout-timeout) slot))
+    (def woken (wait-for-wake-up waiter (pool :checkout-timeout)))
     (put s :wait-us (+ (s :wait-us)
                        (math/round (* 1_000_000 (- (os/clock :monotonic) t0)))))
-    (def value (or handed
-                   (when (pos? (ev/count (waiter :chan)))
-                     (ev/take (waiter :chan)))))
+    (def handed (waiter :value))
     (cond
-      (= retry value) nil
-      # consumed by the caller — clear the slot so the defer does not
-      # rehome the resource we are about to return
-      value (do (put slot :value nil) value)
+      # consumed by the caller — clear the record so the defer does
+      # not rehome the resource we are about to return
+      handed (do (put waiter :value nil) handed)
+      # a retry that arrived, or one that a timed-out child left in
+      # the channel: the pool state changed, decide again
+      (or (= retry woken) (pos? (ev/count (waiter :chan)))) nil
       (timeout! pool))))
 
 (defn acquire

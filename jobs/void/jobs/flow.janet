@@ -41,6 +41,7 @@
 (import ./backend :as backend)
 (import ./record :as record)
 (import ./state :as state)
+(import void/core/util :as util)
 
 (def log-ns "void.jobs.flow")
 
@@ -58,7 +59,7 @@
     (unless (in allowed-keys k)
       (errorf "flow node %q: unknown key %q (allowed: %s)"
               (spec :job) k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed-keys))) " "))))
+              (util/names-str (keys allowed-keys)))))
   (def cs (get spec :children []))
   (unless (indexed? cs)
     (errorf "flow node %q: :children must be a tuple of nodes, got %q" (spec :job) cs))

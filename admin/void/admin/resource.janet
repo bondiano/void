@@ -21,6 +21,7 @@
 (import void/core/schema :as schema)
 (import void/html/form :as form)
 (import void/db/entity :as entity)
+(import void/core/util :as util)
 
 # -- actions -------------------------------------------------------------
 
@@ -68,7 +69,7 @@
     (unless (in allowed-opts k)
       (errorf "admin resource %q: unknown option %q (allowed: %s)"
               rname k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed-opts))) " ")))))
+              (util/names-str (keys allowed-opts))))))
 
 (defn- humanize [k] (form/humanize k))
 
@@ -194,14 +195,14 @@
     (unless (in allowed-inline-keys k)
       (errorf "admin resource %q: inline %q: unknown key %q (allowed: %s)"
               rname iname k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed-inline-keys))) " "))))
+              (util/names-str (keys allowed-inline-keys)))))
   (def rel
     (or (get-in ent [:rels iname])
         (errorf (string "admin resource %q: inline %q is not a relation of %q "
                         "(relations: %s) — an inline is a projection of :db/rels, "
                         "never a second declaration of the link")
                 rname iname (ent :name)
-                (string/join (map |(string/format "%q" $) (sorted (keys (ent :rels)))) " "))))
+                (util/names-str (keys (ent :rels))))))
   (unless (in {:has-many true :has-one true} (rel :kind))
     (errorf (string "admin resource %q: inline %q is a %q relation — an inline edits "
                     "the rows that belong to this one, so it needs :has-many or :has-one; "
@@ -242,7 +243,7 @@
     (unless (in allowed-action-keys k)
       (errorf "admin resource %q: action %q: unknown key %q (allowed: %s)"
               rname aname k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed-action-keys))) " "))))
+              (util/names-str (keys allowed-action-keys)))))
   (unless (or (get spec :apply) (get spec :job))
     (errorf (string "admin resource %q: action %q needs an :apply (fn [row request]) "
                     "or a :job — an action that does nothing is a button that lies")

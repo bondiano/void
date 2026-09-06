@@ -32,6 +32,8 @@
 ###           and so cannot drive a recovery.
 ###   other   nil.
 
+(import void/core/deadline :as deadline)
+
 (def lag-floor
   ``Sub-millisecond sleep drift that is the timer's, not the loop's.
   `ev/sleep` is scheduled against a poll timeout, so even an idle
@@ -91,9 +93,11 @@
   stamp is still unread, which is what keeps a wedged loop from piling
   up a backlog of stale stamps.
 
-  The pause between beats is a `take` on the stop channel under
-  `ev/with-deadline`, not an `ev/sleep`: a live janet thread holds the
-  whole process at exit, so the thread must notice a stop *during* its
+  The pause between beats is a `take` on the stop channel under a
+  deadline (void/core/deadline — the take runs as a child task of
+  this thread's loop, so the deadline cancels that and not the loop
+  itself), not an `ev/sleep`: a live janet thread holds the whole
+  process at exit, so the thread must notice a stop *during* its
   pause — a test that samples every 600 s (rest-test does) would
   otherwise pin the suite for ten minutes after its last assert. The
   deadline expiring is the normal beat; anything arriving on the stop
@@ -103,8 +107,8 @@
   (protect
     (forever
       (ev/give ch (os/clock :monotonic))
-      (def [stopped _] (protect (ev/with-deadline interval (ev/take stop))))
-      (when stopped (break)))))
+      (def [outcome _] (deadline/run interval (fn stop-waiter [] (ev/take stop))))
+      (when (= :ok outcome) (break)))))
 
 (defn start-heartbeat!
   "Start a heartbeat: one worker thread, beating every `interval`

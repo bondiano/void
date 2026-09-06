@@ -194,7 +194,7 @@
   (unless (get engines ename)
     (errorf "config [:html :engine] selects unknown engine %q (contributed: %s)"
             ename
-            (string/join (map |(string/format "%q" $) (sorted (keys engines))) " ")))
+            (util/names-str (keys engines))))
   (set current-context
        @{:config cfg
          :engine-name ename

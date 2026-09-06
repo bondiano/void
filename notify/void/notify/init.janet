@@ -52,6 +52,7 @@
 (import void/core/log :as log)
 (import ./channel :as channel)
 (import ./notification :as notification)
+(import void/core/util :as util)
 
 (def log-ns
   "Log namespace — spelled out, since the file-derived default would
@@ -191,7 +192,7 @@
   (or (get channels name)
       (errorf "no notification channel %q is contributed (have %s)"
               name
-              (string/join (map |(string/format "%q" $) (sorted (keys channels))) " "))))
+              (util/names-str (keys channels)))))
 
 (defn- channels-for [note]
   (def names (or (get note :channels) (active)))
@@ -324,7 +325,7 @@
       (unless (get resolved n)
         (errorf "[:notify :channels] names %q, which no plugin contributed (have %s)"
                 n
-                (string/join (map |(string/format "%q" $) (sorted (keys resolved))) " ")))))
+                (util/names-str (keys resolved))))))
   (def names (or named (delivering resolved)))
   (when (and (= :prod profile)
              (every? (map |(truthy? (index-of $ keeps-only)) names)))
@@ -372,7 +373,7 @@
   notify status`."
   []
   (printf "channels   %s"
-          (string/join (map |(string/format "%q" $) (sorted (keys channels))) " "))
+          (util/names-str (keys channels)))
   (printf "active     %s"
           (let [names (active)]
             (if (empty? names)

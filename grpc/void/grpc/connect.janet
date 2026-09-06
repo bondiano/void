@@ -113,14 +113,24 @@
   ``The client's deadline in seconds, from `Connect-Timeout-Ms`, or
   nil. A header that is not a number is refused rather than ignored:
   a client that asked for a deadline and silently did not get one is
-  worse off than one told its header is wrong.``
+  worse off than one told its header is wrong.
+
+  The Connect protocol's grammar for the header is
+  "Timeout-Milliseconds → positive integer as ASCII string of at most
+  10 digits" (connectrpc.com/docs/protocol, Unary Request), so a zero
+  is refused like any other malformed value. It matters because the
+  deadline underneath (void/core/deadline) reads a non-positive
+  timeout as "no deadline": a `0` let through would run the handler
+  unbounded, the opposite of what the client asked for, and the
+  header is the client's to write.``
   [req]
   (when-let [raw (ring/request-header req "connect-timeout-ms")]
-    (def ms (scan-number (string raw)))
-    (unless (and ms (>= ms 0) (= ms (math/trunc ms)))
+    (def text (string raw))
+    (def ms (scan-number text))
+    (unless (and ms (pos? ms) (= ms (math/trunc ms)) (<= (length text) 10))
       (codes/fail! :invalid_argument
-                   (string/format "Connect-Timeout-Ms must be a whole number of milliseconds, got %q"
-                                  (string raw))))
+                   (string/format "Connect-Timeout-Ms must be a positive whole number of milliseconds (at most 10 digits), got %q"
+                                  text)))
     (/ ms 1000)))
 
 (defn check-protocol-version!

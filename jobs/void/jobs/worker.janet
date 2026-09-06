@@ -332,11 +332,18 @@
 (defn- wait-or-stop
   ``Sleep for `seconds`, or until the worker is told to stop —
   whichever comes first. The take runs in a child task so the deadline
-  never touches this fiber's root task.``
+  never touches this fiber's root task. A nil or non-positive wait is
+  "poll again": the config schema refuses one, but `make` takes its
+  opts unvalidated, and void/core/deadline reads a non-positive
+  timeout as no deadline — the take would then park this loop until
+  `stop!`. The loop still yields once, so the fibers it shares the
+  thread with (the `stop!` that ends it, for one) get to run.``
   [w seconds]
   (def ch (w :stop-chan))
   (unless (or (w :stopped) (nil? ch))
-    (deadline/run seconds (fn stop-waiter [] (ev/take ch))))
+    (if (and (number? seconds) (pos? seconds))
+      (deadline/run seconds (fn stop-waiter [] (ev/take ch)))
+      (ev/sleep 0)))
   nil)
 
 (defn- pause-queue! [w qname until]

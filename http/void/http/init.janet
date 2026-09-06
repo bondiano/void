@@ -151,7 +151,7 @@
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.http/timeout
    :schema [:number {:min 0.001}]
-   :doc "Handler deadline in seconds; a more specific *metadata* layer may only lower it (group -> route). `[:http :read-timeout]` and the server's own limits are not metadata layers: a route that declares nothing inherits them, and one that declares a deadline is bounded by the group above it and by nothing else"
+   :doc "Handler deadline in seconds; a more specific *metadata* layer may only lower it (group -> route). `[:http :read-timeout]` and the server's own limits are not metadata layers: a route that declares nothing inherits them, and one that declares a deadline is bounded by the group above it and by nothing else. The schema refuses a zero on purpose: underneath (void/core/deadline) a non-positive timeout means *no* deadline, not an expired one"
    :merge :restrict
    :allow? (fn [outer inner] (<= inner outer))})
 
@@ -309,7 +309,7 @@
       (or (get stores store-name)
           (errorf "unknown session store %q (contributed: %s)"
                   store-name
-                  (string/join (map |(string/format "%q" $) (sorted (keys stores))) " "))))
+                  (util/names-str (keys stores)))))
     # nothing here refuses the memory store any more: "sessions in a heap"
     # is one instance of a class the deployment shape answers for
     # everybody at once, and it is `[:deploy :shape] :fleet` that says no

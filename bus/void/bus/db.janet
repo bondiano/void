@@ -73,6 +73,7 @@
 (import void/core/system :as system)
 (import void/core/log :as log)
 (import void/core/errors :as errors)
+(import void/core/deadline :as deadline)
 (import void/db :as db)
 (import void/db/builder :as builder)
 (import void/db/lease :as lease)
@@ -539,7 +540,7 @@
                (if (sub :stuck)
                  (min stuck-max (* stuck-interval (max 1 (sub :stuck-attempts))))
                  poll))
-             (protect (ev/with-deadline wait-for (ev/take (sub :wakeup)))))
+             (deadline/run wait-for (fn wakeup-waiter [] (ev/take (sub :wakeup)))))
            (when (> (- (os/clock :monotonic) last-prune) prune-every)
              (set last-prune (os/clock :monotonic))
              (when (sub :leader)
@@ -556,8 +557,8 @@
        (when-let [l (sub :listener)]
          (protect ((l :unsubscribe!) channel (sub :on-note))))
        (protect (ev/give (sub :wakeup) true))
-       (def [ok _] (protect (ev/with-deadline 10 (ev/take (sub :done)))))
-       (unless ok
+       (def [outcome _] (deadline/run 10 (fn done-waiter [] (ev/take (sub :done)))))
+       (unless (= :ok outcome)
          (log/warn "bus consumer did not stop within 10 s" :ns log-ns
                    :group (sub :group)))
        (put subs (sub :group) nil))
@@ -696,8 +697,8 @@
   [f]
   (unless (f :stopped)
     (put f :stopped true)
-    (def [ok _] (protect (ev/with-deadline 10 (ev/take (f :done)))))
-    (unless ok
+    (def [outcome _] (deadline/run 10 (fn done-waiter [] (ev/take (f :done)))))
+    (unless (= :ok outcome)
       (log/warn "outbox forwarder did not stop within 10 s" :ns log-ns)))
   nil)
 

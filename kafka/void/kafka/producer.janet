@@ -19,6 +19,7 @@
 ### counting cleanly) is beyond this process's lifetime.
 
 (import void/core/log :as log)
+(import void/core/deadline :as deadline)
 (import ./client :as client)
 (import ./librdkafka :as rk)
 
@@ -127,9 +128,9 @@
     # the trip from the library's queue to this fiber. Missing the
     # deadline anyway means the pump is not running — a bug, and one
     # worth an error that says so rather than a park without end
-    (def [ok report]
-      (protect (ev/with-deadline (+ (p :timeout) 5) (ev/take answer))))
-    (unless ok
+    (def [outcome report]
+      (deadline/run (+ (p :timeout) 5) (fn report-waiter [] (ev/take answer))))
+    (unless (= :ok outcome)
       (put-in p [:waiters token] nil)
       (errorf "kafka: no delivery report for %q within %d s — the event pump is not serving this producer"
               topic (math/floor (+ (p :timeout) 5))))

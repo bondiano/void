@@ -152,7 +152,7 @@
   (or (get factories name)
       (errorf "unknown bus backend %q (contributed: %s) — [:bus :backend] names the one this process speaks"
               name
-              (string/join (map |(string/format "%q" $) (sorted (keys factories))) " "))))
+              (util/names-str (keys factories)))))
 
 (defn at-least-once?
   "Does the backend redeliver a message whose handler threw?"

@@ -131,7 +131,7 @@
     (unless (in by-name n)
       (errorf "bus handler %q selects unknown middleware %q (known: %s)"
               (get opts :name)
-              n (string/join (map |(string/format "%q" $) (sorted (keys by-name))) " "))))
+              n (util/names-str (keys by-name)))))
   (seq [c :in (sort-contributions contribs)
         :when (if (c :named) (in wanted (c :name)) true)
         :when (if-let [pred (c :when)] (pred opts) true)]

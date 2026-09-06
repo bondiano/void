@@ -25,6 +25,7 @@
 (import void/core/errors :as errors)
 (import ./builder :as builder)
 (import ./state :as state)
+(import void/core/util :as util)
 
 # -- descriptors ---------------------------------------------------------
 
@@ -52,7 +53,7 @@
   (unless (in rel-kinds kind)
     (errorf "entity %q: relation %q has unknown kind %q (expected %s)"
             ename rname kind
-            (string/join (map |(string/format "%q" $) (sorted (keys rel-kinds))) " ")))
+            (util/names-str (keys rel-kinds))))
   (unless (keyword? (get spec :entity))
     (errorf "entity %q: relation %q must name a target entity keyword, got %q"
             ename rname (get spec :entity)))
@@ -362,7 +363,7 @@
     (unless (in allowed k)
       (errorf "%s: unknown option %q (allowed: %s)"
               who k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed))) " ")))))
+              (util/names-str (keys allowed))))))
 
 (defn- select-stmt [desc opts]
   # [:col name], not (keyword name): the column names are the descriptor's

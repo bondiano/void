@@ -126,4 +126,19 @@
           "a started scheduler enqueues on its own"))
 (assert (sc :stopped) "and stops")
 
+# a zero interval polls again rather than parking on the stop channel
+# with no deadline (the config schema refuses one; make does not)
+(def spinq (queue))
+(each n (schedule/defined) (schedule/forget! n))
+(schedule/define! :spin-test {:every 0.05} :report)
+(def spin (schedule/make spinq {:interval 0 :lock-ttl 5}))
+(schedule/start! spin)
+(def t0 (os/clock :monotonic))
+(defer (schedule/stop! spin)
+  (ev/sleep 0.2)
+  (assert (pos? (with-queue spinq (fn [] (length (state/list-jobs {})))))
+          "a scheduler with no interval still enqueues on its own"))
+(assert (spin :stopped) "and stops")
+(assert (< (- (os/clock :monotonic) t0) 1) "promptly — its loop was not parked without a deadline")
+
 (print "schedule-test ok")

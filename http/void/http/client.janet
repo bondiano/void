@@ -89,7 +89,10 @@
 (def defaults
   ``Defaults of a client:
 
-    :timeout          seconds for one whole request/response exchange
+    :timeout          seconds for one whole request/response exchange;
+                      nil or a non-positive number means no deadline
+                      at all (void/core/deadline's reading), not one
+                      that has already passed
     :connect-timeout  seconds to establish the socket
     :max-body         bytes of response body accepted before the
                       exchange is refused — a client without a limit

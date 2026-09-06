@@ -50,6 +50,7 @@
 (import ./render :as render)
 (import ./smtp :as smtp)
 (import ./transport :as transport)
+(import void/core/util :as util)
 
 (def log-ns
   "Log namespace — spelled out, since the file-derived default would
@@ -236,7 +237,7 @@
   (or (get transports name)
       (errorf "[:mail :transport] names %q, which no plugin contributed (have %s)"
               name
-              (string/join (map |(string/format "%q" $) (sorted (keys transports))) " "))))
+              (util/names-str (keys transports)))))
 
 (defn deliver!
   ``Send a delivery **now**, on this fiber, through the active
@@ -338,7 +339,7 @@
   (unless (get transports name)
     (errorf "[:mail :transport] names %q, which no plugin contributed (have %s)"
             name
-            (string/join (map |(string/format "%q" $) (sorted (keys transports))) " ")))
+            (util/names-str (keys transports))))
   (when (= :smtp name)
     # a TLS mode without void/tls, or a password that would go out in
     # the clear — both misconfigurations, and boot is where finding
@@ -397,7 +398,7 @@
   (def t (active-transport))
   (printf "transport  %q%s" (t :name) (if-let [d (t :doc)] (string " — " d) ""))
   (printf "available  %s"
-          (string/join (map |(string/format "%q" $) (sorted (keys transports))) " "))
+          (util/names-str (keys transports)))
   (printf "from       %s" (or (when-let [f (settings :from)] (address/format-address f))
                               "(unset — every message must carry its own :from)"))
   (printf "base-url   %s" (or (settings :base-url)

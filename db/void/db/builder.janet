@@ -313,8 +313,7 @@
     (unless (in allowed k)
       (errorf "sql %s: unknown key %q (allowed: %s)"
               what k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed)))
-                           " ")))))
+              (util/names-str (keys allowed))))))
 
 (defn- where-str [ctx stmt]
   (when-let [w (get stmt :where)]
@@ -515,7 +514,7 @@
     (or (get (d :types) t)
         (errorf "sql DDL: unknown column type %q for dialect %q (known: %s)"
                 t (d :name)
-                (string/join (map |(string/format "%q" $) (sorted (keys (d :types)))) " ")))
+                (util/names-str (keys (d :types)))))
     (errorf "sql DDL column type must be a keyword, a string or [:raw sql], got %q" t)))
 
 (def- column-opts
@@ -558,7 +557,7 @@
     (unless (in column-opts k)
       (errorf "sql DDL column %q: unknown option %q (allowed: %s)"
               cname k
-              (string/join (map |(string/format "%q" $) (sorted (keys column-opts))) " "))))
+              (util/names-str (keys column-opts)))))
   (def parts @[(ident d cname) (type-str d ctype)])
   (when (get opts :primary-key) (array/push parts "PRIMARY KEY"))
   (when (= false (get opts :null)) (array/push parts "NOT NULL"))

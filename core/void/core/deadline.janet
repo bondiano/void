@@ -27,14 +27,25 @@
 ### task: the work runs inline on the caller. A client used inside a
 ### request should not pay for a supervisor it did not ask for, and an
 ### inline call is cancelled with its caller, which is the right thing.
+### "Non-positive means none" is the one reading every caller gets:
+### a `:void.http/timeout`, a client's `:timeout`, a jobs interval —
+### the schemas that guard those keys refuse a zero at config time,
+### and a caller that must treat a zero as "already expired" (grpc's
+### `Connect-Timeout-Ms`) decides so before it gets here.
 ###
 ### With one, the child is cancelled if the caller leaves before the
 ### outcome arrives — a checkout abandoned because the request above
 ### it timed out must not leave a taker parked on the pool's channel
-### to swallow a later handover. That cancellation is cooperative
-### (it lands at the child's next ev operation), so a value the child
-### already computed is never torn out of its hands; it is only not
-### delivered.
+### to swallow a later handover. That cancellation is cooperative in
+### the sense that it lands at the child's next ev operation, but it
+### is not lossless: a value scheduled for the child by `ev/give` to
+### its parked `ev/take` sits in the run queue, and a cancel queued
+### ahead of it supersedes it — the child dies and the value is gone,
+### neither delivered nor left in the channel. A payload that must
+### not be lost therefore does not travel through the channel a child
+### task is parked on; it is written somewhere the caller's own exit
+### can read (the pool hands over through the waiter record and uses
+### the channel as a wake-up only).
 
 (import ./errors :as errors)
 

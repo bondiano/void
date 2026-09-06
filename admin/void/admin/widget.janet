@@ -50,7 +50,7 @@
     (unless (in allowed-keys k)
       (errorf "admin widget %q: unknown key %q (allowed: %s)"
               (get w :name :anonymous) k
-              (string/join (map |(string/format "%q" $) (sorted (keys allowed-keys))) " "))))
+              (util/names-str (keys allowed-keys)))))
   (unless (util/callable? (get w :render))
     (errorf "admin widget %q: :render is required and must be a function"
             (get w :name :anonymous)))

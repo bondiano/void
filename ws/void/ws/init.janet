@@ -47,6 +47,7 @@
 (import ./handshake :as handshake)
 (import ./conn :as conn)
 (import ./rooms :as rooms)
+(import void/core/util :as util)
 
 (def log-ns "void.ws")
 
@@ -171,7 +172,7 @@
   (eachk k spec
     (unless (in spec-keys k)
       (errorf "ws/accept: unknown key %q (known: %s)"
-              k (string/join (map |(string/format "%q" $) (sorted (keys spec-keys))) " "))))
+              k (util/names-str (keys spec-keys)))))
   (unless (get-in req [:void/route :meta :void.ws/socket])
     (errorf (string "route %q answers a websocket handshake but is not marked "
                     ":void.ws/socket true — the mark is what keeps a handler "

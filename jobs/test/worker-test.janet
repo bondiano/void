@@ -205,6 +205,29 @@
   (assert (= 1 (get-in (state/counts) [:default :pending]))
           "a stopped worker claims nothing"))
 
+# -- a zero poll interval polls again, it does not park -------------------
+#
+# The config schema refuses a zero, but make takes its opts as given,
+# and the wait underneath reads a non-positive deadline as none: a
+# runner that took the stop channel with no deadline would sit there
+# until stop! and never claim the job enqueued after it started.
+
+(def spinq (queue))
+(with-queue spinq
+  (def sw (worker/make spinq {:concurrency 1 :poll-interval 0
+                              :shutdown-timeout 2}))
+  (worker/start! sw)
+  (state/enqueue :adder 7 8)
+  (var waited 0)
+  (while (and (< waited 100) (zero? (get-in (state/counts) [:default :completed] 0)))
+    (ev/sleep 0.01)
+    (++ waited))
+  (assert (= 1 (get-in (state/counts) [:default :completed]))
+          "a worker polling with no interval still picks up what is enqueued")
+  (def t0 (os/clock :monotonic))
+  (assert (zero? (worker/stop! sw)) "and stops cleanly")
+  (assert (< (- (os/clock :monotonic) t0) 1) "promptly — the loop was not parked on its stop channel"))
+
 # -- shutdown is a drain, not a kill --------------------------------------
 #
 # The test above stops a worker whose jobs already finished, which any

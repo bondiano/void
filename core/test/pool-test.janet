@@ -277,6 +277,38 @@
   (assert (= 1 (st :opened)) "no replacement was opened")
   (pool/release p again))
 
+# -- the losing ordering: the release is scheduled BEFORE the cancel ----
+#
+# The test above releases and cancels from the same fiber, so the run
+# queue is [child taker, waiter's cancel] and the child always wins.
+# Under load the queue is the other way round: another handler's
+# release is already scheduled when the request deadline cancels the
+# waiter, so the cancel supersedes whatever the release scheduled the
+# child with. A resource travelling through the channel is lost here —
+# :created stays, :in-use is zero, and a :size 1 pool never opens
+# another. The handover goes through the waiter record instead.
+
+(let [[p st] (fixture {:size 1 :checkout-timeout 0.2})]
+  (def held (pool/acquire p))
+  (def sup (ev/chan 1))
+  (def w (ev/go (fn [] (pool/acquire p)) nil sup))
+  (ev/sleep 0.02)
+  # queue: [releaser, w's cancel] — the release hands over to the child
+  # taker, then the cancel lands on w before the child runs
+  (ev/go (fn releaser [] (pool/release p held)))
+  (ev/cancel w :abandon)
+  (ev/take sup)
+  (ev/sleep 0.01)
+  (def s (pool/stats p))
+  (assert (zero? (s :waiting)) "the cancelled waiter is gone")
+  (assert (= 1 (s :created)) "the resource released under the cancel was not lost")
+  (assert (zero? (s :in-use)) "and is not stuck marked in use")
+  (assert (= 1 (s :idle)) "it is back on the idle stack")
+  (def again (pool/acquire p))
+  (assert (= (held :id) (again :id)) "the very same resource is handed out again, without a timeout")
+  (assert (= 1 (st :opened)) "no replacement was opened")
+  (pool/release p again))
+
 # a resource handed to a cancelled waiter goes to the next live waiter
 
 (let [[p st] (fixture {:size 1 :checkout-timeout 5})]

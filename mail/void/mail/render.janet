@@ -28,6 +28,7 @@
 ### the alternative is a link that works in every test and in no inbox.
 
 (import void/html :as html)
+(import void/core/util :as util)
 
 (var base-url
   "The origin a letter's links resolve against — [:mail :base-url],
@@ -102,7 +103,7 @@
     (or (get-in ctx [:engines name])
         (errorf "unknown view engine %q (contributed: %s)"
                 name
-                (string/join (map |(string/format "%q" $) (sorted (keys (ctx :engines)))) " "))))
+                (util/names-str (keys (ctx :engines))))))
   (def context
     (merge {:mail true} (get opts :context {})
            (if-let [l (get opts :layout)] {:layout l} {})))

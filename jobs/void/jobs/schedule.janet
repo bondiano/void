@@ -293,11 +293,15 @@
 
 (defn- wait-or-stop
   "Sleep for `seconds`, or until the scheduler is told to stop —
-  whichever comes first (the worker's `wait-or-stop`)."
+  whichever comes first (the worker's `wait-or-stop`, including its
+  reading of a nil or non-positive wait as \"poll again\" rather than
+  a park without a deadline)."
   [sc seconds]
   (def ch (sc :stop-chan))
   (unless (or (sc :stopped) (nil? ch))
-    (deadline/run seconds (fn stop-waiter [] (ev/take ch))))
+    (if (and (number? seconds) (pos? seconds))
+      (deadline/run seconds (fn stop-waiter [] (ev/take ch)))
+      (ev/sleep 0)))
   nil)
 
 (defn start!

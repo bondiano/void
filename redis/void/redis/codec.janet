@@ -30,6 +30,7 @@
 
 (import spork/json)
 (import ./resp :as resp)
+(import void/core/util :as util)
 
 (def raw
   ``Bytes as bytes: the value goes to the server the way a command
@@ -66,7 +67,7 @@
   (or (get codecs name)
       (errorf "unknown redis codec %q (contributed: %s)"
               name
-              (string/join (map |(string/format "%q" $) (sorted (keys codecs))) " "))))
+              (util/names-str (keys codecs)))))
 
 (defn encode
   "Encode one value with a codec."

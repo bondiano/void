@@ -34,6 +34,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/http/client :as client)
+(import void/core/deadline :as deadline)
 
 (def repo
   "Where the standalone binaries are published."
@@ -498,8 +499,8 @@
     # signal below is what happens when it does not
     (protect (:close (get-in inst [:proc :in])))
     (protect (os/proc-kill (inst :proc) false :term))
-    (def [gone _] (protect (ev/with-deadline 5 (ev/take (inst :exited)))))
-    (unless gone (protect (os/proc-kill (inst :proc))))
+    (def [outcome _] (deadline/run 5 (fn exit-waiter [] (ev/take (inst :exited)))))
+    (unless (= :ok outcome) (protect (os/proc-kill (inst :proc))))
     nil))
 
 (defn health

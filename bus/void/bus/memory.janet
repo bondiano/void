@@ -30,6 +30,7 @@
 ### out of it.
 
 (import void/core/log :as log)
+(import void/core/deadline :as deadline)
 
 (def log-ns "void.bus.memory")
 
@@ -141,8 +142,8 @@
        (put sub :stopped true)
        (put-in m [:groups (sub :group)] nil)
        (ev/chan-close (sub :chan))
-       (def [ok _] (protect (ev/with-deadline 5 (ev/take (sub :done)))))
-       (unless ok
+       (def [outcome _] (deadline/run 5 (fn done-waiter [] (ev/take (sub :done)))))
+       (unless (= :ok outcome)
          (log/warn "bus consumer did not stop within 5 s"
                    :ns log-ns :group (sub :group))))
      nil)
@@ -154,7 +155,7 @@
          (put sub :stopped true)
          (put-in m [:groups name] nil)
          (ev/chan-close (sub :chan))
-         (protect (ev/with-deadline 5 (ev/take (sub :done))))))
+         (deadline/run 5 (fn done-waiter [] (ev/take (sub :done))))))
      (array/clear (m :history))
      nil)
 

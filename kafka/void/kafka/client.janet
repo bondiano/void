@@ -23,6 +23,7 @@
 ### returns.
 
 (import void/core/log :as log)
+(import void/core/deadline :as deadline)
 (import void/fdwait :as fdwait)
 (import ./librdkafka :as rk)
 
@@ -185,8 +186,8 @@
   [c]
   (put c :stopped true)
   (rk/wake-byte! (c :wfd))
-  (def [ok _] (protect (ev/with-deadline 10 (ev/take (c :pump-done)))))
-  (unless ok
+  (def [outcome _] (deadline/run 10 (fn pump-waiter [] (ev/take (c :pump-done)))))
+  (unless (= :ok outcome)
     (log/warn "kafka pump did not stop within 10 s" :ns log-ns :kind (c :kind)))
   (fdwait/release! (c :pair))
   nil)
@@ -243,9 +244,9 @@
       (rk/rd_kafka_AdminOptions_set_request_timeout
         opts (math/floor (* 1000 timeout)) errstr errstr-size)
       (rk/rd_kafka_DescribeCluster (c :handle) opts (c :queue)))
-    (def [ok res] (protect (ev/with-deadline (+ timeout 1) (ev/take answer))))
+    (def [outcome res] (deadline/run (+ timeout 1) (fn answer-waiter [] (ev/take answer))))
     (cond
-      (not ok)
+      (not= :ok outcome)
       (errorf "kafka: no answer from %q within %d s — is the cluster reachable?"
               brokers (math/floor timeout))
 

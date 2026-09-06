@@ -218,7 +218,13 @@
           (do
             # a peer that went away mid-write is not worth a stack
             # trace; the reader is about to see the same EOF. Anything
-            # else that stops the writer is worth one line at warn
+            # else that stops the writer is worth one line at warn —
+            # that is a level up from the debug every write failure
+            # got before wire/net-error-kind: while a failure was told
+            # apart by substrings of its text, an unknown text and a
+            # peer gone looked the same, and warn would have been noise
+            # on every EOF. With the kinds named, an unexplained write
+            # failure is a line an operator should see
             (def kind (wire/net-error-kind err))
             (if (wire/peer-gone? kind)
               (log/debug "websocket write failed — peer gone" :ns log-ns

@@ -103,7 +103,7 @@
   (or (get codecs name)
       (errorf "unknown bus codec %q (contributed: %s)"
               name
-              (string/join (map |(string/format "%q" $) (sorted (keys codecs))) " "))))
+              (util/names-str (keys codecs)))))
 
 (defn check-compatible!
   ``Refuse a codec the backend cannot store. Only `:raw` can be wrong

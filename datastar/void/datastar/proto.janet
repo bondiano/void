@@ -11,6 +11,7 @@
 ### request, a response or a template engine; ./init composes those.
 
 (import spork/json)
+(import void/core/util :as util)
 
 (def modes
   "The element patch modes Datastar accepts."
@@ -24,8 +25,7 @@
       (string mode)
       (errorf "unknown patch mode %q (known: %s)"
               mode
-              (string/join (map |(string/format "%q" $) (sorted (keys modes)))
-                           " ")))))
+              (util/names-str (keys modes))))))
 
 (defn- push-lines [out field value]
   (each line (string/split "\n" (string value))

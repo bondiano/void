@@ -216,6 +216,18 @@
                           {:request {:headers @{"content-type" "application/proto"
                                                 "connect-timeout-ms" "soon"}}}))
   (assert (= 400 (bad-deadline :status))
-          "and a deadline nobody can read is refused rather than dropped"))
+          "and a deadline nobody can read is refused rather than dropped")
+
+  # the protocol's grammar says "positive integer": a zero is not a
+  # deadline that already passed, it is a malformed header — and it
+  # must never become "no deadline at all" for a handler that would
+  # otherwise run unbounded on a client's say-so
+  (def zero-deadline (call c "Slow" (string (proto/encode :shop.orders/CountRequest {}))
+                           {:request {:headers @{"content-type" "application/proto"
+                                                 "connect-protocol-version" "1"
+                                                 "connect-timeout-ms" "0"}}}))
+  (assert (= 400 (zero-deadline :status)))
+  (assert (= "invalid_argument" ((error-of zero-deadline) "code"))
+          "Connect-Timeout-Ms: 0 is refused as malformed, not run without a deadline"))
 
 (print "connect ok")

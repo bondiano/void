@@ -37,11 +37,16 @@
 
 (import void/core/log :as log)
 (import void/core/bind :as bind)
+(import void/core/deadline :as deadline)
+(import void/core/errors :as errors)
 (import ./message :as message)
 (import ./middleware :as middleware)
 (import void/core/util :as util)
 
 (def log-ns "void.bus")
+
+(errors/define! :void.bus/timeout
+  {:status 504 :doc "a handler's :timeout ran out before it returned; the message is nacked"})
 
 # -- definitions ---------------------------------------------------------
 
@@ -211,11 +216,24 @@
   (def wrapped
     (middleware/chain (middleware/select contribs (d :opts)) call (d :opts)))
   (def timeout (get-in d [:opts :timeout]))
+  # a :timeout runs the chain as its own task (void/core/deadline) so
+  # the cancel lands on that task and never on the consumer loop this
+  # handler is called from — ev/with-deadline would cancel the root
+  # task, i.e. the long-lived bus-memory-consumer / bus-db-consumer
+  # fiber, mid-ev-operation (janet-lang/janet#1337). The backend sees
+  # an ordinary nack, with a kind it can tell from a handler's error.
   {:name (d :name)
    :topic (d :topic)
    :fn (if timeout
-         (fn with-deadline [msg]
-           (ev/with-deadline timeout (wrapped msg)))
+         (fn bounded [msg]
+           (deadline/call timeout
+                          (fn handler-task [] (wrapped msg))
+                          (fn []
+                            (errors/raise :void.bus/timeout
+                                          (string/format "handler %q did not return within %.3g s"
+                                                         (d :name) timeout)
+                                          {:handler (d :name) :topic (d :topic)
+                                           :timeout timeout}))))
          wrapped)})
 
 (defn compile-group

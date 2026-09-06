@@ -1,4 +1,5 @@
 (import ../test-support/paths)
+(import void/core/errors :as errors)
 (import void/core/log :as log)
 (import void/bus :as bus)
 (import void/bus/backend :as backend)
@@ -119,9 +120,12 @@
                 {:fn (fn [_] (ev/sleep 5))})
 (def slow-chain (router/compile-group (router/for-group :default :default) []))
 (def t0 (os/clock :monotonic))
-(def [ok2 _] (protect (router/dispatch slow-chain {:id "2" :topic :slow/one :meta @{}})))
+(def [ok2 err2] (protect (router/dispatch slow-chain {:id "2" :topic :slow/one :meta @{}})))
 (assert (not ok2) ":timeout turns a handler that will not return into a nack")
 (assert (< (- (os/clock :monotonic) t0) 1) "and it does so on time")
+(assert (= :void.bus/timeout (errors/kind err2))
+        "the nack names the timeout, so a backend can tell it from the handler's own error")
+(assert (= :slow (get (errors/data err2) :handler)) "and which handler ran out")
 
 # -- an unknown named middleware is a build error ------------------------
 
