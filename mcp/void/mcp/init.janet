@@ -60,17 +60,13 @@
            :read-only? [:optional :boolean]
            :schema [:optional :any]
            :needs [:optional [:vector :keyword]]}
+  :key :name :what "MCP tool"
   :validate (fn [contribs]
-              (def seen @{})
               (each c contribs
                 (unless (or (c :fn) (c :expand))
                   (errorf "MCP tool %q: needs a :fn, or an :expand that projects tools" (c :name)))
                 (when (and (c :fn) (c :expand))
-                  (errorf "MCP tool %q: :fn and :expand are two answers to one question" (c :name)))
-                (when (in seen (c :name))
-                  (errorf "duplicate MCP tool %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+                  (errorf "MCP tool %q: :fn and :expand are two answers to one question" (c :name))))))
 
 (plugin/defextension-point :void.mcp/resource
   :doc "Readable resources beyond the schemas and the health report: {:name :void.obs/metrics :uri \"void://metrics\" :doc ... :mime-type ... :needs [component-keys] :read (fn [;instances] string | {:text ... :mime-type ...})}. Resources are read-only by construction, so they need no allowlist — [:mcp :hide] withholds one by name. As with :void.mcp/tool, a contribution may instead carry {:name ... :expand (fn [boot] [resource ...])}: one projection of a registry the application fills after this manifest froze"

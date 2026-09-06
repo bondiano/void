@@ -66,18 +66,14 @@
            :challenge [:optional :function]
            :cookie [:optional :boolean]
            :priority [:optional :int]}
+  :key :name :what "authentication strategy"
+  # the same check normalize makes, run at resolution so that a
+  # strategy which can never authenticate anybody fails the boot
+  # rather than the login
   :validate (fn [contribs]
-              (def seen @{})
               (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate authentication strategy %q" (c :name)))
-                (put seen (c :name) true)
-                # the same check normalize makes, run at resolution so
-                # that a strategy which can never authenticate anybody
-                # fails the boot rather than the login
                 (unless (or (c :authenticate) (c :verify))
-                  (errorf "strategy %q has neither :authenticate nor :verify" (c :name)))))
-  :reduce |(sorted-by |($ :name) $))
+                  (errorf "strategy %q has neither :authenticate nor :verify" (c :name))))))
 
 (plugin/defextension-point :void.auth/hasher
   :doc "Password hashers behind PHC identifiers: {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] \"m=..,t=..\") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes"

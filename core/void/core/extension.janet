@@ -15,7 +15,9 @@
 ### is sequenced to reason about them. `resolve-point` is the unit
 ### the resolution is made of and the place a point's default
 ### validate/reduce is chosen (`point-validator`, `point-reducer`):
-### a future `:key`/`:index` option on `extension-point` lands there.
+### the `:key` / `:index` options of `extension-point` land there, so
+### a point that is "one contribution per name" says so in its
+### contract instead of re-typing the check and the fold.
 
 (import ./schema :as schema)
 (import ./util :as util)
@@ -24,9 +26,52 @@
 
 (def- allowed-point-keys
   {:name true :doc true :schema true :cardinality true
-   :reduce true :validate true :aliases true :conformance true})
+   :reduce true :validate true :aliases true :conformance true
+   :key true :what true :index true})
 
 (def- cardinalities {:many true :single true :single-required true})
+
+(defn- point-noun
+  "The noun a duplicate-key message calls a contribution when the
+  point gives no :what: the point's name without the `void.` prefix
+  and with its slash a space — :void.dash/tile reads \"dash tile\",
+  so the message is \"duplicate dash tile :orders/backlog\"."
+  [name]
+  (def s (string name))
+  (string/replace "/" " " (if (string/has-prefix? "void." s) (string/slice s 5) s)))
+
+(defn- check-key-options
+  "The option checks behind :key, :what and :index: :key is a keyword
+  the :schema (when it is a dictionary) has a field for and needs
+  :cardinality :many; :what and :index need :key; :index is `true` or
+  a function, and never sits next to :reduce."
+  [name opts card]
+  (def key (get opts :key))
+  (when key
+    (unless (keyword? key)
+      (errorf "extension point %q: :key must be the keyword of the contribution field, got %q"
+              name key))
+    (unless (= :many card)
+      (errorf "extension point %q: :key needs :cardinality :many (a %q point has nothing to keep unique)"
+              name card))
+    (def source (get opts :schema))
+    (when (and (dictionary? source) (not (has-key? source key)))
+      (errorf "extension point %q: :key %q is not a field of :schema (fields: %s)"
+              name key (util/names-str (keys source)))))
+  (when-let [w (get opts :what)]
+    (unless key
+      (errorf "extension point %q: :what names the key in the duplicate message and needs :key" name))
+    (unless (string? w)
+      (errorf "extension point %q: :what must be a string, got %q" name w)))
+  (when-let [ix (get opts :index)]
+    (unless key
+      (errorf "extension point %q: :index folds contributions into a table keyed by :key and needs :key"
+              name))
+    (unless (or (= true ix) (util/callable? ix))
+      (errorf "extension point %q: :index must be true or (fn [contribution] value), got %q"
+              name ix))
+    (when (get opts :reduce)
+      (errorf "extension point %q: :index and :reduce are two answers to one question" name))))
 
 (defn extension-point
   ``Build a named extension-point contract:
@@ -35,18 +80,35 @@
         :doc "HTTP middleware registered by plugins"
         :schema {:name :keyword :phase [:int {:min 0 :max 10000}]
                  :wrap :function}
-        :cardinality :many
+        :key :name
         :reduce (fn [contribs] (sorted-by |($ :phase) contribs)))
 
   Options:
     :schema       schema every contribution is validated against
     :cardinality  :many (default) | :single | :single-required
+    :key          the contribution field that identifies it (`:name`
+                  for most points, `:key` for a serializer): no two
+                  contributions may share it — the second one fails
+                  the boot with "duplicate <what> <value>" — and it is
+                  the default order of the resolution (sorted by it).
+                  Needs :cardinality :many
+    :what         the noun that duplicate message uses; defaults to
+                  the point's own name, `void.` dropped and the slash
+                  a space (:void.dash/tile → "dash tile")
+    :index        true — the resolution is a table keyed by :key with
+                  the contribution as the value; (fn [contribution]
+                  value) — the same table with each value passed
+                  through it (a normalizer). Needs :key; excludes
+                  :reduce
     :reduce       (fn [contributions] resolved) — how the host folds
                   the contributions of all active plugins; defaults to
-                  the tuple of contributions (:many) / the single
-                  contribution (:single, :single-required)
-    :validate     (fn [contributions]) — optional cross-checks (name
-                  conflicts etc.), failure = throw
+                  the order :key gives, else the tuple of
+                  contributions (:many) / the single contribution
+                  (:single, :single-required). An explicit :reduce
+                  wins over the :key order
+    :validate     (fn [contributions]) — optional cross-checks, failure
+                  = throw. Runs after the :key uniqueness check, so it
+                  may take distinct keys for granted
     :aliases      deprecated former names of this point: contributions addressed to an alias fold into
                   this point with a deprecation warning — renaming a
                   point is new-point + alias, never mutation
@@ -87,6 +149,7 @@
   (when-let [c (get opts :conformance)]
     (unless (string? c)
       (errorf "extension point %q: :conformance must be a module name, got %q" name c)))
+  (check-key-options name opts card)
   (def sch
     (when-let [s (get opts :schema)]
       (def [ok n] (protect (schema/normalize s)))
@@ -96,8 +159,12 @@
   # :schema-source keeps the author's shorthand — the contract docs
   # (scripts/gen-contracts.janet) render it, :schema is the normalized
   # validator input
+  # :what is filled in for a :key point so that the message a duplicate
+  # gets is part of the frozen contract (and rendered by gen-contracts)
+  (def what (when (get opts :key) (get opts :what (point-noun name))))
   (freeze (merge-into @{} opts {:name name :cardinality card :schema sch
                                 :aliases (tuple ;aliases)
+                                :what what
                                 :schema-source (get opts :schema)})))
 
 (defn point?
@@ -180,15 +247,13 @@
                 :doc [:optional :string]
                 :needs [:optional [:vector :keyword]]
                 :read-only? [:optional :boolean]}
-       :validate (util/unique-by "CLI command" |($ :name))
-       :reduce |(sorted-by |($ :name) $))
+       :key :name :what "CLI command")
 
      :void.core/health
      (extension-point :void.core/health
        :doc "Health checks beyond the per-component ones: {:name :fn}"
        :schema {:name :keyword :fn :function}
-       :validate (util/unique-by "health check" |($ :name))
-       :reduce |(sorted-by |($ :name) $))
+       :key :name :what "health check")
 
      :void.core/store
      (extension-point :void.core/store
@@ -198,35 +263,32 @@
                 :ask :function
                 :needs [:optional [:vector :keyword]]
                 :doc [:optional :string]}
-       :validate (util/unique-by "store declaration" |($ :name))
-       :reduce |(sorted-by |($ :name) $))
+       :key :name :what "store declaration")
 
      :void.core/log-sink
      (extension-point :void.core/log-sink
        :doc "Log record sinks: {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink"
        :schema {:name :keyword :fn :function :doc [:optional :string]}
-       :validate (util/unique-by "log sink" |($ :name))
-       :reduce |(sorted-by |($ :name) $))
+       :key :name :what "log sink")
 
      :void.core/log-serializer
      (extension-point :void.core/log-serializer
        :doc "Log value serializers by record key: {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer"
        :schema {:key :keyword :fn :function :doc [:optional :string]}
-       :validate (util/unique-by "log serializer for" |($ :key))
-       :reduce (fn [contribs] (tabseq [c :in contribs] (c :key) (c :fn))))
+       :key :key :what "log serializer for" :index |($ :fn))
 
      :void.core/config-source
      (extension-point :void.core/config-source
        :doc "Extra config sources (vault, consul): {:name :fn :priority}; consumed on config (re)load"
        :schema {:name :keyword :fn :function :priority [:optional :int]}
-       :validate (util/unique-by "config source" |($ :name))
+       :key :name :what "config source"
        :reduce |(sorted-by (fn [c] [(get c :priority 100) (c :name)]) $))
 
      :void.core/schema-type
      (extension-point :void.core/schema-type
        :doc "Custom schema types: {:name :money :spec <register-type! spec>}; registered during resolution"
        :schema {:name :keyword :spec :dictionary}
-       :validate (util/unique-by "schema type" |($ :name))
+       :key :name :what "schema type"
        :reduce (fn [contribs]
                  (each c contribs
                    (schema/register-type! (c :name) (c :spec)))
@@ -236,7 +298,7 @@
      (extension-point :void.core/schema-projection
        :doc "Schema projections (openapi, proto, forms): {:name :fn}; registered during resolution"
        :schema {:name :keyword :fn :function}
-       :validate (util/unique-by "schema projection" |($ :name))
+       :key :name :what "schema projection"
        :reduce (fn [contribs]
                  (each c contribs
                    (schema/register-projection! (c :name) (c :fn)))
@@ -249,7 +311,8 @@
                 :doc [:optional :string]
                 :methods [:optional :dictionary]
                 :conformance [:optional :string]}
-       :validate (util/unique-by "interface" |($ :name))
+       :key :name :what "interface"
+       # not :index: the declarations are read by boot as a frozen struct
        :reduce (fn [contribs]
                  (freeze (tabseq [c :in contribs] (c :name) c))))
 
@@ -387,22 +450,49 @@
                      name (length cs)
                      (if (empty? cs) "" (string " (from: " (from-str) ")"))))))
 
+(defn- key-check
+  "The check a :key point runs before anything else: every
+  contribution carries the key, and no two carry the same one — the
+  message being \"duplicate <what> <value>\", the one the points used
+  to hand-write."
+  [point]
+  (def key (point :key))
+  (def unique (util/unique-by (point :what) |(get $ key)))
+  (fn [values]
+    (each v values
+      (when (nil? (get v key))
+        (errorf "contribution without %q: %q" key v)))
+    (unique values)))
+
 (defn- point-validator
   "The cross-check a point runs over its contribution values before
-  folding: its :validate, or nil for none. The place a default check
-  derived from the contract (a `:key` option: no two contributions
-  with the same key) would be chosen."
+  folding: the :key uniqueness check when the point has a :key, then
+  its own :validate; nil when it has neither. Uniqueness goes first so
+  that a :validate may take distinct keys for granted."
   [point]
-  (point :validate))
+  (def own (point :validate))
+  (cond
+    (nil? (point :key)) own
+    (nil? own) (key-check point)
+    (let [unique (key-check point)]
+      (fn [values] (unique values) (own values)))))
 
 (defn- point-reducer
-  "The fold a point applies to its contribution values: its :reduce,
-  else the tuple of values for :many and the single value otherwise.
-  The place a default fold derived from the contract (`:key`: sorted
-  by it; `:index`: a table keyed by it) would be chosen."
+  "The fold a point applies to its contribution values, first answer
+  wins: its :reduce; a table keyed by :key for :index (each value
+  through the :index function when it is one); the values sorted by
+  :key; else the tuple of values for :many and the single value
+  otherwise."
   [point]
-  (or (point :reduce)
-      (if (= :many (point :cardinality)) identity first)))
+  (def key (point :key))
+  (def index (point :index))
+  (cond
+    (point :reduce) (point :reduce)
+    index (let [value (if (= true index) identity index)]
+            (fn [values] (tabseq [v :in values] (get v key) (value v))))
+    key (fn [values] (sorted-by |(get $ key) values))
+    (= :many (point :cardinality)) identity
+    first))
 
 (defn resolve-point
   ``Resolve one point from its contributions `cs` (`[{:plugin :value}

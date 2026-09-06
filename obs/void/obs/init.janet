@@ -66,7 +66,6 @@
 (import ./runtime :as runtime)
 (import ./log :as obslog)
 (import ./instrument :as instrument)
-(import void/core/util :as util)
 
 (def log-ns
   "Log namespace — spelled out, since the file-derived default would
@@ -80,8 +79,7 @@
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
-  :validate (util/unique-by "span exporter" |($ :name))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name :what "span exporter")
 
 (plugin/defextension-point :void.obs/instrument
   :doc "Auto-instrumentation: {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition"
@@ -89,8 +87,7 @@
            :needs [:optional [:vector :keyword]]
            :install :function
            :doc [:optional :string]}
-  :validate (util/unique-by "instrumentation" |($ :name))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name :what "instrumentation")
 
 (plugin/contribute! :void.core/interface
   {:name :void/obs

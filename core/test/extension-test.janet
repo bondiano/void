@@ -95,4 +95,89 @@
 (assert (string/find "contribution to :test/strict" (e5 0)))
 (assert (string/find "requires exactly one contribution, got 2" (e5 1)))
 
+# -- :key — one contribution per key, resolved in key order ----------------
+
+(def keyed (extension/extension-point :test/thing :schema {:name :keyword :n [:optional :int]} :key :name))
+(assert (= "test thing" (keyed :what)) "the duplicate noun derives from the point name")
+(assert (= "dash tile" ((extension/extension-point :void.dash/tile :key :name) :what)) "`void.` is dropped, the slash a space")
+(assert (= "widget" ((extension/extension-point :widget :key :name) :what)) "no namespace: the bare name")
+(assert (= "span exporter" ((extension/extension-point :void.obs/exporter :key :name :what "span exporter") :what)) ":what overrides it")
+
+(def [rk ek] (extension/resolve-point :test/thing keyed [(contrib :test/b {:name :b :n 2})
+                                                        (contrib :test/a {:name :a :n 1})]))
+(assert (empty? ek))
+(assert (deep= @[{:name :a :n 1} {:name :b :n 2}] rk) "the default fold sorts by the key")
+
+(def [rd ed] (extension/resolve-point :test/thing keyed [(contrib :test/a {:name :a :n 1})
+                                                        (contrib :test/b {:name :a :n 2})]))
+(assert (nil? rd))
+(assert (deep= @["extension point :test/thing: duplicate test thing :a"] ed) "a repeated key names the noun and the value")
+
+(def unschematic (extension/extension-point :test/loose :key :name))
+(def [rn en] (extension/resolve-point :test/loose unschematic [(contrib :test/a {:n 1})]))
+(assert (nil? rn))
+(assert (deep= @["extension point :test/loose: contribution without :name: {:n 1}"] en)
+        "without a schema to say so, the key check itself refuses a contribution that lacks the key")
+
+# an explicit :validate runs after the uniqueness check, an explicit :reduce replaces the key order
+(def keyed-own
+  (extension/extension-point :test/own :schema {:name :keyword :n :int} :key :name
+    :validate (fn [cs] (each c cs (when (neg? (c :n)) (errorf "thing %q is negative" (c :name)))))
+    :reduce (fn [cs] (sorted-by |($ :n) cs))))
+(def [ro eo] (extension/resolve-point :test/own keyed-own [(contrib :test/a {:name :b :n 2})
+                                                          (contrib :test/b {:name :a :n 1})]))
+(assert (empty? eo))
+(assert (deep= @[{:name :a :n 1} {:name :b :n 2}] ro) "the point's own :reduce decides the order")
+(assert (deep= @["extension point :test/own: thing :a is negative"]
+           (last (extension/resolve-point :test/own keyed-own [(contrib :test/a {:name :a :n -1})])))
+        "the point's own :validate still runs")
+(assert (deep= @["extension point :test/own: duplicate test own :a"]
+           (last (extension/resolve-point :test/own keyed-own [(contrib :test/a {:name :a :n 1})
+                                                              (contrib :test/b {:name :a :n -1})])))
+        "uniqueness is checked before the point's own :validate")
+
+# -- :index — a table keyed by :key --------------------------------------
+
+(def indexed (extension/extension-point :test/codec :schema {:name :keyword :fn :function} :key :name :index true))
+(def a-fn (fn [] :a))
+(def b-fn (fn [] :b))
+(def [ri ei] (extension/resolve-point :test/codec indexed [(contrib :test/a {:name :a :fn a-fn})
+                                                          (contrib :test/b {:name :b :fn b-fn})]))
+(assert (empty? ei))
+(assert (table? ri) "an index is a table")
+(assert (deep= @{:a {:name :a :fn a-fn} :b {:name :b :fn b-fn}} ri) "keyed by the key, the contribution as the value")
+(assert (deep= @{} (first (extension/resolve-point :test/codec indexed []))) "no contributions: an empty index")
+(assert (deep= @["extension point :test/codec: duplicate test codec :a"]
+           (last (extension/resolve-point :test/codec indexed [(contrib :test/a {:name :a :fn a-fn})
+                                                              (contrib :test/b {:name :a :fn b-fn})])))
+        "an index refuses a repeated key the same way")
+
+(def projected (extension/extension-point :test/serializer :schema {:key :keyword :fn :function} :key :key :index |($ :fn)))
+(assert (deep= @{:err a-fn :req b-fn}
+           (first (extension/resolve-point :test/serializer projected [(contrib :test/a {:key :err :fn a-fn})
+                                                                      (contrib :test/b {:key :req :fn b-fn})])))
+        "a function :index projects each contribution into the value")
+
+# -- the option checks ---------------------------------------------------
+
+(expect-error ":key not a keyword" ":key must be the keyword of the contribution field"
+  |(extension/extension-point :test/bad :key "name"))
+(expect-error ":key on a :single point" ":key needs :cardinality :many"
+  |(extension/extension-point :test/bad :cardinality :single :key :name))
+(expect-error ":key outside the schema" ":key :id is not a field of :schema (fields: :fn :name)"
+  |(extension/extension-point :test/bad :schema {:name :keyword :fn :function} :key :id))
+(assert (extension/point? (extension/extension-point :test/ok :schema [:or :dictionary :function] :key :name))
+        "a non-dictionary schema cannot vouch for the field and is not asked to")
+(expect-error ":what without :key" ":what names the key in the duplicate message and needs :key"
+  |(extension/extension-point :test/bad :what "thing"))
+(expect-error ":what not a string" ":what must be a string"
+  |(extension/extension-point :test/bad :key :name :what :thing))
+(expect-error ":index without :key" ":index folds contributions into a table keyed by :key and needs :key"
+  |(extension/extension-point :test/bad :index true))
+(expect-error ":index of the wrong shape" ":index must be true or (fn [contribution] value)"
+  |(extension/extension-point :test/bad :key :name :index :name))
+(expect-error ":index next to :reduce" ":index and :reduce are two answers to one question"
+  |(extension/extension-point :test/bad :key :name :index true :reduce identity))
+(assert (nil? ((extension/extension-point :test/plain2) :what)) "no :key: no noun in the contract")
+
 (print "extension-test: all assertions passed")

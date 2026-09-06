@@ -57,13 +57,7 @@
   :schema {:name :keyword
            :render :function
            :doc [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate view engine %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
+  :key :name :what "view engine" :index true)
 
 (plugin/contribute! :void.html/engine
   {:name :hiccup

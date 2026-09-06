@@ -252,6 +252,16 @@
                  (string/join (map |(string/format "`%q`" $) as) ", ")))))
   (when-let [d (pt :doc)]
     (p "- %s" d))
+  # a :key point is "one contribution per <key>": the field, the fold
+  # it implies and the message a repeat gets are all contract
+  (when-let [k (pt :key)]
+    (p "- **key:** `%q` · %s · a repeat fails the boot with `duplicate %s <%s>`"
+       k
+       (cond
+         (pt :index) (string/format "resolved as a table keyed by `%q`" k)
+         (pt :reduce) "folded by the point's own :reduce"
+         (string/format "resolved sorted by `%q`" k))
+       (pt :what) (string k)))
   (if-let [s (pt :schema-source)]
     (do (p "- **contribution schema:**")
         (p "")

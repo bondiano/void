@@ -144,12 +144,10 @@
            :aliases [:optional [:vector :string]]
            :encoding-aliases [:optional [:vector :string]]
            :doc [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate Connect codec %q" (c :name)))
-                (put seen (c :name) true))))
+  :key :name :what "Connect codec"
+  # the first codec whose content type matches serves the request, so
+  # the resolution keeps contribution order rather than name order
+  :reduce identity)
 
 (var settings
   "The [:grpc] slice, read at :before-start."

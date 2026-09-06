@@ -63,7 +63,7 @@
            :when [:optional :function]
            :named [:optional :boolean]
            :doc [:optional :string]}
-  :validate (util/unique-by "middleware" |($ :name))
+  :key :name :what "middleware"
   :reduce |(sorted-by |[($ :phase) ($ :name)] $))
 
 (plugin/defextension-point :void.http/hook
@@ -75,7 +75,7 @@
            :fn [:or :function :symbol]
            :env [:optional :function]
            :doc [:optional :string]}
-  :validate (util/unique-by "lifecycle hook" |($ :name))
+  :key :name :what "lifecycle hook"
   :reduce |(sorted-by (fn [c] [(c :stage) (c :name)]) $))
 
 (plugin/defextension-point :void.http/route-meta-key
@@ -85,7 +85,7 @@
            :doc [:optional :string]
            :merge [:optional [:enum :replace :concat :deep-merge :restrict]]
            :allow? [:optional :function]}
-  :validate (util/unique-by "metadata key" |($ :key))
+  :key :key :what "metadata key"
   :reduce (fn [contribs]
             (def out @{})
             (each c contribs
@@ -102,7 +102,7 @@
            # a raw env table cannot live in a frozen manifest — wrap it
            # with router/env-ref
            :env [:optional :function]}
-  :validate (util/unique-by "route source" |($ :name)))
+  :key :name :what "route source")
 
 (plugin/defextension-point :void.http/edge
   :doc "Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total."
@@ -110,7 +110,7 @@
            :phase [:optional :int]
            :wrap :function
            :doc [:optional :string]}
-  :validate (util/unique-by "edge wrapper" |($ :name))
+  :key :name :what "edge wrapper"
   :reduce (fn [contribs]
             (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
 
@@ -121,8 +121,7 @@
            :make :function
            :shared? [:optional :boolean]
            :replacement [:optional :string]}
-  :validate (util/unique-by "session store" |($ :name))
-  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
+  :key :name :what "session store" :index true)
 
 (plugin/defextension-point :void.http/body-codec
   :doc "Request body codecs: {:name :content-type :decode (fn [bytes] value) :encode?}; the parsing middleware decodes a matching request body into (req :parsed-body)"
@@ -130,14 +129,17 @@
            :content-type :string
            :decode :function
            :encode [:optional :function]}
-  :validate (util/unique-by "body codec" |($ :name)))
+  :key :name :what "body codec"
+  # the parsing middleware takes the first codec whose content type
+  # matches, so the resolution keeps contribution order, not name order
+  :reduce identity)
 
 (plugin/defextension-point :void.http/error-renderer
   :doc "Error renderers: {:name :fn (fn [err req ctx] response|nil) :priority?}; first response wins, priority order (default 1000)"
   :schema {:name :keyword
            :fn :function
            :priority [:optional :int]}
-  :validate (util/unique-by "error renderer" |($ :name))
+  :key :name :what "error renderer"
   :reduce |(sorted-by (fn [c] [(get c :priority 1000) (c :name)]) $))
 
 # -- reserved metadata keys owned by the kernel --------------------------

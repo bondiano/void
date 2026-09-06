@@ -65,13 +65,7 @@
            :doc [:optional :string]
            :send :function
            :health [:optional :function]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate mail transport %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) (transport/normalize c))))
+  :key :name :index transport/normalize)
 
 (plugin/contribute! :void.core/interface
   {:name :void/mail

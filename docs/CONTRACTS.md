@@ -44,6 +44,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
 - Tiles on the admin index: {:name :orders/today :label "Orders today" :render (fn [request] hiccup)}
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate dashboard widget <name>`
 - **contribution schema:**
 
   ```janet
@@ -64,6 +65,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
 - Extra items in the admin navigation: {:name :docs :label "Docs" :href "/admin/reports"}. A link to a page inside the admin says :path instead — {:name :jobs :label "Jobs" :path "/jobs"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate admin menu item <name>`
 - **contribution schema:**
 
   ```janet
@@ -74,6 +76,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
 - Arbitrary admin pages: {:name :reports :label "Reports" :path "/reports" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate admin page <name>`
 - **contribution schema:**
 
   ```janet
@@ -84,6 +87,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
 - Widgets: {:name :money :types [:money]? :match (fn [field] bool)? :priority 100? :render (fn [ctx] hiccup) :display? :filter? :parse? :assets {:style :script}? :routes (fn [ctx] [route ...])? :encoding :multipart?}. :render is the only required half; each of the others answers a question that would otherwise be a special case inside the admin — :encoding says the control cannot ride a urlencoded form, so form-page flips the <form> to multipart and `submitted` hands :parse the request even when (req :form) never saw the field (the upload widget). :assets are concatenated into the admin's two served files (a fingerprinted .css and .js under the admin prefix) rather than written into a page, so a widget's style costs the application no `'unsafe-inline'`. Resolution runs once per field at mount, never per row — `void admin widgets` prints the result and why
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate admin widget <name>`
 - **contribution schema:**
 
   ```janet
@@ -114,6 +118,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/auth` · **cardinality:** `:many`
 - Authentication strategies: {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate authentication strategy <name>`
 - **contribution schema:**
 
   ```janet
@@ -124,6 +129,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/authz` · **cardinality:** `:many`
 - Policies contributed by a plugin: {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate policy <name>`
 - **contribution schema:**
 
   ```janet
@@ -134,6 +140,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/authz` · **cardinality:** `:many`
 - Attribute providers: {:name :orders/brand :for :subject|:resource|:env :keys [:subject/brand-id]? :fn (fn [ctx] attrs) :needs [component-keys]?}; called when a policy first asks for one of its keys, and memoized for the rest of that decision
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate attribute provider <name>`
 - **contribution schema:**
 
   ```janet
@@ -144,6 +151,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/bus` · **cardinality:** `:many`
 - Message-bus backends: {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate bus backend <name>`
 - **contribution schema:**
 
   ```janet
@@ -155,6 +163,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/bus` · **cardinality:** `:many`
 - Message codecs: {:name :json :encode (fn [value] bytes) :decode (fn [bytes] value) :bytes? boolean?}; [:bus :codec] picks one by name. :bytes? false means the codec does not produce bytes at all (:raw), which a backend that stores them refuses at start
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate bus codec <name>`
 - **contribution schema:**
 
   ```janet
@@ -165,6 +174,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/bus` · **cardinality:** `:many`
 - Message middleware: {:name :phase :wrap (fn [handler handler-opts] handler') :named boolean? :when (fn [handler-opts] bool)?}; the same phase scale as :void.http/middleware, and the handler's own options as a second argument because a bus handler's options are fixed at declaration (see void/bus/middleware). A :named contribution applies only to handlers that list it under :middleware
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate bus middleware <name>`
 - **contribution schema:**
 
   ```janet
@@ -175,6 +185,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to "does running this change anything?" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it, so silence means "unknown" and unknown is never offered
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate CLI command <name>`
 - **contribution schema:**
 
   ```janet
@@ -185,6 +196,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Extra config sources (vault, consul): {:name :fn :priority}; consumed on config (re)load
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate config source <name>`
 - **contribution schema:**
 
   ```janet
@@ -195,6 +207,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Health checks beyond the per-component ones: {:name :fn}
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate health check <name>`
 - **contribution schema:**
 
   ```janet
@@ -215,6 +228,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Interface declarations for component :provides: {:name :void/cache :doc ... :methods {...} :conformance "void/cache/conformance/store"} — :conformance names the module of the interface's conformance suite, the one every implementation runs
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate interface <name>`
 - **contribution schema:**
 
   ```janet
@@ -225,6 +239,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Log value serializers by record key: {:key :err :fn (fn [value] shaped)}; the core ships the :err serializer
+- **key:** `:key` · resolved as a table keyed by `:key` · a repeat fails the boot with `duplicate log serializer for <key>`
 - **contribution schema:**
 
   ```janet
@@ -235,6 +250,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Log record sinks: {:name :fn (fn [record])}; installed by plugin/start! next to the configured built-in sink
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate log sink <name>`
 - **contribution schema:**
 
   ```janet
@@ -245,6 +261,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Schema projections (openapi, proto, forms): {:name :fn}; registered during resolution
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate schema projection <name>`
 - **contribution schema:**
 
   ```janet
@@ -255,6 +272,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Custom schema types: {:name :money :spec <register-type! spec>}; registered during resolution
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate schema type <name>`
 - **contribution schema:**
 
   ```janet
@@ -265,6 +283,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/core` · **cardinality:** `:many`
 - Stores a second replica would have to see: {:name :void.http/session :what "sessions" :needs [component-keys] :ask (fn [boot] {:store :memory :shared? false|true|:by-design :why ... :replacement ...} | nil)}; asked once everything is up, and under [:deploy :shape] :fleet a per-process answer stops the boot. :needs are the components that have to be running for :ask to answer — the same convention as :void.core/cli, and what lets `void deploy check` survey a composition without opening a port
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate store declaration <name>`
 - **contribution schema:**
 
   ```janet
@@ -275,6 +294,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/dash` · **cardinality:** `:many`
 - Tiles on the dashboard overview: {:name :orders/backlog :label "Backlog"? :render (fn [] hiccup)}. A tile that throws renders its error instead of taking the page down
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate dash tile <name>`
 - **contribution schema:**
 
   ```janet
@@ -285,6 +305,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/grpc` · **cardinality:** `:many`
 - Connect codecs: {:name :void.grpc/proto :content-type "application/proto" :aliases [...]? :encoding "proto" :encode (fn [message value] bytes) :decode (fn [message bytes] value)}. `:encoding` is the name Connect's GET form uses in ?encoding=; the first codec whose content type matches a request serves it. void/grpc ships the two the protocol defines, and the point exists because a fleet that speaks a third one internally should not need a second server
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate Connect codec <name>`
 - **contribution schema:**
 
   ```janet
@@ -295,6 +316,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/html` · **cardinality:** `:many`
 - View engines: {:name :render (fn [view context] bytes)}; config [:html :engine] selects the default, a view response's :void.html/engine key overrides per response. The context carries :request, :layout and the response's :void.html/context entries.
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate view engine <name>`
 - **contribution schema:**
 
   ```janet
@@ -305,6 +327,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Request body codecs: {:name :content-type :decode (fn [bytes] value) :encode?}; the parsing middleware decodes a matching request body into (req :parsed-body)
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate body codec <name>`
 - **contribution schema:**
 
   ```janet
@@ -315,6 +338,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total.
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate edge wrapper <name>`
 - **contribution schema:**
 
   ```janet
@@ -325,6 +349,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Error renderers: {:name :fn (fn [err req ctx] response|nil) :priority?}; first response wins, priority order (default 1000)
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate error renderer <name>`
 - **contribution schema:**
 
   ```janet
@@ -335,6 +360,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Global request-lifecycle hooks: {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate lifecycle hook <name>`
 - **contribution schema:**
 
   ```janet
@@ -345,6 +371,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Phased HTTP middleware: {:name :phase 0-10000 :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool?}; :named applies only when a route lists it under :void.http/middleware
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate middleware <name>`
 - **contribution schema:**
 
   ```janet
@@ -355,6 +382,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Route metadata key declarations: {:key :schema? :doc? :merge (:replace :concat :deep-merge :restrict)? :allow?}
+- **key:** `:key` · folded by the point's own :reduce · a repeat fails the boot with `duplicate metadata key <key>`
 - **contribution schema:**
 
   ```janet
@@ -365,6 +393,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Route sources: {:name :routes <router/routes value, or (fn [boot] routes-value)> :env <(router/env-ref (curenv)) for bare handler symbols>?}; every active source lands in the one route table. The function form exists for a source that is a *projection* of something resolved during bootstrap — void/admin turns its resource registry and the pages contributed to :void.admin/page into real routes, and neither is knowable when the manifest freezes. It is called once per table build, so a rebuild after a reload re-projects.
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate route source <name>`
 - **contribution schema:**
 
   ```janet
@@ -375,6 +404,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Session store factories: {:name :make (fn [session-config] store) :shared? boolean :replacement string?}; config [:http :session :store] picks one by name. :shared? is the answer to "would a second replica see this session" — a store that does not say is taken to live in one process's heap, because that is what a store written without the question in mind is
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate session store <name>`
 - **contribution schema:**
 
   ```janet
@@ -416,6 +446,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/mail` · **cardinality:** `:many`
 - Mail transports: {:name :smtp :send (fn [delivery] receipt) :doc string?}; [:mail :transport] names the one this process uses. A delivery is {:message :bytes :id :at}; a receipt is {:transport :id :accepted :rejected}
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate mail transport <name>`
 - **contribution schema:**
 
   ```janet
@@ -436,6 +467,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/mcp` · **cardinality:** `:many`
 - Tools that are not CLI commands: {:name :mcp/thing :doc ... :title ... :read-only? true|false :schema <void schema of the arguments> :needs [component-keys] :fn (fn [;instances arguments] string | {:text ... :error? bool})}. The gate is the same one commands pass: a tool that does not declare itself read-only is exposed only when [:mcp :tools] names it. A contribution may instead carry {:name ... :expand (fn [boot] [tool ...])} — one *projection* of something bootstrap resolved, for a plugin whose tools are derived from a registry the application fills long after its manifest froze (void/admin-mcp turns every declared admin resource into tools this way). An expansion yields ordinary tools and passes the same gate
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate MCP tool <name>`
 - **contribution schema:**
 
   ```janet
@@ -446,6 +478,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/notify` · **cardinality:** `:many`
 - Notification channels: {:name :mail :deliver (fn [payload] receipt) :project (fn [note] payload-or-nil)? :address :email? :permanent? (fn [err] bool)? :needs [component-keys]? :doc string?}; [:notify :channels] names the ones this process delivers on. :project runs where notify/send was called and returns data; :deliver runs where the delivery happens — on a worker, with void/notify-jobs composed. :needs is what :deliver needs *started* there: a worker is a CLI command, a command starts what it declared and nothing else, and a channel that posts over https is the only thing that knows it needs :tls/lib — void/notify-jobs hands the union of the active channels' :needs to the delivery job (void/jobs/job)
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate notification channel <name>`
 - **contribution schema:**
 
   ```janet
@@ -466,6 +499,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/obs` · **cardinality:** `:many`
 - Span exporters: {:name :fn (fn [span]) :doc?}; every finished sampled span is handed to each one, and an exporter that throws is logged rather than allowed to fail the request it was watching
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate span exporter <name>`
 - **contribution schema:**
 
   ```janet
@@ -476,6 +510,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/obs` · **cardinality:** `:many`
 - Auto-instrumentation: {:name :needs [component keys or interfaces]? :install (fn [boot & instances] teardown-thunk?) :doc?}; applied at :after-start and skipped when a named component is not in the composition
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate instrumentation <name>`
 - **contribution schema:**
 
   ```janet
@@ -486,6 +521,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/pressure` · **cardinality:** `:many`
 - Custom pressure checks: {:name :db/pool :fn (fn [] {:ok bool :reason ...}) :doc?}; a check that answers :ok false — or throws — is one more reason to shed
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate pressure check <name>`
 - **contribution schema:**
 
   ```janet
@@ -496,6 +532,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/proto` · **cardinality:** `:many`
 - `.proto` files a plugin ships: {:name :orders/api :path "protos/orders.proto" :paths ["vendor/protos"]?}. Loaded and registered at :before-start, before any route table is built, so void/grpc can project a service declared in a file the application never imported. A plugin that would rather have its descriptors baked into its module uses `proto/defproto` and contributes nothing
+- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate .proto contribution <name>`
 - **contribution schema:**
 
   ```janet
@@ -506,6 +543,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/redis` · **cardinality:** `:many`
 - Value codecs: {:name :encode (fn [value] bytes) :decode (fn [bytes] value)}; config [:redis :codec] picks one by name
+- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate redis codec <name>`
 - **contribution schema:**
 
   ```janet

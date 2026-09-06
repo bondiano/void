@@ -205,13 +205,7 @@
            :path :string
            :paths [:optional [:vector :string]]
            :doc [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate .proto contribution %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name :what ".proto contribution")
 
 # -- custom schema types and the projection ------------------------------
 #

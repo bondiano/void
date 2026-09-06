@@ -60,13 +60,7 @@
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate pressure check %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name)
 
 (plugin/contribute! :void.pressure/check checks/db-pool-contribution)
 

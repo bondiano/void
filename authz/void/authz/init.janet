@@ -59,26 +59,14 @@
            :fn :function
            :needs [:optional [:vector :keyword]]
            :doc [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate attribute provider %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name :what "attribute provider")
 
 (plugin/defextension-point :void.authz/policy
   :doc "Policies contributed by a plugin: {:name :orders/read :fn (fn [ctx] bool|reason-string) :doc?}. An application usually writes `defpolicy` in its own module instead — this is for plugins that ship policies of their own"
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate policy %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name :what "policy")
 
 (plugin/contribute! :void.core/interface
   {:name :void/authz

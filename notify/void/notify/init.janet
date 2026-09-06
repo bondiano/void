@@ -71,13 +71,7 @@
            :permanent? [:optional :function]
            :needs [:optional [:vector :keyword]]
            :health [:optional :function]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate notification channel %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) (channel/normalize c))))
+  :key :name :what "notification channel" :index channel/normalize)
 
 (plugin/contribute! :void.core/interface
   {:name :void/notify

@@ -75,17 +75,7 @@
 (plugin/defextension-point :void.redis/codec
   :doc "Value codecs: {:name :encode (fn [value] bytes) :decode (fn [bytes] value)}; config [:redis :codec] picks one by name"
   :schema {:name :keyword :encode :function :decode :function}
-  :validate (fn [contribs]
-              (def seen @{})
-              (def dupes @[])
-              (each c contribs
-                (if (in seen (c :name))
-                  (array/push dupes (c :name))
-                  (put seen (c :name) true)))
-              (unless (empty? dupes)
-                (errorf "duplicate redis codec %s"
-                        (string/join (map |(string/format "%q" $) dupes) " "))))
-  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
+  :key :name :index true)
 
 (each c codec/builtin (plugin/contribute! :void.redis/codec c))
 

@@ -71,13 +71,8 @@
            :assets [:optional :dictionary]
            :routes [:optional :function]
            :encoding [:optional [:enum :multipart]]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (widget/normalize c)
-                (when (in seen (c :name))
-                  (errorf "duplicate admin widget %q" (c :name)))
-                (put seen (c :name) true)))
+  :key :name
+  :validate (fn [contribs] (each c contribs (widget/normalize c)))
   :reduce |(sorted-by |(- (get $ :priority 100)) $))
 
 # The one route-metadata key this package declares. A widget may ask
@@ -103,46 +98,34 @@
            :method [:optional :keyword]
            :policies [:optional [:vector :keyword]]
            :meta [:optional :dictionary]}
+  :key :name
   :validate (fn [contribs]
-              (def seen @{})
               (each c contribs
-                (when (in seen (c :name))
-                  (errorf "duplicate admin page %q" (c :name)))
                 (unless (string/has-prefix? "/" (c :path))
-                  (errorf "admin page %q: :path must start with /" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+                  (errorf "admin page %q: :path must start with /" (c :name))))))
 
 (plugin/defextension-point :void.admin/dashboard-widget
   :doc "Tiles on the admin index: {:name :orders/today :label \"Orders today\" :render (fn [request] hiccup)}"
   :schema {:name :keyword
            :render :function
            :label [:optional :string]}
-  :validate (fn [contribs]
-              (def seen @{})
-              (each c contribs
-                (when (in seen (c :name)) (errorf "duplicate dashboard widget %q" (c :name)))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+  :key :name :what "dashboard widget")
 
 (plugin/defextension-point :void.admin/menu
   :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}. A link to a page inside the admin says :path instead — {:name :jobs :label \"Jobs\" :path \"/jobs\"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two"
   :schema {:name :keyword :label :string
            :href [:optional :string]
            :path [:optional :string]}
+  :key :name :what "admin menu item"
   :validate (fn [contribs]
-              (def seen @{})
               (each c contribs
-                (when (in seen (c :name)) (errorf "duplicate admin menu item %q" (c :name)))
                 (when (= (nil? (get c :href)) (nil? (get c :path)))
                   (errorf (string "admin menu item %q: name the link once — :href for a URL "
                                   "of its own, :path for one under [:admin :prefix]")
                           (c :name)))
                 (when-let [p (get c :path)]
                   (unless (string/has-prefix? "/" p)
-                    (errorf "admin menu item %q: :path must start with /" (c :name))))
-                (put seen (c :name) true)))
-  :reduce |(sorted-by |($ :name) $))
+                    (errorf "admin menu item %q: :path must start with /" (c :name)))))))
 
 (plugin/defextension-point :void.admin/history
   :doc "Where the history tab of a row comes from: {:name :fn (fn [{:resource :id :request}] [{:at :actor :detail} ...])}. Nobody contributes one by default, so there is no history tab by default — the admin announces changes (:void.admin/changed) and does not keep them"

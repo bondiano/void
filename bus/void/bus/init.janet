@@ -82,22 +82,13 @@
 
 # -- extension points ----------------------------------------------------
 
-(defn- unique-names! [what contribs]
-  (def seen @{})
-  (each c contribs
-    (when (in seen (c :name))
-      (errorf "duplicate %s %q" what (c :name)))
-    (put seen (c :name) true)))
-
 (plugin/defextension-point :void.bus/backend
   :conformance "void/bus/conformance/backend"
   :doc "Message-bus backends: {:name :db :make (fn [bus-config] backend) :doc string?}; [:bus :backend] names the one this process speaks. A backend declares its guarantees ({:delivery :at-most-once|:at-least-once :ordering :none|:per-group :durable :shared}) and the router reads them — see void/bus/backend"
   :schema {:name :keyword
            :doc [:optional :string]
            :make :function}
-  :validate (fn [contribs] (unique-names! "bus backend" contribs))
-  :reduce (fn [contribs]
-            (tabseq [c :in contribs] (c :name) (backend/normalize-factory c))))
+  :key :name :index backend/normalize-factory)
 
 (plugin/defextension-point :void.bus/codec
   :doc "Message codecs: {:name :json :encode (fn [value] bytes) :decode (fn [bytes] value) :bytes? boolean?}; [:bus :codec] picks one by name. :bytes? false means the codec does not produce bytes at all (:raw), which a backend that stores them refuses at start"
@@ -106,8 +97,7 @@
            :encode :function
            :decode :function
            :bytes? [:optional :boolean]}
-  :validate (fn [contribs] (unique-names! "bus codec" contribs))
-  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) (codec/normalize c))))
+  :key :name :index codec/normalize)
 
 (plugin/defextension-point :void.bus/middleware
   :doc "Message middleware: {:name :phase :wrap (fn [handler handler-opts] handler') :named boolean? :when (fn [handler-opts] bool)?}; the same phase scale as :void.http/middleware, and the handler's own options as a second argument because a bus handler's options are fixed at declaration (see void/bus/middleware). A :named contribution applies only to handlers that list it under :middleware"
@@ -117,7 +107,7 @@
            :wrap :function
            :named [:optional :boolean]
            :when [:optional :function]}
-  :validate (fn [contribs] (unique-names! "bus middleware" contribs))
+  :key :name
   :reduce (fn [contribs] (tuple ;(map middleware/normalize contribs))))
 
 (each c codec/builtin (plugin/contribute! :void.bus/codec c))
