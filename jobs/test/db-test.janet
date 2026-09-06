@@ -47,9 +47,9 @@
 
     # -- the schema ------------------------------------------------------
 
-    (assert (>= (length (jobsdb/ddl)) 6)
+    (assert (>= (length (jobsdb/ddl :sqlite)) 6)
             "the ddl covers the queue, its indexes, the locks and the rate windows")
-    (assert (some |(string/find "unique_key IS NOT NULL" $) (jobsdb/ddl))
+    (assert (some |(string/find "unique_key IS NOT NULL" $) (jobsdb/ddl :sqlite))
             "the uniqueness index is partial — a released key is a NULL, not a deleted row")
     (jobsdb/create-tables!)
     (assert true "creating the tables twice is not an error")

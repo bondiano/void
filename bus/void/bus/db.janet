@@ -28,7 +28,8 @@
 ### migration and never a change at the publisher.
 ###
 ### **One reader per group at a time, by lease.** A group is claimed
-### with a token and a deadline in `void_bus_leases`; the holder reads a
+### with a token and a deadline in `void_bus_leases` — a void/db/lease
+### table, the same one void/jobs-db locks with; the holder reads a
 ### batch, delivers it and advances the cursor. Two processes of the same
 ### service therefore do not double-deliver, and a process that dies
 ### holding the lease costs the group one `[:bus-db :lease-ttl]` of
@@ -74,6 +75,7 @@
 (import void/core/errors :as errors)
 (import void/db :as db)
 (import void/db/builder :as builder)
+(import void/db/lease :as lease)
 (import ./backend :as bus-backend)
 (import ./state :as state)
 
@@ -124,65 +126,110 @@
 
 # -- the schema ----------------------------------------------------------
 
-(defn- seq-column [dialect]
+(defn- seq-column
   ``The monotonic column a cursor is a position in. The one piece of
   DDL that cannot be dialect-neutral, and the reason it is worth the
   branch: a cursor needs an ordering that a second inserter cannot
   wedge itself into, and "the id, which happens to sort" is not that
-  once two processes publish in the same second.``
+  once two processes publish in the same second. The builder's
+  `:bigserial` is that column on Postgres and MySQL; on sqlite it
+  spells the rowid alias without AUTOINCREMENT, and a rowid *is*
+  reused once the highest row is deleted — which the pruner does, and
+  a reused seq is a message a cursor has already passed. So sqlite
+  keeps its own spelling.``
+  [dialect]
   (case dialect
-    :postgres "bigserial primary key"
-    :sqlite "integer primary key autoincrement"
-    (errorf "void/bus-db has no message-log DDL for the %q dialect — the log needs a monotonic sequence column, and how to declare one is the one thing SQL does not agree on"
-            dialect)))
+    :sqlite [:seq "integer primary key autoincrement"]
+    [:seq :bigserial {:primary-key true}]))
 
-(defn ddl
-  ``Every statement that creates the tables this backend needs, as a
-  tuple of SQL strings — what `[:bus-db :auto-create]` runs at boot
-  and what `void bus-db ddl` prints for a deployment that would rather
-  run its own migration.``
-  [dialect &opt table]
-  (default table (defaults :table))
+(defn- index-if-not-exists?
+  ``Does this engine take `CREATE INDEX IF NOT EXISTS`? MySQL does not
+  (MariaDB does): there the clause is a syntax error, so the index is
+  created bare and a second boot's ER_DUP_KEYNAME is read as "done" —
+  see `already-there?`. The builder passes the clause through as
+  written; refusing or emulating it per dialect is its business (§8.6).``
+  [dialect]
+  (not= :mysql dialect))
+
+(defn- pending-index
+  ``The forwarder's index. Partial — `WHERE forwarded_at IS NULL` — so
+  it is the size of the backlog, not of the history; that clause is
+  the one piece of DDL here the builder has no spelling for, so it
+  stays a string. MySQL has no partial indexes: there the index is
+  led by the column the read filters on and is the size of the
+  history, which is a slower forwarder and not a wrong one.``
+  [dialect outbox]
+  (def name (string outbox "_pending_idx"))
+  (if (= :mysql dialect)
+    {:create-index name :on outbox :columns [:forwarded-at :created-at]}
+    (string "CREATE INDEX IF NOT EXISTS " name " ON " outbox
+            " (created_at) WHERE forwarded_at IS NULL")))
+
+(defn- statements
+  "The schema as builder statements (and the one string), in creation order."
+  [dialect table]
   (def messages table)
   (def cursors (string table "_cursors"))
   (def leases (string table "_leases"))
   (def outbox (string table "_outbox"))
-  [(string "CREATE TABLE IF NOT EXISTS " messages " (\n"
-           "  seq " (seq-column dialect) ",\n"
-           "  id text not null,\n"
-           "  topic text not null,\n"
-           "  body text,\n"
-           "  meta text,\n"
-           "  published_at double precision not null\n)")
-   (string "CREATE UNIQUE INDEX IF NOT EXISTS " messages "_id_idx ON " messages " (id)")
-   (string "CREATE INDEX IF NOT EXISTS " messages "_topic_idx ON " messages " (topic, seq)")
-   (string "CREATE TABLE IF NOT EXISTS " cursors " (\n"
-           "  group_name text primary key,\n"
-           "  position bigint not null,\n"
-           "  stuck_seq bigint,\n"
-           "  stuck_attempts integer not null,\n"
-           "  updated_at double precision not null\n)")
-   (string "CREATE TABLE IF NOT EXISTS " leases " (\n"
-           "  name text primary key,\n"
-           "  token text not null,\n"
-           "  until double precision not null\n)")
-   (string "CREATE TABLE IF NOT EXISTS " outbox " (\n"
-           "  id text primary key,\n"
-           "  topic text not null,\n"
-           "  body text,\n"
-           "  meta text,\n"
-           "  created_at double precision not null,\n"
-           "  forwarded_at double precision\n)")
-   # partial, so the forwarder's read touches only what it still owes:
-   # the index is the size of the backlog, not of the history
-   (string "CREATE INDEX IF NOT EXISTS " outbox "_pending_idx ON " outbox
-           " (created_at) WHERE forwarded_at IS NULL")])
+  # `:string` where a column is a key or indexed, `:text` where it is a
+  # document: the same `text` on sqlite and Postgres, and on MySQL
+  # only the first is indexable without a prefix length
+  [{:create-table messages :if-not-exists true
+    :columns [(seq-column dialect)
+              [:id :string {:null false}]
+              [:topic :string {:null false}]
+              [:body :text]
+              [:meta :text]
+              [:published-at :double {:null false}]]}
+   {:create-index (string messages "_id_idx") :on messages
+    :if-not-exists (index-if-not-exists? dialect) :columns [:id] :unique true}
+   {:create-index (string messages "_topic_idx") :on messages
+    :if-not-exists (index-if-not-exists? dialect) :columns [:topic :seq]}
+   {:create-table cursors :if-not-exists true
+    :columns [[:group-name :string {:primary-key true}]
+              [:position :bigint {:null false}]
+              [:stuck-seq :bigint]
+              [:stuck-attempts :integer {:null false}]
+              [:updated-at :double {:null false}]]}
+   (lease/statement leases)
+   {:create-table outbox :if-not-exists true
+    :columns [[:id :string {:primary-key true}]
+              [:topic :string {:null false}]
+              [:body :text]
+              [:meta :text]
+              [:created-at :double {:null false}]
+              [:forwarded-at :double]]}
+   (pending-index dialect outbox)])
+
+(defn ddl
+  ``Every statement that creates the tables this backend needs, as a
+  tuple of SQL strings spelled for `dialect` — what `[:bus-db
+  :auto-create]` runs at boot and what `void bus-db ddl` prints for a
+  deployment that would rather run its own migration. A dialect the
+  builder does not know is refused by name.``
+  [dialect &opt table]
+  (default table (defaults :table))
+  (tuple ;(map |(if (string? $) $ (first (builder/format $ dialect)))
+               (statements dialect table))))
+
+(defn- already-there?
+  ``MySQL has no `CREATE INDEX IF NOT EXISTS` (MariaDB does), so on
+  that engine the second boot's index statements fail with
+  ER_DUP_KEYNAME — which for an idempotent schema pass is the answer
+  "done", not an error. Nowhere else: sqlite and Postgres take the
+  clause, and any failure there is real.``
+  [dialect e]
+  (and (= :mysql dialect) (= 1061 (get (errors/data e) :code))))
 
 (defn create-tables!
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
-  (each sql (ddl ((db/current-driver) :dialect) table)
-    (db/execute-sql sql [] {:kind :write :prepared false}))
+  (def dialect ((db/current-driver) :dialect))
+  (each sql (ddl dialect table)
+    (def [ok e] (protect (db/execute-sql sql [] {:kind :write :prepared false})))
+    (unless (or ok (already-there? dialect e))
+      (error e)))
   nil)
 
 # -- statement helpers ---------------------------------------------------
@@ -200,6 +247,9 @@
 
 (defn- postgres? []
   (= :postgres ((db/current-driver) :dialect)))
+
+(defn- mysql? []
+  (= :mysql ((db/current-driver) :dialect)))
 
 (defn- as-text
   ``A codec's output as something a text column can hold. Every codec
@@ -291,9 +341,15 @@
     # duplicates are the direction to fail in (./state on publish-tx!).
     # On Postgres it matters twice over: a failed statement poisons the
     # transaction it is in, and `bus/publish` is allowed inside one.
+    # MySQL has no ON CONFLICT; its ON DUPLICATE KEY UPDATE of a key to
+    # itself is the same no-op (INSERT IGNORE would also swallow every
+    # other error, which is not the bargain)
     (db/execute-sql
       (string "INSERT INTO " tbl " (id, topic, body, meta, published_at) VALUES ("
-              (phs 1 5) ") ON CONFLICT (id) DO NOTHING")
+              (phs 1 5) ")"
+              (if (mysql?)
+                " ON DUPLICATE KEY UPDATE id = id"
+                " ON CONFLICT (id) DO NOTHING"))
       [(env :id) (string (env :topic)) (as-text (env :body))
        (as-text (env :meta-body)) now]
       {:kind :write})
@@ -304,36 +360,14 @@
                       {:kind :write}))
     nil)
 
+  # the leases are void/db/lease's, in `<table>_leases`: the fence, the
+  # first taker's savepoint and the "a lost race is an answer" rule are
+  # written once there, and a release is the row going away
   (defn take-lease! [name tok now ttl]
-    (def n
-      (db/execute-sql
-        (string "UPDATE " leases " SET token = " (ph 1) ", until = " (ph 2)
-                " WHERE name = " (ph 3)
-                " AND (until < " (ph 4) " OR token = " (ph 5) ")")
-        [tok (+ now ttl) name now tok]
-        {:kind :write}))
-    (if (pos? (get n :count 0))
-      true
-      # no row yet: the first taker inserts it, and a lost race there
-      # is a unique violation, which is an answer and not an error —
-      # the only kind that is: a connection that died under the INSERT
-      # propagates, rather than reading as "somebody else has it"
-      (let [[ok e] (protect
-                     (db/execute-sql
-                       (string "INSERT INTO " leases " (name, token, until) VALUES ("
-                               (phs 1 3) ")")
-                       [name tok (+ now ttl)] {:kind :write}))]
-        (cond
-          ok true
-          (errors/kind? e :void.db/unique-violation) false
-          (error e)))))
+    (lease/acquire! leases name tok now ttl))
 
   (defn release-lease! [name tok]
-    (protect
-      (db/execute-sql
-        (string "UPDATE " leases " SET until = 0 WHERE name = " (ph 1)
-                " AND token = " (ph 2))
-        [name tok] {:kind :write}))
+    (protect (lease/release! leases name tok))
     nil)
 
   (defn cursor-of [group]

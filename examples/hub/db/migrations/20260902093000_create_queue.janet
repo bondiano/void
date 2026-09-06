@@ -13,12 +13,16 @@
 ### The queue is in **this** database rather than beside it, which is what
 ### lets a received delivery and the notification it caused be one commit.
 
+(import void/db :as db)
 (import void/jobs/db :as jobs-db)
 
 (def jobs-table "void_jobs")
 
 (defn up []
-  (jobs-db/ddl jobs-table))
+  # SQL strings for the dialect this migration runs against: the
+  # plugin's declaration is one, the spelling is the engine's, and a
+  # migration is where the two meet
+  (jobs-db/ddl ((db/current-driver) :dialect) jobs-table))
 
 (defn down []
   [{:drop-table (string jobs-table "_rates")}

@@ -57,6 +57,7 @@
 (import void/core/errors :as errors)
 (import void/db :as db)
 (import void/db/builder :as builder)
+(import void/db/lease :as lease)
 (import ./backend :as backend)
 (import ./record :as record)
 
@@ -90,70 +91,116 @@
 # -- the schema ----------------------------------------------------------
 
 (def columns
-  ``The column of every record field, in creation order. Kept explicit
-  rather than derived: the table is read by people and by other
-  services, and a column that quietly renames itself when a field does
-  is a migration nobody wrote.``
-  [[:id "text primary key"]
-   [:job "text not null"]
-   [:args "text not null"]
-   [:queue "text not null"]
-   [:priority "integer not null"]
-   [:state "text not null"]
-   [:attempt "integer not null"]
-   [:max_attempts "integer not null"]
-   [:backoff "text"]
-   [:timeout "double precision"]
-   [:run_at "double precision not null"]
-   [:enqueued_at "double precision not null"]
-   [:started_at "double precision"]
-   [:claimed_at "double precision"]
-   [:finished_at "double precision"]
-   [:unique_key "text"]
-   [:unique_until "double precision"]
-   [:group_key "text"]
-   [:parent "text"]
-   [:children_left "integer"]
-   [:children "text"]
-   [:result "text"]
-   [:error "text"]
-   [:failures "text"]
-   [:token "text"]])
+  ``The column of every record field, in creation order, as builder
+  columns — a type name void/db/builder spells per dialect, so the one
+  declaration is the table on every engine. Kept explicit rather than
+  derived: the table is read by people and by other services, and a
+  column that quietly renames itself when a field does is a migration
+  nobody wrote.
 
-(def- col-names (map |(string ($ 0)) columns))
+  `:string` where a column is a key or indexed, `:text` where it is a
+  document: the two are the same `text` on sqlite and Postgres, and
+  on MySQL only the first is indexable without a prefix length.``
+  [[:id :string {:primary-key true}]
+   [:job :string {:null false}]
+   [:args :text {:null false}]
+   [:queue :string {:null false}]
+   [:priority :integer {:null false}]
+   [:state :string {:null false}]
+   [:attempt :integer {:null false}]
+   [:max-attempts :integer {:null false}]
+   [:backoff :text]
+   [:timeout :double]
+   [:run-at :double {:null false}]
+   [:enqueued-at :double {:null false}]
+   [:started-at :double]
+   [:claimed-at :double]
+   [:finished-at :double]
+   [:unique-key :string]
+   [:unique-until :double]
+   [:group-key :string]
+   [:parent :string]
+   [:children-left :integer]
+   [:children :text]
+   [:result :text]
+   [:error :text]
+   [:failures :text]
+   [:token :string]])
+
+(def- col-names (map |(builder/snake ($ 0)) columns))
 (def- col-list (string/join col-names ", "))
+
+(defn- index-if-not-exists?
+  ``Does this engine take `CREATE INDEX IF NOT EXISTS`? MySQL does not
+  (MariaDB does): there the clause is a syntax error, so the index is
+  created bare and a second boot's ER_DUP_KEYNAME is read as "done" —
+  see `already-there?`. The builder passes the clause through as
+  written; refusing or emulating it per dialect is its business (§8.6).``
+  [dialect]
+  (not= :mysql dialect))
+
+(defn- unique-index
+  ``The index that makes unique jobs exact. Partial — `WHERE unique_key
+  IS NOT NULL` — so it is the size of the keys in play, not of the
+  history; that clause is the one piece of DDL here the builder has no
+  spelling for, so it stays a string. MySQL has no partial indexes at
+  all, and a plain unique index is the same promise there: a NULL is
+  distinct from every other NULL in a unique index on every one of
+  the three engines, which is exactly what a released key relies on.``
+  [dialect table]
+  (def name (string table "_unique_idx"))
+  (if (= :mysql dialect)
+    {:create-index name :on table :columns [:unique-key] :unique true}
+    (string "CREATE UNIQUE INDEX IF NOT EXISTS " name " ON " table
+            " (unique_key) WHERE unique_key IS NOT NULL")))
+
+(defn- statements
+  "The schema as builder statements (and the one string), in creation order."
+  [dialect table]
+  (def idempotent-index (index-if-not-exists? dialect))
+  [{:create-table table :if-not-exists true :columns columns}
+   {:create-index (string table "_claim_idx") :on table :if-not-exists idempotent-index
+    :columns [:state :queue :priority :run-at]}
+   (unique-index dialect table)
+   {:create-index (string table "_parent_idx") :on table :if-not-exists idempotent-index
+    :columns [:parent]}
+   (lease/statement (string table "_locks"))
+   {:create-table (string table "_rates") :if-not-exists true
+    :columns [[:queue :string {:null false}]
+              [:window-start :double {:null false}]
+              [:n :integer {:null false}]]
+    :primary-key [:queue :window-start]}])
 
 (defn ddl
   ``Every statement that creates the tables this backend needs, as a
-  tuple of SQL strings — what `[:jobs-db :auto-create]` runs at boot
-  and what `void jobs-db ddl` prints for a deployment that would
-  rather run its own migration.``
-  [&opt table]
+  tuple of SQL strings spelled for `dialect` — what `[:jobs-db
+  :auto-create]` runs at boot and what `void jobs-db ddl` prints for a
+  deployment that would rather run its own migration. The dialect is
+  an argument because the same declaration is a different string on
+  each engine, and a migration file asks for the one it runs against
+  (`((db/current-driver) :dialect)`).``
+  [dialect &opt table]
   (default table (defaults :table))
-  [(string "CREATE TABLE IF NOT EXISTS " table " (\n  "
-           (string/join (map |(string ($ 0) " " ($ 1)) columns) ",\n  ")
-           "\n)")
-   (string "CREATE INDEX IF NOT EXISTS " table "_claim_idx ON " table
-           " (state, queue, priority, run_at)")
-   (string "CREATE UNIQUE INDEX IF NOT EXISTS " table "_unique_idx ON " table
-           " (unique_key) WHERE unique_key IS NOT NULL")
-   (string "CREATE INDEX IF NOT EXISTS " table "_parent_idx ON " table
-           " (parent)")
-   (string "CREATE TABLE IF NOT EXISTS " table "_locks (\n"
-           "  name text primary key,\n"
-           "  token text not null,\n"
-           "  until double precision not null\n)")
-   (string "CREATE TABLE IF NOT EXISTS " table "_rates (\n"
-           "  queue text not null,\n"
-           "  window_start double precision not null,\n"
-           "  n integer not null,\n"
-           "  primary key (queue, window_start)\n)")])
+  (tuple ;(map |(if (string? $) $ (first (builder/format $ dialect)))
+               (statements dialect table))))
+
+(defn- already-there?
+  ``MySQL has no `CREATE INDEX IF NOT EXISTS` (MariaDB does), so on
+  that engine the second boot's index statements fail with
+  ER_DUP_KEYNAME — which for an idempotent schema pass is the answer
+  "done", not an error. Nowhere else: sqlite and Postgres take the
+  clause, and any failure there is real.``
+  [dialect e]
+  (and (= :mysql dialect) (= 1061 (get (errors/data e) :code))))
 
 (defn create-tables!
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
-  (each sql (ddl table)
-    (db/execute-sql sql [] {:kind :write :prepared false}))
+  (def dialect ((db/current-driver) :dialect))
+  (each sql (ddl dialect table)
+    (def [ok e] (protect (db/execute-sql sql [] {:kind :write :prepared false})))
+    (unless (or ok (already-there? dialect e))
+      (error e)))
   nil)
 
 # -- rows <-> records ----------------------------------------------------
@@ -264,7 +311,7 @@
     (db/execute-sql
       (string "INSERT INTO " tbl " (" col-list ") VALUES ("
               (phs 1 (length col-names)) ")")
-      (map |(get row (keyword (string/replace-all "_" "-" $))) col-names)
+      (map |(get row ($ 0)) columns)
       {:kind :write}))
 
   (defn unique-holder [k now]
@@ -451,22 +498,26 @@
      # row is a tbl that only grows
      (when (number? keep-for)
        (def horizon (- now keep-for))
-       (def n (db/execute-sql
-                (string "DELETE FROM " tbl
-                        " WHERE state IN ('completed','dead') AND finished_at < " (ph 1)
-                        " AND id IN (SELECT id FROM " tbl
-                        " WHERE state IN ('completed','dead') AND finished_at < " (ph 2)
-                        " LIMIT " (math/floor prune-batch) ")")
-                [horizon horizon] {:kind :write}))
-       (when (pos? (get n :count 0))
+       # a batch is picked and then deleted by id — two statements
+       # rather than `DELETE ... WHERE id IN (SELECT ... LIMIT n)`,
+       # which sqlite and Postgres take and MySQL refuses (no LIMIT in
+       # an IN subquery, no reading the table being deleted from)
+       (def finished [:and [:in :state ["completed" "dead"]]
+                      [:< :finished-at [:val horizon]]])
+       (def batch (map |(get $ :id)
+                       (db/query-sql {:select [:id] :from tbl :where finished
+                                      :order-by [:finished-at :id]
+                                      :limit (math/floor prune-batch)})))
+       (def n (if (empty? batch)
+                0
+                (db/execute! {:delete tbl :where [:and finished [:in :id batch]]})))
+       (when (pos? n)
          (log/debug "pruned finished job records" :ns log-ns
-                    :rows (get n :count 0) :keep-for keep-for)))
+                    :rows n :keep-for keep-for)))
      # the schedule leases ride along: fire! takes one per slot and
      # never unlocks it, so rows whose lease expired past its grace are
      # this pass's to delete — see lock-keep
-     (db/execute-sql
-       (string "DELETE FROM " locks " WHERE until < " (ph 1))
-       [(- now lock-keep)] {:kind :write})
+     (lease/prune! locks (- now lock-keep))
      (def stale
        (map row->record
             (db/query-sql
@@ -529,48 +580,16 @@
                 :where {:id pid}})
              (when released parent))))))
 
+   # the locks are leases in `<table>_locks` — void/db/lease's take,
+   # renew and release, with the fence and the first taker's savepoint
+   # written once there
    :lock!
    (fn db-lock [name ttl token now]
-     (def until (+ now ttl))
-     (db/with-tx*
-       {}
-       (fn lock-tx []
-         (def cur (first (db/query-sql
-                           [(string "SELECT token, until FROM " locks
-                                    " WHERE name = " (ph 1)) [name]])))
-         (cond
-           (nil? cur)
-           # the INSERT gets its own savepoint: the primary key catches
-           # the race the SELECT could not, and on Postgres that
-           # violation would otherwise abort the transaction it shares
-           # (the 25P02 class push! documents)
-           (let [[ok e] (protect
-                          (db/with-tx*
-                            {}
-                            (fn lock-insert-sp []
-                              (db/execute-sql
-                                (string "INSERT INTO " locks " (name, token, until) VALUES ("
-                                        (phs 1 3) ")")
-                                [name token until] {:kind :write}))))]
-             (cond
-               ok true
-               # lost the race for the row: somebody else holds the lock
-               (errors/kind? e :void.db/unique-violation) false
-               (error e)))
-
-           (or (= token (get cur :token)) (<= (get cur :until 0) now))
-           (pos? (get (db/execute-sql
-                        (string "UPDATE " locks " SET token = " (ph 1) ", until = " (ph 2)
-                                " WHERE name = " (ph 3)
-                                " AND (until <= " (ph 4) " OR token = " (ph 5) ")")
-                        [token until name now token] {:kind :write})
-                      :count 0))
-
-           false))))
+     (lease/acquire! locks name token now ttl))
 
    :unlock!
    (fn db-unlock [name token]
-     (pos? (db/execute! {:delete locks :where {:name name :token token}})))
+     (lease/release! locks name token))
 
    :rate-take!
    (fn db-rate-take [queue limit duration now]
@@ -654,12 +673,16 @@
   {:name :jobs-db/ddl
    :read-only? true
    :doc "Print the SQL this backend needs: void jobs-db ddl"
-   :fn (fn cli-ddl [& args]
+   # the pool, for its dialect: the same declaration is a different
+   # string on each engine, and the one to print is the one this
+   # composition runs against
+   :needs [:db/pool]
+   :fn (fn cli-ddl [_ & args]
          (unless (empty? args)
            (errorf "void jobs-db ddl takes no arguments (got %q)" (string/join args " ")))
          (def cfg (merge defaults
                          (or (get-in plugin/current-boot [:config :values :jobs-db]) {})))
-         (each sql (ddl (cfg :table))
+         (each sql (ddl ((db/current-driver) :dialect) (cfg :table))
            (printf "%s;\n" sql)))})
 
 (plugin/defplugin void/jobs-db

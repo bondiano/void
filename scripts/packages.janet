@@ -156,10 +156,11 @@
 
    :void/jobs
    # void/db-sqlite is what the db backend is tested against;
-   # void/db-postgres is on the path for the SKIP LOCKED suite but is
-   # resolved with `require` only when VOID_TEST_PG names a server.
+   # void/db-postgres and void/db-mysql are on the path for the SKIP
+   # LOCKED and the MySQL suites but are resolved with `require` only
+   # when VOID_TEST_PG / VOID_TEST_MYSQL name a server.
    {:dir "jobs" :deps [:void/core :void/db :void/redis]
-    :test-deps [:void/db-sqlite :void/db-postgres :void/dev] :jpm [:spork]}
+    :test-deps [:void/db-sqlite :void/db-postgres :void/db-mysql :void/dev] :jpm [:spork]}
 
    :void/pressure
    # void/rest in tests only: the 503 goes out as problem+json wherever
@@ -294,15 +295,16 @@
    # bus. Both are separate plugins in this package, the void/cache —
    # void/cache-redis split, so an application whose messages never leave
    # the process composes neither. The suite reaches void/db-sqlite for a
-   # real log to consume from, void/db-postgres for the LISTEN/NOTIFY and
-   # SKIP LOCKED paths
-   # (resolved with `require` only when VOID_TEST_PG names a server)
+   # real log to consume from, void/db-postgres for the LISTEN/NOTIFY
+   # path and void/db-mysql for the polling one on the third engine
+   # (both resolved with `require` only when VOID_TEST_PG /
+   # VOID_TEST_MYSQL name a server),
    # void/obs to prove the trace continues out of a request and into a
    # consumer — bus imports none of the three — and void/dev for
    # `test/start!`, which boots the plugin the way an application
    # would.
    {:dir "bus" :deps [:void/core :void/db :void/jobs]
-    :test-deps [:void/db-sqlite :void/db-postgres :void/obs :void/dev]
+    :test-deps [:void/db-sqlite :void/db-postgres :void/db-mysql :void/obs :void/dev]
     :jpm [:spork]}
 
    :void/kafka

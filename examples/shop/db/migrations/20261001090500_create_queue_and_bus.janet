@@ -33,12 +33,12 @@
   ((db/current-driver) :dialect))
 
 (defn up []
-  # SQL strings rather than statement maps: the message log needs a
-  # monotonic sequence column, and how to declare one is the one piece
-  # of DDL the two engines genuinely do not agree on (void/bus/db) —
-  # so the plugin writes it per dialect and the migration asks for the
+  # SQL strings rather than statement maps: each plugin's schema is one
+  # declaration through the builder, spelled per dialect (a text key
+  # is a varchar on MySQL, the log's sequence column is one thing on
+  # sqlite and another everywhere else), so the migration asks for the
   # dialect it is running against
-  [;(jobs-db/ddl jobs-table)
+  [;(jobs-db/ddl (dialect) jobs-table)
    ;(bus-db/ddl (dialect) bus-table)])
 
 (defn down []
