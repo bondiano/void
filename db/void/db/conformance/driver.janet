@@ -81,6 +81,16 @@
   (when ok (error "expected the statement to fail, and it did not"))
   [(errors/kind e) e])
 
+(defn propagate-visibly
+  ``A suite's uncaught envelope reaches `jpm test` as `error: <struct
+  0x…>`: the runtime describes a frozen table, it does not read one.
+  Say the kind and the message on stderr first, then propagate with
+  the fiber, so the stack that follows is still the suite's.``
+  [name e f]
+  (when (errors/error? e)
+    (eprintf "%s: %s" name (errors/str e)))
+  (propagate e f))
+
 (defn run!
   ``Assert that `drv0` behaves like a `:void/db-driver` when plugged into
   the kernel. `name` names the engine in the failure messages, because
@@ -109,6 +119,7 @@
   (defn drop-table! []
     (db/run {:drop-table table :if-exists true} {:prepared false}))
 
+  (try
   (defer (do (with-dyns [db/pool-dyn p] (drop-table!))
              (pool/close-all! p))
     (with-dyns [db/pool-dyn p]
@@ -351,6 +362,7 @@
             (assert (= 1 (db/value {:select [[:raw "count(*) AS n"]] :from table
                                     :where [:= :email "types@x.y"]}))
                     (note "the pool serves the next query on a fresh connection")))))))
+    ([e f] (propagate-visibly name e f)))
 
   (printf "%s: db-driver conformance OK" name)
   true)

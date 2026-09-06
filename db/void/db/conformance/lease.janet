@@ -21,6 +21,7 @@
 (import ../lease :as lease)
 (import ../pool :as pool)
 (import ../state :as db)
+(import ./driver :as suite)
 
 (defn run!
   ``Assert that void/db/lease keeps its promise over `drv0`. `name`
@@ -45,6 +46,7 @@
   (defn drop-table! []
     (db/run {:drop-table table :if-exists true} {:prepared false}))
 
+  (try
   (defer (do (with-dyns [db/pool-dyn p] (drop-table!))
              (pool/close-all! p))
     (with-dyns [db/pool-dyn p]
@@ -145,6 +147,7 @@
         (assert (= 1 (length (filter |(get $ 1) results)))
                 (note "and exactly one of them holds the lease"))
         (assert (lease/holder table "race") (note "which the table agrees with")))))
+    ([e f] (suite/propagate-visibly name e f)))
 
   (printf "void/db/lease conformance (%s) OK" name)
   nil)
