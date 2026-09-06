@@ -91,12 +91,11 @@
       # across ev/go tasks — which is exactly the task root
       (put entry :owner (fiber/root))
       # on any exit — a normal return, an error, or a fiber cancelled
-      # mid-query — a connection the driver reports as left mid-protocol
-      # (a cancelled query, an undrained result stream) is discarded, not
-      # handed to the next owner to read the previous one's result
-      (defer (do (unless (driver/reusable? (pool/driver-of p) (entry :conn))
-                   (pool/discard! entry))
-                 (pool/checkin p entry))
+      # mid-query — the entry goes back through checkin, which asks the
+      # driver's :reusable? and closes a connection left mid-protocol
+      # (a cancelled query, an undrained result stream) rather than hand
+      # it to the next owner to read the previous one's result
+      (defer (pool/checkin p entry)
         (with-dyns [conn-dyn entry]
           (f entry))))))
 
