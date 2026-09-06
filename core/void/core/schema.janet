@@ -22,9 +22,7 @@
 ### stored but never consulted by validation (`db-annotations`).
 
 (import ./errors :as errors)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import ./util :as util)
 
 (defn- path-str [path]
   (string/format "[%s]"
@@ -35,9 +33,6 @@
        (not= v math/inf)
        (not= v (- math/inf))
        (= v (math/trunc v))))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
 
 # -- registries ----------------------------------------------------------
 
@@ -76,7 +71,7 @@
   (when (in combinator-heads name)
     (errorf "schema type %q collides with a built-in combinator" name))
   (def pred (get spec :validate))
-  (unless (callable? pred)
+  (unless (util/callable? pred)
     (errorf "schema type %q: :validate must be a function, got %q" name pred))
   (put type-registry name
        {:pred pred
@@ -123,7 +118,7 @@
    [:table {:validate (fn [v _] (table? v)) :kind :sized}]
    [:struct {:validate (fn [v _] (struct? v)) :kind :sized}]
    [:dictionary {:validate (fn [v _] (dictionary? v)) :kind :sized}]
-   [:function {:validate (fn [v _] (callable? v))}]]
+   [:function {:validate (fn [v _] (util/callable? v))}]]
   (register-type! name spec))
 
 (def- alnum '(range "az" "AZ" "09"))
@@ -184,7 +179,7 @@
     (unless (= :bytes (tdef :kind))
       (errorf "schema %q: :format only applies to string-like types" head))
     (unless (in format-registry f)
-      (errorf "unknown string format %q (known: %s)" f (names-str (keys format-registry)))))
+      (errorf "unknown string format %q (known: %s)" f (util/names-str (keys format-registry)))))
   (node head out []))
 
 (defn- map-node [props-form entries-form]
@@ -249,7 +244,7 @@
         (node :ref {:name (form 1)} []))
 
     :pred
-    (do (arity (and (<= 2 n 3) (callable? (form 1))) "[:pred fn message?]")
+    (do (arity (and (<= 2 n 3) (util/callable? (form 1))) "[:pred fn message?]")
         (node :pred {:fn (form 1) :message (get form 2)} []))
 
     :peg
@@ -267,7 +262,7 @@
       (do (arity (<= n 2) "[type props?]")
           (type-node head (get form 1)))
       (errorf "unknown schema head %q (types: %s)"
-              head (names-str (keys type-registry))))))
+              head (util/names-str (keys type-registry))))))
 
 (defn normalize
   ``Normalize any schema form into a node struct {:type :props
@@ -335,7 +330,7 @@
                (get schema-registry name)))
   (unless sch
     (errorf "schema %q is not registered (schemas: %s; types: %s)"
-            name (names-str (keys schema-registry)) (names-str (keys type-registry))))
+            name (util/names-str (keys schema-registry)) (util/names-str (keys type-registry))))
   (normalize sch))
 
 # -- errors and messages -------------------------------------------------
@@ -348,7 +343,7 @@
   {:type (fn [e] (string/format "expected %q, got %q" (e :expected) (e :value)))
    :literal (fn [e] (string/format "expected exactly %q, got %q" (e :expected) (e :value)))
    :enum (fn [e] (string/format "expected one of %s, got %q"
-                                (names-str (e :values)) (e :value)))
+                                (util/names-str (e :values)) (e :value)))
    :union (fn [e] (string/format "no union branch matched %q" (e :value)))
    :missing (fn [_] "required key is missing")
    :unknown (fn [_] "unknown key in a closed map")
@@ -374,7 +369,7 @@
   (def m (get err :message))
   (def msg
     (cond
-      (callable? m) (m err)
+      (util/callable? m) (m err)
       m m
       (let [f (or (get (dyn :void.schema/messages {}) (err :code))
                   (get default-messages (err :code)))]
@@ -566,7 +561,7 @@
   (eachk k opts
     (unless (in allowed-check-opts k)
       (errorf "schema/check: unknown option %q (allowed: %s)"
-              k (names-str (keys allowed-check-opts)))))
+              k (util/names-str (keys allowed-check-opts)))))
   (def errors @[])
   (def v (visit (normalize sch) value [] errors opts))
   {:value v :errors (tuple ;errors)})
@@ -652,7 +647,7 @@
           (if-let [sub (get entries k)]
             [k sub]
             (errorf "schema/select: key %q not in schema (has: %s)"
-                    k (names-str (keys entries)))))))
+                    k (util/names-str (keys entries)))))))
 
 # -- projections ---------------------------------------------------------
 
@@ -670,7 +665,7 @@
   [name f]
   (unless (keyword? name)
     (errorf "projection name must be a keyword, got %q" name))
-  (unless (callable? f)
+  (unless (util/callable? f)
     (errorf "projection %q must be a function, got %q" name f))
   (put projection-registry name f)
   name)
@@ -681,7 +676,7 @@
   [name sch & args]
   (def f (or (get projection-registry name)
              (errorf "unknown schema projection %q (known: %s)"
-                     name (names-str (keys projection-registry)))))
+                     name (util/names-str (keys projection-registry)))))
   (f (normalize sch) ;args))
 
 (register-projection! :validator

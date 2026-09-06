@@ -26,6 +26,7 @@
 (import ./assets :as assets)
 (import ./tailwind :as tailwind)
 (import ./temple :as temple)
+(import void/core/util :as util)
 
 # -- re-exported view vocabulary -----------------------------------------
 
@@ -64,14 +65,11 @@
                 (put seen (c :name) true)))
   :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
 (plugin/contribute! :void.html/engine
   {:name :hiccup
    :doc "The hiccup pipeline: a view is hiccup data or (fn [context] hiccup); a layout is (fn [content context] hiccup)"
    :render (fn hiccup-render [view context]
-             (def content (if (callable? view) (view context) view))
+             (def content (if (util/callable? view) (view context) view))
              (hiccup/render
                (if-let [layout (get context :layout)]
                  (layout content context)

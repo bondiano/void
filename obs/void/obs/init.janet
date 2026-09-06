@@ -66,6 +66,7 @@
 (import ./runtime :as runtime)
 (import ./log :as obslog)
 (import ./instrument :as instrument)
+(import void/core/util :as util)
 
 (def log-ns
   "Log namespace — spelled out, since the file-derived default would
@@ -74,20 +75,12 @@
 
 # -- extension points ----------------------------------------------------
 
-(defn- unique-by [what f]
-  (fn [contribs]
-    (def seen @{})
-    (each c contribs
-      (def k (f c))
-      (when (in seen k) (errorf "duplicate %s %q" what k))
-      (put seen k true))))
-
 (plugin/defextension-point :void.obs/exporter
   :doc "Span exporters: {:name :fn (fn [span]) :doc?}; every finished sampled span is handed to each one, and an exporter that throws is logged rather than allowed to fail the request it was watching"
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
-  :validate (unique-by "span exporter" |($ :name))
+  :validate (util/unique-by "span exporter" |($ :name))
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/defextension-point :void.obs/instrument
@@ -96,7 +89,7 @@
            :needs [:optional [:vector :keyword]]
            :install :function
            :doc [:optional :string]}
-  :validate (unique-by "instrumentation" |($ :name))
+  :validate (util/unique-by "instrumentation" |($ :name))
   :reduce |(sorted-by |($ :name) $))
 
 (plugin/contribute! :void.core/interface

@@ -25,6 +25,7 @@
 ### it is what puts an RPC method within reach of `:void.cache/response`
 ### and of every cache between here and the client.
 
+(import void/core/deadline :as deadline)
 (import void/http/ring :as ring)
 (import void/http/router :as router)
 (import void/proto/descriptor :as desc)
@@ -65,27 +66,17 @@
 (defn- run-handler
   ``Call the handler, honouring the client's `Connect-Timeout-Ms`.
 
-  With a deadline the call runs as its own task, so the deadline
-  cancels *that* and never the fiber underneath — the same shape
-  void/http's `run-handler` uses, and for the same upstream reason
-  (janet-lang/janet#1337).``
+  With a deadline the call runs as its own task (void/core/deadline),
+  so the deadline cancels *that* and never the fiber underneath — the
+  same shape void/http's `run-handler` uses, and for the same upstream
+  reason (janet-lang/janet#1337).``
   [call handler message req timeout]
   (defn invoke [] (with-dyns [call-dyn call] (handler message req)))
-  (if (nil? timeout)
-    (invoke)
-    (do
-      (def sup (ev/chan 1))
-      (def task (ev/go (fn handler-task [] (invoke)) nil sup))
-      (ev/deadline timeout task task)
-      (def [sig fib] (ev/take sup))
-      (def value (fiber/last-value fib))
-      (cond
-        (= :ok sig) value
-        (and (string? value) (string/find "deadline" value))
-        (codes/fail! :deadline_exceeded
-                     (string/format "the client's Connect-Timeout-Ms of %d ms ran out"
-                                    (math/round (* 1000 timeout))))
-        (error value)))))
+  (deadline/call timeout invoke
+                 (fn []
+                   (codes/fail! :deadline_exceeded
+                                (string/format "the client's Connect-Timeout-Ms of %d ms ran out"
+                                               (math/round (* 1000 timeout)))))))
 
 (defn- panic-message
   ``What a client is told when a handler raised something that is not

@@ -14,11 +14,7 @@
 ### take the process down), and a handler registered for one is
 ### reported at boot with a did-you-mean, the way extension points are.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
+(import ./util :as util)
 
 (def lifecycle-hooks
   "Hooks fired by the core lifecycle itself: :config-loaded,
@@ -108,7 +104,7 @@
   [reg hook f & kvs]
   (unless (keyword? hook)
     (errorf "hook name must be a keyword, got %q" hook))
-  (unless (callable? f)
+  (unless (util/callable? f)
     (errorf "hook %q: handler must be a function, got %q" hook f))
   (when (odd? (length kvs))
     (errorf "hook %q: expected key-value option pairs" hook))
@@ -118,7 +114,7 @@
   (eachk k opts
     (unless (in allowed-handler-opts k)
       (errorf "hook %q: unknown option %q (allowed: %s)"
-              hook k (names-str (keys allowed-handler-opts)))))
+              hook k (util/names-str (keys allowed-handler-opts)))))
   (def name (get opts :name (keyword (gensym))))
   (unless (keyword? name)
     (errorf "hook %q: :name must be a keyword, got %q" hook name))

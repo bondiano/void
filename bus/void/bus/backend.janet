@@ -70,8 +70,7 @@
 ### a backend that is not `:durable`, because an outbox in front of a
 ### queue that forgets is a longer way to lose the message.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (def- required [:publish! :consume! :stop!])
 (def- optional [:close :stats :health])
@@ -117,11 +116,11 @@
     (errorf "bus backend must be a dictionary, got %q" b))
   (def name (get b :name :anonymous))
   (each k required
-    (unless (callable? (get b k))
+    (unless (util/callable? (get b k))
       (errorf "bus backend %q: %q must be a function, got %q" name k (get b k))))
   (each k optional
     (when-let [f (get b k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "bus backend %q: %q must be a function, got %q" name k f))))
   (table/to-struct
     (merge
@@ -142,7 +141,7 @@
   (def name (get c :name))
   (unless (keyword? name)
     (errorf "bus backend contribution: :name must be a keyword, got %q" name))
-  (unless (callable? (get c :make))
+  (unless (util/callable? (get c :make))
     (errorf "bus backend %q: :make must be a function, got %q" name (get c :make)))
   (table/to-struct (merge @{:doc nil} c)))
 

@@ -58,6 +58,7 @@
 ### `void/obs/instrument` uses, so the client stays free of any
 ### knowledge that observability exists.
 
+(import void/core/deadline :as deadline)
 (import ./wire :as wire)
 (import ./multipart :as multipart)
 
@@ -502,18 +503,7 @@
   client used inside a request should not pay for a supervisor it did
   not ask for.``
   [seconds f]
-  (if (nil? seconds)
-    (f)
-    (let [sup (ev/chan 1)
-          task (ev/go (fn client-task [] (f)) nil sup)]
-      (ev/deadline seconds task task)
-      (def [sig fib] (ev/take sup))
-      (def value (fiber/last-value fib))
-      (cond
-        (= :ok sig) value
-        (and (string? value) (string/find "deadline" value))
-        (error {:void.http/timeout true})
-        (error value)))))
+  (deadline/call seconds f (fn [] (error {:void.http/timeout true}))))
 
 (defn- write! [conn bytes]
   (def [ok err] (protect (:write conn bytes)))

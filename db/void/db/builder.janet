@@ -18,6 +18,8 @@
 ### only differ in placeholder style and quoting and live in a registry
 ### so drivers can add their own.
 
+(import void/core/util :as util)
+
 (def null
   "Explicit SQL NULL for value positions — Janet dictionaries cannot
   hold nil, so {:set {:deleted-at db/null}} sets the column to NULL."
@@ -85,7 +87,7 @@
   (unless (keyword? name)
     (errorf "dialect name must be a keyword, got %q" name))
   (def ph (get spec :placeholder))
-  (unless (or (function? ph) (cfunction? ph))
+  (unless (util/callable? ph)
     (errorf "dialect %q: :placeholder must be a function, got %q" name ph))
   (put dialect-registry name
        {:name name

@@ -46,12 +46,11 @@
 ### replica reads the same configuration and holds the same users. A
 ### store built out of config is shared by construction.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (defn- require-fns [kind st name required]
   (each k required
-    (unless (callable? (get st k))
+    (unless (util/callable? (get st k))
       (errorf "%s %q: %q must be a function, got %q" kind name k (get st k)))))
 
 # -- user store ----------------------------------------------------------

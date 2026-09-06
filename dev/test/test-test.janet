@@ -123,4 +123,26 @@
 
 (rm-rf snap-dir)
 
+# -- service: the gate every live-server suite stands behind ----------------
+
+(def gate (test/service "VOID_TEST_TEST_SERVICE" "a test:// url"))
+(assert (= "VOID_TEST_TEST_SERVICE" (gate :env-var)))
+(os/setenv "VOID_TEST_TEST_SERVICE" nil)
+(assert (nil? ((gate :value))) "unset: no value")
+(assert (not ((gate :available?))) "and nothing to test against")
+(os/setenv "VOID_TEST_TEST_SERVICE" "   ")
+(assert (nil? ((gate :value))) "blank is unset — a stray space in CI is not a server")
+(assert (not ((gate :available?))))
+(os/setenv "VOID_TEST_TEST_SERVICE" " test://127.0.0.1:1/9 ")
+(assert (= "test://127.0.0.1:1/9" ((gate :value))) "trimmed")
+(assert ((gate :available?)))
+(os/setenv "VOID_TEST_TEST_SERVICE" nil)
+(def announced
+  (let [buf @""]
+    (with-dyns [:out buf] ((gate :skip) "some-suite"))
+    (string buf)))
+(assert (= "some-suite: SKIPPED (set VOID_TEST_TEST_SERVICE to a test:// url)\n" announced)
+        "the skip line names the suite, the variable and what to set it to")
+(assert (nil? ((gate :skip) "quiet")) "and skip returns nil, so it can stand in an if")
+
 (print "test-test: all assertions passed")

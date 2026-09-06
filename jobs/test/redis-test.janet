@@ -2,6 +2,7 @@
 (import void/jobs/conformance/backend :as conformance)
 (import void/core/log :as log)
 (import void/core/plugin :as plugin)
+(import void/test :as test)
 (import void/redis/codec :as codec)
 (import void/redis/commands :as rcmd)
 (import void/redis/config :as rconfig)
@@ -78,11 +79,11 @@
 
 # -- against a real server -----------------------------------------------
 
-(def url (when-let [v (os/getenv env-var)]
-           (unless (empty? (string/trim v)) (string/trim v))))
+(def- gate (test/service env-var "a redis:// url"))
+(def url ((gate :value)))
 
 (if (nil? url)
-  (printf "redis-test: SKIPPED (set %s to a redis:// url)" env-var)
+  ((gate :skip) "redis-test")
   (do
     (def cfg {:url url :prefix (string "void-test:jobs:" (os/getpid) ":")})
     (def client

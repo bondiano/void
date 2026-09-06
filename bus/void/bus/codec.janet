@@ -40,9 +40,7 @@
 ### nil three frames later.
 
 (import spork/json)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (def raw
   ``No encoding: the value goes to the backend as it is. Usable only
@@ -93,7 +91,7 @@
   (unless (keyword? name)
     (errorf "bus codec: :name must be a keyword, got %q" name))
   (each k [:encode :decode]
-    (unless (callable? (get c k))
+    (unless (util/callable? (get c k))
       (errorf "bus codec %q: %q must be a function, got %q" name k (get c k))))
   (table/to-struct (merge @{:bytes? true :doc nil} c)))
 

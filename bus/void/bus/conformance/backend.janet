@@ -70,9 +70,7 @@
 (import ../codec :as codec)
 (import ../router :as router)
 (import ../state :as state)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (defn- forget-all! []
   (each n (router/defined) (router/forget! n)))
@@ -147,7 +145,7 @@
 
     (assert (keyword? (b :name)) (note "a backend names itself"))
     (each k [:publish! :consume! :stop! :close :stats]
-      (assert (callable? (b k))
+      (assert (util/callable? (b k))
               (note (string k " is callable after normalize — the broker never checks"))))
     (assert (index-of (get-in b [:guarantees :delivery]) backend/deliveries)
             (note "and declares a delivery guarantee the router knows"))

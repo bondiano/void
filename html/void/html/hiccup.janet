@@ -14,6 +14,7 @@
 ### (when x {:checked x}).
 
 (import spork/htmlgen)
+(import void/core/util :as util)
 
 (def raw
   "(raw text) — splice unescaped HTML (spork/htmlgen)."
@@ -26,9 +27,6 @@
 (def doctype
   "The HTML5 doctype, ready to splice into a fragment."
   htmlgen/doctype-html)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
 
 (defn- clean-attrs
   "Drop nil-valued attributes; keep everything else as-is."
@@ -48,7 +46,7 @@
     (do
       (def head (first node))
       (cond
-        (callable? head)
+        (util/callable? head)
         (expand (head ;(tuple/slice node 1)))
 
         (or (keyword? head) (symbol? head))

@@ -35,10 +35,10 @@
 ###                        opens, so the next poll does not repeat the
 ###                        round trip
 ###
-### Timeouts run the handler as its own ev task with `ev/deadline` on it,
-### never `ev/with-deadline` around it: that cancels the *root* task, and
-### cancelling this loop mid-ev-operation is the upstream bug class
-### void/http already documented.
+### Timeouts run the handler as its own ev task with `ev/deadline` on it
+### (void/core/deadline), never `ev/with-deadline` around it: that cancels
+### the *root* task, and cancelling this loop mid-ev-operation is the
+### upstream bug class void/http already documented.
 ###
 ### Shutdown is a drain, not a kill: `stop!` closes the stop channel,
 ### every napping fiber wakes at once, the ones holding a job are given
@@ -66,6 +66,7 @@
 
 (import void/core/log :as log)
 (import void/core/errors :as errors)
+(import void/core/deadline :as deadline)
 (import ./backend :as backend)
 (import ./job :as job)
 (import ./record :as record)
@@ -278,27 +279,17 @@
   [d r]
   (def args (r :args))
   (def timeout (get r :timeout))
-  (if (nil? timeout)
-    (with-dyns [state/current-job-dyn r] ((job/handler d) ;args))
-    (do
-      (def sup (ev/chan 1))
-      (def task (ev/go (fn job-task []
-                         (with-dyns [state/current-job-dyn r]
-                           ((job/handler d) ;args)))
-                       nil sup))
-      (ev/deadline timeout task task)
-      (def [sig fib] (ev/take sup))
-      (def value (fiber/last-value fib))
-      (cond
-        (= :ok sig) value
-        # the cancellation value matched whole (errors/deadline?), never
-        # as a substring: a job whose own error mentions a deadline is
-        # a failure, not a timeout
-        (errors/deadline? value)
-        (errors/raise :void.jobs/timeout
-                      (string/format "timed out after %.3g s" timeout)
-                      {:timeout timeout})
-        (error value)))))
+  (deadline/call timeout
+                 (fn job-task []
+                   (with-dyns [state/current-job-dyn r]
+                     ((job/handler d) ;args)))
+                 # the cancellation value is matched whole (errors/deadline?),
+                 # never as a substring: a job whose own error mentions a
+                 # deadline is a failure, not a timeout
+                 (fn []
+                   (errors/raise :void.jobs/timeout
+                                 (string/format "timed out after %.3g s" timeout)
+                                 {:timeout timeout}))))
 
 (defn run-one!
   ``Run one claimed record to its conclusion and settle it. Never
@@ -344,14 +335,9 @@
   never touches this fiber's root task.``
   [w seconds]
   (def ch (w :stop-chan))
-  (if (or (w :stopped) (nil? ch))
-    nil
-    (do
-      (def sup (ev/chan 1))
-      (def task (ev/go (fn stop-waiter [] (ev/take ch)) nil sup))
-      (ev/deadline seconds task task)
-      (ev/take sup)
-      nil)))
+  (unless (or (w :stopped) (nil? ch))
+    (deadline/run seconds (fn stop-waiter [] (ev/take ch))))
+  nil)
 
 (defn- pause-queue! [w qname until]
   (put-in w [:paused qname] until)
@@ -484,14 +470,13 @@
   (def deadline (+ (os/clock :monotonic) limit))
   (var left (length (w :fibers)))
   (while (and (pos? left) (< (os/clock :monotonic) deadline))
-    (def sup2 (ev/chan 1))
-    (def task (ev/go (fn waiter [] (ev/take sup)) nil sup2))
-    (ev/deadline (max 0.01 (- deadline (os/clock :monotonic))) task task)
-    (def [sig _] (ev/take sup2))
+    (def [outcome _]
+      (deadline/run (max 0.01 (- deadline (os/clock :monotonic)))
+                    (fn waiter [] (ev/take sup))))
     # :ok is the waiter handing over one fiber's exit — count it
     # drained, whatever the fiber's last value was (a runner's is nil).
-    # :error is the deadline cancelling the waiter: time is up
-    (if (= :ok sig) (-- left) (break)))
+    # anything else is the deadline (or a closed supervisor): time is up
+    (if (= :ok outcome) (-- left) (break)))
   (def stuck (length (w :running)))
   (put w :stop-chan nil)
   (array/clear (w :fibers))

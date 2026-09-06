@@ -31,9 +31,7 @@
 (import void/html/hiccup :as hiccup)
 (import void/http/router :as router)
 (import ./resource :as res)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 # -- normalization -------------------------------------------------------
 
@@ -53,12 +51,12 @@
       (errorf "admin widget %q: unknown key %q (allowed: %s)"
               (get w :name :anonymous) k
               (string/join (map |(string/format "%q" $) (sorted (keys allowed-keys))) " "))))
-  (unless (callable? (get w :render))
+  (unless (util/callable? (get w :render))
     (errorf "admin widget %q: :render is required and must be a function"
             (get w :name :anonymous)))
   (each k [:display :filter :parse :routes]
     (when-let [f (get w k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "admin widget %q: %q must be a function, got %q"
                 (get w :name :anonymous) k f))))
   # :encoding is how a widget says its control cannot ride a urlencoded

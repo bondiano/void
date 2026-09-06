@@ -36,8 +36,7 @@
 
 (import void/proto/descriptor :as desc)
 (import void/http/router :as router)
-
-(defn- callable? [x] (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (defn path-of
   "The path a Connect call to this method arrives on."
@@ -69,7 +68,7 @@
   (unless (and (dictionary? spec) (keyword? (spec :name)))
     (errorf "void/grpc: an rpc binding needs a keyword :name, got %q" spec))
   (def handler (spec :handler))
-  (unless (or (symbol? handler) (callable? handler))
+  (unless (or (symbol? handler) (util/callable? handler))
     (errorf "void/grpc: rpc %q needs a handler function or symbol, got %q"
             (spec :name) handler))
   (def meta (get spec :meta {}))

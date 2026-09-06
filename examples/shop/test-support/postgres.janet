@@ -9,18 +9,14 @@
 # other was skipped — the same bargain void/db-postgres, void/redis and
 # void/jobs strike.
 
+(import void/test :as test)
+
 (def env-var "VOID_TEST_PG")
 
-(defn conninfo
-  "The configured server, or nil."
-  []
-  (when-let [v (os/getenv env-var)]
-    (unless (empty? (string/trim v)) (string/trim v))))
+(def- gate (test/service env-var "a conninfo or a postgres:// url"))
 
-(defn available?
-  "Is there a server to test against?"
-  []
-  (not (nil? (conninfo))))
+(def conninfo "The configured server, or nil." (gate :value))
+(def available? "Is there a server to test against?" (gate :available?))
 
 (defn config
   ``The [:db-postgres] config slice for the configured server: the

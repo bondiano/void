@@ -14,12 +14,10 @@
 (import void/core/hooks :as hooks)
 (import void/core/deploy :as deploy)
 (import ./dev/generate :as gen)
+(import void/core/util :as util)
 
 (def- allowed-opts
   {:plugins true :profile true :config true :only true :components true})
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
 
 (defn- deps-closure [sys ks]
   (def needed @{})
@@ -27,7 +25,7 @@
     (unless (in needed k)
       (unless (get-in sys [:components k])
         (errorf "test/start!: unknown component %q in :only (components: %s)"
-                k (names-str (keys (sys :components)))))
+                k (util/names-str (keys (sys :components)))))
       (put needed k true)
       (each rk (values (get-in sys [:resolution k] {}))
         (visit rk))))
@@ -51,7 +49,7 @@
   (eachk k opts
     (unless (in allowed-opts k)
       (errorf "test/start!: unknown option %q (allowed: %s)"
-              k (names-str (keys allowed-opts)))))
+              k (util/names-str (keys allowed-opts)))))
   (def boot-opts
     (tabseq [k :in [:plugins :config] :when (get opts k)] k (opts k)))
   (put boot-opts :profile (get opts :profile :test))
@@ -109,6 +107,35 @@
      (def ,sym (,start! ,opts))
      (defer (,stop! ,sym)
        ,;body)))
+
+# -- live services -------------------------------------------------------
+
+(defn service
+  ``A live service a suite can be gated on — a database, a broker, a
+  bucket — named by an environment variable, so the suite asks for it
+  by name rather than guessing at one or starting one:
+
+      (def- pg (test/service "VOID_TEST_PG" "a conninfo or a postgres:// url"))
+      (if-not ((pg :available?)) ((pg :skip) "driver-test") ...)
+
+  Returns `{:env-var :value :available? :skip}`: `value` is the
+  variable's trimmed content, nil when it is unset or blank; `skip`
+  announces a skipped suite the way a passing one announces itself —
+  `<suite>: SKIPPED (set VAR to <hint>)` — so a scrolled-past CI log
+  still says which is which, and returns nil. What can be tested
+  without the service always runs: a missing server is not a broken
+  driver, and a suite that cannot be run at all is a suite nobody
+  runs.``
+  [env-var hint]
+  (defn value []
+    (when-let [v (os/getenv env-var)]
+      (unless (empty? (string/trim v)) (string/trim v))))
+  {:env-var env-var
+   :value value
+   :available? (fn [] (not (nil? (value))))
+   :skip (fn [suite]
+           (printf "%s: SKIPPED (set %s to %s)" suite env-var hint)
+           nil)})
 
 (defn generate
   "Generate a sample value for a schema — see void/dev/generate."

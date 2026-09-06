@@ -18,42 +18,10 @@
 ### keys; loosening is an error).
 
 (import ./schema :as schema)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import ./util :as util)
 
 (defn- err-str [e]
   (if (string? e) e (describe e)))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
-
-# -- did-you-mean --------------------------------------------------------
-
-(defn- levenshtein [a b]
-  (def lb (length b))
-  (var prev (seq [j :range [0 (inc lb)]] j))
-  (for i 1 (inc (length a))
-    (def cur @[i])
-    (for j 1 (inc lb)
-      (array/push cur
-                  (min (inc (cur (dec j)))
-                       (inc (prev j))
-                       (+ (prev (dec j))
-                          (if (= (a (dec i)) (b (dec j))) 0 1)))))
-    (set prev cur))
-  (prev lb))
-
-(defn- suggest [name candidates]
-  (def s (string name))
-  (var best nil)
-  (var best-d math/inf)
-  (each c (sorted candidates)
-    (def d (levenshtein s (string c)))
-    (when (< d best-d) (set best-d d) (set best c)))
-  (if (and best (<= best-d 3) (< best-d (length s)))
-    (string/format " — did you mean %q?" best)
-    ""))
 
 # -- key declarations ----------------------------------------------------
 
@@ -93,13 +61,13 @@
   (eachk k opts
     (unless (in allowed-decl-keys k)
       (errorf "metadata key %q: unknown option %q (allowed: %s)"
-              key k (names-str (keys allowed-decl-keys)))))
+              key k (util/names-str (keys allowed-decl-keys)))))
   (def strat (get opts :merge :replace))
   (unless (in strategies strat)
     (errorf "metadata key %q: :merge must be one of :replace :concat :deep-merge :restrict, got %q"
             key strat))
   (when (= strat :restrict)
-    (unless (callable? (get opts :allow?))
+    (unless (util/callable? (get opts :allow?))
       (errorf "metadata key %q: :merge :restrict requires an :allow? function (fn [outer inner] bool)"
               key)))
   (when-let [d (get opts :doc)]
@@ -281,7 +249,7 @@
         (nil? (get dm k))
         (array/push errors
                     (string/format "unknown metadata key %q (layer %q)%s"
-                                   k source (suggest k (keys dm))))
+                                   k source (util/suggest k (keys dm))))
 
         (do
           (def decl (dm k))

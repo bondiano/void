@@ -39,6 +39,7 @@
 ###                                           ;     :queries :query-us}
 
 (import ./errors :as errors)
+(import ./deadline :as deadline)
 
 (errors/define! :void.core/pool-timeout
   {:status 503 :doc "no pooled resource became free within :checkout-timeout"})
@@ -170,12 +171,9 @@
   waits in `slot` (the child took it before dying) or in the channel,
   and `await` rehomes it.``
   [ch timeout slot]
-  (def sup (ev/chan 1))
-  (def task (ev/go (fn waiter-task [] (put slot :value (ev/take ch)))
-                   nil sup))
-  (ev/deadline timeout task task)
-  (defer (protect (ev/cancel task "pool checkout abandoned"))
-    (ev/take sup))
+  (deadline/call timeout
+                 (fn waiter-task [] (put slot :value (ev/take ch)))
+                 (fn [] nil))
   (get slot :value))
 
 (defn- next-waiter

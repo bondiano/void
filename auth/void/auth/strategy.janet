@@ -31,11 +31,9 @@
 
 (import void/core/log :as log)
 (import ./identity :as identity)
+(import void/core/util :as util)
 
 (def log-ns "void.auth.strategy")
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
 
 (def default-priority
   "Where a strategy sits in the chain when it does not say. Lower runs
@@ -52,7 +50,7 @@
     (errorf "a strategy needs a keyword :name, got %q" name))
   (each k [:authenticate :verify :challenge]
     (when-let [f (get s k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "strategy %q: %q must be a function, got %q" name k f))))
   (unless (or (s :authenticate) (s :verify))
     (errorf "strategy %q has neither :authenticate nor :verify — it can never establish an identity" name))

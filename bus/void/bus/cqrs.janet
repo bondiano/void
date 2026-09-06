@@ -40,14 +40,9 @@
 (import void/core/schema :as schema)
 (import ./router :as router)
 (import ./state :as state)
+(import void/core/util :as util)
 
 (def log-ns "void.bus.cqrs")
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
 
 # -- events --------------------------------------------------------------
 
@@ -87,7 +82,7 @@
   [name]
   (or (get events name)
       (errorf "no bus event named %q is declared in this process (declared: %s)"
-              name (names-str (keys events)))))
+              name (util/names-str (keys events)))))
 
 (defn declared-events
   "Names of every declared event."
@@ -168,7 +163,7 @@
       (errorf "%s: :schema is not a schema: %s" who (if (string? err) err (describe err)))))
   (def f (get binding :fn))
   (when f
-    (unless (callable? f)
+    (unless (util/callable? f)
       (errorf "%s: :fn must be a function, got %q" who f)))
   (def d (table/to-struct
            @{:name name
@@ -186,7 +181,7 @@
   [name]
   (or (get commands name)
       (errorf "no bus command named %q is declared in this process (declared: %s) — a command is dispatched here, so the module that declares it has to be imported here"
-              name (names-str (keys commands)))))
+              name (util/names-str (keys commands)))))
 
 (defn declared-commands
   "Names of every declared command."
@@ -204,8 +199,8 @@
   [d]
   (def b (when (and (d :env) (d :binding)) (get (d :env) (d :binding))))
   (cond
-    (and b (callable? (get b :value))) (b :value)
-    (callable? (d :fn)) (d :fn)
+    (and b (util/callable? (get b :value))) (b :value)
+    (util/callable? (d :fn)) (d :fn)
     (errorf "bus command %q: %q no longer names a function in its module — was it renamed?"
             (d :name) (d :binding))))
 

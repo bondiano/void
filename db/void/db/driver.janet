@@ -59,6 +59,7 @@
 
 (import void/core/errors :as errors)
 (import void/db/builder :as builder)
+(import void/core/util :as util)
 
 # -- the error form ------------------------------------------------------
 
@@ -144,9 +145,6 @@
     (errors/make :void.db/error (if (bytes? e) (string e) (describe e))
                  {:sql sql :driver-error e})))
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
 (def- required [:connect :close :execute])
 
 (def- optional
@@ -168,11 +166,11 @@
   # fails fast with the list of registered dialects
   (builder/dialect dialect)
   (each k required
-    (unless (callable? (get drv k))
+    (unless (util/callable? (get drv k))
       (errorf "db driver %q: %q must be a function, got %q" name k (get drv k))))
   (each k optional
     (when-let [f (get drv k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "db driver %q: %q must be a function, got %q" name k f))))
   (unless (nil? (get drv :returning))
     (unless (boolean? (get drv :returning))

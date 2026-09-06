@@ -26,6 +26,7 @@
 ### migration has none.
 
 (import void/core/log :as log)
+(import void/core/util :as util)
 (import ./state :as state)
 
 (def default-dir
@@ -138,7 +139,7 @@
     # a function may run statements itself *and* return SQL to run —
     # (defn up [] "CREATE TABLE ...") is the shortest spelling there is,
     # and it must not be a silent no-op
-    (or (function? step) (cfunction? step)) (run-sql (step))
+    (util/callable? step) (run-sql (step))
 
     (or (bytes? step) (indexed? step)) (run-sql step)
 

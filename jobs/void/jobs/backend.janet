@@ -82,8 +82,7 @@
 ### runtime can call every key unconditionally — the same shape
 ### void/db/driver and void/cache/store have, for the same reason.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (def- required
   [:push! :claim! :settle! :fetch :list :counts :remove! :clear!])
@@ -151,11 +150,11 @@
     (errorf "jobs backend must be a dictionary, got %q" b))
   (def name (get b :name :anonymous))
   (each k required
-    (unless (callable? (get b k))
+    (unless (util/callable? (get b k))
       (errorf "jobs backend %q: %q must be a function, got %q" name k (get b k))))
   (each k optional
     (when-let [f (get b k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "jobs backend %q: %q must be a function, got %q" name k f))))
   (def locks (local-locks))
   (table/to-struct

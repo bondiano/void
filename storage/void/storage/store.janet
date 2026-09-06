@@ -54,8 +54,7 @@
 ###            not say `true`, and `:replacement` (a string)
 ###            is the line the refusal prints.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (def- required [:put! :get :stream :delete! :url])
 
@@ -72,11 +71,11 @@
   (unless (keyword? name)
     (errorf "storage store :name must be a keyword, got %q" name))
   (each k required
-    (unless (callable? (get st k))
+    (unless (util/callable? (get st k))
       (errorf "storage store %q: %q must be a function, got %q" name k (get st k))))
   (each k optional
     (when-let [f (get st k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "storage store %q: %q must be a function, got %q" name k f))))
   (def get- (st :get))
   (freeze

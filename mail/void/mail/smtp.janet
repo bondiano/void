@@ -36,6 +36,7 @@
 
 (import spork/base64)
 (import void/core/log :as log)
+(import void/core/deadline :as deadline)
 (import ./address :as address)
 (import ./message :as message)
 (import ./transport :as transport)
@@ -94,22 +95,6 @@
 
 # -- the connection ------------------------------------------------------
 
-(defn- deadline-call
-  ``Run `f` under a timeout without touching the caller's root task:
-  the work runs in a supervised child task and only that task is
-  cancelled. The idiom (and the reason for it) is void/redis/conn's —
-  `ev/deadline` on the caller would cancel the request being served.``
-  [timeout f on-timeout]
-  (def slot @{})
-  (def sup (ev/chan 1))
-  (def task (ev/go (fn timed [] (put slot :value (f)) (put slot :done true)) nil sup))
-  (when (and timeout (pos? timeout)) (ev/deadline timeout task task))
-  (def [status fiber] (ev/take sup))
-  (cond
-    (= :error status) (error (fiber/last-value fiber))
-    (slot :done) (slot :value)
-    (on-timeout)))
-
 (defn- target [cfg]
   (string (get cfg :host "127.0.0.1") ":" (get cfg :port 25)))
 
@@ -138,8 +123,10 @@
   [cfg]
   (when-let [why (tls-refusal cfg)] (fail nil why))
   (def timeout (get cfg :connect-timeout (defaults :connect-timeout)))
+  # under a deadline on a child task, never on the caller (see
+  # void/core/deadline): the caller may be the request being served
   (def stream
-    (deadline-call
+    (deadline/call
       timeout
       (fn [] (net/connect (get cfg :host "127.0.0.1") (string (get cfg :port 25))))
       (fn [] (fail nil (string/format "connecting to %s timed out after %.1fs"

@@ -19,9 +19,7 @@
 (import void/core/meta :as meta)
 (import ./middleware :as mw)
 (import ./wire :as wire)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 # -- route declarations (data-first) -------------------------------------
 
@@ -38,7 +36,7 @@
             (string/join (map string (sorted (keys methods))) " ") method))
   (unless (and (string? pattern) (string/has-prefix? "/" pattern))
     (errorf "route pattern %q must be a string starting with /" pattern))
-  (unless (or (symbol? handler) (callable? handler))
+  (unless (or (symbol? handler) (util/callable? handler))
     (errorf "route %q %q: handler must be a symbol or a function, got %q"
             method pattern handler))
   {:route true :method method :pattern pattern :handler handler
@@ -273,7 +271,7 @@
       [(or env (errorf "cannot resolve bare %s symbol %q without a module environment — qualify it (my-app.orders/show)" what sym))
        sym]))
   (def binding (get menv nm))
-  (unless (and binding (callable? (get binding :value)))
+  (unless (and binding (util/callable? (get binding :value)))
     (errorf "%s %q does not resolve to a function%s"
             what sym (if i "" " in the declaring module")))
   [menv nm])
@@ -286,7 +284,7 @@
   update the env in place (void/dev watch) are live without a rebuild.
   A function literal is called directly and marked :no-reload.``
   [handler &opt env]
-  (if (callable? handler)
+  (if (util/callable? handler)
     {:call (fn literal-handler [req] (handler req))
      :fn handler
      :no-reload true}
@@ -302,7 +300,7 @@
   [h &opt env what]
   (default what "lifecycle hook")
   (cond
-    (callable? h) (fn [& args] (h ;args))
+    (util/callable? h) (fn [& args] (h ;args))
     (symbol? h)
     (let [[menv nm] (resolve-binding h env what)]
       (fn hook-call [& args] ((in (in menv nm) :value) ;args)))
@@ -382,7 +380,7 @@
       (errorf "build-table: each source must be {:name ... :routes <routes value>}, got %q" src))
     (def env
       (let [e (get src :env)]
-        (if (callable? e) (e) e)))     # unwrap env-ref closures
+        (if (util/callable? e) (e) e)))     # unwrap env-ref closures
     (flatten-source (get src :name :anonymous) (src :routes) env
                     flat errors))
 

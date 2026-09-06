@@ -38,6 +38,7 @@
 ### length of one decision.
 
 (import void/core/log :as log)
+(import void/core/util :as util)
 
 (def log-ns "void.authz.context")
 
@@ -52,9 +53,6 @@
   "Registered attribute providers, in resolution order."
   @[])
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
 (defn normalize-provider
   "Validate a provider: {:name :for :fn :keys? :doc?}."
   [p]
@@ -66,7 +64,7 @@
   (def for (get p :for))
   (unless (index-of for [:subject :resource :env])
     (errorf "provider %q: :for must be :subject, :resource or :env, got %q" name for))
-  (unless (callable? (get p :fn))
+  (unless (util/callable? (get p :fn))
     (errorf "provider %q: :fn must be a function, got %q" name (get p :fn)))
   (when-let [keys (get p :keys)]
     (unless (and (indexed? keys) (all keyword? keys))

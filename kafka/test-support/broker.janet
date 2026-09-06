@@ -16,26 +16,15 @@
 # runs. This is the same arrangement void/db-mysql has under
 # VOID_TEST_MYSQL and void/db-postgres under VOID_TEST_PG.
 
+(import void/test :as test)
+
 (def env-var "VOID_TEST_KAFKA")
 
-(defn brokers
-  "The configured bootstrap servers, or nil."
-  []
-  (when-let [v (os/getenv env-var)]
-    (unless (empty? (string/trim v)) (string/trim v))))
+(def- gate (test/service env-var "bootstrap servers, e.g. 127.0.0.1:9092"))
 
-(defn available?
-  "Is there a cluster to test against?"
-  []
-  (not (nil? (brokers))))
-
-(defn skip
-  "Announce a skipped suite the way a passing one announces itself, so
-  a scrolled-past CI log still says which is which."
-  [suite]
-  (printf "%s: SKIPPED (set %s to bootstrap servers, e.g. 127.0.0.1:9092)"
-          suite env-var)
-  nil)
+(def brokers "The configured bootstrap servers, or nil." (gate :value))
+(def available? "Is there a cluster to test against?" (gate :available?))
+(def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
   "The [:kafka] config slice for the configured cluster."

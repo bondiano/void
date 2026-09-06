@@ -20,11 +20,7 @@
 ### overridden per enqueue — the definition is where the policy
 ### *belongs*, not where it is locked.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
+(import void/core/util :as util)
 
 # -- canonical rendering -------------------------------------------------
 #
@@ -81,7 +77,7 @@
   (def b (merge default-backoff (or b0 {})))
   (unless (index-of (b :strategy) strategies)
     (errorf "%s: :strategy must be one of %s, got %q"
-            who (names-str strategies) (b :strategy)))
+            who (util/names-str strategies) (b :strategy)))
   (each k [:base :max]
     (def v (b k))
     (unless (and (number? v) (>= v 0))
@@ -141,7 +137,7 @@
   (eachk k opts
     (unless (in allowed-opts k)
       (errorf "%s: unknown option %q (allowed: %s)"
-              who k (names-str (keys allowed-opts)))))
+              who k (util/names-str (keys allowed-opts)))))
   (when-let [q (get opts :queue)]
     (unless (keyword? q)
       (errorf "%s: :queue must be a keyword, got %q" who q)))
@@ -160,12 +156,12 @@
     # nobody wrote down. A literal key is a string
     (unless (or (index-of u unique-modes) (string? u))
       (errorf "%s: :unique must be %s, or a literal key as a string, got %q"
-              who (names-str unique-modes) u)))
+              who (util/names-str unique-modes) u)))
   (when-let [t (get opts :unique-ttl)]
     (unless (and (number? t) (pos? t))
       (errorf "%s: :unique-ttl must be a positive number of seconds, got %q" who t)))
   (when-let [g (get opts :group)]
-    (unless (or (string? g) (keyword? g) (callable? g))
+    (unless (or (string? g) (keyword? g) (util/callable? g))
       (errorf "%s: :group must be a string, a keyword or a function of the job's arguments, got %q"
               who g)))
   (when-let [n (get opts :needs)]
@@ -204,7 +200,7 @@
   (def f (get binding :fn))
   (def sym (get binding :binding))
   (when f
-    (unless (callable? f)
+    (unless (util/callable? f)
       (errorf "%s: :fn must be a function, got %q" who f)))
   (when sym
     (unless (dictionary? (get binding :env))
@@ -237,7 +233,7 @@
   [name]
   (or (get registry name)
       (errorf "no job named %q is defined in this process (defined: %s) — the worker must import the module that declares it"
-              name (names-str (keys registry)))))
+              name (util/names-str (keys registry)))))
 
 (defn defined
   "Names of every registered job definition."
@@ -311,8 +307,8 @@
   [d]
   (def b (when (and (d :env) (d :binding)) (get (d :env) (d :binding))))
   (cond
-    (and b (callable? (get b :value))) (b :value)
-    (callable? (d :fn)) (d :fn)
+    (and b (util/callable? (get b :value))) (b :value)
+    (util/callable? (d :fn)) (d :fn)
     (errorf "job %q: %q no longer names a function in its module — was it renamed?"
             (d :name) (d :binding))))
 
@@ -337,7 +333,7 @@
   (def g (if (in opts :group) (get opts :group) (get-in d [:opts :group])))
   (cond
     (nil? g) nil
-    (callable? g) (let [k (g ;args)] (when k (string k)))
+    (util/callable? g) (let [k (g ;args)] (when k (string k)))
     (string g)))
 
 # -- the macro -----------------------------------------------------------

@@ -32,15 +32,15 @@
 ### removed it), and the middleware around all of it, which is
 ### void/http's own suite.
 
+(import void/core/util :as util)
+
 (def- contract-keys
   "The four functions a session store is."
   [:load :save :delete :sweep])
 
-(defn- callable? [v] (or (function? v) (cfunction? v)))
-
 (defn- missing-keys [store]
   (if (dictionary? store)
-    (seq [k :in contract-keys :when (not (callable? (get store k)))] k)
+    (seq [k :in contract-keys :when (not (util/callable? (get store k)))] k)
     contract-keys))
 
 (defn run!
@@ -86,7 +86,7 @@
             (if (= 1 (length gaps)) "is not" "are not")
             (string/join (map string contract-keys) ", ")))
   (each k contract-keys
-    (assert (callable? (store k)) (note (string k " is callable"))))
+    (assert (util/callable? (store k)) (note (string k " is callable"))))
 
   (defer (each s ids (protect ((store :delete) s)))
 

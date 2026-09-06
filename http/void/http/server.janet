@@ -25,6 +25,7 @@
 ### and what void/ws is built on — the kernel itself stays ignorant of
 ### the protocol that takes over.
 
+(import void/core/deadline :as deadline)
 (import ./wire :as wire)
 
 (def default-config
@@ -324,25 +325,15 @@
   loop fiber mid-ev-operation is exactly the upstream bug class of
   janet-lang/janet#1337/#1707."
   [handler req timeout &opt on-timeout]
-  (if (nil? timeout)
-    (handler req)
-    (do
-      (def sup (ev/chan 1))
-      (def task (ev/go (fn handler-task [] (handler req)) nil sup))
-      (ev/deadline timeout task task)
-      (def [sig fib] (ev/take sup))
-      (def value (fiber/last-value fib))
-      (cond
-        (= :ok sig) value
-        (and (string? value) (string/find "deadline" value))
-        (do
-          # the :on-timeout lifecycle stage: the handler task was
-          # cancelled by its :void.http/timeout
-          (when on-timeout (protect (on-timeout req)))
-          {:status 503
-           :headers @{"content-type" "text/plain; charset=utf-8"}
-           :body "503 handler timeout"})
-        (error value)))))
+  (deadline/call timeout
+                 (fn handler-task [] (handler req))
+                 (fn []
+                   # the :on-timeout lifecycle stage: the handler task was
+                   # cancelled by its :void.http/timeout
+                   (when on-timeout (protect (on-timeout req)))
+                   {:status 503
+                    :headers @{"content-type" "text/plain; charset=utf-8"}
+                    :body "503 handler timeout"})))
 
 (defn- serve-connection [state conn opts]
   (def buf @"")

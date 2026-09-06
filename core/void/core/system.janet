@@ -8,6 +8,7 @@
 ### inspectable from the REPL (`pp sys`) — no hidden singletons.
 
 (import ./schema :as schema)
+(import ./util :as util)
 
 (def- allowed-component-keys
   {:key true :doc true :plugin true :scope true
@@ -15,9 +16,6 @@
    :start true :stop true :health true :suspend true :resume true})
 
 (def- allowed-scopes {:singleton true :factory true})
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
 
 (defn- plugin-of [comp]
   (if-let [p (get comp :plugin)]
@@ -63,11 +61,11 @@
   (def scope (get opts :scope :singleton))
   (unless (in allowed-scopes scope)
     (errorf "component %q: :scope must be :singleton or :factory, got %q" key scope))
-  (unless (callable? (get opts :start))
+  (unless (util/callable? (get opts :start))
     (errorf "component %q: a :start function is required" key))
   (each fk [:stop :health :suspend :resume]
     (when-let [f (get opts fk)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "component %q: %q must be a function, got %q" key fk f))))
   (when (not= (nil? (get opts :suspend)) (nil? (get opts :resume)))
     (errorf "component %q: :suspend and :resume must be declared together" key))
@@ -275,7 +273,7 @@
       # through schema/validate, exactly as plugin :config-schema does
       # (load-boot-config); only a callable is called directly
       (def validator
-        (if (callable? sch) sch (fn [v] (schema/validate sch v))))
+        (if (util/callable? sch) sch (fn [v] (schema/validate sch v))))
       (def ok
         (try (validator cfg)
           ([e] (errorf "component %q: config %q failed schema validation: %s"

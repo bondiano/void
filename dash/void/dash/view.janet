@@ -12,6 +12,7 @@
 (import void/html/assets :as assets)
 (import void/html/hiccup :as hiccup)
 (import void/core/config :as config)
+(import void/core/util :as util)
 (import void/datastar/ds :as ds)
 (import void/datastar/init :as datastar)
 (import ./context :as ctx)
@@ -333,7 +334,7 @@ document.addEventListener("input", function (e) {
   (def s
     (cond
       (config/secret? v) (string/format "@{:secret %q}" (get v :secret))
-      (or (function? v) (cfunction? v)) "<function>"
+      (util/callable? v) "<function>"
       (string/format "%q" v)))
   (if (> (length s) limit) (string (string/slice s 0 limit) "…") s))
 

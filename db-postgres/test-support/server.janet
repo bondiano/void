@@ -13,26 +13,15 @@
 # as skipped instead of failing — a missing database is not a broken
 # driver, and a suite that cannot be run at all is a suite nobody runs.
 
+(import void/test :as test)
+
 (def env-var "VOID_TEST_PG")
 
-(defn conninfo
-  "The configured server, or nil."
-  []
-  (when-let [v (os/getenv env-var)]
-    (unless (empty? (string/trim v)) (string/trim v))))
+(def- gate (test/service env-var "a conninfo or a postgres:// url"))
 
-(defn available?
-  "Is there a server to test against?"
-  []
-  (not (nil? (conninfo))))
-
-(defn skip
-  "Announce a skipped suite the way a passing one announces itself, so
-  a scrolled-past CI log still says which is which."
-  [suite]
-  (printf "%s: SKIPPED (set %s to a conninfo or a postgres:// url)"
-          suite env-var)
-  nil)
+(def conninfo "The configured server, or nil." (gate :value))
+(def available? "Is there a server to test against?" (gate :available?))
+(def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
   ``The [:db-postgres] config slice for the configured server: the

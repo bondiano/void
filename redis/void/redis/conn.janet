@@ -39,6 +39,7 @@
 ### directions of it.
 
 (import void/core/log :as log)
+(import void/core/deadline :as deadline)
 (import ./resp :as resp)
 
 (def log-ns
@@ -105,27 +106,6 @@
 
 # -- opening -------------------------------------------------------------
 
-(defn- deadline-call
-  ``Run `f` under a timeout without touching the caller's root task:
-  the work runs in a supervised child task, and only that task is
-  cancelled. `ev/deadline` on the caller would cancel the *request*
-  a pooled connection is serving — the bug class the kernel documents.``
-  [timeout f on-timeout]
-  (def slot @{})
-  (def sup (ev/chan 1))
-  (def task (ev/go (fn timed []
-                     (put slot :value (f))
-                     (put slot :done true))
-                   nil sup))
-  (when (and timeout (pos? timeout)) (ev/deadline timeout task task))
-  (def [status fiber] (ev/take sup))
-  (cond
-    (= :error status) (error (fiber/last-value fiber))
-    # a flag rather than the value: whether the work finished is not
-    # something the value can answer for
-    (slot :done) (slot :value)
-    (on-timeout)))
-
 (var tls-connect
   ``How a `{:tls true}` connection (a rediss:// URL) is opened —
   `(fn [host port opts] stream)` — or nil when this composition has
@@ -148,7 +128,9 @@
                       ":void/tls to :plugins, or terminate the TLS in "
                       "front of redis and point [:redis :url] at the plaintext side")
               (string (get opts :host) ":" (get opts :port)))))
-  (deadline-call
+  # under a deadline on a child task, never on the caller: `ev/deadline`
+  # there would cancel the *request* a pooled connection is serving
+  (deadline/call
     timeout
     (fn []
       (if (get opts :tls)

@@ -35,6 +35,7 @@
 ### and the binary result format (./types explains why text).
 
 (import void/fdwait)
+(import void/core/deadline :as deadline)
 (import ./libpq :as pq)
 (import ./types :as types)
 
@@ -114,27 +115,6 @@
   []
   @{:stmts @{} :next 0})
 
-(defn- with-deadline
-  ``Run (f) under a wall-clock limit, in a supervised CHILD task —
-  never `ev/with-deadline` on the caller, which cancels its root
-  task; for a request fiber that is the whole request (and the same reason void/db's pool spells its checkout timeout out this way).``
-  [seconds f on-timeout]
-  (if (or (nil? seconds) (not (pos? seconds)))
-    (f)
-    (do
-      (def slot @{})
-      (def sup (ev/chan 1))
-      (def task (ev/go (fn deadline-body []
-                         (put slot :value (f))
-                         (put slot :done true))
-                       nil sup))
-      (ev/deadline seconds task task)
-      (def [status fiber] (ev/take sup))
-      (cond
-        (slot :done) (slot :value)
-        (= :error status) (error (fiber/last-value fiber))
-        (on-timeout)))))
-
 (defn- poll-connect
   ``PQconnectPoll until the handshake is done. The first call is made
   as if the previous one had returned PGRES_POLLING_WRITING, which is
@@ -196,7 +176,9 @@
     (errorf "postgres: cannot start connecting: %s" msg))
   (def [ok err]
     (protect
-      (with-deadline (get opts :connect-timeout)
+      # a child task under the deadline, never `ev/with-deadline` on the
+      # caller — for a request fiber that would cancel the whole request
+      (deadline/call (get opts :connect-timeout)
                      (fn [] (poll-connect c))
                      (fn [] (errorf "postgres: connecting timed out after %.1fs"
                                     (get opts :connect-timeout))))))

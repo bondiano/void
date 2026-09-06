@@ -49,6 +49,7 @@
 
 (import spork/cron)
 (import void/core/log :as log)
+(import void/core/deadline :as deadline)
 (import ./state :as state)
 
 (def log-ns "void.jobs.schedule")
@@ -290,16 +291,14 @@
     :stop-chan nil
     :fired 0})
 
-(defn- wait-or-stop [sc seconds]
+(defn- wait-or-stop
+  "Sleep for `seconds`, or until the scheduler is told to stop —
+  whichever comes first (the worker's `wait-or-stop`)."
+  [sc seconds]
   (def ch (sc :stop-chan))
-  (if (or (sc :stopped) (nil? ch))
-    nil
-    (do
-      (def sup (ev/chan 1))
-      (def task (ev/go (fn stop-waiter [] (ev/take ch)) nil sup))
-      (ev/deadline seconds task task)
-      (ev/take sup)
-      nil)))
+  (unless (or (sc :stopped) (nil? ch))
+    (deadline/run seconds (fn stop-waiter [] (ev/take ch))))
+  nil)
 
 (defn start!
   "Start the scheduler fiber."

@@ -17,26 +17,15 @@
 (import void/redis/config :as rconfig)
 (import void/redis/pool :as rpool)
 (import void/redis/state :as redis)
+(import void/test :as test)
 
 (def env-var "VOID_TEST_REDIS")
 
-(defn url
-  "The configured server, or nil."
-  []
-  (when-let [v (os/getenv env-var)]
-    (unless (empty? (string/trim v)) (string/trim v))))
+(def- gate (test/service env-var "a redis:// url"))
 
-(defn available?
-  "Is there a server to test against?"
-  []
-  (not (nil? (url))))
-
-(defn skip
-  "Announce a skipped suite the way a passing one announces itself, so
-  a scrolled-past CI log still says which is which."
-  [suite]
-  (printf "%s: SKIPPED (set %s to a redis:// url)" suite env-var)
-  nil)
+(def url "The configured server, or nil." (gate :value))
+(def available? "Is there a server to test against?" (gate :available?))
+(def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn prefix
   "A key prefix nothing else is using: the suite name and this process."

@@ -14,26 +14,15 @@
 # driver, and a suite that cannot be run at all is a suite nobody runs.
 # This is the same arrangement void/db-postgres has under VOID_TEST_PG.
 
+(import void/test :as test)
+
 (def env-var "VOID_TEST_MYSQL")
 
-(defn dsn
-  "The configured server, or nil."
-  []
-  (when-let [v (os/getenv env-var)]
-    (unless (empty? (string/trim v)) (string/trim v))))
+(def- gate (test/service env-var "a mysql:// url or a key=value list"))
 
-(defn available?
-  "Is there a server to test against?"
-  []
-  (not (nil? (dsn))))
-
-(defn skip
-  "Announce a skipped suite the way a passing one announces itself, so
-  a scrolled-past CI log still says which is which."
-  [suite]
-  (printf "%s: SKIPPED (set %s to a mysql:// url or a key=value list)"
-          suite env-var)
-  nil)
+(def dsn "The configured server, or nil." (gate :value))
+(def available? "Is there a server to test against?" (gate :available?))
+(def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (def- numeric {:port true :connect-timeout true})
 (def- booleans {:found-rows true :reconnect true})

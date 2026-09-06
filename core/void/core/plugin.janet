@@ -20,42 +20,10 @@
 (import ./hooks :as hooks)
 (import ./log :as log)
 (import ./deploy :as deploy)
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import ./util :as util)
 
 (defn- err-str [e]
   (if (string? e) e (describe e)))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
-
-# -- did-you-mean --------------------------------------------------------
-
-(defn- levenshtein [a b]
-  (def lb (length b))
-  (var prev (seq [j :range [0 (inc lb)]] j))
-  (for i 1 (inc (length a))
-    (def cur @[i])
-    (for j 1 (inc lb)
-      (array/push cur
-                  (min (inc (cur (dec j)))
-                       (inc (prev j))
-                       (+ (prev (dec j))
-                          (if (= (a (dec i)) (b (dec j))) 0 1)))))
-    (set prev cur))
-  (prev lb))
-
-(defn- suggest [name candidates]
-  (def s (string name))
-  (var best nil)
-  (var best-d math/inf)
-  (each c (sorted candidates)
-    (def d (levenshtein s (string c)))
-    (when (< d best-d) (set best-d d) (set best c)))
-  (if (and best (<= best-d 3) (< best-d (length s)))
-    (string/format " — did you mean %q?" best)
-    ""))
 
 # -- semver --------------------------------------------------------------
 
@@ -169,14 +137,14 @@
   (eachk k opts
     (unless (in allowed-point-keys k)
       (errorf "extension point %q: unknown option %q (allowed: %s)"
-              name k (names-str (keys allowed-point-keys)))))
+              name k (util/names-str (keys allowed-point-keys)))))
   (def card (get opts :cardinality :many))
   (unless (in cardinalities card)
     (errorf "extension point %q: :cardinality must be :many, :single or :single-required, got %q"
             name card))
   (each fk [:reduce :validate]
     (when-let [f (get opts fk)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "extension point %q: %q must be a function, got %q" name fk f))))
   (when-let [d (get opts :doc)]
     (unless (string? d)
@@ -301,7 +269,7 @@
   (tuple
     ;(seq [c :in components]
        (do
-         (unless (and (dictionary? c) (keyword? (get c :key)) (callable? (get c :start)))
+         (unless (and (dictionary? c) (keyword? (get c :key)) (util/callable? (get c :start)))
            (errorf "plugin %q: :components entries must be component definitions (see system/component), got %q"
                    name c))
          (if (get c :plugin)
@@ -379,7 +347,7 @@
   (eachk k opts
     (unless (in allowed-manifest-keys k)
       (errorf "plugin %q: unknown option %q (allowed: %s)"
-              pname k (names-str (keys allowed-manifest-keys)))))
+              pname k (util/names-str (keys allowed-manifest-keys)))))
   (def api (get opts :void-api core/void-api))
   (unless (and (number? api) (= api (math/trunc api)))
     (errorf "plugin %q: :void-api must be an integer, got %q" pname api))
@@ -390,7 +358,7 @@
       (errorf "plugin %q: :doc must be a string, got %q" pname d)))
   (each fk [:when :on-load]
     (when-let [f (get opts fk)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "plugin %q: %q must be a function, got %q" pname fk f))))
   (when-let [ck (get opts :config-key)]
     (unless (keyword? ck)
@@ -402,7 +370,7 @@
     (unless (dictionary? cd)
       (errorf "plugin %q: :config-defaults must be a dictionary, got %q" pname cd)))
   (when-let [cs (get opts :config-schema)]
-    (unless (callable? cs)
+    (unless (util/callable? cs)
       (def [ok e] (protect (schema/normalize cs)))
       (unless ok
         (errorf "plugin %q: invalid :config-schema: %s" pname (err-str e)))))
@@ -700,7 +668,7 @@
                                        {:plugin (m :name)
                                         :key (m :config-key)
                                         :schema (let [s (m :config-schema)]
-                                                  (if (callable? s)
+                                                  (if (util/callable? s)
                                                     s
                                                     (fn [v] (schema/validate s v))))})))
       cfg)
@@ -797,7 +765,7 @@
         (array/push errors
                     (string/format "plugin %q contributes to unknown extension point %q%s"
                                    (m :name) pname
-                                   (suggest pname (array/concat (array ;(keys points))
+                                   (util/suggest pname (array/concat (array ;(keys points))
                                                                 ;(keys aliases))))))))
 
   (def out @{})
@@ -897,7 +865,7 @@
     (def v (c :value))
     (when (hooks/suspect? reg (v :hook))
       (eprintf "warning: plugin %q registers a handler for hook %q, which no active plugin declares — it will never run%s"
-               (c :plugin) (v :hook) (suggest (v :hook) (keys declared))))
+               (c :plugin) (v :hook) (util/suggest (v :hook) (keys declared))))
     (hooks/add! reg (v :hook) (v :fn)
                 :phase (get v :phase 1000)
                 :name (get v :name)
@@ -911,7 +879,7 @@
   (eachk k opts
     (unless (in allowed-boot-opts k)
       (errorf "bootstrap: unknown option %q (allowed: %s)"
-              k (names-str (keys allowed-boot-opts)))))
+              k (util/names-str (keys allowed-boot-opts)))))
   (def profile (get opts :profile :dev))
   (def errors @[])
 
@@ -1095,7 +1063,7 @@
   (def b (pick-boot boot))
   (def e (get-in b [:extensions name]))
   (unless e
-    (errorf "unknown extension point %q%s" name (suggest name (keys (b :extensions)))))
+    (errorf "unknown extension point %q%s" name (util/suggest name (keys (b :extensions)))))
   (e :resolved))
 
 (defn- check-value [c]
@@ -1149,7 +1117,7 @@
     (do
       (def e (get-in bt [:extensions sel]))
       (unless e
-        (errorf "unknown extension point %q%s" sel (suggest sel (keys (bt :extensions)))))
+        (errorf "unknown extension point %q%s" sel (util/suggest sel (keys (bt :extensions)))))
       {:point sel
        :owner (e :owner)
        :doc (get-in e [:point :doc])
@@ -1203,4 +1171,4 @@
      :selected (get-in sys [:config k :impl])}
 
     (errorf "unknown component or interface %q%s"
-            k (suggest k (keys (sys :components))))))
+            k (util/suggest k (keys (sys :components))))))

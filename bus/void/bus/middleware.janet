@@ -63,6 +63,7 @@
 (import void/core/log :as log)
 (import void/core/schema :as schema)
 (import ./message :as message)
+(import void/core/util :as util)
 
 (def log-ns "void.bus")
 
@@ -88,9 +89,6 @@
 (def phase/business (phases :business))
 (def phase/response (phases :response))
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
 (defn normalize
   "Validate a `:void.bus/middleware` contribution and fill in its
   defaults."
@@ -100,13 +98,13 @@
   (def name (get c :name))
   (unless (keyword? name)
     (errorf "bus middleware: :name must be a keyword, got %q" name))
-  (unless (callable? (get c :wrap))
+  (unless (util/callable? (get c :wrap))
     (errorf "bus middleware %q: :wrap must be a function, got %q" name (get c :wrap)))
   (def phase (get c :phase phase/business))
   (unless (number? phase)
     (errorf "bus middleware %q: :phase must be a number, got %q" name phase))
   (when-let [pred (get c :when)]
-    (unless (callable? pred)
+    (unless (util/callable? pred)
       (errorf "bus middleware %q: :when must be a function, got %q" name pred)))
   (table/to-struct (merge @{:doc nil :named false :when nil} c {:phase phase})))
 

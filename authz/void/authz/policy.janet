@@ -27,8 +27,7 @@
 ### reason it said no, and it is for the decision log and `void authz
 ### explain`, never for the client.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (def registry
   "Registered policies, by name."
@@ -42,7 +41,7 @@
   (def name (get p :name))
   (unless (keyword? name)
     (errorf "a policy needs a keyword :name, got %q" name))
-  (unless (callable? (get p :fn))
+  (unless (util/callable? (get p :fn))
     (errorf "policy %q: :fn must be a function, got %q" name (get p :fn)))
   (freeze (merge @{:doc nil} p)))
 

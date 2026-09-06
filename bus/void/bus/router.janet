@@ -38,14 +38,9 @@
 (import void/core/log :as log)
 (import ./message :as message)
 (import ./middleware :as middleware)
+(import void/core/util :as util)
 
 (def log-ns "void.bus")
-
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
-(defn- names-str [names]
-  (string/join (map |(string/format "%q" $) (sorted names)) " "))
 
 # -- definitions ---------------------------------------------------------
 
@@ -65,7 +60,7 @@
   (eachk k opts
     (unless (in allowed-opts k)
       (errorf "%s: unknown option %q (allowed: %s)"
-              who k (names-str (keys allowed-opts)))))
+              who k (util/names-str (keys allowed-opts)))))
   (def topic (get opts :topic))
   (unless topic
     (errorf "%s: a handler needs a :topic — an exact topic (:user/created), a namespace (:user/*) or :*" who))
@@ -107,7 +102,7 @@
   (def f (get binding :fn))
   (def sym (get binding :binding))
   (when f
-    (unless (callable? f)
+    (unless (util/callable? f)
       (errorf "%s: :fn must be a function, got %q" who f)))
   (when sym
     (unless (dictionary? (get binding :env))
@@ -152,8 +147,8 @@
   [d]
   (def b (when (and (d :env) (d :binding)) (get (d :env) (d :binding))))
   (cond
-    (and b (callable? (get b :value))) (b :value)
-    (callable? (d :fn)) (d :fn)
+    (and b (util/callable? (get b :value))) (b :value)
+    (util/callable? (d :fn)) (d :fn)
     (errorf "bus handler %q: %q no longer names a function in its module — was it renamed?"
             (d :name) (d :binding))))
 

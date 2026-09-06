@@ -137,29 +137,29 @@
    :void/db-postgres
    # libpq is opened at runtime through ffi/, so it is not a jpm
    # dependency; void/fdwait is, and it has to be built.
-   {:dir "db-postgres" :deps [:void/core :void/db :void/fdwait]}
+   {:dir "db-postgres" :deps [:void/core :void/db :void/fdwait] :test-deps [:void/dev]}
 
    :void/db-mysql
    # libmysqlclient is opened at runtime through ffi/, so it is not a jpm
    # dependency — and unlike void/db-postgres there is no native module
    # either: this driver parks on a channel to a worker thread rather than
    # on a descriptor, so void/fdwait is not an edge.
-   {:dir "db-mysql" :deps [:void/core :void/db]}
+   {:dir "db-mysql" :deps [:void/core :void/db] :test-deps [:void/dev]}
 
    :void/redis
    # A connection is a net/ stream — no client library. void/http only
    # for void/redis-http, which contributes the session store.
-   {:dir "redis" :deps [:void/core] :test-deps [:void/http] :jpm [:spork]}
+   {:dir "redis" :deps [:void/core] :test-deps [:void/http :void/dev] :jpm [:spork]}
 
    :void/cache
-   {:dir "cache" :deps [:void/core :void/http :void/redis]}
+   {:dir "cache" :deps [:void/core :void/http :void/redis] :test-deps [:void/dev]}
 
    :void/jobs
    # void/db-sqlite is what the db backend is tested against;
    # void/db-postgres is on the path for the SKIP LOCKED suite but is
    # resolved with `require` only when VOID_TEST_PG names a server.
    {:dir "jobs" :deps [:void/core :void/db :void/redis]
-    :test-deps [:void/db-sqlite :void/db-postgres] :jpm [:spork]}
+    :test-deps [:void/db-sqlite :void/db-postgres :void/dev] :jpm [:spork]}
 
    :void/pressure
    # void/rest in tests only: the 503 goes out as problem+json wherever
@@ -313,7 +313,7 @@
    # split): the :kafka backend factory and the envelope spelling live
    # there. The suite runs its integration half only when VOID_TEST_KAFKA
    # names a cluster.
-   {:dir "kafka" :deps [:void/core :void/fdwait :void/bus]}
+   {:dir "kafka" :deps [:void/core :void/fdwait :void/bus] :test-deps [:void/dev]}
 
    :void/tls
    # Outbound TLS from the system libssl. libssl is opened at runtime

@@ -37,6 +37,7 @@
 (import ./errors :as errors)
 (import ./server :as server)
 (import ./prefork :as prefork)
+(import void/core/util :as util)
 
 # -- boot context --------------------------------------------------------
 
@@ -53,18 +54,6 @@
 
 # -- extension points ----------------------------------------------------
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
-
-(defn- unique-by [what f]
-  (fn [contribs]
-    (def seen @{})
-    (each c contribs
-      (def k (f c))
-      (when (in seen k)
-        (errorf "duplicate %s %q" what k))
-      (put seen k true))))
-
 (plugin/defextension-point :void.http/middleware
   :doc "Phased HTTP middleware: {:name :phase 0-10000 :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool?}; :named applies only when a route lists it under :void.http/middleware"
   :schema {:name :keyword
@@ -73,7 +62,7 @@
            :when [:optional :function]
            :named [:optional :boolean]
            :doc [:optional :string]}
-  :validate (unique-by "middleware" |($ :name))
+  :validate (util/unique-by "middleware" |($ :name))
   :reduce |(sorted-by |[($ :phase) ($ :name)] $))
 
 (plugin/defextension-point :void.http/hook
@@ -85,7 +74,7 @@
            :fn [:or :function :symbol]
            :env [:optional :function]
            :doc [:optional :string]}
-  :validate (unique-by "lifecycle hook" |($ :name))
+  :validate (util/unique-by "lifecycle hook" |($ :name))
   :reduce |(sorted-by (fn [c] [(c :stage) (c :name)]) $))
 
 (plugin/defextension-point :void.http/route-meta-key
@@ -95,7 +84,7 @@
            :doc [:optional :string]
            :merge [:optional [:enum :replace :concat :deep-merge :restrict]]
            :allow? [:optional :function]}
-  :validate (unique-by "metadata key" |($ :key))
+  :validate (util/unique-by "metadata key" |($ :key))
   :reduce (fn [contribs]
             (def out @{})
             (each c contribs
@@ -112,7 +101,7 @@
            # a raw env table cannot live in a frozen manifest — wrap it
            # with router/env-ref
            :env [:optional :function]}
-  :validate (unique-by "route source" |($ :name)))
+  :validate (util/unique-by "route source" |($ :name)))
 
 (plugin/defextension-point :void.http/edge
   :doc "Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total."
@@ -120,7 +109,7 @@
            :phase [:optional :int]
            :wrap :function
            :doc [:optional :string]}
-  :validate (unique-by "edge wrapper" |($ :name))
+  :validate (util/unique-by "edge wrapper" |($ :name))
   :reduce (fn [contribs]
             (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
 
@@ -131,7 +120,7 @@
            :make :function
            :shared? [:optional :boolean]
            :replacement [:optional :string]}
-  :validate (unique-by "session store" |($ :name))
+  :validate (util/unique-by "session store" |($ :name))
   :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
 
 (plugin/defextension-point :void.http/body-codec
@@ -140,14 +129,14 @@
            :content-type :string
            :decode :function
            :encode [:optional :function]}
-  :validate (unique-by "body codec" |($ :name)))
+  :validate (util/unique-by "body codec" |($ :name)))
 
 (plugin/defextension-point :void.http/error-renderer
   :doc "Error renderers: {:name :fn (fn [err req ctx] response|nil) :priority?}; first response wins, priority order (default 1000)"
   :schema {:name :keyword
            :fn :function
            :priority [:optional :int]}
-  :validate (unique-by "error renderer" |($ :name))
+  :validate (util/unique-by "error renderer" |($ :name))
   :reduce |(sorted-by (fn [c] [(get c :priority 1000) (c :name)]) $))
 
 # -- reserved metadata keys owned by the kernel --------------------------
@@ -353,7 +342,7 @@
   [contribs]
   (def by-stage @{})
   (each c (or contribs [])
-    (def env (let [e (c :env)] (if (callable? e) (e) e)))
+    (def env (let [e (c :env)] (if (util/callable? e) (e) e)))
     (def call (router/resolve-callable
                 (c :fn) env
                 (string/format "%q hook %q" (c :stage) (c :name))))
@@ -406,7 +395,7 @@
   turns its resource registry into routes) cannot carry the value in a
   frozen manifest, so it carries the projection instead.``
   [name routes boot]
-  (if (callable? routes)
+  (if (util/callable? routes)
     (let [[ok v] (protect (routes boot))]
       (unless ok
         (errorf "route source %q: projecting its routes failed: %s" name v))

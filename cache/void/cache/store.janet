@@ -66,8 +66,7 @@
 ### you. `normalize` cannot check this, but a test in this package
 ### pins the asymmetry so it stays documented rather than discovered.
 
-(defn- callable? [x]
-  (or (function? x) (cfunction? x)))
+(import void/core/util :as util)
 
 (def- required [:get :put :delete :clear])
 
@@ -88,11 +87,11 @@
   (unless (keyword? name)
     (errorf "cache store :name must be a keyword, got %q" name))
   (each k required
-    (unless (callable? (get st k))
+    (unless (util/callable? (get st k))
       (errorf "cache store %q: %q must be a function, got %q" name k (get st k))))
   (each k optional
     (when-let [f (get st k)]
-      (unless (callable? f)
+      (unless (util/callable? f)
         (errorf "cache store %q: %q must be a function, got %q" name k f))))
   (def values (get st :values :janet))
   (unless (in value-kinds values)
