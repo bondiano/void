@@ -174,6 +174,12 @@
    :doc "Route-level lifecycle hooks: {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks"
    :merge :concat})
 
+(plugin/contribute! :void.http/route-meta-key
+  {:key :void.http/body
+   :schema [:enum :raw :parsed]
+   :doc "What the kernel does with this route's request body: :parsed (the default — urlencoded/multipart -> (req :form), a matching :void.http/body-codec -> (req :parsed-body)) or :raw — the parsing middleware is not in this route's chain at all, and the handler reads (req :body) itself. A route that speaks its own wire format (an RPC method under void/grpc) says :raw, so a JSON body is decoded by the one codec that understands it rather than twice"
+   :merge :replace})
+
 # -- built-in middleware (through the same point other plugins use) ------
 
 (plugin/contribute! :void.http/middleware
@@ -218,7 +224,10 @@
 (plugin/contribute! :void.http/middleware
   {:name :void.http/parsing
    :phase middleware/phase/parsing
-   :doc "Decode request bodies: urlencoded/multipart -> (req :form), registered body codecs -> (req :parsed-body)"
+   :doc "Decode request bodies: urlencoded/multipart -> (req :form), registered body codecs -> (req :parsed-body); a route marked :void.http/body :raw is not wrapped"
+   # decided at table build, like every :when: a :raw route has no
+   # parsing wrapper, so nothing is checked per request
+   :when (fn [rmeta] (not= :raw (get rmeta :void.http/body)))
    :wrap (fn [handler]
            (fn parsing [req]
              (def ct (ring/request-header req "content-type"))

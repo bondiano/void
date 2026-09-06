@@ -169,11 +169,16 @@
   is not merged in here: it is the route group's, and merging it is
   the router's job — with provenance, and with `:restrict` keys that
   may only be tightened. Two merges that could disagree is one merge too
-  many.``
+  many. `:void.http/body :raw` keeps the kernel's parsing middleware
+  out of the chain: a Connect body is decoded by the call's codec from
+  the raw bytes, and with void/rest in the composition it would
+  otherwise have been decoded once more, into keyword-keyed data
+  nobody reads.``
   [svc m]
   (merge {:name (m :route-name)
           :void.grpc/service (svc :name)
-          :void.grpc/method (m :name)}
+          :void.grpc/method (m :name)
+          :void.http/body :raw}
          (m :meta)))
 
 (defn routes

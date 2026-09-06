@@ -5,7 +5,8 @@
 (import void/core/plugin :as plugin)
 (import void/proto :as proto)
 (import void/grpc :as grpc)
-(require "void/http/init")
+(import void/http/init :as http)
+(require "void/rest/init")
 
 ### The protocol, end to end, through the whole kernel: the requests below
 ### take the same path a socket's would — routing, the phase chain, the
@@ -239,5 +240,49 @@
     (assert (= 400 (spelled :status)) (string "Connect-Timeout-Ms: " text " is refused"))
     (assert (= "invalid_argument" ((error-of spelled) "code"))
             (string "Connect-Timeout-Ms: " text " is not digits, and is refused as such"))))
+
+# -- one decode per body: the kernel's codecs stay off an RPC route ------
+#
+# An RPC route is marked :void.http/body :raw (mount/method-meta), so
+# the kernel's parsing middleware is not in its chain: a JSON body is
+# read once, by the call's codec, and never first by a
+# :void.http/body-codec — void/rest's, or anybody else's.
+
+(var kernel-decodes 0)
+(def counting-codec
+  (plugin/manifest 'test/counting-codec
+    :version "0.1.0"
+    :requires {:void/http ">=0.0.1"}
+    :contributes
+    {:void.http/body-codec [{:name :test/counting-json
+                             :content-type "application/json"
+                             :decode (fn [b] (++ kernel-decodes) (json/decode (string b)))}]}))
+
+(test/with-http [c {:plugins [:void/http :void/proto :void/grpc counting-codec app]
+                    :config {:env @{}
+                             :cli {:log {:level :error}
+                                   :http {:strict-meta true :access-log false}}}}]
+  (def jresp (json-call c "GetOrder" {:id "A-1"}))
+  (assert (= 200 (jresp :status)))
+  (assert (= "A-1" ((json/decode (string (jresp :body))) "id")))
+  (assert (= 0 kernel-decodes)
+          "the only JSON body codec in the composition never saw the RPC body")
+  (assert (not (index-of :void.http/parsing
+                         ((http/explain-route (string path "GetOrder") :post) :middleware)))
+          "because the parsing middleware is not in the RPC route's chain")
+  (assert (= :raw (get-in (http/explain-route (string path "GetOrder") :post)
+                          [:meta :void.http/body]))))
+
+# and with void/rest in the composition — the case the double decode
+# came from — the JSON call still answers, through the codec that
+# understands the proto3 mapping
+(test/with-http [c {:plugins [:void/http :void/proto :void/grpc :void/rest app]
+                    :config {:env @{}
+                             :cli {:log {:level :error}
+                                   :http {:strict-meta true :access-log false}}}}]
+  (def jresp (json-call c "GetOrder" {:id "A-1"}))
+  (assert (= 200 (jresp :status)))
+  (assert (= "990" ((json/decode (string (jresp :body))) "totalCents"))
+          "with void/rest in the composition the body is still read as proto3 JSON, by the call's codec"))
 
 (print "connect ok")

@@ -25,6 +25,13 @@
    :headers @{"content-type" "application/json"}
    :body (string "{\"got\":\"" (get-in req [:parsed-body "title"] "?") "\"}")})
 
+# a route that speaks its own wire format: the body reaches it as bytes
+(defn raw-echo [req]
+  (ring/text 200 (string "raw " (length (req :body))
+                         (if (nil? (req :parsed-body)) " unparsed" " parsed"))))
+
+(var decoded 0)
+
 (defn events [req]
   (ring/sse (coro
               (yield {:event "tick" :data "one"})
@@ -35,6 +42,7 @@
     (router/GET "/" 'hello {:name :hello})
     (router/GET "/whoami" 'whoami {:name :whoami})
     (router/POST "/echo" 'echo-json {:name :echo})
+    (router/POST "/raw" 'raw-echo {:name :raw :void.http/body :raw})
     (router/GET "/events" 'events {:name :events})))
 
 (def app
@@ -53,6 +61,7 @@
                              :content-type "application/json"
                              # a poor man's {"title":"x"} parse
                              :decode (fn [b]
+                                       (++ decoded)
                                        (def s (string b))
                                        (def key "\"title\":\"")
                                        (if-let [i (string/find key s)]
@@ -94,6 +103,17 @@
   (def j (test/inject c {:uri "/echo" :json {:title "x"}}))
   (assert (= 200 (j :status)))
   (assert (= "x" ((test/json j) :got)))
+  (assert (= 1 decoded) "the codec ran once for the parsed route")
+
+  # -- :void.http/body :raw — the parsing middleware is not in the chain -
+  (def raw (test/inject c {:uri "/raw" :json {:title "x"}}))
+  (assert (= 200 (raw :status)))
+  (assert (= "raw 13 unparsed" (test/text raw))
+          "a :raw route gets the bytes and no :parsed-body")
+  (assert (= 1 decoded) "and the codec did not run for it")
+  (assert (not (index-of :void.http/parsing ((http/explain-route "/raw" :post) :middleware)))
+          "because the wrapper is absent from the chain, not skipped per request")
+  (assert (index-of :void.http/parsing ((http/explain-route "/echo" :post) :middleware)))
 
   # -- SSE: frames drained by the wire serializer ------------------------
   (def ev (test/inject c {:uri "/events"}))

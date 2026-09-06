@@ -174,10 +174,10 @@
    :encode (fn encode-json [message value]
              (proto/encode-json message value (json-options)))
    :decode (fn decode-json [message bytes]
-             # deliberately not (req :parsed-body): if void/rest is in
-             # the composition it has already decoded this body with
-             # keyword keys, and the proto3 JSON mapping is defined
-             # over the *names* a peer sent
+             # from the raw bytes: the proto3 JSON mapping is defined
+             # over the *names* a peer sent, and an RPC route is marked
+             # :void.http/body :raw (mount/method-meta) so no other
+             # codec — void/rest's, with its keyword keys — has run
              (proto/decode-json message (string bytes) (json-options)))})
 
 # -- error details -------------------------------------------------------
