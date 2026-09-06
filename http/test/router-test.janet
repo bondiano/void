@@ -135,6 +135,53 @@
 (assert (= :orders/show (get-in req [:void/route :name])) ":void/route is set")
 (assert (= "7" (get-in req [:params :id])))
 
+# -- :route-aware — :wrap sees the route at build, never the request ---
+
+(def seen-at-build @[])
+(def aware-table
+  (router/build-table
+    {:sources [{:name :app :routes src}]
+     :meta-keys meta-keys
+     :middleware
+     [;middleware
+      {:plugin :my-app
+       :value {:name :timeout-tag :phase mw/phase/business :route-aware true
+               :when |(not (nil? (get $ :void.http/timeout)))
+               :wrap (fn [handler rmeta]
+                       (array/push seen-at-build (rmeta :name))
+                       # the spec lives in the closure: whatever the
+                       # request carries is not consulted
+                       (def tag (string "t=" (rmeta :void.http/timeout)))
+                       (fn [req]
+                         (def resp (handler req))
+                         (merge resp {:body (string (resp :body) " " tag)})))}}
+      {:plugin :my-app
+       :value {:name :plain :phase mw/phase/observability
+               :wrap (fn [handler] handler)}}]}))
+(assert (deep= (sorted seen-at-build) @[:admin/users :health :misc :orders/show])
+        "a :route-aware :wrap is called once per route at table build, with that route's merged meta")
+(assert (= "42 t=5" ((router/dispatch aware-table @{:method :get :path "/orders/42"}) :body))
+        "the wrapper used the route's own value (5 overrides the group's 30)")
+(assert (= "up t=30" ((router/dispatch aware-table @{:method :get :path "/health"}) :body))
+        "and the inherited one where the route did not override")
+(def [aware-entry _] (router/match aware-table :get "/orders/1"))
+(assert (= "1 t=5" (((aware-entry :chain)
+                     @{:method :get :path "/orders/1" :params {:id "1"}
+                       :void/route {:meta {:void.http/timeout 999 :name :forged}}})
+                    :body))
+        "a forged :void/route on the request changes nothing — the meta was read at build")
+(assert (not (first (protect (router/build-table
+                               {:sources [{:name :app :routes src}]
+                                :meta-keys meta-keys
+                                :middleware
+                                [;middleware
+                                 {:plugin :my-app
+                                  :value {:name :unary :phase 100
+                                          # a v1 :wrap of one argument, wrongly flagged
+                                          :route-aware true
+                                          :wrap (fn [handler] handler)}}]}))))
+        "a :route-aware contribution whose :wrap takes one argument fails the table build, not a request")
+
 # -- late binding --------------------------------------------------------
 
 (def henv (require "test-support/fixtures/handlers"))

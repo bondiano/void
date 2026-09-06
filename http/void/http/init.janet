@@ -56,12 +56,13 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.http/middleware
-  :doc "Phased HTTP middleware: {:name :phase 0-10000 :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool?}; :named applies only when a route lists it under :void.http/middleware"
+  :doc "Phased HTTP middleware: {:name :phase 0-10000 :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request"
   :schema {:name :keyword
            :phase [:int {:min 0 :max 10000}]
            :wrap :function
            :when [:optional :function]
            :named [:optional :boolean]
+           :route-aware [:optional :boolean]
            :doc [:optional :string]}
   :key :name :what "middleware"
   :reduce |(sorted-by |[($ :phase) ($ :name)] $))

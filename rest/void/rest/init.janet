@@ -117,41 +117,43 @@
    :doc "Coerce and validate request parts against the route's :void.schema/* keys; violations answer problem+json (400 request line parts, 422 body)"
    :when (fn [rmeta] (some |(not (nil? (get rmeta $)))
                            [;request-schema-keys]))
-   :wrap (fn [handler]
+   :route-aware true
+   :wrap (fn [handler rmeta]
+           # resolved once per route, at table build: which request-line
+           # parts this route schemas, each schema already normalized.
+           # Headers are validated against a keywordized copy and never
+           # put back — the request keeps its string-keyed header table
+           (def parts
+             (seq [[key slot status put-back] :in [[:void.schema/params :params 400 true]
+                                                     [:void.schema/query :query 400 true]
+                                                     [:void.schema/headers :headers 400 false]]
+                   :let [form (get rmeta key)]
+                   :when form]
+               {:slot slot :schema (normalized form) :status status :put-back put-back}))
+           (def body-schema
+             (when-let [form (get rmeta :void.schema/body)] (normalized form)))
            (fn rest-validate [req]
-             (label done
-               (def rmeta (get-in req [:void/route :meta] {}))
-               (defn part [key slot value status put-back]
-                 (when-let [form (get rmeta key)]
-                   (def res (schema/check (normalized form) value {:coerce true}))
-                   # a violation is raised as data: the panic guard hands
-                   # it to the renderers, and the problem+json one reads
-                   # the schema errors off the envelope
-                   (unless (empty? (res :errors))
-                     (errors/raise :void.schema/invalid
-                                   (string/format "invalid request %s" (string slot))
-                                   {:in slot :errors (res :errors)}
-                                   status))
-                   (when put-back
-                     (put req slot (res :value)))))
-               (part :void.schema/params :params
-                     (keywordize (req :params)) 400 true)
-               (part :void.schema/query :query
-                     (keywordize (req :query)) 400 true)
-               # headers are validated against a keywordized copy; the
-               # request keeps its string-keyed header table untouched
-               (part :void.schema/headers :headers
-                     (keywordize (req :headers)) 400 false)
-               (when (get rmeta :void.schema/body)
-                 (def [value coerce] (body-value req))
-                 (def res (schema/check (normalized (rmeta :void.schema/body))
-                                        value
-                                        (if coerce {:coerce true} {})))
-                 (unless (empty? (res :errors))
-                   (errors/raise :void.schema/invalid "invalid request body"
-                                 {:in :body :errors (res :errors)} 422))
-                 (put req :parsed-body (res :value)))
-               (handler req))))})
+             (each p parts
+               (def slot (p :slot))
+               (def res (schema/check (p :schema) (keywordize (req slot)) {:coerce true}))
+               # a violation is raised as data: the panic guard hands
+               # it to the renderers, and the problem+json one reads
+               # the schema errors off the envelope
+               (unless (empty? (res :errors))
+                 (errors/raise :void.schema/invalid
+                               (string/format "invalid request %s" (string slot))
+                               {:in slot :errors (res :errors)}
+                               (p :status)))
+               (when (p :put-back)
+                 (put req slot (res :value))))
+             (when body-schema
+               (def [value coerce] (body-value req))
+               (def res (schema/check body-schema value (if coerce {:coerce true} {})))
+               (unless (empty? (res :errors))
+                 (errors/raise :void.schema/invalid "invalid request body"
+                               {:in :body :errors (res :errors)} 422))
+               (put req :parsed-body (res :value)))
+             (handler req)))})
 
 # -- lazy JSON responses and the serialization middleware ----------------
 
@@ -190,28 +192,36 @@
   (and (dictionary? resp)
        (not (nil? (get resp :void.rest/data)))))
 
-(defn- check-response-schema [req resp data]
-  (def rs (get-in req [:void/route :meta :void.schema/response]))
-  (when rs
-    (when-let [form (get rs (resp :status))]
-      (def res (schema/check (normalized form) data {}))
-      (unless (empty? (res :errors))
-        (errorf "response for %q violates its %d schema:\n  - %s"
-                (get-in req [:void/route :name]) (resp :status)
-                (string/join (map schema/error-str (res :errors))
-                             "\n  - "))))))
+(defn- check-response-schema
+  "Check one payload against the route's response schemas by status
+  (`rs`, the route's :void.schema/response); a violation is a panic,
+  because it is the handler's bug and not the client's."
+  [route-name rs resp data]
+  (when-let [form (get rs (resp :status))]
+    (def res (schema/check (normalized form) data {}))
+    (unless (empty? (res :errors))
+      (errorf "response for %q violates its %d schema:\n  - %s"
+              route-name (resp :status)
+              (string/join (map schema/error-str (res :errors))
+                           "\n  - ")))))
 
 (plugin/contribute! :void.http/middleware
   {:name :void.rest/serialize
    :phase middleware/phase/response
    :doc "Encode lazy (rest/json data) responses; with [:rest :validate-responses] check the payload against the route's :void.schema/response schema first"
-   :wrap (fn [handler]
+   :route-aware true
+   :wrap (fn [handler rmeta]
+           # whether responses are checked, and against what, is settled
+           # at table build: the [:rest] slice was read at :before-start
+           # (phase 450, before the table) and the route is frozen
+           (def rs (when ((context) :validate-responses)
+                     (get rmeta :void.schema/response)))
+           (def route-name (get rmeta :name))
            (fn rest-serialize [req]
              (def resp (handler req))
              (when (rest-response? resp)
                (def data (resp :void.rest/data))
-               (when ((context) :validate-responses)
-                 (check-response-schema req resp data))
+               (when rs (check-response-schema route-name rs resp data))
                (put resp :body (json/encode data)))
              resp))})
 

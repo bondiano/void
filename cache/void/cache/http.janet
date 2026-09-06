@@ -244,15 +244,13 @@
    :phase 5500
    :doc "Serve routes marked :void.cache/response from the shared cache, and store their 200 responses"
    :when (fn [rmeta] (dictionary? (get rmeta :void.cache/response)))
-   :wrap (fn [handler]
-           # :wrap sees the handler and not the route, so the spec is
-           # read off the request's route entry — one lookup into a
-           # table that was merged and precompiled at build time, and
-           # nothing else on this path is computed per request
+   :route-aware true
+   :wrap (fn [handler rmeta]
+           # the route's policy, once, at table build — the same value
+           # :when accepted; nothing on this path is read per request
+           (def spec (get rmeta :void.cache/response {}))
            (fn cache-response [req]
-             (respond handler
-                      (get-in req [:void/route :meta :void.cache/response] {})
-                      req)))})
+             (respond handler spec req)))})
 
 (plugin/defplugin void/cache-http
   :doc "Response caching for void/http: routes marked :void.cache/response answer from the shared cache, inside authz enforcement, with the refusals a shared cache needs (never a Set-Cookie, never an Authorization or cookie-carrying request unless the route opts in, never a stream)."

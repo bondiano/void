@@ -10,7 +10,12 @@
 ### :void.http/middleware metadata key. A :when predicate is evaluated
 ### against the route's merged metadata once, at table-build time: a
 ### middleware that declines a route is not in that route's chain at
-### all — nothing is decided on the hot path.
+### all — nothing is decided on the hot path. A contribution marked
+### :route-aware has its :wrap called as (fn [handler route-meta]) with
+### that same merged metadata, so what a wrapper needs from the route
+### (a rate spec, a schema, a cache policy) is computed once, in the
+### closure, and never read off the request. The default stays the
+### one-argument :wrap of contract v1; the flag is additive.
 
 (def phases
   "The standard phase constants."
@@ -134,10 +139,16 @@
 
 (defn chain
   ``Compose selected middleware values around a handler: the lowest
-  phase ends up outermost. Returns the composed (fn [request]
-  response).``
-  [selected handler]
+  phase ends up outermost. A value marked :route-aware gets the route's
+  merged metadata as the second argument of its :wrap — at build time,
+  once; every other :wrap is called with the handler alone. Returns
+  the composed (fn [request] response).``
+  [selected handler &opt route-meta]
+  (default route-meta {})
   (var h handler)
   (loop [i :down-to [(dec (length selected)) 0]]
-    (set h (((selected i) :wrap) h)))
+    (def m (selected i))
+    (set h (if (m :route-aware)
+             ((m :wrap) h route-meta)
+             ((m :wrap) h))))
   h)

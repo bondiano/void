@@ -355,33 +355,39 @@
    # something only the identity knows
    :phase 4500
    :doc "Verify the CSRF token on unsafe requests whose credential rode on a cookie; bind the token for the form slot and the meta tag"
+   # [:security :csrf :enabled false] takes the wrapper out of every
+   # chain at table build; GET routes stay in, because a page is where
+   # the token is minted and the form slot bound
+   :when (fn [_] (get (settings :csrf) :enabled true))
+   :route-aware true
    :wrap
-   (fn [handler]
+   (fn [handler rmeta]
+     # the slice and the route are both known here, at table build —
+     # whether this route asked for the check unconditionally is a
+     # fact about the route, not about the request
+     (def cfg (settings :csrf))
+     (def route-name (get rmeta :name))
      (fn security-csrf [req]
-       (def cfg (settings :csrf))
-       (if-not (get cfg :enabled true)
-         (handler req)
-         (let [rmeta (get-in req [:void/route :meta] {})]
-           # a request with neither a session nor a cookie of ours gets
-           # a binding now, so that the token this page carries can be
-           # verified when it comes back
-           (unless (csrf/binding-of req cfg)
-             (put req :void.security/fresh-binding (crypto/token 16)))
-           (if (and (csrf/applies? req rmeta cfg)
-                    (not (csrf/verify (csrf/presented req cfg)
-                                      (or (csrf/binding-of req cfg)
-                                          (get req :void.security/fresh-binding))
-                                      cfg)))
-             (do
-               (log/info "CSRF token missing or invalid" :ns log-ns
-                         :route (get rmeta :name) :method (get req :method))
-               (csrf-cookie! req (refused req) cfg))
-             # the slot void/html has been waiting with since wave 1:
-             # every non-GET form renders the hidden field, and nothing
-             # renders when this plugin is absent
-             (let [resp (with-dyns [:void.html/csrf (fn [] (csrf/field-markup req cfg))]
-                          (handler req))]
-               (csrf-cookie! req resp cfg)))))))})
+       # a request with neither a session nor a cookie of ours gets
+       # a binding now, so that the token this page carries can be
+       # verified when it comes back
+       (unless (csrf/binding-of req cfg)
+         (put req :void.security/fresh-binding (crypto/token 16)))
+       (if (and (csrf/applies? req rmeta cfg)
+                (not (csrf/verify (csrf/presented req cfg)
+                                  (or (csrf/binding-of req cfg)
+                                      (get req :void.security/fresh-binding))
+                                  cfg)))
+         (do
+           (log/info "CSRF token missing or invalid" :ns log-ns
+                     :route route-name :method (get req :method))
+           (csrf-cookie! req (refused req) cfg))
+         # the slot void/html has been waiting with since wave 1:
+         # every non-GET form renders the hidden field, and nothing
+         # renders when this plugin is absent
+         (let [resp (with-dyns [:void.html/csrf (fn [] (csrf/field-markup req cfg))]
+                      (handler req))]
+           (csrf-cookie! req resp cfg)))))})
 
 # -- rate limiting -------------------------------------------------------
 
@@ -424,11 +430,16 @@
            (and spec
                 (let [key (get spec :key :ip)]
                   (if subject? (not= :ip key) (= :ip key)))))
+   :route-aware true
    :wrap
-   (fn [handler]
+   (fn [handler rmeta]
+     # the same spec :when computed, once more at table build and
+     # kept in the closure; the store is checked per request because
+     # its component starts after the table is built
+     (def spec (rate-config rmeta))
+     (def route-name (get rmeta :name))
      (fn security-rate [req]
-       (def spec (rate-config (get-in req [:void/route :meta] {})))
-       (if-not (and spec limiter-store)
+       (if-not limiter-store
          (handler req)
          (let [key (rate-key req spec)
                result (limit/check! limiter-store (string key) spec)]
@@ -442,7 +453,7 @@
                resp)
              (do
                (log/info "rate limited" :ns log-ns
-                         :route (get-in req [:void/route :meta :name])
+                         :route route-name
                          :key key :limit (spec :limit) :window (spec :window))
                (limited req spec result)))))))})
 

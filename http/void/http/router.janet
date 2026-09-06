@@ -335,7 +335,9 @@
     (def merged (meta/merge-layers decls (d :layers) {:strict strict}))
     (each e (merged :errors)
       (array/push errors (string/format "%s: %s" label e)))
-    (def rmeta (merged :value))
+    # frozen once: the entry keeps it, :when reads it, and a
+    # :route-aware :wrap closes over the very same value
+    (def rmeta (freeze (merged :value)))
     (def name (rmeta :name))
     (cond
       (nil? name)
@@ -359,7 +361,7 @@
               staged (stage-hooks-for (get opts :stage-hooks {}) rmeta (d :env))
               combined (sorted-by (fn [m] [(m :phase) (string (m :name))])
                                   (array ;selected ;(staged :wrappers)))]
-          {:chain (mw/chain combined (if h-ok (resolved :call) identity))
+          {:chain (mw/chain combined (if h-ok (resolved :call) identity) rmeta)
            :middleware (tuple ;(map |($ :name) combined))
            :hooks (staged :out)})))
     (unless c-ok
@@ -375,7 +377,7 @@
           :static (compiled :static)
           :handler (d :handler)
           :no-reload (resolved :no-reload)
-          :meta (freeze rmeta)
+          :meta rmeta
           :provenance (freeze (merged :provenance))
           :warnings (merged :warnings)
           :chain (chain-or-err :chain)
