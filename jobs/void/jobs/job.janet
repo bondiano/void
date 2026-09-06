@@ -6,10 +6,11 @@
 ### :args [42]}` in a table, in redis or in a row, and the process that
 ### runs it looks the name up in this registry. Which is also why the
 ### handler is held as a *binding*, not as a function value: the
-### environment of the defining module plus the symbol, read at call time,
-### so redefining the function in the REPL — or a reload by void/dev's
-### watcher — is live for jobs already queued. void/http's symbol handlers
-### resolve the same way and for the same reason.
+### environment of the defining module plus the symbol, read at call time
+### through void/core/bind, so redefining the function in the REPL — or a
+### reload by void/dev's watcher — is live for jobs already queued.
+### void/http's symbol handlers and void/bus's resolve through the same
+### module, for the same reason.
 ###
 ### The policy is everything the runtime needs to decide what to do
 ### when the handler throws or when two enqueues collide: how many
@@ -21,6 +22,7 @@
 ### *belongs*, not where it is locked.
 
 (import void/core/util :as util)
+(import void/core/bind :as bind)
 
 # -- canonical rendering -------------------------------------------------
 #
@@ -209,7 +211,8 @@
     (errorf "%s: a definition needs :fn or :binding + :env" who))
   # shallow, deliberately: :env is the defining module's environment,
   # a table that refers to itself through its own bindings, and a deep
-  # copy of it is a walk that does not end
+  # copy of it is a walk that does not end. :handler is the resolved
+  # binding — which of the two halves runs is decided here, once
   (def d
     (table/to-struct
       @{:name name
@@ -217,7 +220,8 @@
         :fn f
         :binding sym
         :env (get binding :env)
-        :doc (get binding :doc)}))
+        :doc (get binding :doc)
+        :handler (bind/declared binding who)}))
   (put registry name d)
   d)
 
@@ -300,17 +304,12 @@
   here instead of in the middle of a queue.
 
   The module binding wins over the value captured at definition time,
-  which is what makes a reload live. The captured value is the
-  fallback for a job defined somewhere a module binding cannot exist —
-  inside a function, in a test, at the REPL — and such a job is not
-  hot-reloadable, which is the whole difference between the two.``
+  which is what makes a reload live. The captured value is what a job
+  defined somewhere a module binding cannot exist — inside a function,
+  in a test, at the REPL — runs, and such a job is not hot-reloadable
+  (`bind/declared` decides which, at `define!`).``
   [d]
-  (def b (when (and (d :env) (d :binding)) (get (d :env) (d :binding))))
-  (cond
-    (and b (util/callable? (get b :value))) (b :value)
-    (util/callable? (d :fn)) (d :fn)
-    (errorf "job %q: %q no longer names a function in its module — was it renamed?"
-            (d :name) (d :binding))))
+  (bind/current (d :handler)))
 
 (defn unique-key
   ``The uniqueness key of a call, or nil when the job does not ask for

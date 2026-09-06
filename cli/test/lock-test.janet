@@ -32,8 +32,18 @@
 (assert (not= (lock/digest named-fn) (lock/digest other-name))
         "and differently from one with another name")
 (assert (= (lock/digest (fn [] 1)) (lock/digest (fn [] 2)))
-        "an anonymous function collapses to its anonymity — the honest
-        boundary the file's header states")
+        "two anonymous functions of one module are one thing — a body is
+        outside the honest boundary the file's header states")
+
+# an anonymous function is named by the module it was compiled in — a
+# module *name*, which two machines that loaded the same code agree on
+(array/push module/paths ["/virtual/:all:.janet" :source])
+(def in-one ((compile '(fn [] 1) (curenv) "/virtual/plugins/one.janet")))
+(def in-two ((compile '(fn [] 1) (curenv) "/virtual/plugins/two.janet")))
+(assert (not= (lock/digest in-one) (lock/digest in-two))
+        "an anonymous function moved to another module is a change")
+(assert (string/find "#fn(anonymous in plugins/one)" (lock/canonical in-one))
+        "and the rendering says which module, never an address")
 
 (assert (string/find "#fn(named-fn)" (lock/canonical named-fn))
         "the canonical rendering names a function rather than addressing it")

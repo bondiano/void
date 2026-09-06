@@ -38,6 +38,7 @@
 
 (import void/core/log :as log)
 (import void/core/schema :as schema)
+(import void/core/bind :as bind)
 (import ./router :as router)
 (import ./state :as state)
 (import void/core/util :as util)
@@ -171,7 +172,9 @@
              :fn f
              :binding (get binding :binding)
              :env (get binding :env)
-             :doc (get binding :doc)}))
+             :doc (get binding :doc)
+             # the resolved binding: which half runs is decided here, once
+             :handler (bind/declared binding who)}))
   (put commands name d)
   d)
 
@@ -197,12 +200,7 @@
   "The function behind a command, resolved now — late-bound the way a
   handler's is, so a reload is live."
   [d]
-  (def b (when (and (d :env) (d :binding)) (get (d :env) (d :binding))))
-  (cond
-    (and b (util/callable? (get b :value))) (b :value)
-    (util/callable? (d :fn)) (d :fn)
-    (errorf "bus command %q: %q no longer names a function in its module — was it renamed?"
-            (d :name) (d :binding))))
+  (bind/current (d :handler)))
 
 (defn send
   ``Dispatch a command to its one handler and return what the handler

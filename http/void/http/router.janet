@@ -6,8 +6,8 @@
 ### route-source contribution around them. `build-table` turns the route
 ### sources into an immutable route table — patterns compiled to PEGs,
 ### metadata merged (global -> group -> route) through void/core/meta with
-### provenance kept for explain, handler symbols resolved to their module
-### environments (late binding, : the env table is looked up per call, so
+### provenance kept for explain, handler symbols resolved through
+### void/core/bind (late binding: the env table is looked up per call, so
 ### a REPL redefinition is live without a rebuild), and the middleware
 ### chain composed per route — nothing is decided on the hot path. Every
 ### validation failure across every route is reported in one batch. The
@@ -17,6 +17,8 @@
 
 (import void/core/plugin :as plugin)
 (import void/core/meta :as meta)
+(import void/core/bind :as bind)
+(import void/core/errors :as errors)
 (import ./middleware :as mw)
 (import ./wire :as wire)
 (import void/core/util :as util)
@@ -249,63 +251,6 @@
                                  source-name node))))
   (walk form "" []))
 
-# -- handler resolution --------------------------------------------------
-
-(defn- last-slash [s]
-  (var i nil)
-  (loop [j :down-to [(dec (length s)) 0] :until i]
-    (when (= (chr "/") (s j)) (set i j)))
-  i)
-
-(defn- resolve-binding
-  "A qualified symbol 'my-app.orders/show names binding `show` in
-  module \"my-app/orders\" (dots become path separators); a bare
-  symbol is looked up in `env`. Returns [module-env binding-name]."
-  [sym env what]
-  (def s (string sym))
-  (def i (last-slash s))
-  (def [menv nm]
-    (if i
-      [(require (string/replace-all "." "/" (string/slice s 0 i)))
-       (symbol (string/slice s (inc i)))]
-      [(or env (errorf "cannot resolve bare %s symbol %q without a module environment — qualify it (my-app.orders/show)" what sym))
-       sym]))
-  (def binding (get menv nm))
-  (unless (and binding (util/callable? (get binding :value)))
-    (errorf "%s %q does not resolve to a function%s"
-            what sym (if i "" " in the declaring module")))
-  [menv nm])
-
-(defn resolve-handler
-  ``Resolve a handler declaration to {:call <fn per dispatch> :fn
-  <current fn> :no-reload <bool>} against `env` (the declaring module's
-  environment, for bare symbols). The resolved *environment table* is
-  captured and the binding is read per call — module reloads that
-  update the env in place (void/dev watch) are live without a rebuild.
-  A function literal is called directly and marked :no-reload.``
-  [handler &opt env]
-  (if (util/callable? handler)
-    {:call (fn literal-handler [req] (handler req))
-     :fn handler
-     :no-reload true}
-    (do
-      (def [menv nm] (resolve-binding handler env "handler"))
-      {:call (fn symbol-handler [req] ((in (in menv nm) :value) req))
-       :fn (get-in menv [nm :value])
-       :no-reload false})))
-
-(defn resolve-callable
-  "resolve-handler's variadic sibling for lifecycle hooks:
-  fn-or-symbol -> (fn [& args]) with the same late-binding rule."
-  [h &opt env what]
-  (default what "lifecycle hook")
-  (cond
-    (util/callable? h) (fn [& args] (h ;args))
-    (symbol? h)
-    (let [[menv nm] (resolve-binding h env what)]
-      (fn hook-call [& args] ((in (in menv nm) :value) ;args)))
-    (errorf "%s must be a function or a symbol, got %q" what h)))
-
 # -- table build ---------------------------------------------------------
 
 (def- allowed-build-opts
@@ -334,7 +279,7 @@
   (each s (sorted (keys mw/stages))
     (def route-resolved
       (seq [h :in (get route-hooks s [])]
-        (resolve-callable h env (string/format "%q hook" s))))
+        ((bind/resolve h env (string/format "%q hook" s)) :call)))
     (if (get mw/out-of-chain-stages s)
       (unless (empty? route-resolved)
         (put out s (tuple ;route-resolved)))
@@ -378,10 +323,8 @@
   (each src (get opts :sources [])
     (unless (and (dictionary? src) (get src :routes))
       (errorf "build-table: each source must be {:name ... :routes <routes value>}, got %q" src))
-    (def env
-      (let [e (get src :env)]
-        (if (util/callable? e) (e) e)))     # unwrap env-ref closures
-    (flatten-source (get src :name :anonymous) (src :routes) env
+    # an env-ref closure is passed through as it is: bind unwraps it
+    (flatten-source (get src :name :anonymous) (src :routes) (get src :env)
                     flat errors))
 
   # build entries
@@ -407,9 +350,9 @@
     (def [pat-ok compiled] (protect (compile-pattern (d :pattern))))
     (unless pat-ok
       (array/push errors (string/format "%s: %s" label (string compiled))))
-    (def [h-ok resolved] (protect (resolve-handler (d :handler) (d :env))))
+    (def [h-ok resolved] (protect (bind/resolve (d :handler) (d :env) "handler")))
     (unless h-ok
-      (array/push errors (string/format "%s: %s" label (string resolved))))
+      (array/push errors (string/format "%s: %s" label (errors/message resolved))))
     (def [c-ok chain-or-err]
       (protect
         (let [selected (mw/select contribs rmeta)

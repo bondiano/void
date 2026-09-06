@@ -23,6 +23,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/meta :as meta)
+(import void/core/bind :as bind)
 (import void/core/hooks :as corehooks)
 (import void/core/log :as log)
 (import ./wire :as wire)
@@ -342,10 +343,9 @@
   [contribs]
   (def by-stage @{})
   (each c (or contribs [])
-    (def env (let [e (c :env)] (if (util/callable? e) (e) e)))
-    (def call (router/resolve-callable
-                (c :fn) env
-                (string/format "%q hook %q" (c :stage) (c :name))))
+    (def call ((bind/resolve (c :fn) (c :env)
+                             (string/format "%q hook %q" (c :stage) (c :name)))
+               :call))
     (array/push (or (get by-stage (c :stage))
                     (let [a @[]] (put by-stage (c :stage) a) a))
                 call))
@@ -668,7 +668,7 @@
       [(string/ascii-upper (string (e :method)))
        (e :pattern)
        (string/format "%q" (e :name))
-       (if (symbol? (e :handler)) (string (e :handler)) "<fn>")
+       (bind/describe (e :handler))
        (string/format "%q" (e :source))]))
   (def widths
     (seq [i :range [0 4]]

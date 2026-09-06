@@ -29,6 +29,7 @@
 (import void/core/system :as system)
 (import void/core/hooks :as hooks)
 (import void/core/deploy :as deploy)
+(import void/core/bind :as bind)
 (import ./new :as new)
 (import ./repl :as repl)
 (import ./make :as make)
@@ -155,12 +156,19 @@
   :needs components (plus transitive dependencies), call :fn with those
   instances followed by the string arguments, then stop what was
   started (reverse dependency order, `teardown!`). Returns the
-  command's return value.``
+  command's return value.
+
+  :fn is a function or a symbol — `'my-app.ops/status` names `status`
+  in module `my-app/ops` and is read through that module's env when
+  the command runs (void/core/bind), so a command is as live under the
+  watcher and the REPL as a route handler is.``
   [boot command args]
-  (def f (command :fn))
-  (when (symbol? f)
-    (errorf "command %q: :fn is the symbol %q — symbol resolution for CLI commands is not wired yet, contribute a function"
-            (command :name) f))
+  # resolved before anything starts: a command whose symbol names no
+  # function fails here, with the symbol in the message, rather than
+  # after a pool has been opened for it
+  (def f ((bind/resolve (command :fn) nil
+                        (string/format "command %q" (command :name)))
+          :call))
   (def needs (get command :needs []))
   (def sys (boot :system))
   (unless (empty? needs)

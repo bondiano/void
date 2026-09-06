@@ -3,6 +3,7 @@
 (import void/core/system :as system)
 (import void/core/deploy :as deploy)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import void/cli :as cli)
 
 # -- command words / resolution ------------------------------------------
@@ -91,12 +92,45 @@
         "a command without :needs gets only the args")
 (assert (empty? log) "no component starts for a :needs-less command")
 
-# -- a symbol :fn is rejected with a clear error -------------------------
+# -- a symbol :fn is late-bound (void/core/bind) -------------------------
+#
+# A command contributed as a qualified symbol is read through its
+# module's env when it runs — the same rule as a route handler, and the
+# same reason: the watcher re-evaluates a file into its existing env,
+# and the next `void <command>` in a long-lived process (the dev
+# dashboard, an MCP server) runs the new body.
 
-(def [ok err]
-  (protect (cli/run-command boot2 {:name :sym :fn 'some-fn} [])))
-(assert (not ok) "symbol :fn throws")
-(assert (string/find "symbol" err) "the error explains the limitation")
+(def module-dir (string (os/cwd) "/.tmp-cli-test-" (os/time)))
+(os/mkdir module-dir)
+(array/insert module/paths 0 [(string module-dir "/:all:.janet") :source])
+(defer (do (os/rm (string module-dir "/symcmd.janet")) (os/rmdir module-dir))
+  (spit (string module-dir "/symcmd.janet")
+        "(defn hello [& args] (string \"v1 \" (string/join args \",\")))")
+  (assert (= "v1 a,b" (cli/run-command boot2 {:name :sym :fn 'symcmd/hello} ["a" "b"]))
+          "a qualified symbol names the command's function in its module")
+  # what the watcher does on a change: the file re-evaluated into the
+  # module's own env table
+  (spit (string module-dir "/symcmd.janet")
+        "(defn hello [& args] (string \"v2 \" (string/join args \",\")))")
+  (dofile (string module-dir "/symcmd.janet") :env (require "symcmd"))
+  (assert (= "v2 a" (cli/run-command boot2 {:name :sym :fn 'symcmd/hello} ["a"]))
+          "and a reload is live for the next run — nothing was re-registered")
+  (def [ok err]
+    (protect (cli/run-command boot2 {:name :sym :fn 'symcmd/nope} [])))
+  (assert (not ok) "a symbol that names no function is refused")
+  (assert (= :void.bind/unresolvable (errors/kind err)) "as an error the seams can read")
+  (assert (string/find "command :sym" (errors/message err)) "naming the command")
+  (assert (string/find "does not resolve to a function" (errors/message err)) "and the fact"))
+
+(def [ok3 err3]
+  (protect (cli/run-command boot2 {:name :gone :fn 'no-such-module/hello} [])))
+(assert (not ok3) "a symbol whose module cannot be loaded is refused")
+(assert (string/find "cannot be loaded" (errors/message err3)) "and the message says so")
+
+(def [ok2 err2]
+  (protect (cli/run-command boot2 {:name :bare :fn 'hello} [])))
+(assert (not ok2) "a bare symbol has no env to resolve in")
+(assert (string/find "qualify it" (errors/message err2)) "and the message says how to spell it")
 
 # -- void deploy check ---------------------------------------------------
 #

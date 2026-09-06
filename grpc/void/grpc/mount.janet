@@ -28,6 +28,7 @@
 (import void/core/deadline :as deadline)
 (import void/http/ring :as ring)
 (import void/http/router :as router)
+(import void/core/bind :as bind)
 (import void/proto/descriptor :as desc)
 (import ./codes :as codes)
 (import ./connect :as connect)
@@ -150,16 +151,15 @@
   (def env (svc :env))
   (if (function? env) (env) env))
 
-(defn- resolve-handler [svc m]
-  (router/resolve-callable (m :handler) (env-of svc)
-                           (string/format "rpc %q" (m :route-name))))
-
 (defn handler-for
   "The route handler of one method — a closure over the service, the
   method and the handler resolved against the declaring module's
-  environment (late binding)."
+  environment (late binding, void/core/bind)."
   [svc m]
-  (def handler (resolve-handler svc m))
+  (def handler
+    ((bind/resolve (m :handler) (env-of svc)
+                   (string/format "rpc %q" (m :route-name)))
+     :call))
   (fn rpc-route [req] (answer svc m handler req)))
 
 # -- the route table -----------------------------------------------------

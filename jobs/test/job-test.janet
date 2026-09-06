@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/core/errors :as errors)
 (import void/jobs/job :as job)
 
 (log/set-level! "void.jobs" :error)
@@ -39,6 +40,16 @@
   (job/lookup :nested-job))
 (assert (= 30 ((job/handler (declare-nested)) 3))
         "a job declared inside a function runs — it is merely not reloadable")
+
+# a module-level job whose binding stops naming a function says so
+# where it is looked up, with the name — rather than running the body
+# captured at declaration as if nothing had happened
+(job/defjob renamed-away [x] x)
+(def renamed-away 5)
+(def [rok rerr] (protect (job/handler (job/lookup :renamed-away))))
+(assert (not rok) "a binding that no longer names a function is an error")
+(assert (string/find "job :renamed-away: renamed-away no longer names a function" (errors/message rerr))
+        "which names the job and the binding")
 
 (def [ok err] (protect (job/lookup! :never-declared)))
 (assert (not ok) "an undeclared job is an error")

@@ -19,6 +19,7 @@
 (import void/core/config :as config)
 (import void/core/deploy :as deploy)
 (import void/core/meta :as meta)
+(import void/core/bind :as bind)
 (import void/http/init :as http)
 (import void/html/init :as html)
 (import void/htmx/init :as htmx)
@@ -412,7 +413,7 @@
                   :hx-swap "innerHTML"}
               [:code (string (e :name))]]]
         [:td (string (e :source))]
-        [:td [:code (if (symbol? (e :handler)) (string (e :handler)) "<fn>")]]])]]
+        [:td [:code (bind/describe (e :handler))]]])]]
    [:div {:id route-target :class "dash-detail"}
     [:p {:class "dash-note"} "Pick a route."]]])
 

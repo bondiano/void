@@ -19,9 +19,13 @@
 ### and a function has no stable identity across two processes — its
 ### address is not the same twice, so hashing it would make every run
 ### differ from every other. What is hashed is therefore the
-### contribution *as data*, with each function collapsed to its name:
-### a middleware inserted, removed, renamed or re-phased changes the
-### hash, and an edit to a middleware's body does not. That is the
+### contribution *as data*, with each function reduced to what names
+### it (void/core/bind): a symbol as written, a named function by its
+### name, an anonymous one by the module it was compiled in — a module
+### *name*, inverted through module/paths, so it reads the same on
+### every machine that loaded the same code. A middleware inserted,
+### removed, renamed, re-phased or moved to another module changes
+### the hash, and an edit to a middleware's body does not. That is the
 ### honest boundary, and the file says so in its own header — the tool
 ### that catches a changed function body is the one that already
 ### watches the source, not the one that reads a manifest.
@@ -35,6 +39,7 @@
 (import void/core/init :as core)
 (import void/core/plugin :as plugin)
 (import void/core/deploy :as deploy)
+(import void/core/bind :as bind)
 
 (def lock-version
   "Format version of the file. It goes in the file so that a future
@@ -60,23 +65,21 @@
   (string/format "%016x" h))
 
 (defn- fn-label
-  ``The name of a function, or "anonymous". `(string f)` would do it
-  for a named function and would print an address for the rest, so the
-  address never gets into a digest.``
+  ``What names a function in the digest: its name, or — for an
+  anonymous one — the module it was compiled in (`anonymous in
+  void/http`), so two lambdas from two plugins are two things rather
+  than one "anonymous". `(string f)` would print an address for the
+  anonymous, and the address never gets into a digest.``
   [f]
-  (def named (when (function? f) (get (disasm f) :name)))
-  (cond
-    named (string named)
-    (cfunction? f) (let [s (string f)]
-                     (if (string/find "0x" s) "anonymous" s))
-    "anonymous"))
+  (or (bind/fn-name f)
+      (if-let [o (bind/origin f)] (string "anonymous in " o) "anonymous")))
 
 (defn canonical
   ``One spelling per value, so that two processes that resolved the
   same composition write the same bytes: dictionary keys sorted by
-  their own rendering, sequences in order, functions collapsed to
-  their names, and anything else tagged by type rather than by
-  identity.``
+  their own rendering, sequences in order, functions reduced to their
+  names (an anonymous one to the module it lives in), and anything
+  else tagged by type rather than by identity.``
   [x]
   (cond
     (or (function? x) (cfunction? x)) (string "#fn(" (fn-label x) ")")
@@ -159,8 +162,9 @@
 # a deploy.
 #
 # The hashes cover the composition *as data*, with every function
-# collapsed to its name (void/cli/lock): a middleware inserted,
-# removed, renamed or re-phased changes them; an edit inside a
+# reduced to its name — or, for an anonymous one, to the module it
+# lives in (void/cli/lock): a middleware inserted, removed, renamed,
+# re-phased or moved to another module changes them; an edit inside a
 # middleware's body does not.
 #
 # Generated file — take a new one with `void plugins lock` rather than

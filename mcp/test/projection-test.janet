@@ -54,7 +54,15 @@
       {:name :test/angry
        :doc "Throws"
        :read-only? true
-       :fn (fn [& args] (error "no"))}]
+       :fn (fn [& args] (error "no"))}
+      {:name :test/sym
+       :doc "Named by a symbol, resolved through its module at the call"
+       :read-only? true
+       :fn 'symtool/hello}
+      {:name :test/nosym
+       :doc "Named by a symbol nothing answers to"
+       :read-only? true
+       :fn 'symtool/nope}]
      :void.mcp/tool
      [{:name :test/typed
        :doc "Takes typed arguments"
@@ -67,6 +75,16 @@
        :doc "A note"
        :mime-type "text/plain"
        :read (fn [] "the note")}]}))
+
+# the module behind :test/sym — written here so that the test can
+# rewrite it, which is what a reload is
+(def module-dir (string (os/cwd) "/.tmp-mcp-test-" (os/time)))
+(os/mkdir module-dir)
+(array/insert module/paths 0 [(string module-dir "/:all:.janet") :source])
+(defn- write-symtool [version]
+  (spit (string module-dir "/symtool.janet")
+        (string "(defn hello [& args] (printf \"" version " %j\" args))")))
+(write-symtool "v1")
 
 (defn- boot-with [mcp-config]
   (def boot (plugin/bootstrap {:plugins [:void/mcp (app)]
@@ -155,6 +173,24 @@
 (def angry (call "test_angry" @{}))
 (assert (get-in angry [:result :isError]) "a command that throws is a failed tool call")
 (assert (string/find "no" (get-in angry [:result :content 0 :text])) "carrying its message")
+
+# -- a command named by a symbol is late-bound (void/core/bind) ----------
+
+(def sym1 (call "test_sym" @{:args ["x"]}))
+(assert (= `v1 ("x")` (string/trim (get-in sym1 [:result :content 0 :text])))
+        "a qualified symbol resolves through its module when the tool is called")
+(write-symtool "v2")
+(dofile (string module-dir "/symtool.janet") :env (require "symtool"))
+(def sym2 (call "test_sym" @{:args ["x"]}))
+(assert (= `v2 ("x")` (string/trim (get-in sym2 [:result :content 0 :text])))
+        "and a reload of that module is live for the next call — the server noticed nothing")
+
+(def nosym (call "test_nosym" @{}))
+(assert (get-in nosym [:result :isError]) "a symbol nothing answers to is a failed call")
+(assert (string/find "does not resolve to a function" (get-in nosym [:result :content 0 :text]))
+        "that says so in a sentence, not an address")
+(os/rm (string module-dir "/symtool.janet"))
+(os/rmdir module-dir)
 
 # -- typed tools are validated and coerced by the schema layer -----------
 

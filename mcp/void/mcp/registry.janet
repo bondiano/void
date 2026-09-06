@@ -38,6 +38,8 @@
 (import void/core/plugin :as plugin)
 (import void/core/schema :as schema)
 (import void/core/system :as system)
+(import void/core/bind :as bind)
+(import void/core/errors :as errors)
 (import void/openapi/jsonschema :as jsonschema)
 
 (def defaults
@@ -85,16 +87,20 @@
 # -- running a command ---------------------------------------------------
 
 (defn- callable
-  ``The function of a contribution under `key`, or a readable refusal —
-  symbols are late-bound and nothing resolves them for CLI commands yet,
-  so say that rather than call a symbol.``
+  ``The function of a contribution under `key`, resolved now through
+  void/core/bind: a function is itself, a qualified symbol
+  (`'my-app.ops/status`) is read through its module's env at every
+  call — so a tool redefined in the REPL, or reloaded by void/dev's
+  watcher, answers with its new body without the server noticing. A
+  symbol that names no function is a readable `:void.bind/unresolvable`
+  error, raised before any `:needs` component is started.``
   [entry &opt key]
   (default key :fn)
-  (def f (entry key))
-  (when (symbol? f)
-    (errorf "%q: %q is the symbol %q — contribute a function, symbol resolution is not wired for commands"
-            (entry :name) key f))
-  f)
+  ((bind/resolve (entry key) nil
+                 (string/format "MCP %s %q"
+                                (if (= key :read) "resource" "tool")
+                                (entry :name)))
+   :call))
 
 (defn- instances
   ``The `:needs` instances of a command, in declaration order.
@@ -148,6 +154,15 @@
     (string? value) value
     (string/format "%q" value)))
 
+(defn- failure-text
+  "What a failed call says to the model: a string as it is, an error
+  envelope (void/core/errors) by its sentence, anything else described."
+  [value]
+  (cond
+    (string? value) value
+    (errors/error? value) (errors/message value)
+    (describe value)))
+
 (defn run-command
   ``Run a CLI command as a tool call: resolve its `:needs`, bind
   `:out` to a buffer, call it with the instances followed by the
@@ -167,7 +182,7 @@
           (f ;inst ;args)))))
   (if ok
     {:text (rendered out value) :error? false}
-    {:text (string (if (string? value) value (describe value))
+    {:text (string (failure-text value)
                    (if (empty? out) "" (string "\n\n" out)))
      :error? true}))
 
@@ -190,7 +205,7 @@
           (f ;inst args)))))
   (cond
     (not ok)
-    {:text (string (if (string? value) value (describe value))
+    {:text (string (failure-text value)
                    (if (empty? out) "" (string "\n\n" out)))
      :error? true}
     (dictionary? value) {:text (get value :text (rendered out nil))

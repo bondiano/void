@@ -10,10 +10,10 @@
 ### A handler is a name, a topic pattern and a function. The name is a
 ### keyword and the function is held as a **binding** rather than as a
 ### value — the defining module's environment plus the symbol, read at
-### delivery time — so a `defhandler` redefined in the REPL, or reloaded
-### by void/dev's watcher, is live for the next message without a restart.
-### `defjob` and void/http's symbol handlers resolve the same way, for the
-### same reason.
+### delivery time through void/core/bind — so a `defhandler` redefined in
+### the REPL, or reloaded by void/dev's watcher, is live for the next
+### message without a restart. `defjob` and void/http's symbol handlers
+### resolve through the same module, for the same reason.
 ###
 ### **One consumer, many handlers.** The router registers a *single*
 ### subscription with the backend — one consumer group for this process —
@@ -36,6 +36,7 @@
 ### where a reader finds out before production does.
 
 (import void/core/log :as log)
+(import void/core/bind :as bind)
 (import ./message :as message)
 (import ./middleware :as middleware)
 (import void/core/util :as util)
@@ -119,7 +120,9 @@
         # shallow, deliberately: :env is the defining module's own
         # environment, and a deep copy of it is a walk that does not end
         :env (get binding :env)
-        :doc (get binding :doc)}))
+        :doc (get binding :doc)
+        # the resolved binding: which half runs is decided here, once
+        :handler (bind/declared binding who)}))
   (put registry name d)
   d)
 
@@ -145,12 +148,7 @@
   new body, and one whose binding has stopped being a function says so
   here rather than in the middle of a delivery.``
   [d]
-  (def b (when (and (d :env) (d :binding)) (get (d :env) (d :binding))))
-  (cond
-    (and b (util/callable? (get b :value))) (b :value)
-    (util/callable? (d :fn)) (d :fn)
-    (errorf "bus handler %q: %q no longer names a function in its module — was it renamed?"
-            (d :name) (d :binding))))
+  (bind/current (d :handler)))
 
 (defn for-group
   ``Every handler belonging to consumer group `group` — the ones that
