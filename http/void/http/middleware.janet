@@ -20,6 +20,11 @@
 (def phases
   "The standard phase constants."
   {:panic-guard 0
+   # the request id is a counter and a log-context binding — it costs
+   # nothing, so it sits under every refusal a chain can make: a shed
+   # 503 (100) and an address-keyed 429 (200) carry an id in the log
+   # and in :on-response like any other response
+   :request-id 50
    :observability 1000
    :parsing 2000
    :session 3000
@@ -30,6 +35,7 @@
    :response 9000})
 
 (def phase/panic-guard (phases :panic-guard))
+(def phase/request-id (phases :request-id))
 (def phase/observability (phases :observability))
 (def phase/parsing (phases :parsing))
 (def phase/session (phases :session))
@@ -50,6 +56,16 @@
 # it). Response-side hooks are (fn [request response]) -> response.
 # :on-response / :on-error / :on-timeout live outside the chain — the
 # server, the panic guard and the inject path call them.
+#
+# The slots are a frozen contract (ADR-0016, refined by ADR-0045), and
+# :on-send at 500 has a consequence worth stating: it sees only the
+# responses that reached slot 500. A middleware that refuses *outside*
+# it — void/pressure's 503 at 100, void/security's address-keyed 429 at
+# 200 — does so precisely so that a refusal costs nothing, and its
+# response never passes an :on-send hook. What must see every response
+# a route produced is :on-response (out of chain, called by the
+# transport); what must see every response this process emits, a 404
+# and a rendered 500 included, is a :void.http/edge wrapper.
 
 (def stage-slots
   "In-chain stage -> phase slot."

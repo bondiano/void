@@ -277,6 +277,60 @@
   (assert (= "yes" (get-in blown [:headers "x-order"]))
           "lowest phase is outermost, so the phase-100 wrapper sees what the phase-9000 one did"))
 
+# -- an early refusal carries a request id -------------------------------
+#
+# request-id sits at phase 50: a refusal made at 100 (void/pressure's
+# 503) or 200 (void/security's address-keyed 429) never reaches the
+# observability phase, and still has to be findable in the log and
+# identifiable in :on-response. :on-send (500) is *inside* such a
+# refusal by design, and does not see it — the transport's :on-response
+# is the hook that does.
+
+(def refused-ids @[])
+(def refuser-app
+  (plugin/manifest 'test/refuser
+    :version "0.1.0"
+    :requires {:void/http ">=0.0.1"}
+    :contributes
+    {:void.http/route-source [{:name :test/refuser :routes edge-routes
+                               :env (router/env-ref (curenv))}]
+     :void.http/middleware [{:name :test/shed
+                             :phase 100
+                             :wrap (fn [handler]
+                                     (fn [req]
+                                       (ring/text 503 (string "shed " (req :request-id)))))}]
+     :void.http/hook [{:stage :on-send :name :test/on-send
+                       :fn (fn [req resp] (ring/header resp "x-on-send" "seen"))}
+                      {:stage :on-response :name :test/seen-id
+                       :fn (fn [req resp]
+                             (array/push refused-ids [(resp :status) (req :request-id)]))}]}))
+
+(def refuser-boot
+  (plugin/start! {:plugins ["void/http/init" refuser-app]
+                  :profile :test
+                  :config {:env @{} :cli {:log {:level :error}
+                                          :http {:port 0 :access-log false}}}}))
+
+(defer (plugin/shutdown! refuser-boot 3)
+  (def ex (http/explain-route "/fine"))
+  (assert (< (index-of :void.http/request-id (ex :middleware))
+             (index-of :test/shed (ex :middleware)))
+          "request-id wraps the phase-100 refusal")
+  # drive the kernel the way the server and test/inject do: the handler,
+  # then the transport's :on-response notification with the same request
+  (def kernel (get-in refuser-boot [:system :instances :http/kernel]))
+  (def req (http/make-request {:uri "/fine"}))
+  (def shed ((kernel :handler) req))
+  (assert (= 503 (shed :status)))
+  (assert (string? (req :request-id)) "the refused request was given an id")
+  (assert (= (string "shed " (req :request-id)) (string (shed :body)))
+          "and the phase-100 refusal already saw it")
+  (assert (nil? (get-in shed [:headers "x-on-send"]))
+          ":on-send (500) is inside a phase-100 refusal and does not see it — by design")
+  ((kernel :notify-response) req shed)
+  (assert (deep= @[[503 (req :request-id)]] refused-ids)
+          ":on-response, out of chain, sees the refusal and its id"))
+
 # -- the :prod profile defaults the session cookie to Secure -------------
 #
 # Production sits behind the TLS relay, and a session cookie a browser

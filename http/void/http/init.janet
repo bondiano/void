@@ -208,7 +208,11 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.http/request-id
-   :phase middleware/phase/observability
+   # 50, not the observability phase (1000): an id is a counter, and an
+   # early refusal — pressure's 503 at 100, the address-keyed 429 at
+   # 200 — should be findable in the log and carry its id into
+   # :on-response like any other response
+   :phase middleware/phase/request-id
    :doc "Mint the request id ((req :request-id)) and bind it to the log context; config [:http :request-id-header] names a trusted inbound header to take instead (off by default, fastify-style)"
    :wrap (fn [handler]
            # :wrap runs at table-build time — the context (and config)
