@@ -158,8 +158,8 @@
 (defn- apply-env!
   "Apply the `prefix`-ed variables of `env`, in sorted order for a
   stable provenance, as the env layer: each becomes the leaf its name
-  spells, its string coerced with `parse-scalar`. VOID_PROFILE selects
-  the profile and is not a value."
+  spells, its string coerced with `parse-scalar`. `<prefix>PROFILE`
+  selects the profile and is not a value."
   [vals provenance env prefix]
   (each name (sorted (keys env))
     (when (and (string/has-prefix? prefix name)

@@ -254,8 +254,7 @@
                                  :extension-points (freeze points)})))))
 
 (defmacro defplugin
-  ``Define this module's plugin manifest and export it as `manifest`
-:
+  ``Define this module's plugin manifest and export it as `manifest`:
 
       (defplugin void/redis
         :version "0.3.0"

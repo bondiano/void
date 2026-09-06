@@ -436,6 +436,24 @@
 (assert (= [:test/dp] (dp-report :active))
         "keyword :plugins entries resolve through the registry")
 
+# -- a point declared both ways fails, and the failure drains the queue --
+
+(plugin/defextension-point :test/both-ways
+  :doc "declared via defextension-point and in the manifest"
+  :cardinality :many)
+(expect-error "point declared both ways" "declared both"
+  |(plugin/defplugin test/both-ways
+     :version "0.0.1"
+     :extension-points {:test/both-ways {:doc "declared in the manifest"}}))
+(assert (nil? (get plugin/manifest-registry :test/both-ways))
+        "a defplugin that fails the both-ways check registers nothing")
+
+(plugin/defplugin test/after-both-ways
+  :version "0.0.1")
+(assert (= :test/after-both-ways (manifest :name)))
+(assert (nil? (get-in manifest [:extension-points :test/both-ways]))
+        "the failed defplugin drained the queue: nothing leaks into the next manifest")
+
 # -- deprecation aliases -------------------------------------------------
 
 (expect-error "self-alias" "alias itself"

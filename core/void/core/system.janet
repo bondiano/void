@@ -324,8 +324,8 @@
                  (component-config comp (sys :config))))
 
 (defn- stop-instance
-  "Call the component's :stop with its instance, when it has one; then
-  forget the instance and mark it :stopped."
+  "Call the component's :stop with its instance, when it declares one;
+  then forget the instance and mark it :stopped."
   [sys k]
   (def comp (get-in sys [:components k]))
   (when-let [stop-fn (get comp :stop)]
