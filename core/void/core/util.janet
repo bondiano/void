@@ -42,6 +42,15 @@
         (errorf "duplicate %s %q" what k))
       (put seen k true))))
 
+(defn err-str
+  ``The text of a caught error for a message that quotes it: a string
+  error as it is, anything else (an errors/ envelope, a schema
+  struct, a fiber's value) through `describe`. What `protect`'s second
+  value looks like in a "failed: %s" report — written here once
+  instead of once per module that batches errors.``
+  [e]
+  (if (string? e) e (describe e)))
+
 # -- did-you-mean --------------------------------------------------------
 
 (defn levenshtein

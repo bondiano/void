@@ -27,7 +27,10 @@
   "Level keyword -> numeric severity."
   {:trace 10 :debug 20 :info 30 :warn 40 :error 50 :fatal 60})
 
-(defn- level-num [l]
+(defn- level-num
+  "The numeric rank of a level keyword, or an error naming the known
+  levels."
+  [l]
   (or (get levels l)
       (errorf "unknown log level %q (levels: :trace :debug :info :warn :error :fatal)" l)))
 
@@ -166,13 +169,20 @@
 
 # -- redaction and serializers -------------------------------------------
 
-(defn- redact [rec]
+(defn- redact
+  "Blank, in place, every configured redaction path the record has a
+  value at."
+  [rec]
   (each path (state :redact)
     (unless (nil? (get-in rec path))
       (put-in rec path "[redacted]")))
   rec)
 
-(defn- serialize [rec]
+(defn- serialize
+  "Apply the registered serializers to the record in place, each to its
+  key when present; a serializer that throws leaves a placeholder
+  naming its error rather than losing the record."
+  [rec]
   (def sers (state :serializers))
   (unless (empty? sers)
     (eachp [k f] sers
@@ -205,11 +215,17 @@
 (def- level-colors
   {10 "90" 20 "36" 30 "32" 40 "33" 50 "31" 60 "35"})
 
-(defn- fmt-ts [ts]
+(defn- fmt-ts
+  "A timestamp as the local HH:MM:SS the pretty sink prints."
+  [ts]
   (def d (os/date (math/floor ts) true))
   (string/format "%02d:%02d:%02d" (d :hours) (d :minutes) (d :seconds)))
 
-(defn- kv-str [rec]
+(defn- kv-str
+  "The record's extra keys as ` k=v ...` in key order for the pretty
+  sink — the four standard keys are printed by the line itself; empty
+  when there are none."
+  [rec]
   (def parts @[])
   (each k (sorted (filter |(not (in {:ts true :level true :ns true :msg true} $))
                           (keys rec)))

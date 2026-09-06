@@ -141,7 +141,10 @@
 
 # -- the survey ----------------------------------------------------------
 
-(defn- declarations [boot]
+(defn- declarations
+  "The :void.core/store declarations a boot resolved — none when it has
+  no extensions."
+  [boot]
   (or (get-in boot [:extensions :void.core/store :resolved]) []))
 
 (defn needs
@@ -157,7 +160,13 @@
       (array/push out k)))
   (distinct out))
 
-(defn- ask-one [decl boot]
+(defn- ask-one
+  "Ask one declaration's :ask about the boot: nil when the store is not
+  composed (nothing to say), else its answer under the declaration's
+  :name and :what. An :ask that throws is recorded as `:shared?
+  :unknown` with the error, never re-raised — the survey reports, it
+  does not crash."
+  [decl boot]
   (def [ok answer] (protect ((decl :ask) boot)))
   (cond
     (not ok)
@@ -195,7 +204,10 @@
   [entries]
   (filter |(not (in not-a-defect (get $ :shared?))) entries))
 
-(defn- line [e]
+(defn- line
+  "One violation as a report line: what the store holds, which store it
+  is, and what to compose instead."
+  [e]
   (string/format "  %s — the %q store: %s"
                  (e :what) (get e :store :anonymous)
                  (get e :replacement "no shared replacement is declared")))
@@ -228,14 +240,20 @@
 
 # -- the report ----------------------------------------------------------
 
-(defn- verdict [e]
+(defn- verdict
+  "The one-word column of a survey row: what `:shared?` says."
+  [e]
   (case (get e :shared?)
     true "shared"
     :by-design "by design"
     :unknown "no answer"
     "per-process"))
 
-(defn- note [e]
+(defn- note
+  "The tail of a survey row — the detail worth reading for its verdict:
+  the replacement for a per-process store, the reason for a by-design
+  one, the error for one that gave no answer."
+  [e]
   (case (get e :shared?)
     false (get e :replacement "")
     :by-design (get e :why "")

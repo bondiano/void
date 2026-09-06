@@ -10,7 +10,9 @@
 ### unresolvable secrets, schema failures) are collected in one batch —
 ### fail fast, but with the full list.
 
-(defn- path-str [path]
+(defn- path-str
+  "A config path as it reads in a message: `[:db :pool :size]`."
+  [path]
   (string/format "[%s]"
                  (string/join (map |(string/format "%q" $) path) " ")))
 
@@ -41,7 +43,11 @@
     (errorf "not a secret box: %q" box))
   (in secret-store box))
 
-(defn- make-secret [spec value]
+(defn- make-secret
+  "Box a resolved secret: the box carries only the secret's name, the
+  value lives in `secret-store` keyed by the box, so a printed config
+  never shows it and `reveal` is the one way in."
+  [spec value]
   (def box @{:secret (spec :secret)})
   (put secret-store box value)
   box)
@@ -61,7 +67,11 @@
         [v nil]
         [nil (string/format "secret %s: env var %s is not set" name name)]))))
 
-(defn- resolve-secrets! [node path env sources errors]
+(defn- resolve-secrets!
+  "Walk a layer's tree in place, replacing every secret spec with a box
+  holding the resolved value; a secret that cannot be resolved is one
+  batched error naming its path."
+  [node path env sources errors]
   (eachp [k v] node
     (def p (tuple ;path k))
     (cond
@@ -88,7 +98,11 @@
     (array/push out [path data]))
   out)
 
-(defn- assoc-path! [root path value]
+(defn- assoc-path!
+  "Set `value` at `path` in the nested table `root`, creating the
+  tables on the way — and replacing a scalar found there, since the
+  later layer wins."
+  [root path value]
   (var node root)
   (each k (slice path 0 -2)
     (unless (table? (get node k))
@@ -96,12 +110,20 @@
     (set node (get node k)))
   (put node (last path) value))
 
-(defn- record! [provenance path source]
+(defn- record!
+  "Append `source` to the provenance history of `path` — the layers
+  that set it, oldest first; `explain` reads the last one as the
+  winner."
+  [provenance path source]
   (if-let [hist (get provenance path)]
     (array/push hist source)
     (put provenance path @[source])))
 
-(defn- apply-layer! [vals provenance data source]
+(defn- apply-layer!
+  "Merge one layer's leaves into the values, recording each leaf's
+  source. A leaf at the root (an empty path) cannot be set and is
+  skipped."
+  [vals provenance data source]
   (each [path value] (collect-leaves data [] @[])
     (when (next path)
       (assoc-path! vals path value)
@@ -133,7 +155,12 @@
   (tuple ;(map |(keyword (string/replace-all "_" "-" (string/ascii-lower $)))
                (string/split "__" (string/slice name (length prefix))))))
 
-(defn- apply-env! [vals provenance env prefix]
+(defn- apply-env!
+  "Apply the `prefix`-ed variables of `env`, in sorted order for a
+  stable provenance, as the env layer: each becomes the leaf its name
+  spells, its string coerced with `parse-scalar`. VOID_PROFILE selects
+  the profile and is not a value."
+  [vals provenance env prefix]
   (each name (sorted (keys env))
     (when (and (string/has-prefix? prefix name)
                (> (length name) (length prefix))
@@ -156,7 +183,11 @@
           value (parse-scalar (string/slice s (inc eq)))]
       [path value nil])))
 
-(defn- apply-cli! [vals provenance cli errors]
+(defn- apply-cli!
+  "Apply the CLI layer: a dictionary is merged as it is, a list is
+  parsed as `path.to.key=value` overrides one by one; a malformed
+  override is a batched error, not a stop."
+  [vals provenance cli errors]
   (cond
     (nil? cli) nil
 
@@ -194,7 +225,12 @@
     [nil (string/format "config file %s must contain a dictionary, got %q" path v)]
     [v nil]))
 
-(defn- config-files [dir profile files errors]
+(defn- config-files
+  "The config files to load in order: the four conventional ones under
+  `dir` (default, then the profile; .jdn before .janet) when present,
+  then every explicit `files` entry — which must exist, or it is an
+  error."
+  [dir profile files errors]
   (def out @[])
   (each path [(string dir "/default.jdn")
               (string dir "/default.janet")
@@ -214,7 +250,13 @@
   {:defaults true :dir true :files true :profile true
    :env true :env-prefix true :cli true :secret-sources true})
 
-(defn- apply-defaults! [vals provenance defaults layers errors]
+(defn- apply-defaults!
+  "Apply the lowest layer: one dictionary as the defaults layer, or a
+  list of per-plugin `{:plugin :key :defaults}` entries (what
+  bootstrap builds from the manifests' :config-defaults) as one layer
+  each, attributed to its plugin. Every layer applied is appended to
+  `layers`."
+  [vals provenance defaults layers errors]
   (defn add-layer [source data]
     (array/push layers source)
     (apply-layer! vals provenance data source))
@@ -330,7 +372,11 @@
            "CLI override")
     (string/format "%q" source)))
 
-(defn- child-entries [provenance path]
+(defn- child-entries
+  "For a subtree at `path`: every provenance entry strictly below it,
+  leaf path -> its winning (last) source — the :children of `explain`
+  for a non-leaf path."
+  [provenance path]
   (def plen (length path))
   (def out @{})
   (eachp [p hist] provenance

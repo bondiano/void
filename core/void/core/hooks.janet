@@ -82,7 +82,12 @@
        (let [ns (namespace-of hook)]
          (and ns (in (get reg :hooks/owned {}) ns)))))
 
-(defn- warn-undeclared! [reg hook]
+(defn- warn-undeclared!
+  "Warn once per name (the registry remembers) when a fired hook is one
+  no active plugin declares: the handlers still run, but a typo in a
+  handler's hook name would silently never run, and this is where a
+  reader learns the name is not declared."
+  [reg hook]
   (when (suspect? reg hook)
     (def warned (get reg :hooks/warned))
     (unless (in warned hook)
@@ -147,7 +152,10 @@
   (sorted-by (fn [e] [(e :phase) (string (e :hook)) (string (e :name))])
              entries))
 
-(defn- fail [entry e]
+(defn- fail
+  "The error for a handler that threw: the hook, the handler's name,
+  its plugin when known, and the throw's text."
+  [entry e]
   (errorf "hook %q handler %q%s failed: %s"
           (entry :hook) (entry :name)
           (if-let [p (entry :plugin)] (string/format " (plugin %q)" p) "")

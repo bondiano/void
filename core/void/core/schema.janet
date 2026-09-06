@@ -24,11 +24,16 @@
 (import ./errors :as errors)
 (import ./util :as util)
 
-(defn- path-str [path]
+(defn- path-str
+  "A value path as it reads in a message: `[:db :pool :size]`."
+  [path]
   (string/format "[%s]"
                  (string/join (map |(string/format "%q" $) path) " ")))
 
-(defn- integer? [v]
+(defn- integer?
+  "A finite number with no fractional part — Janet has one number type,
+  so :int is a predicate."
+  [v]
   (and (number? v)
        (not= v math/inf)
        (not= v (- math/inf))
@@ -91,7 +96,10 @@
 
 # -- built-in types and formats ------------------------------------------
 
-(defn- coerce-scan [check]
+(defn- coerce-scan
+  "The :coerce of a numeric type: a string that scans as a number
+  passing `check`, else nil (no coercion)."
+  [check]
   (fn [v _] (when (string? v)
               (when-let [n (scan-number v)]
                 (when (check n) n)))))
@@ -147,7 +155,10 @@
   [x]
   (and (struct? x) (= node-proto (struct/getproto x))))
 
-(defn- node [type props children]
+(defn- node
+  "Build a normalized schema node — a struct with the node prototype,
+  its :type, frozen :props and :children as a tuple."
+  [type props children]
   (struct/with-proto node-proto
                      :type type
                      :props (freeze (or props {}))
@@ -155,12 +166,18 @@
 
 (var- normalize* nil)
 
-(defn- check-bound [props head k]
+(defn- check-bound
+  "Refuse a non-numeric :min / :max on a type node."
+  [props head k]
   (when-let [v (get props k)]
     (unless (number? v)
       (errorf "schema %q: %q must be a number, got %q" head k v))))
 
-(defn- type-node [head props-form]
+(defn- type-node
+  "Normalize `[type props]` for a registered type: check the bounds,
+  compile a :pattern into a PEG (kept as :pattern-peg) and check a
+  :format is registered — both only make sense on string-like types."
+  [head props-form]
   (def tdef (in type-registry head))
   (def props (or props-form {}))
   (unless (dictionary? props)
@@ -182,7 +199,10 @@
       (errorf "unknown string format %q (known: %s)" f (util/names-str (keys format-registry)))))
   (node head out []))
 
-(defn- map-node [props-form entries-form]
+(defn- map-node
+  "Normalize a `[:map props entries]` form: the entries in sorted key
+  order, each normalized."
+  [props-form entries-form]
   (unless (dictionary? props-form)
     (errorf "schema :map: props must be a dictionary, got %q" props-form))
   (unless (dictionary? entries-form)
@@ -191,13 +211,21 @@
         (seq [k :in (sorted (keys entries-form))]
           [k (normalize* (entries-form k))])))
 
-(defn- props-form [form idx head]
+(defn- props-form
+  "The optional props dictionary at `idx` of a tuple form (`{}` when
+  absent), or an error naming the head."
+  [form idx head]
   (def props (or (get form idx) {}))
   (unless (dictionary? props)
     (errorf "schema %q: props must be a dictionary, got %q" head props))
   props)
 
-(defn- normalize-tuple [form]
+(defn- normalize-tuple
+  "Normalize a tuple form by its head keyword — :enum, :or/:union,
+  :and, :optional, :vector, :map-of, :map, :ref, :pred, :peg,
+  :literal, or a registered type with props — checking each head's
+  arity."
+  [form]
   (def head (let [h (first form)] (if (= h :or) :union h)))
   (unless (keyword? head)
     (errorf "schema tuple must start with a keyword, got %q" form))
@@ -325,7 +353,11 @@
     ~(def ,name ,doc (,register! ,(keyword name) ,(first body)))
     ~(def ,name (,register! ,(keyword name) ,(first body)))))
 
-(defn- resolve-ref [name opts]
+(defn- resolve-ref
+  "The schema a `[:ref name]` points at: the per-call :registry in
+  `opts` first, then the global one; an unknown name lists what is
+  registered. Returns it normalized."
+  [name opts]
   (def sch (or (when-let [reg (get opts :registry)] (get reg name))
                (get schema-registry name)))
   (unless sch
@@ -357,7 +389,9 @@
    :pred (fn [e] (string/format "predicate failed for %q" (e :value)))
    :peg (fn [e] (string/format "%q does not match peg %q" (e :value) (e :source)))})
 
-(defn- err! [errors path code & kvs]
+(defn- err!
+  "Push one validation error `{:path :code ...kvs}` onto `errors`."
+  [errors path code & kvs]
   (array/push errors (struct :path (tuple ;path) :code code ;kvs)))
 
 (defn error-str
@@ -382,7 +416,11 @@
 
 (var- visit nil)
 
-(defn- check-props [kind props v path errors]
+(defn- check-props
+  "Check a type's props against a value that already passed its
+  predicate: :min/:max on numbers; length bounds, :pattern and :format
+  on bytes; length bounds on sized collections."
+  [kind props v path errors]
   (defn bounds [len min-code max-code & extra]
     (when-let [m (props :min)]
       (when (< len m) (err! errors path min-code :min m ;extra :value v)))
@@ -402,7 +440,11 @@
     :sized (bounds (length v) :min-length :max-length :length (length v))
     nil))
 
-(defn- visit-type-node [sch value path errors opts]
+(defn- visit-type-node
+  "Validate a value against a registered type: coerce first when asked
+  and the raw value fails the predicate, then the predicate, then the
+  props. Returns the (possibly coerced) value."
+  [sch value path errors opts]
   (def name (sch :type))
   (def tdef (or (get type-registry name)
                 (errorf "schema type %q is not registered" name)))
@@ -418,7 +460,10 @@
     (err! errors path :type :expected name :value v :message (tdef :message)))
   v)
 
-(defn- visit-enum [sch value path errors opts]
+(defn- visit-enum
+  "Validate membership in the enum's values; with coercion a string is
+  also tried as the keyword and as the number it spells."
+  [sch value path errors opts]
   (def values ((sch :props) :values))
   (defn hit? [v] (not (nil? (index-of v values))))
   (var v value)
@@ -430,7 +475,11 @@
     (err! errors path :enum :values values :value v))
   v)
 
-(defn- visit-union [sch value path errors opts]
+(defn- visit-union
+  "Validate against each branch in order and take the first that
+  accepts, returning its (possibly coerced) value; when none does, one
+  :union error carrying every branch's errors as :causes."
+  [sch value path errors opts]
   (def causes @[])
   (var matched nil)
   (each branch (sch :children)
@@ -445,7 +494,11 @@
     (do (err! errors path :union :value value :causes (tuple ;causes))
         value)))
 
-(defn- visit-vector [sch value path errors opts]
+(defn- visit-vector
+  "Validate an indexed value: the length props, then each item at its
+  index. With coercion the items' coerced values are rebuilt into the
+  input's kind (tuple or array)."
+  [sch value path errors opts]
   (if (not (indexed? value))
     (do (err! errors path :type :expected :vector :value value)
         value)
@@ -461,7 +514,12 @@
         (if (tuple? value) (tuple ;out) out)
         value))))
 
-(defn- visit-map [sch value path errors opts]
+(defn- visit-map
+  "Validate a dictionary field by field: a missing non-optional key is
+  :missing, and under :closed an undeclared key is :unknown. With
+  coercion the coerced fields are rebuilt into the input's kind
+  (struct or table)."
+  [sch value path errors opts]
   (if (not (dictionary? value))
     (do (err! errors path :type :expected :map :value value)
         value)
@@ -486,7 +544,11 @@
         (if (struct? value) (freeze out) out)
         value))))
 
-(defn- visit-map-of [sch value path errors opts]
+(defn- visit-map-of
+  "Validate a homogeneous dictionary: every key against the key schema
+  (a failing key is one :key error, its own errors dropped) and every
+  value against the value schema."
+  [sch value path errors opts]
   (if (not (dictionary? value))
     (do (err! errors path :type :expected :map :value value)
         value)
@@ -506,13 +568,19 @@
         (if (struct? value) (freeze out) out)
         value))))
 
-(defn- visit-pred [sch value path errors]
+(defn- visit-pred
+  "Validate with a predicate function: false or a throw is one :pred
+  error with the schema's message."
+  [sch value path errors]
   (def [ok res] (protect (((sch :props) :fn) value)))
   (unless (and ok res)
     (err! errors path :pred :value value :message ((sch :props) :message)))
   value)
 
-(defn- visit-peg [sch value path errors]
+(defn- visit-peg
+  "Validate a bytes value against a compiled PEG: not bytes is a :type
+  error, no match a :peg error naming the pattern's source."
+  [sch value path errors]
   (if (not (bytes? value))
     (err! errors path :type :expected :bytes :value value)
     (unless (peg/match ((sch :props) :peg) value)
@@ -604,7 +672,10 @@
 
 # -- composition ---------------------------------------------------------
 
-(defn- as-map-node [sch who]
+(defn- as-map-node
+  "Normalize and insist on a map schema — what `who` (schema/merge,
+  schema/select) operates on."
+  [sch who]
   (def n (normalize sch))
   (unless (= :map (n :type))
     (errorf "%s expects map schemas, got %q" who (n :type)))
@@ -723,7 +794,10 @@
             (def [inner required?] (unwrap sub keep-refs?))
             [k inner required?])))
 
-(defn- props-under [prefix props]
+(defn- props-under
+  "The props whose keyword starts with `prefix` — one projection's
+  annotations — frozen."
+  [prefix props]
   (freeze (tabseq [[k v] :pairs props
                    :when (and (keyword? k) (string/has-prefix? prefix k))]
             k v)))

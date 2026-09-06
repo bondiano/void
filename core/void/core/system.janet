@@ -17,7 +17,10 @@
 
 (def- allowed-scopes {:singleton true :factory true})
 
-(defn- plugin-of [comp]
+(defn- plugin-of
+  "The plugin a component definition came from, for a message; a
+  component built outside a manifest has none."
+  [comp]
   (if-let [p (get comp :plugin)]
     (string/format "plugin %q" p)
     "<unknown plugin>"))
@@ -127,7 +130,10 @@
 
 # -- graph validation ----------------------------------------------------
 
-(defn- collect-components [components]
+(defn- collect-components
+  "Component definitions -> key -> definition, refusing a duplicate key
+  and naming both plugins; a dictionary is taken as already keyed."
+  [components]
   (cond
     (indexed? components)
     (do
@@ -151,7 +157,10 @@
     (errorf "components must be a registry table or a list of definitions, got %q"
             components)))
 
-(defn- interface-providers [comps]
+(defn- interface-providers
+  "Interface -> the keys of the components that :provide it, in key
+  order."
+  [comps]
   (def out @{})
   (each k (sorted (keys comps))
     (each iface (get-in comps [k :provides] [])
@@ -193,7 +202,11 @@
     (errorf "%s depends on %q which is neither a component nor a provided interface"
             who ref)))
 
-(defn- topo-sort [comps resolution]
+(defn- topo-sort
+  "The start order: a depth-first walk over the resolved dependencies,
+  keys visited in sorted order so the result is stable; a cycle is an
+  error printing the path around it."
+  [comps resolution]
   (def order @[])
   (def state @{})
   (def path @[])
@@ -265,7 +278,11 @@
 
 # -- lifecycle -----------------------------------------------------------
 
-(defn- component-config [comp config]
+(defn- component-config
+  "The config slice a component declared with :config {:key :schema},
+  validated against the schema the way a plugin's :config-schema is;
+  nil for a component without one."
+  [comp config]
   (when-let [spec (get comp :config)]
     (def cfg (get config (spec :key)))
     (when-let [sch (get spec :schema)]
@@ -298,12 +315,18 @@
            (get-in sys [:instances rk]))))
   (table/to-struct out))
 
-(defn- start-instance [sys k]
+(defn- start-instance
+  "Call the component's :start with its resolved deps and config slice;
+  returns the instance."
+  [sys k]
   (def comp (get-in sys [:components k]))
   ((comp :start) (resolved-deps sys k)
                  (component-config comp (sys :config))))
 
-(defn- stop-instance [sys k]
+(defn- stop-instance
+  "Call the component's :stop with its instance, when it has one; then
+  forget the instance and mark it :stopped."
+  [sys k]
   (def comp (get-in sys [:components k]))
   (when-let [stop-fn (get comp :stop)]
     (stop-fn (get-in sys [:instances k])))

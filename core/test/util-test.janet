@@ -37,6 +37,15 @@
 (expect-error "the key can be anything hashable" "duplicate path \"/a\""
   |((util/unique-by "path" |($ :path)) [{:path "/a"} {:path "/a"}]))
 
+# -- err-str -------------------------------------------------------------
+
+(assert (= "boom" (util/err-str "boom")) "a string error is itself")
+(assert (= "boom" (util/err-str (in (protect (error "boom")) 1))) "what protect hands back for a string raise")
+(assert (= ":x/y" (util/err-str :x/y)) "a keyword is described, not passed through as-is")
+(assert (= "nil" (util/err-str nil)) "even nil has a description")
+(assert (string/has-prefix? "<struct" (util/err-str {:void/error :x/y}))
+        "a struct is what `describe` says of it — the caller shapes envelopes with errors/str")
+
 # -- levenshtein ---------------------------------------------------------
 
 (assert (= 0 (util/levenshtein "abc" "abc")))

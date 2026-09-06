@@ -20,9 +20,6 @@
 (import ./schema :as schema)
 (import ./util :as util)
 
-(defn- err-str [e]
-  (if (string? e) e (describe e)))
-
 # -- key declarations ----------------------------------------------------
 
 (def- allowed-decl-keys
@@ -76,7 +73,7 @@
   (when-let [s (get opts :schema)]
     (def [ok e] (protect (schema/normalize s)))
     (unless ok
-      (errorf "metadata key %q: invalid :schema: %s" key (err-str e))))
+      (errorf "metadata key %q: invalid :schema: %s" key (util/err-str e))))
   (freeze (merge-into @{} opts {:key key :merge strat})))
 
 (defn declarations
@@ -112,7 +109,10 @@
 
 # -- merge ---------------------------------------------------------------
 
-(defn- deep-merge* [old new]
+(defn- deep-merge*
+  "Recursive merge of two dictionaries, `new` winning at the leaves;
+  anything but two dictionaries is replaced by `new`."
+  [old new]
   (if (and (dictionary? old) (dictionary? new))
     (do
       (def out (merge-into @{} old))
@@ -121,7 +121,12 @@
       out)
     new))
 
-(defn- merge-key [decl key outer inner source errors]
+(defn- merge-key
+  "Fold one declared key's `inner` (the more specific layer) into
+  `outer` (the enclosing one) by the declaration's :merge strategy —
+  :replace, :concat, :deep-merge or :restrict. A strategy violation is
+  a batched error attributed to `source`, and `outer` stands."
+  [decl key outer inner source errors]
   (case (decl :merge)
     :replace inner
 
@@ -178,7 +183,7 @@
           (not ok)
           (do (array/push errors
                           (string/format "metadata key %q (layer %q): :allow? failed: %s"
-                                         key source (err-str allowed)))
+                                         key source (util/err-str allowed)))
               outer)
           allowed inner
           (do (array/push errors
@@ -186,7 +191,10 @@
                                          key source inner outer))
               outer))))))
 
-(defn- record! [provenance k source v]
+(defn- record!
+  "Append `{:source :value}` to the provenance history of key `k`,
+  oldest first."
+  [provenance k source v]
   (def entry {:source source :value v})
   (if-let [hist (get provenance k)]
     (array/push hist entry)
@@ -265,7 +273,7 @@
               (do (set ok false)
                   (array/push errors
                               (string/format "metadata key %q (layer %q): %s"
-                                             k source (err-str res))))))
+                                             k source (util/err-str res))))))
           (when ok
             (put value k (merge-key decl k (get value k) v source errors))
             (record! provenance k source v))
