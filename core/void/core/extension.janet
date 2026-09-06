@@ -279,7 +279,7 @@
 
      :void.core/config-source
      (extension-point :void.core/config-source
-       :doc "Extra config sources (vault, consul): {:name :fn :priority}; consumed on config (re)load"
+       :doc "Extra secret sources (vault, consul): {:name :fn :priority}; :fn is (fn [spec] value-or-nil) for a {:secret NAME} reference, tried in :priority order (lowest first, default 100) before :file and the env. Bootstrap phase 2 hands the contributions of every loaded plugin — active or not, since :when reads the config they help build — to config/load as :secret-sources"
        :schema {:name :keyword :fn :function :priority [:optional :int]}
        :key :name :what "config source"
        :reduce |(sorted-by (fn [c] [(get c :priority 100) (c :name)]) $))

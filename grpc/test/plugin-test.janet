@@ -24,9 +24,9 @@
 (def boot (plugin/bootstrap {:plugins [:void/http :void/proto :void/grpc] :profile :test} true))
 
 (def meta-keys (get-in boot [:extensions :void.http/route-meta-key :resolved] {}))
-(each k [:void.grpc/service :void.grpc/method]
-  (assert (get meta-keys k)
-          (string/format "%q is declared, so a route may carry it" k)))
+(assert (get meta-keys :void.grpc/method) ":void.grpc/method is declared, so a route may carry it")
+(assert (nil? (get meta-keys :void.grpc/service))
+        "and it is the only key: the service name lives in the route's name")
 
 (def renderers (get-in boot [:extensions :void.http/error-renderer :resolved] []))
 (def connect-renderer (first (filter |(= :void.grpc/error ($ :name)) renderers)))

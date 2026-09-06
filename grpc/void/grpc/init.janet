@@ -202,12 +202,9 @@
 
 # -- route metadata ------------------------------------------------------
 
-(plugin/contribute! :void.http/route-meta-key
-  {:key :void.grpc/service
-   :schema :keyword
-   :doc "The RPC service this route serves — set by void/grpc's projection, so a middleware can tell an RPC method from a page"
-   :merge :replace})
-
+# the route carries :void.grpc/method alone: the service is already in
+# the route's name (:pkg.Service/Method), and nothing ever read a
+# second key for it (ADR-0046)
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.grpc/method
    :schema :keyword

@@ -139,9 +139,29 @@
     {:plugin (m :name) :key k
      :schema (m :config-schema) :defaults (m :config-defaults)}))
 
+(defn- config-sources
+  ``Phase 2 (config): the :void.core/config-source contributions of
+  every loaded manifest, resolved through the point's own contract
+  (schema, unique :name, :priority order) into the functions
+  config/load tries first for a {:secret NAME} reference. Every loaded
+  plugin, not the active ones: :when reads the config these sources
+  help build, so activation cannot gate them — a source from a plugin
+  its :when later switches off has been consulted once, at load. A bad
+  contribution is a phase-2 error naming the plugin.``
+  [ms errors]
+  (def name :void.core/config-source)
+  (def cs (seq [m :in (sorted-by |($ :name) ms)
+                c :in (get-in m [:contributes name] [])]
+            {:plugin (m :name) :value c}))
+  (def [resolved point-errors]
+    (extension/resolve-point name (extension/core-points name) cs))
+  (array/concat errors point-errors)
+  (map |($ :fn) (or resolved [])))
+
 (defn- load-boot-config
-  "Phase 2 (config): layered load with plugin defaults, then batch
-  validation of every slice — the core's and each manifest's
+  "Phase 2 (config): layered load with plugin defaults, secret
+  references resolved through the contributed config sources, then
+  batch validation of every slice — the core's and each manifest's
   :config-key — against its schema, in one config/validate call."
   [ms opts errors]
   (def slices (array/concat (array ;core-slices) ;(keep manifest-slice ms)))
@@ -152,6 +172,11 @@
        (seq [s :in slices :when (s :defaults)]
          {:plugin (s :plugin) :key (s :key) :defaults (s :defaults)}))
   (put copts :profile (get opts :profile :dev))
+  # explicit :secret-sources in the options are tried before the
+  # contributed ones — what the caller wrote beats what a plugin adds
+  (put copts :secret-sources
+       (array/concat (array ;(get copts :secret-sources []))
+                     ;(config-sources ms errors)))
   (def [ok cfg] (protect (config/load copts)))
   (if ok
     (do

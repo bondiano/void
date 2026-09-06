@@ -3,6 +3,7 @@
 (import ../void/core/schema :as schema)
 (import ../void/core/hooks :as hooks)
 (import ../void/core/log :as log)
+(import ../void/core/config :as config)
 
 (defn expect-error [name pat thunk]
   (def [ok err] (protect (thunk)))
@@ -203,6 +204,61 @@
 
 (expect-error "user :defaults reserved" ":config-defaults"
   |(plugin/dry-run {:plugins [] :config {:defaults {:a 1}}}))
+
+# -- :void.core/config-source: a plugin's secret source reaches config/load --
+
+(defn- vault-plugin [name priority answer]
+  (plugin/manifest name
+    :contributes {:void.core/config-source
+                  [{:name (keyword name) :priority priority
+                    :fn (fn [spec] (when (= (spec :secret) "VAULT_KEY") answer))}]}))
+
+(def vault-boot
+  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault 100 "from-vault")]
+                     :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}}}
+                    true))
+(assert (= "from-vault" (config/reveal (get-in vault-boot [:config :values :app :token])))
+        "a {:secret NAME} reference resolves through the contributed source")
+(assert (= 1 (length (get-in vault-boot [:extensions :void.core/config-source :resolved])))
+        "and the point still resolves in phase 4, for inspect")
+
+# :priority orders the sources — the lowest answers first; ties by :name
+(def ordered-boot
+  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault-b 100 "b")
+                               (vault-plugin 'test/vault-a 10 "a")]
+                     :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}}}
+                    true))
+(assert (= "a" (config/reveal (get-in ordered-boot [:config :values :app :token]))))
+
+# the caller's own :secret-sources are tried before any plugin's
+(def explicit-boot
+  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault 10 "from-vault")]
+                     :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}
+                              :secret-sources [(fn [spec] "mine")]}}
+                    true))
+(assert (= "mine" (config/reveal (get-in explicit-boot [:config :values :app :token]))))
+
+# a source from a plugin :when deactivates is consulted anyway: :when
+# reads the config the source helps build
+(def gated-boot
+  (plugin/bootstrap {:plugins [(plugin/manifest 'test/vault-gated
+                                 :when (fn [_] false)
+                                 :contributes {:void.core/config-source
+                                               [{:name :gated :fn (fn [_] "gated")}]})]
+                     :config {:env @{} :cli {:app {:token {:secret "X"}}}}}
+                    true))
+(assert (= [:test/vault-gated] (gated-boot :inactive)))
+(assert (= "gated" (config/reveal (get-in gated-boot [:config :values :app :token]))))
+
+# a malformed contribution is a phase-2 error naming the plugin, not a
+# crash inside config/load
+(def src-err
+  (expect-error "bad config source" "phase :config"
+    |(plugin/dry-run {:plugins [(plugin/manifest 'test/vault-bad
+                                  :contributes {:void.core/config-source [{:name :x}]})]
+                      :config {:env @{}}})))
+(assert (and (string/find "test/vault-bad" src-err) (string/find ":void.core/config-source" src-err))
+        src-err)
 
 # -- conditional activation ----------------------------------------------
 

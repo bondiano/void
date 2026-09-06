@@ -195,7 +195,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/config-source`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- Extra config sources (vault, consul): {:name :fn :priority}; consumed on config (re)load
+- Extra secret sources (vault, consul): {:name :fn :priority}; :fn is (fn [spec] value-or-nil) for a {:secret NAME} reference, tried in :priority order (lowest first, default 100) before :file and the env. Bootstrap phase 2 hands the contributions of every loaded plugin — active or not, since :when reads the config they help build — to config/load as :secret-sources
 - **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate config source <name>`
 - **contribution schema:**
 
@@ -837,7 +837,6 @@ layer.
 | `:void.datastar/morph` | `:void/datastar` | `:replace` | `:boolean` | Answer a Datastar request with the rendered page as morph events (title + body over SSE) instead of an HTML document |
 | `:void.db/txn` | `:void/db-http` | `:replace` | `[:or :boolean {:isolation [:optional :keyword]}]` | Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN |
 | `:void.grpc/method` | `:void/grpc` | `:replace` | `:keyword` | The RPC method this route serves — set by void/grpc's projection; its presence is what the Connect error renderer keys on |
-| `:void.grpc/service` | `:void/grpc` | `:replace` | `:keyword` | The RPC service this route serves — set by void/grpc's projection, so a middleware can tell an RPC method from a page |
 | `:void.htmx/partial` | `:void/htmx` | `:replace` | `:boolean` | Answer HX-Request-Type: partial with the fragment alone — the view response's layout is stripped before rendering |
 | `:void.http/body` | `:void/http` | `:replace` | `[:enum :raw :parsed]` | What the kernel does with this route's request body: :parsed (the default — urlencoded/multipart -> (req :form), a matching :void.http/body-codec -> (req :parsed-body)) or :raw — the parsing middleware is not in this route's chain at all, and the handler reads (req :body) itself. A route that speaks its own wire format (an RPC method under void/grpc) says :raw, so a JSON body is decoded by the one codec that understands it rather than twice |
 | `:void.http/hooks` | `:void/http` | `:concat` | `:dictionary` | Route-level lifecycle hooks: {stage [fn-or-symbol ...]}; concatenated per stage, group hooks before route hooks |

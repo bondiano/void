@@ -176,7 +176,6 @@
   nobody reads.``
   [svc m]
   (merge {:name (m :route-name)
-          :void.grpc/service (svc :name)
           :void.grpc/method (m :name)
           :void.http/body :raw}
          (m :meta)))

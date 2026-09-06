@@ -88,8 +88,9 @@
 (assert (get-in by-method [:GetOrder :idempotent]))
 (assert (= 5 (get-in by-method [:GetOrder :service-meta :void.http/timeout]))
         "the service's layer is the group's, and the router merges it — this package does not")
-(assert (= :shop.orders/OrderService (get-in by-method [:GetOrder :meta :void.grpc/service])))
 (assert (= :GetOrder (get-in by-method [:GetOrder :meta :void.grpc/method])))
+(assert (nil? (get-in by-method [:GetOrder :meta :void.grpc/service]))
+        "the service rides in the route's name, not in a second meta key nothing reads")
 (assert (= :orders/place (get-in by-method [:PlaceOrder :meta :name]))
         "and a method may name its own route")
 
