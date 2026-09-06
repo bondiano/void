@@ -139,8 +139,11 @@
                          [:at :timestamp]]}
               {:prepared false})
       # the two statements are the assertion: a table declared in the
-      # builder's type names compiles on this engine, or they raised
-      (db/run {:create-index (string table "_note_idx") :on table :columns [:note]}
+      # builder's type names compiles on this engine, or they raised.
+      # The index goes on :at, not :note — :text is the column no
+      # engine promises to index (MySQL wants a prefix length), and the
+      # suite asserts what every driver must do, not what one refuses
+      (db/run {:create-index (string table "_at_idx") :on table :columns [:at]}
               {:prepared false})
 
       # -- DML through the builder -------------------------------------
