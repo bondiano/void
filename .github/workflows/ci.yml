@@ -176,6 +176,13 @@ jobs:
           janet scripts/gen-contracts.janet
           git diff --exit-code docs/CONTRACTS.md
 
+      - name: Nothing void/core owns is written a second time
+        # wave 8's exit criterion as a gate: one pool, one lease table,
+        # one late-binding resolver, one chunked reader, one callable?.
+        # The script's table names each mechanism, the text that gives a
+        # copy away, and the files argued for; a hit anywhere else fails
+        run: janet scripts/check-copies.janet
+
       - name: The changelog matches the tags, and the version is not behind them
         # the released part of CHANGELOG.md is a projection of tagged
         # history, and void/core's `version` is the one place the version

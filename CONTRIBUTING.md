@@ -4,7 +4,11 @@ Every package tests with `jpm test` from its own directory; CI
 additionally dry-runs the full composition (`janet
 scripts/dry-run.janet`) and checks that
 [docs/CONTRACTS.md](docs/CONTRACTS.md) matches the declarations (`janet
-scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`).
+scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`),
+and that nothing `void/core` owns is written a second time (`janet
+scripts/check-copies.janet` — the pool, the lease table, the late-binding
+resolver, the chunked reader, the helpers; the table in the script names
+every file allowed to spell one of them itself).
 
 Bootstrap a checkout once — it installs the external dependencies every
 package declares and builds `void/fdwait`, the repository's one native

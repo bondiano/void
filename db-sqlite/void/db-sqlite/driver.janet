@@ -40,6 +40,8 @@
 ###     ":memory:" therefore gets ONE connection, handed out to every
 ###     checkout — see `make` and the size check in ../init.
 
+(import void/core/util :as util)
+
 ### janet-lang/sqlite3 is resolved on first use, not imported: the void
 ### bundle deliberately does not depend on it. An application that never
 ### lists :void/db-sqlite in its :plugins never reaches this file; one
@@ -185,9 +187,6 @@
 
 # -- connections ---------------------------------------------------------
 
-(defn- err-str [e]
-  (if (string? e) e (describe e)))
-
 (defn open
   ``Open one connection and apply `pragmas` — [[name value] ...], in
   order — to it. A half-open handle is closed before the failure is
@@ -197,13 +196,13 @@
   (check-path! path)
   (def [ok conn] (protect (sqlite3/open path)))
   (unless ok
-    (errorf "sqlite: cannot open %s: %s" path (err-str conn)))
+    (errorf "sqlite: cannot open %s: %s" path (util/err-str conn)))
   (each [name value] pragmas
     (def sql (pragma-sql name value))
     (def [pok e] (protect (sqlite3/eval conn sql)))
     (unless pok
       (protect (sqlite3/close conn))
-      (errorf "sqlite %s: %s failed: %s" path sql (err-str e))))
+      (errorf "sqlite %s: %s failed: %s" path sql (util/err-str e))))
   conn)
 
 (defn close-connection
@@ -291,7 +290,7 @@
   name (sqlite spells it "UNIQUE constraint failed: users.email") when
   the sentence carries one.``
   [e sql]
-  (def text (err-str e))
+  (def text (util/err-str e))
   (def state (some (fn [[needle st]] (when (string/find needle text) st))
                    synthetic-sqlstates))
   (def constraint (when-let [c (string/find ": " text)]
@@ -306,7 +305,7 @@
 (defn- busy?
   "Is this sqlite error SQLITE_BUSY — a lock somebody else holds?"
   [e]
-  (def s (err-str e))
+  (def s (util/err-str e))
   (or (string/find "database is locked" s)
       (string/find "database table is locked" s)))
 
@@ -340,7 +339,7 @@
       (do (ev/sleep pause)
           (set pause (min 0.1 (* 2 pause))))
       (do
-        (when (string/find "invalid sql value" (err-str r))
+        (when (string/find "invalid sql value" (util/err-str r))
           (when-let [[i v] (unbindable params)]
             (errorf "sqlite: parameter %d is %q, which has no SQL type — pass a number, string, buffer, boolean or nil"
                     (inc i) v)))
