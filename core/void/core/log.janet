@@ -386,9 +386,18 @@
 
 # -- configuration (bootstrap wires this from [:log]) --------------------
 
+(def config-key
+  "The config slice this module reads."
+  :log)
+
 (def Config
-  "Schema of the [:log] config slice (validated by plugin/start!)."
+  "Schema of the [:log] config slice — a slice of the core's built-in
+  manifest (boot/core-slices), validated in bootstrap phase 2 with
+  every plugin's, before anything starts."
   {:level [:optional [:enum :trace :debug :info :warn :error :fatal]]
+   # namespace prefix -> level: the keys are the application's own
+   # namespaces, so this map is open by construction (:dictionary, not
+   # a map schema)
    :levels [:optional :dictionary]
    :sink [:optional [:enum :pretty :jdn]]
    :redact [:optional [:vector [:vector :keyword]]]

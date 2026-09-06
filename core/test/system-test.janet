@@ -4,7 +4,8 @@
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
-          (string/format "%s: error %q does not mention %q" name (string err) pat)))
+          (string/format "%s: error %q does not mention %q" name (string err) pat))
+  (string err))
 
 # -- component definition validation ------------------------------------
 
@@ -256,15 +257,25 @@
 
 # -- config schema hook --------------------------------------------------
 
+# deprecated on a component (ADR-0046: the manifest's :config-schema is
+# where a plugin's slice is validated), but honoured: `init` checks it
+# through the same config/validate, before anything starts
 (defn db-schema [cfg] (string? (get cfg :host)))
 
-(def sys9
-  (system/init
-    [(system/component :db
-       :config {:key :database :schema db-schema}
-       :start (fn [d c] c))]
-    {:database {:host 123}}))
-(expect-error "schema rejects bad config" "schema" |(system/start sys9))
+(def sys9-err
+  (expect-error "schema rejects bad config" "schema"
+    |(system/init
+       [(system/component :db
+          :config {:key :database :schema db-schema}
+          :start (fn [d c] c))
+        (system/component :other
+          :config {:key :other :schema {:n :int}}
+          :start (fn [d c] c))]
+       {:database {:host 123} :other {:n "x"}})))
+(assert (and (string/find "component :db" sys9-err) (string/find "component :other" sys9-err))
+        "every component's schema failure is in the one error, not first-fail")
+(assert (string/find "[:other :n] (component :other): expected :int" sys9-err)
+        "with the path from the config root")
 
 (def sys9b
   (system/init
@@ -277,14 +288,20 @@
 
 # the documented common case: the schema is data (a Config struct),
 # validated through void/core/schema exactly like a plugin's
-# :config-schema — not silently skipped for not being callable
-(def sys9c
-  (system/init
-    [(system/component :db
-       :config {:key :database :schema {:host :string}}
-       :start (fn [d c] c))]
-    {:database {:host 123}}))
-(expect-error "a data schema rejects bad config" "schema" |(system/start sys9c))
+# :config-schema — not silently skipped for not being callable, and
+# closed the same way
+(expect-error "a data schema rejects bad config" "expected :string, got 123"
+  |(system/init
+     [(system/component :db
+        :config {:key :database :schema {:host :string}}
+        :start (fn [d c] c))]
+     {:database {:host 123}}))
+(expect-error "a data schema is closed, like a manifest's" "did you mean :host?"
+  |(system/init
+     [(system/component :db
+        :config {:key :database :schema {:host :string}}
+        :start (fn [d c] c))]
+     {:database {:host "h" :hots "typo"}}))
 
 (def sys9d
   (system/init

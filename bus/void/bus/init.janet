@@ -332,7 +332,7 @@
     starts at :after-start, once the components a handler is going to
     reach for are running."
     :provides [:void/bus]
-    :config {:key :bus :schema Config}
+    :config {:key :bus}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))

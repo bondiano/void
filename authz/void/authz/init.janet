@@ -193,7 +193,7 @@
     plugin ships and one an application wrote with `defpolicy` are the
     same kind of thing."
     :provides [:void/authz]
-    :config {:key :authz :schema Config}
+    :config {:key :authz}
     :start
     (fn start [_ cfg0]
       (def cfg (conf cfg0))

@@ -476,9 +476,12 @@
   from the config root, the message (with the did-you-mean of a closed
   map) and the layer that set the value, so a typo reads as
   `[:http :prot]: unknown key ... — did you mean :port? (from env var
-  VOID_HTTP__PROT)`. The schema's maps are closed here."
+  VOID_HTTP__PROT)`. The schema's maps are closed here. An absent
+  slice is an empty one: a schema of optional keys accepts it, one
+  with a required key reports that key as missing rather than the
+  slice as not a map."
   [cfg k sch who]
-  (def [ok res] (protect (schema/check (schema/closed sch) (get (cfg :values) k))))
+  (def [ok res] (protect (schema/check (schema/closed sch) (get (cfg :values) k {}))))
   (if (not ok)
     [(string/format "config %s%s: invalid schema: %s" (path-str [k]) who (util/err-str res))]
     (seq [e :in (res :errors)]
@@ -505,9 +508,11 @@
   first-fail. specs is indexed of {:key <config-key> :schema <schema>
   :plugin <kw, optional> :component <kw, optional>}; :schema is a
   void/core/schema form — its maps closed by default (schema/closed),
-  every failure reported with the path from the config root and the
-  layer that set the value — or a validator function that fails by
-  returning false or throwing. Returns an array of error strings,
+  an absent slice checked as an empty map, every failure reported with
+  the path from the config root and the layer that set the value — or
+  a validator function, called with the slice as it is (nil when
+  absent), that fails by returning false or throwing. Returns an array
+  of error strings,
   empty when everything is valid. The one place a config slice meets
   its schema: bootstrap phase 2 and the component system both call
   it.``

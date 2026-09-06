@@ -177,7 +177,7 @@
     per-connection prepared-statement cache and the pool metrics
     (:waits, :wait-us, :queries) void/obs will export."
     :deps [:void/db-driver]
-    :config {:key :db :schema Config}
+    :config {:key :db}
     :start
     (fn start [deps cfg0]
       (def cfg (or cfg0 {}))

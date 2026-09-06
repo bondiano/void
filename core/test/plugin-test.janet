@@ -2,6 +2,7 @@
 (import ../void/core/system :as system)
 (import ../void/core/schema :as schema)
 (import ../void/core/hooks :as hooks)
+(import ../void/core/log :as log)
 
 (defn expect-error [name pat thunk]
   (def [ok err] (protect (thunk)))
@@ -155,6 +156,50 @@
                       :config {:cli {:b1 {:port "x"} :b2 {:nope 1}}}})))
 (assert (and (string/find "test/bad1" cfg-err) (string/find "test/bad2" cfg-err))
         "config errors are batched across plugins, not first-fail")
+(assert (string/find "[:b2 :host] (plugin :test/bad2): required key is missing" cfg-err)
+        "the missing key is still what fails :b2")
+(assert (string/find "[:b2 :nope] (plugin :test/bad2): unknown key" cfg-err)
+        "and the schema is closed, so the undeclared key is reported next to it")
+
+# the core's own slices are validated the same way, in the same batch:
+# [:log] and [:deploy] are slices of the built-in void/core manifest
+(def core-err
+  (expect-error "core slices" "phase :config"
+    |(plugin/dry-run {:plugins [bad1]
+                      :config {:env @{}
+                               :cli {:b1 {:port "x"}
+                                     :log {:levl :debug}
+                                     :deploy {:shape :cluster}}}})))
+(assert (string/find "test/bad1" core-err) "a plugin's failure")
+(assert (string/find "[:log :levl] (plugin :void/core): unknown key in a closed map — did you mean :level? (from CLI override)" core-err)
+        (string "and the core's, attributed to the core, with a did-you-mean and the layer: " core-err))
+(assert (string/find "[:deploy :shape] (plugin :void/core): expected one of :fleet :single" core-err) core-err)
+
+# a component's :config :schema is deprecated but honoured: validated
+# through the same config/validate at graph time, with one warning per
+# plugin per boot naming the components
+(def dep-warnings @[])
+(log/set-sinks! [(fn [rec] (when (= :warn (rec :level)) (array/push dep-warnings (freeze rec))))])
+(def dep-plugin
+  (plugin/manifest 'test/dep
+    :config-key :dep
+    :config-schema {:n [:optional :int]}
+    :components [(system/component :dep/a
+                   :config {:key :dep :schema {:n [:optional :int]}}
+                   :start (fn [d c] c))
+                 (system/component :dep/b
+                   :config {:key :dep-b :schema {:m :int}}
+                   :start (fn [d c] c))]))
+(plugin/dry-run {:plugins [dep-plugin] :config {:env @{} :cli {:dep {:n 1} :dep-b {:m 2}}}})
+(assert (= 1 (length dep-warnings)) (string/format "one warning per plugin per boot, got %q" dep-warnings))
+(assert (string/find "deprecated" (get-in dep-warnings [0 :msg])))
+(assert (= [:dep/a :dep/b] (get-in dep-warnings [0 :components]))
+        (string/format "naming the components: %q" (first dep-warnings)))
+(def dep-err
+  (expect-error "a deprecated component schema still rejects bad config" "phase :graph"
+    |(plugin/dry-run {:plugins [dep-plugin] :config {:env @{} :cli {:dep {:n 1} :dep-b {:m "x"}}}})))
+(assert (string/find "[:dep-b :m] (plugin :test/dep, component :dep/b): expected :int" dep-err) dep-err)
+(log/configure! nil :test)
 
 (expect-error "user :defaults reserved" ":config-defaults"
   |(plugin/dry-run {:plugins [] :config {:defaults {:a 1}}}))

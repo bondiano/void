@@ -116,7 +116,7 @@
     also when the boot probe runs — DescribeCluster through the event
     API, so an unreachable cluster fails the boot rather than the
     first message), and a factory for group consumers."
-    :config {:key :kafka :schema Config}
+    :config {:key :kafka}
     :start
     (fn start [_ cfg]
       (def p (producer/make

@@ -816,7 +816,7 @@
     registry and the tracer are what it exports — and on nothing else,
     so a jobs worker exports exactly what an HTTP process does."
     :deps [:void/obs]
-    :config {:key :obs-otlp :schema Config}
+    :config {:key :obs-otlp}
     :start
     (fn start [_ cfg]
       (start! cfg (get-in boot-ref [:config :values :app :name])))

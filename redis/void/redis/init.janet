@@ -203,7 +203,7 @@
     and so the health check has a connection to use that no request is
     waiting on."
     :provides [:void/redis]
-    :config {:key :redis :schema Config}
+    :config {:key :redis}
     :start
     (fn start [_ cfg0]
       (def cfg (merge config/defaults (or cfg0 {})))
@@ -308,7 +308,7 @@
     read; the connection is opened by the first subscription, so an
     application that never subscribes never opens one."
     :deps [:redis/client]
-    :config {:key :redis :schema Config}
+    :config {:key :redis}
     :start
     (fn start [deps cfg0]
       (def cfg (merge config/defaults (or cfg0 {})))

@@ -141,7 +141,7 @@
     [:crypto :require] is missing from the library that was found —
     argon2id needs OpenSSL 3.2 and an LTS distribution may ship 3.0."
     :provides [:void/crypto]
-    :config {:key :crypto :schema Config}
+    :config {:key :crypto}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))

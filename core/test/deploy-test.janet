@@ -4,6 +4,14 @@
 (import ../void/core/plugin :as plugin)
 (import ../void/core/system :as system)
 (import ../void/core/deploy :as deploy)
+(import ../void/core/config :as config)
+
+(defn expect-error [name pat thunk]
+  (def [ok err] (protect (thunk)))
+  (assert (not ok) (string name ": expected an error"))
+  (assert (string/find pat (string err))
+          (string/format "%s: error %q does not mention %q" name (string err) pat))
+  (string err))
 
 # -- the shape -----------------------------------------------------------
 
@@ -28,10 +36,20 @@
         ":deploy :single cannot talk a prefork family out of being several heaps")
 (assert (= :single (get (deploy/resolve! {:http {:workers 1}} :dev) :shape)))
 
-(def errs @[])
-(assert (= :single (get (deploy/resolve! {:deploy {:shape :cluster}} :dev errs) :shape)))
+# a bad shape is a config error, batched like any other: the [:deploy]
+# slice has a schema, validated in phase 2 with every plugin's
+(def errs (config/validate {:values {:deploy {:shape :cluster}}}
+                           [{:key :deploy :plugin :void/core :schema deploy/Config}]))
 (assert (= 1 (length errs)) "a bad shape is a config error, batched like any other")
 (assert (string/find "[:deploy :shape]" (first errs)))
+(assert (string/find ":fleet" (first errs)) "naming the shapes there are")
+(assert (= :single (get (deploy/resolve! {:deploy {:shape :cluster}} :dev) :shape))
+        "resolve! runs after that check; a value the batch reported reads as unset")
+(def typo-err
+  (expect-error "a typo in the slice is caught with a did-you-mean" "did you mean :shape?"
+    |(plugin/dry-run {:plugins [] :config {:env @{} :cli {:deploy {:shpae :fleet}}}})))
+(assert (string/find "phase :config" typo-err))
+(assert (string/find "[:deploy :shpae]" typo-err))
 
 # the reason is what the report prints, and it is different every time
 (deploy/resolve! {} :prod)

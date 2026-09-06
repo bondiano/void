@@ -7,7 +7,7 @@
 ### All runtime state lives inside the system value itself, fully
 ### inspectable from the REPL (`pp sys`) — no hidden singletons.
 
-(import ./schema :as schema)
+(import ./config :as config)
 (import ./util :as util)
 
 (def- allowed-component-keys
@@ -33,8 +33,12 @@
   Options:
     :deps     tuple of dependency refs — component keys or interfaces
     :provides tuple of interface keywords this component implements
-    :config   {:key <config-key> :schema <optional validator>} — the
-              component's slice of the config map, passed to :start
+    :config   {:key <config-key>} — the component's slice of the
+              config map, passed to :start. A :schema here is
+              deprecated (ADR-0046): it is still validated by `init`,
+              through config/validate like a manifest's, but a
+              plugin's slice belongs in the manifest's :config-schema,
+              where bootstrap checks it in phase 2 with every other
     :start    (fn [deps cfg] instance) — required; `deps` is a struct
               keyed by the refs from :deps
     :stop     (fn [inst]) — optional
@@ -231,13 +235,34 @@
     (visit k))
   order)
 
+(defn- check-component-config
+  "Validate every component's deprecated `:config :schema` against its
+  slice of `config` — all of them, one error listing every failure —
+  through config/validate, the same call bootstrap makes for a
+  manifest's :config-schema; a system built outside a boot has no
+  manifest, so this is where its schemas are honoured."
+  [comps config]
+  (def specs
+    (seq [k :in (sorted (keys comps))
+          :let [c (comps k)]
+          :when (get-in c [:config :schema])]
+      {:component k
+       :plugin (get c :plugin)
+       :key (get-in c [:config :key])
+       :schema (get-in c [:config :schema])}))
+  (def errors (config/validate {:values config} specs))
+  (unless (empty? errors)
+    (errorf "component config failed schema validation:\n  - %s"
+            (string/join errors "\n  - "))))
+
 (defn init
   ``Validate component definitions and build a system value.
 
   `components` is a registry table (key -> definition) or an indexed
   collection of definitions; `config` is the application config map.
   Fails fast on duplicate keys, missing dependencies, unresolved
-  interface conflicts and dependency cycles — before anything starts.
+  interface conflicts, dependency cycles and a config slice failing a
+  component's (deprecated) :config :schema — before anything starts.
 
   The returned system is plain data:
     :components  key -> definition
@@ -268,6 +293,7 @@
                         ref)))
     (put resolution k res))
   (def order (topo-sort comps resolution))
+  (check-component-config comps config)
   @{:components comps
     :providers providers
     :resolution resolution
@@ -279,26 +305,12 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn- component-config
-  "The config slice a component declared with :config {:key :schema},
-  validated against the schema the way a plugin's :config-schema is;
-  nil for a component without one."
+  "The config slice a component declared with :config {:key}; nil for
+  a component without one. Validated already — by `init` for a
+  deprecated :config :schema, by bootstrap phase 2 for the manifest's."
   [comp config]
   (when-let [spec (get comp :config)]
-    (def cfg (get config (spec :key)))
-    (when-let [sch (get spec :schema)]
-      # a data schema (the common case — Config structs) validates
-      # through schema/validate, exactly as plugin :config-schema does
-      # (load-boot-config); only a callable is called directly
-      (def validator
-        (if (util/callable? sch) sch (fn [v] (schema/validate sch v))))
-      (def ok
-        (try (validator cfg)
-          ([e] (errorf "component %q: config %q failed schema validation: %s"
-                       (comp :key) (spec :key) (describe e)))))
-      (when (= ok false)
-        (errorf "component %q: config %q failed schema validation"
-                (comp :key) (spec :key))))
-    cfg))
+    (get config (spec :key))))
 
 (defn- resolved-deps
   "Build the deps struct passed to :start/:resume. Factory dependencies

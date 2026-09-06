@@ -736,7 +736,7 @@
     true in development, and a deployment that runs its own migrations
     turns it off and takes the DDL from `void bus-db ddl`."
     :deps [:db/pool]
-    :config {:key :bus-db :schema Config}
+    :config {:key :bus-db}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -756,7 +756,7 @@
     failure mode of forgetting to start it is worse than the cost of
     one idle fiber."
     :deps [:bus.db/schema :void/bus]
-    :config {:key :bus-db :schema Config}
+    :config {:key :bus-db}
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))

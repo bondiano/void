@@ -635,7 +635,7 @@
     two small tables beside it."
     :deps [:db/pool]
     :provides [:void/jobs-backend]
-    :config {:key :jobs-db :schema Config}
+    :config {:key :jobs-db}
     :start
     (fn start [_ cfg0]
       (def cfg (merge defaults (or cfg0 {})))

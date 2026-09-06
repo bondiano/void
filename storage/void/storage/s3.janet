@@ -283,7 +283,7 @@
     # asks for a stack the composition does not carry — and a command that
     # touches an https bucket declares `:tls/lib` the way a job does.
     :deps [:crypto/lib]
-    :config {:key :storage-s3 :schema Config}
+    :config {:key :storage-s3}
     :start
     (fn start [_ cfg]
       (def s (make cfg))

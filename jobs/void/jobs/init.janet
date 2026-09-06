@@ -265,7 +265,7 @@
     a config line once void/jobs-db or void/jobs-redis is in the
     composition."
     :provides [:void/jobs-backend]
-    :config {:key :jobs :schema Config}
+    :config {:key :jobs}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -290,7 +290,7 @@
     well enqueue without ever starting one."
     :deps [:void/jobs-backend]
     :provides [:void/jobs]
-    :config {:key :jobs :schema Config}
+    :config {:key :jobs}
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))
@@ -327,7 +327,7 @@
     by default — a process starts one by saying so, and `void jobs
     work` is the same worker in the foreground."
     :deps [:void/jobs]
-    :config {:key :jobs :schema Config}
+    :config {:key :jobs}
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))
@@ -358,7 +358,7 @@
     of processes enqueues it once. Off by default, and meant to be on
     in exactly the processes that should be firing schedules."
     :deps [:void/jobs]
-    :config {:key :jobs :schema Config}
+    :config {:key :jobs}
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))

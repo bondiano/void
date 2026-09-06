@@ -302,7 +302,7 @@
     a session re-reads on every request."
     :deps [:db/pool]
     :provides [:void/auth-user-store]
-    :config {:key :auth-db :schema Config}
+    :config {:key :auth-db}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -317,7 +317,7 @@
     is void's own; put `(auth-db/tables)` in a migration."
     :deps [:db/pool]
     :provides [:void/auth-token-store]
-    :config {:key :auth-db :schema Config}
+    :config {:key :auth-db}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -330,7 +330,7 @@
     in-process store cannot do under prefork or a fleet."
     :deps [:db/pool]
     :provides [:void/auth-challenge-store]
-    :config {:key :auth-db :schema Config}
+    :config {:key :auth-db}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))

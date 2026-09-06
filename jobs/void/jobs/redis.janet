@@ -658,7 +658,7 @@
     mark it claimed."
     :deps [:redis/client]
     :provides [:void/jobs-backend]
-    :config {:key :jobs-redis :schema Config}
+    :config {:key :jobs-redis}
     :start
     (fn start [deps cfg0]
       (def cfg (merge defaults (or cfg0 {})))

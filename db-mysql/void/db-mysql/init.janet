@@ -157,7 +157,7 @@
     savepoints. Holds a keeper connection so a wrong host or a missing
     client library fails the boot rather than the first request."
     :provides [:void/db-driver]
-    :config {:key :db-mysql :schema Config}
+    :config {:key :db-mysql}
     :start
     (fn start [_ cfg0]
       (def drv (mysql/from-config cfg0))

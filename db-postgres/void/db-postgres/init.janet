@@ -166,7 +166,7 @@
     wrong host or a missing libpq fails the boot rather than the first
     request."
     :provides [:void/db-driver]
-    :config {:key :db-postgres :schema Config}
+    :config {:key :db-postgres}
     :start
     (fn start [_ cfg0]
       (def cfg (merge defaults (or cfg0 {})))
@@ -258,7 +258,7 @@
     a pooled session is not the same one twice. One fiber parked in
     fdwait; it costs nothing until the server speaks."
     :deps [:db.postgres/driver]
-    :config {:key :db-postgres :schema Config}
+    :config {:key :db-postgres}
     :start
     (fn start [_ cfg0]
       (def cfg (merge defaults (or cfg0 {})))

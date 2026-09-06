@@ -169,7 +169,7 @@
     per-machine on purpose — [:deploy :shape] :fleet refuses it and
     names void/storage-s3."
     :provides [:void/storage-store]
-    :config {:key :storage :schema Config}
+    :config {:key :storage}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -191,7 +191,7 @@
     storage/put!, storage/url and the upload seam."
     :deps [:void/storage-store]
     :provides [:void/storage]
-    :config {:key :storage :schema Config}
+    :config {:key :storage}
     :start
     (fn start [deps _cfg]
       (def st (store/normalize (deps :void/storage-store)))

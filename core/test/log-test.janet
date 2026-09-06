@@ -137,7 +137,10 @@
                                 :config {:env @{} :cli {:log {:level :loud}}}}
                                true))))
 (assert (not ok))
-(assert (string/find "[:log]" err) (string "log config error names the slice: " err))
+(assert (string/find "[:log :level]" err) (string "log config error names the slice: " err))
+(assert (string/find "phase :config" err)
+        (string "the [:log] slice is validated in phase 2 with every other slice, not at start!: " err))
+(assert (string/find "(from CLI override)" err) (string "and blames the layer that set it: " err))
 
 # restore defaults for whoever runs next in this process
 (log/configure! nil :test)

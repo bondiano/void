@@ -96,7 +96,7 @@
     [:tls]: trust anchors, minimum protocol version, verification.
     Every consumer seam's connection goes through that context."
     :provides [:void/tls]
-    :config {:key :tls :schema Config}
+    :config {:key :tls}
     :start
     (fn start [_ cfg0]
       (install!) # idempotent; :on-load already did it on the boot path,

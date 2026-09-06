@@ -144,7 +144,7 @@
     with the configured pragmas, plus the keeper connection that fails
     a bad path at boot and holds an in-memory database open."
     :provides [:void/db-driver]
-    :config {:key :db-sqlite :schema Config}
+    :config {:key :db-sqlite}
     :start
     (fn start [_ cfg0]
       (def cfg (merge defaults (or cfg0 {})))

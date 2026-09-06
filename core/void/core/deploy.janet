@@ -73,6 +73,13 @@
   "What [:deploy :shape] may say."
   {:single true :fleet true})
 
+(def Config
+  "Schema of the [:deploy] config slice — a slice of the core's
+  built-in manifest (boot/core-slices), validated in bootstrap phase 2
+  with every plugin's; a shape that is neither :single nor :fleet is a
+  config error batched like any other."
+  {:shape [:optional [:enum ;(sorted (keys shapes))]]})
+
 (defn default-shape
   "The shape a profile gets when the config does not say: `:fleet` in
   `:prod`, `:single` everywhere else."
@@ -103,22 +110,23 @@
 (defn resolve!
   ``Work out the deployment from the config `values` and the profile.
   Returns {:shape :reason} and installs it as the process' current
-  deployment; a bad `[:deploy :shape]` is pushed onto `errors` (the
-  bootstrap batches config failures) and the profile default is used.
+  deployment. `[:deploy :shape]` is validated by `Config` before this
+  runs (bootstrap phase 2, with every other slice); a value that is not
+  a shape is one that batch has already reported, and is read here as
+  unset so the profile default answers instead of a second error.
 
   The reason is kept because it is what the report prints, and
   "why does this composition think it is a fleet" has three different
   answers.``
-  [values profile &opt errors]
-  (default errors @[])
+  [values profile]
   (def declared (get-in values [config-key :shape]))
+  # a read of another plugin's slice, not a validation of it:
+  # [:http :workers] is void/http's key and void/http's schema checks
+  # it; without void/http in the composition it is simply unset
   (def workers (get-in values [:http :workers] 1))
   # :auto is "one worker per CPU", which is more than one everywhere
   # this matters
   (def forked? (or (= :auto workers) (and (number? workers) (> workers 1))))
-  (when (and (not (nil? declared)) (not (in shapes declared)))
-    (array/push errors
-                (string/format "[:deploy :shape] must be :single or :fleet, got %q" declared)))
   (def named (when (in shapes declared) declared))
   (def [sh reason]
     (cond

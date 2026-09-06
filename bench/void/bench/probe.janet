@@ -167,7 +167,7 @@
 (def component
   (system/component :bench/probe
     :doc "The loop-lag sampler the runtime budgets are read from."
-    :config {:key :bench-probe :schema Config}
+    :config {:key :bench-probe}
     :start
     (fn start [_ cfg]
       (def p (make (merge defaults (or cfg {}))))

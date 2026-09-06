@@ -276,7 +276,7 @@
     An application with a registration form provides
     :void/auth-user-store itself, or composes void/auth-db."
     :provides [:void/auth-user-store]
-    :config {:key :auth :schema Config}
+    :config {:key :auth}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -367,7 +367,7 @@
     registered from a REPL are the same thing."
     :deps [:void/auth-user-store :void/auth-token-store :void/auth-challenge-store]
     :provides [:void/auth]
-    :config {:key :auth :schema Config}
+    :config {:key :auth}
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))

@@ -350,7 +350,7 @@
     gauges. The metrics themselves are module-level and outlive a restart,
     the way a counter should."
     :provides [:void/obs]
-    :config {:key :obs :schema Config}
+    :config {:key :obs}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -384,7 +384,7 @@
     turning tracing off has to be one line, not a redeploy without the
     plugin."
     :deps [:void/obs]
-    :config {:key :obs :schema Config}
+    :config {:key :obs}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))

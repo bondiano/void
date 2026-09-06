@@ -18,7 +18,6 @@
 (import ./init :as core)
 (import ./system :as system)
 (import ./config :as config)
-(import ./schema :as schema)
 (import ./hooks :as hooks)
 (import ./log :as log)
 (import ./deploy :as deploy)
@@ -118,28 +117,47 @@
         (array/push errors
                     (string/format "plugin %q: :on-load failed: %s" (m :name) (util/err-str e)))))))
 
+(def core-slices
+  ``The config slices void/core itself reads — [:log] and [:deploy] —
+  in the shape `load-boot-config` derives from every plugin manifest's
+  :config-key / :config-schema: the built-in manifest's entries. They
+  are declared here rather than in a manifest in the :plugins list
+  because the core is not a plugin there: its extension points are
+  injected by extension/declared-points and its version is seeded by
+  check-compat, and a :void/core entry in every lock file and plugin
+  list is a question for 8.5 (boot as a dependency), not for config.
+  Both slices are validated by the same config/validate call as every
+  plugin's, in phase 2, before anything starts (ADR-0046).``
+  [{:plugin :void/core :key log/config-key :schema log/Config}
+   {:plugin :void/core :key deploy/config-key :schema deploy/Config}])
+
+(defn- manifest-slice
+  "A manifest's config slice, {:plugin :key :schema :defaults}, or nil
+  for a plugin without a :config-key."
+  [m]
+  (when-let [k (m :config-key)]
+    {:plugin (m :name) :key k
+     :schema (m :config-schema) :defaults (m :config-defaults)}))
+
 (defn- load-boot-config
   "Phase 2 (config): layered load with plugin defaults, then batch
-  validation of every :config-key against its :config-schema."
+  validation of every slice — the core's and each manifest's
+  :config-key — against its schema, in one config/validate call."
   [ms opts errors]
+  (def slices (array/concat (array ;core-slices) ;(keep manifest-slice ms)))
   (def copts (merge-into @{} (get opts :config {})))
   (when (get copts :defaults)
     (array/push errors ":config :defaults is reserved — plugin defaults come from manifests (:config-defaults)"))
   (put copts :defaults
-       (seq [m :in ms :when (m :config-defaults)]
-         {:plugin (m :name) :key (m :config-key) :defaults (m :config-defaults)}))
+       (seq [s :in slices :when (s :defaults)]
+         {:plugin (s :plugin) :key (s :key) :defaults (s :defaults)}))
   (put copts :profile (get opts :profile :dev))
   (def [ok cfg] (protect (config/load copts)))
   (if ok
     (do
       # a data schema goes through as it is: config/validate closes its
       # maps and reports each failure with the layer that set the value
-      (array/concat errors
-                    (config/validate cfg
-                                     (seq [m :in ms :when (m :config-schema)]
-                                       {:plugin (m :name)
-                                        :key (m :config-key)
-                                        :schema (m :config-schema)})))
+      (array/concat errors (config/validate cfg slices))
       cfg)
     (do (array/push errors (util/err-str cfg))
         nil)))
@@ -170,11 +188,35 @@
                                    (m :name) r)))))
   [active inactive])
 
+(defn- warn-component-schemas
+  "The deprecation notice for `:config :schema` on a component
+  (ADR-0046), once per plugin per boot, naming the components: the
+  schema is still honoured — system/init validates it through the same
+  config/validate — but a plugin's slice belongs in the manifest's
+  :config-schema, where phase 2 checks it with every other slice, and
+  a component repeating the manifest's schema validates the slice
+  twice."
+  [active]
+  (each m active
+    (def keyed
+      (seq [c :in (m :components) :when (get-in c [:config :schema])] (c :key)))
+    (unless (empty? keyed)
+      (def repeated?
+        (and (m :config-schema)
+             (all |(= (m :config-key) (get-in $ [:config :key]))
+                  (filter |(get-in $ [:config :schema]) (m :components)))))
+      (log/warn (if repeated?
+                  "component :config :schema is deprecated — the manifest's :config-schema already validates the slice, drop the component's"
+                  "component :config :schema is deprecated — move the schema to the manifest's :config-schema, where phase 2 validates it with every other slice")
+                :ns "void.core.boot" :plugin (m :name) :components keyed))))
+
 (defn- build-system
   "Phase 5 (graph): components of active plugins -> system/init (dups,
-  missing deps, interface conflicts, cycles). Every :provides interface
-  must be declared via :void.core/interface."
+  missing deps, interface conflicts, cycles, deprecated component
+  config schemas). Every :provides interface must be declared via
+  :void.core/interface."
   [active extensions cfg errors]
+  (warn-component-schemas active)
   (def comps (mapcat |($ :components) active))
   (def declared (or (get-in extensions [:void.core/interface :resolved]) {}))
   (each c comps
@@ -247,7 +289,7 @@
   # the deployment is resolved with the config and travels on the boot:
   # `dry-run` and `void deploy check` need the shape without starting
   # anything, and a bad [:deploy :shape] is a config error like any other
-  (def dep (deploy/resolve! (if cfg (cfg :values) {}) profile errors))
+  (def dep (deploy/resolve! (if cfg (cfg :values) {}) profile))
   (checked :config errors sources)
 
   # the profile is reachable from a :when as (dyn :void/profile), the
@@ -317,15 +359,10 @@
   (def boot (if (get boot-or-opts :system)
               boot-or-opts
               (bootstrap* boot-or-opts true)))
-  # the logger comes up first: [:log] slice + profile pick the built-in
-  # sink, contributed sinks/serializers install alongside
-  (def log-cfg (get-in boot [:config :values :log]))
-  (when log-cfg
-    (def check (schema/check log/Config log-cfg))
-    (unless (empty? (check :errors))
-      (errorf "[:log] config invalid: %s"
-              (string/join (map schema/error-str (check :errors)) "; "))))
-  (log/configure! log-cfg (boot :profile))
+  # the logger comes up first: the [:log] slice (validated in phase 2
+  # as one of `core-slices`) + profile pick the built-in sink,
+  # contributed sinks/serializers install alongside
+  (log/configure! (get-in boot [:config :values log/config-key]) (boot :profile))
   (when-let [sinks (get-in boot [:extensions :void.core/log-sink :resolved])]
     (unless (empty? sinks)
       (log/set-sinks! (array/concat (array ;(or (log/sinks) []))
