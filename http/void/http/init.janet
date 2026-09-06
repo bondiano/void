@@ -102,7 +102,10 @@
            # a raw env table cannot live in a frozen manifest — wrap it
            # with router/env-ref
            :env [:optional :function]}
-  :key :name :what "route source")
+  :key :name :what "route source"
+  # the kernel reads the sources in plugin order when it builds the
+  # table, so the resolution keeps contribution order, not name order
+  :reduce identity)
 
 (plugin/defextension-point :void.http/edge
   :doc "Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total."

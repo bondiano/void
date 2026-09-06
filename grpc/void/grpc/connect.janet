@@ -126,8 +126,10 @@
   [req]
   (when-let [raw (ring/request-header req "connect-timeout-ms")]
     (def text (string raw))
-    (def ms (scan-number text))
-    (unless (and ms (pos? ms) (= ms (math/trunc ms)) (<= (length text) 10))
+    # the grammar's own check first: `scan-number` would also read
+    # "1e3", "0x10", "+5" and "5.0", none of which the protocol allows
+    (def ms (when (peg/match '(* :d+ -1) text) (scan-number text)))
+    (unless (and ms (pos? ms) (<= (length text) 10))
       (codes/fail! :invalid_argument
                    (string/format "Connect-Timeout-Ms must be a positive whole number of milliseconds (at most 10 digits), got %q"
                                   text)))

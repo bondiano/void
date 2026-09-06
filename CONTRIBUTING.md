@@ -8,7 +8,8 @@ scripts/gen-contracts.janet && git diff --exit-code docs/CONTRACTS.md`),
 and that nothing `void/core` owns is written a second time (`janet
 scripts/check-copies.janet` — the pool, the lease table, the late-binding
 resolver, the chunked reader, the helpers; the table in the script names
-every file allowed to spell one of them itself).
+every file allowed to spell one of them itself, and `--self-test` checks
+the patterns against the copies they are for).
 
 Bootstrap a checkout once — it installs the external dependencies every
 package declares and builds `void/fdwait`, the repository's one native

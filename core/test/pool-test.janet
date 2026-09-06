@@ -326,6 +326,92 @@
   (assert (= (held :id) (ev/take got)) "the rehomed resource reached the waiter behind the cancelled one")
   (assert (= 1 (st :opened)) "without opening a second one"))
 
+# -- a retry announced under the checkout deadline -------------------------
+#
+# A slot freed by a non-reusable release is announced to the oldest
+# waiter as a retry. When the waiter's own deadline fires in the same
+# loop turn — the timer phase queues the child's cancel and the
+# releaser's resumption back to back — the doorbell never reaches the
+# child: it dies of the cancel without taking. The retry mark lives in
+# the waiter record, so the waiter still learns of the free slot and
+# opens a fresh resource instead of timing out on it. The thread is
+# blocked past both timers to make that turn happen on purpose.
+
+(let [[p st] (fixture {:size 1 :checkout-timeout 0.05})]
+  (def held (pool/acquire p))
+  (def sup (ev/chan 1))
+  (def w (ev/go (fn [] (pool/acquire p)) nil sup))
+  (ev/go (fn releaser []
+           (ev/sleep 0.02)
+           (put held :dead true)
+           (pool/release p held)))
+  (ev/sleep 0)
+  (assert (= 1 ((pool/stats p) :waiting)) "the second checkout is parked under its deadline")
+  (os/sleep 0.1)
+  (def [sig fib] (ev/take sup))
+  (assert (= :ok sig) "the waiter told of the freed slot does not time out on it")
+  (def got (fiber/last-value fib))
+  (assert (= 2 (got :id)) "it opened a fresh resource in the slot the dead one left")
+  (assert (= 1 (st :closed)) "the dead resource was closed")
+  (assert (zero? ((pool/stats p) :timeouts)) "and nothing was counted as a timeout")
+  (pool/release p got))
+
+# -- a retry announced to a waiter cancelled in the window is passed on ---
+#
+# The same losing ordering as the release above, for the retry: the
+# freed slot is announced to w, then w's cancel lands before its child
+# runs and supersedes the doorbell. A retry that travelled through the
+# channel was lost with it, and the waiter behind w sat until its own
+# timeout on a slot nobody would open. The mark is in w's record, and
+# w's exit hands it to the next live waiter.
+
+(let [[p st] (fixture {:size 1 :checkout-timeout 0.2})]
+  (def held (pool/acquire p))
+  (def sup (ev/chan 1))
+  (def doomed (ev/go (fn [] (pool/acquire p)) nil sup))
+  (ev/sleep 0.01)
+  (def sup2 (ev/chan 1))
+  (def behind (ev/go (fn [] (def r (pool/acquire p)) (pool/release p r) (r :id)) nil sup2))
+  (ev/sleep 0.01)
+  (assert (= 2 ((pool/stats p) :waiting)))
+  (put held :dead true)
+  # queue: [releaser, doomed's cancel] — the release closes the dead
+  # resource and announces the slot to doomed; the cancel lands on
+  # doomed before its child runs
+  (ev/go (fn releaser [] (pool/release p held)))
+  (ev/cancel doomed :abandon)
+  (ev/take sup)
+  (def [sig fib] (ev/take sup2))
+  (assert (= :ok sig) "the waiter behind the cancelled one was told of the freed slot, and did not time out")
+  (assert (= 2 (fiber/last-value fib)) "it opened a fresh resource in that slot")
+  (assert (= 1 (st :closed)) "the dead one was closed")
+  (assert (zero? ((pool/stats p) :timeouts)))
+  (assert (zero? ((pool/stats p) :waiting)) "nobody is left parked"))
+
+# -- close! between a handover and the waiter's return -------------------
+#
+# A release pops the oldest waiter and writes the resource into its
+# record; close! runs before that waiter does, so wake-all cannot see
+# it. Without a second look the waiter would return the resource and
+# the closed pool would count a checkout — "no more checkouts" would
+# hold for every waiter but this one.
+
+(let [[p st] (fixture {:size 1 :checkout-timeout 0.2})]
+  (def held (pool/acquire p))
+  (def sup (ev/chan 1))
+  (def w (ev/go (fn [] (pool/acquire p)) nil sup))
+  (ev/sleep 0.02)
+  (pool/release p held)
+  (pool/close! p)
+  (def [sig fib] (ev/take sup))
+  (assert (= :error sig) "the waiter served just before close! does not get a checkout")
+  (assert (= :void.core/pool-closed (errors/kind (fiber/last-value fib)))
+          "it fails with the closed kind, like the waiters close! woke")
+  (assert (= 1 (st :closed)) "the resource it was handed is closed on its way back")
+  (def s (pool/stats p))
+  (assert (zero? (s :in-use)) "and is not counted as checked out")
+  (assert (zero? (s :created))))
+
 # -- make refuses a pool it cannot run -----------------------------------
 
 (assert (not (first (protect (pool/make {:close (fn [_])}))))

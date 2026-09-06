@@ -115,6 +115,9 @@
 (assert (= "<fn string/find>" (bind/describe string/find)))
 (assert (= "greet" (bind/fn-name greet)))
 (assert (nil? (bind/fn-name (fn [] 1))))
+(assert (nil? (bind/fn-name |(+ $ 1)))
+        "a | lambda is anonymous too — the compiler names every one of them short-fn")
+(assert (= "<fn>" (bind/describe |(+ $ 1))))
 (assert (nil? (bind/fn-name 42)))
 
 # origin is the source path inverted through module/paths — a module

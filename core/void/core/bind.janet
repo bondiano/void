@@ -183,13 +183,22 @@
 
 # -- describing, for tables and locks -------------------------------------
 
+(def- short-fn-name
+  "The name the compiler gives every `|` lambda: `(disasm |(+ $ 1))`
+  reports `short-fn`, so two short lambdas would be one name — and one
+  cache key, one lock entry. They are anonymous here, at the price of
+  a function someone deliberately named `short-fn`."
+  "short-fn")
+
 (defn fn-name
   "The name of a function value, or nil for an anonymous one — read
   off its bytecode rather than `(string f)`, which prints an address
-  for the anonymous and would put that address into a digest."
+  for the anonymous and would put that address into a digest. A `|`
+  lambda counts as anonymous (see `short-fn-name`)."
   [f]
   (cond
-    (function? f) (when-let [n (get (disasm f) :name)] (string n))
+    (function? f) (when-let [n (get (disasm f) :name)]
+                    (unless (= short-fn-name (string n)) (string n)))
     (cfunction? f) (let [s (string f)]
                      (when-let [m (peg/match '(* "<cfunction " (<- (some (if-not ">" 1))) ">") s)]
                        (unless (string/find "0x" (m 0)) (m 0))))

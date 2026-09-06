@@ -180,8 +180,13 @@ jobs:
         # wave 8's exit criterion as a gate: one pool, one lease table,
         # one late-binding resolver, one chunked reader, one callable?.
         # The script's table names each mechanism, the text that gives a
-        # copy away, and the files argued for; a hit anywhere else fails
-        run: janet scripts/check-copies.janet
+        # copy away, and the files argued for; a hit anywhere else fails,
+        # and so does an allowed file the pattern no longer matches. The
+        # self-test plants each pattern's samples and asserts a hit, so a
+        # pattern that stopped matching is red rather than green forever
+        run: |
+          janet scripts/check-copies.janet --self-test
+          janet scripts/check-copies.janet
 
       - name: The changelog matches the tags, and the version is not behind them
         # the released part of CHANGELOG.md is a projection of tagged

@@ -393,7 +393,7 @@ key plus a deprecation alias for the old name, never a mutation.
 
 - **owner:** `:void/http` · **cardinality:** `:many`
 - Route sources: {:name :routes <router/routes value, or (fn [boot] routes-value)> :env <(router/env-ref (curenv)) for bare handler symbols>?}; every active source lands in the one route table. The function form exists for a source that is a *projection* of something resolved during bootstrap — void/admin turns its resource registry and the pages contributed to :void.admin/page into real routes, and neither is knowable when the manifest freezes. It is called once per table build, so a rebuild after a reload re-projects.
-- **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate route source <name>`
+- **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate route source <name>`
 - **contribution schema:**
 
   ```janet
@@ -542,8 +542,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.redis/codec`
 
 - **owner:** `:void/redis` · **cardinality:** `:many`
-- Value codecs: {:name :encode (fn [value] bytes) :decode (fn [bytes] value)}; config [:redis :codec] picks one by name
-- **key:** `:name` · resolved as a table keyed by `:name` · a repeat fails the boot with `duplicate redis codec <name>`
+- Value codecs: {:name :encode (fn [value] bytes) :decode (fn [bytes] value)}; config [:redis :codec] picks one by name. Unique by :name, resolved as a table keyed by it — spelled as a :validate and a :reduce rather than as :key/:index because this point's duplicate message lists every repeated name in one sentence (`duplicate redis codec :a :b`), and the :key check stops at the first.
 - **contribution schema:**
 
   ```janet

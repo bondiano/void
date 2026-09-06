@@ -228,6 +228,16 @@
                                                  "connect-timeout-ms" "0"}}}))
   (assert (= 400 (zero-deadline :status)))
   (assert (= "invalid_argument" ((error-of zero-deadline) "code"))
-          "Connect-Timeout-Ms: 0 is refused as malformed, not run without a deadline"))
+          "Connect-Timeout-Ms: 0 is refused as malformed, not run without a deadline")
+
+  # "positive integer as ASCII string of at most 10 digits": what
+  # scan-number would read as a number is still not the grammar
+  (each text ["1e3" "+5" "5.0" "0x10" "12345678901"]
+    (def spelled (call c "GetOrder" ""
+                       {:request {:headers @{"content-type" "application/proto"
+                                             "connect-timeout-ms" text}}}))
+    (assert (= 400 (spelled :status)) (string "Connect-Timeout-Ms: " text " is refused"))
+    (assert (= "invalid_argument" ((error-of spelled) "code"))
+            (string "Connect-Timeout-Ms: " text " is not digits, and is refused as such"))))
 
 (print "connect ok")

@@ -304,7 +304,11 @@
   (def notify? (not= false (get opts :notify)))
   (def batch (get opts :batch (defaults :batch)))
   (def lease-ttl (get opts :lease-ttl (defaults :lease-ttl)))
-  (def poll (get opts :poll-interval (defaults :poll-interval)))
+  # never non-positive: the consumer waits under deadline/run, which
+  # reads a non-positive timeout as "no deadline" and would park the
+  # consumer until a NOTIFY or stop!; the schema's :min guards the
+  # configured value, this guards a backend built by hand
+  (def poll (max 0.001 (get opts :poll-interval (defaults :poll-interval))))
   (def stuck-interval (get opts :stuck-interval (defaults :stuck-interval)))
   (def stuck-max (get opts :stuck-max (defaults :stuck-max)))
   (def keep-for (get opts :keep-for (defaults :keep-for)))

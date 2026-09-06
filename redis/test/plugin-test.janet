@@ -1,6 +1,7 @@
 (import ../test-support/paths)
 (import ../test-support/server)
 (import void/core/plugin :as plugin)
+(import void/core/extension :as extension)
 (import void/core/system :as system)
 (import void/core/log :as log)
 (import void/redis :as redis)
@@ -28,6 +29,20 @@
         "and owned by this plugin")
 (assert (= 3 (get-in points [:void.redis/codec :contributions]))
         "with the three built-in codecs contributed to it")
+
+# the codec point's duplicate sentence lists every repeated name at
+# once, which is why it keeps a :validate of its own instead of :key
+(def codec-point (get-in plugin/manifest-registry [:void/redis :extension-points :void.redis/codec]))
+(defn- a-codec [name] {:plugin :test :value {:name name :encode string :decode string}})
+(def [_ dup-errors]
+  (extension/resolve-point :void.redis/codec codec-point
+                           (map a-codec [:b :a :b :c :a])))
+(assert (deep= @["extension point :void.redis/codec: duplicate redis codec :a :b"] dup-errors)
+        "every repeated codec name in one sentence, sorted")
+(def [resolved no-errors]
+  (extension/resolve-point :void.redis/codec codec-point (map a-codec [:b :a])))
+(assert (empty? no-errors))
+(assert (deep= @[:a :b] (sorted (keys resolved))) "and the resolution is a table keyed by name")
 
 (def [ok err]
   (protect (plugin/dry-run {:plugins plugins :profile :test

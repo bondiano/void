@@ -37,6 +37,8 @@
   (def [ok err] (protect (wrap/wrap (fn [x] x))))
   (assert (not ok) "an anonymous function needs a :name")
   (assert (string/find "in every process" err) "and the error says why")
+  (assert (not (first (protect (wrap/wrap |(* $ 2)))))
+          "a | lambda is anonymous too: two of them would otherwise share the key short-fn")
 
   (var named-calls 0)
   (def named (wrap/wrap (fn [x] (++ named-calls) x) {:name :identity}))

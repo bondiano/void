@@ -49,6 +49,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
+(import void/core/util :as util)
 (import ./codec :as codec)
 (import ./commands :as commands)
 (import ./config :as config)
@@ -72,10 +73,21 @@
              :codec "the value codec named by [:redis :codec]"
              :prefix "the string every key is prefixed with"}})
 
+(defn- duplicate-codecs
+  "The codec names contributed more than once, sorted."
+  [contribs]
+  (sorted (seq [[name n] :pairs (frequencies (map |($ :name) contribs))
+                :when (> n 1)]
+            name)))
+
 (plugin/defextension-point :void.redis/codec
-  :doc "Value codecs: {:name :encode (fn [value] bytes) :decode (fn [bytes] value)}; config [:redis :codec] picks one by name"
+  :doc "Value codecs: {:name :encode (fn [value] bytes) :decode (fn [bytes] value)}; config [:redis :codec] picks one by name. Unique by :name, resolved as a table keyed by it — spelled as a :validate and a :reduce rather than as :key/:index because this point's duplicate message lists every repeated name in one sentence (`duplicate redis codec :a :b`), and the :key check stops at the first."
   :schema {:name :keyword :encode :function :decode :function}
-  :key :name :index true)
+  :validate (fn [contribs]
+              (def dupes (duplicate-codecs contribs))
+              (unless (empty? dupes)
+                (errorf "duplicate redis codec %s" (util/names-str dupes))))
+  :reduce (fn [contribs] (tabseq [c :in contribs] (c :name) c)))
 
 (each c codec/builtin (plugin/contribute! :void.redis/codec c))
 

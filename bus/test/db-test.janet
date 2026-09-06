@@ -106,6 +106,25 @@
       (assert (pos? before))
       (state/stop-consumers! br))
 
+    # a backend built by hand with a non-positive poll interval still
+    # polls: the consumer's wait is a deadline, and a non-positive one
+    # would be "no deadline" — parked until a NOTIFY that sqlite never
+    # sends
+    (def zero-poll (backend/normalize (busdb/store {:poll-interval 0 :notify false})))
+    (def brz (state/make zero-poll (codec/normalize codec/json)
+                         {:group :zero-poll :dedup {:enabled false}
+                          :poison {:enabled false} :retry {:enabled false}}))
+    (def polled @[])
+    (router/define! :zero-poll-consumer {:topic :zp/*}
+                    {:fn (fn [m] (array/push polled (m :payload)))})
+    (with-dyns [state/broker-dyn brz]
+      (state/start-consumers! brz)
+      (ev/sleep 0.05)
+      (state/publish :zp/one {:n 1})
+      (ev/sleep 0.3)
+      (assert (= 1 (length polled)) "a zero poll interval still polls, it does not park the consumer")
+      (state/stop-consumers! brz))
+
     # keep-for 0 prunes everything the cursors have already passed; a
     # message no group has read yet is never pruned, whatever its age
     (def pruner (backend/normalize (busdb/store {:keep-for 0.001})))

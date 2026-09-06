@@ -47,6 +47,8 @@
 
 (assert (string/find "#fn(named-fn)" (lock/canonical named-fn))
         "the canonical rendering names a function rather than addressing it")
+(assert (= (lock/canonical |(+ $ 1)) (lock/canonical (fn [] 1)))
+        "a | lambda renders as the anonymous function it is, not as #fn(short-fn)")
 
 # a cfunction renders as `(string f)` spells it — the rendering locks
 # in the wild hold, which a lock-version 1 file must keep hashing to
