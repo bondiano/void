@@ -68,6 +68,8 @@
     "/empty" (ring/response 204)
     "/slow" (do (ev/sleep 0.4) (ring/text 200 "late"))
     "/big" (ring/text 200 (string/repeat "x" 4096))
+    "/big-chunked" (ring/response 200 (seq [_ :range [0 8]] (string/repeat "x" 512))
+                                  @{"content-type" "text/plain"})
     "/boom" (ring/text 500 "sorry")
     "/close" (ring/response 200 "bye" @{"connection" "close"})
     "/method" (ring/text 200 (req :method))
@@ -158,6 +160,14 @@
 (def [ok3 err3] (protect (client/get (string base "/big") {:max-body 100})))
 (assert (not ok3) "a body past :max-body is refused rather than allocated")
 (assert (string/find ":max-body" (string err3)))
+
+# the same limit over chunked framing: refused at the chunk that would
+# cross it, not after the whole stream was buffered
+(def [ok3c err3c] (protect (client/get (string base "/big-chunked") {:max-body 1000})))
+(assert (not ok3c) "a chunked body past :max-body is refused")
+(assert (string/find ":max-body" (string err3c)))
+(assert (= 4096 (length ((client/get (string base "/big-chunked")) :body)))
+        "and under the default limit the same stream is reassembled whole")
 
 (def [ok4 err4] (protect (client/get "http://127.0.0.1:9/nothing" {:timeout 1})))
 (assert (not ok4) "a refused connection names the authority")

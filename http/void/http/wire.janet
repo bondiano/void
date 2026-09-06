@@ -9,8 +9,18 @@
 ### ideas, divergences are not synced back (the first one: the HTTP/1.x
 ### minor version is captured — keep-alive semantics depend on it).
 ###
+### Two things the server and the client used to carry a copy of each
+### live here as well: the chunked-body decoder (`decode-chunked`, a
+### pure state machine over whatever bytes the caller has, and
+### `read-chunked`, which drives it with the caller's own I/O) and the
+### classification of what janet's net raises (`net-error-kind`) —
+### one table of the texts an OS produces, instead of substring
+### matching in every read loop.
+###
 ### Derived from spork/http (https://github.com/janet-lang/spork),
 ### Copyright (c) 2022 Calvin Rose and contributors, MIT license.
+
+(import void/core/errors :as errors)
 
 # -- head grammars -------------------------------------------------------
 
@@ -142,6 +152,258 @@
       [(first m) (- (+ nl 2) start)]
       :error)
     nil))
+
+# The decoder is a state machine over a buffer it never mutates: the
+# server and the client each own a connection buffer that holds the
+# head, the body and whatever pipelined bytes follow, and each has its
+# own way of filling it (a per-read timeout under a cumulative clock on
+# the server, one timeout on the client). So the decoder only says how
+# far it got (`:pos`), what it produced (`:out`) and what it is missing
+# (`:need`); pulling bytes is the caller's loop. The two readers it
+# replaced agreed on the grammar and differed only in what they did
+# about a limit or a short read, which is exactly the split here.
+
+(def chunked-reasons
+  "The closed set of reasons a chunked decoder fails with, and the
+  sentence each carries. Both sides answer the same reason the same
+  way (`:too-large` is a 413 on the server and `:void.http/too-large`
+  on the client); the sentence is the 400's body and the client's
+  message."
+  {:too-large "chunked body is past max-body"
+   :malformed "malformed chunk framing"
+   :bad-terminator "chunk not CRLF-terminated"
+   :oversized-line "oversized chunk-size line"
+   :oversized-trailers "oversized trailers"})
+
+(defn chunked-start
+  "The decoder state for a chunked body whose first chunk-size line
+  begins at `pos` in the buffer — just past the head."
+  [&opt pos]
+  (default pos 0)
+  {:phase :size :pos pos :received 0 :out ""})
+
+(defn- advance
+  "The next decoder state: `st` with the given keys replaced, frozen —
+  a state is a value the caller can keep, log or compare."
+  [st & kvs]
+  # not (merge st (struct ;kvs)): a struct drops nil-valued keys, and
+  # a nil here means "forget this key" (:need, :remaining)
+  (def next (merge st))
+  (each [k v] (partition 2 kvs) (put next k v))
+  (freeze next))
+
+(defn- need-bytes
+  "Stop until buf holds at least n bytes."
+  [st n]
+  (advance st :need n))
+
+(defn- fail
+  "Stop for good with one of `chunked-reasons`."
+  [st reason]
+  (advance st :phase :error :reason reason :message (chunked-reasons reason)))
+
+(defn- past-limit?
+  "Is n over a limit that may be absent (nil = unbounded)?"
+  [n limit]
+  (and limit (> n limit)))
+
+(defn- line-too-long?
+  "Has more than :max-line arrived since `from` without the line ending?"
+  [buf from limits]
+  (past-limit? (- (length buf) from) (limits :max-line)))
+
+(defn- step-size
+  "At a chunk-size line: size 0 opens the trailer section, anything
+  else the chunk's data. The body limit is checked here, before the
+  data arrives — a peer announcing a 2 GB chunk is refused at the
+  announcement."
+  [buf st limits]
+  (def pos (st :pos))
+  (def head (parse-chunk-head buf pos))
+  (case head
+    nil (if (line-too-long? buf pos limits)
+          (fail st :oversized-line)
+          (need-bytes st (inc (length buf))))
+    :error (fail st :malformed)
+    (let [[size consumed] head
+          next-pos (+ pos consumed)]
+      (cond
+        (past-limit? (+ (st :received) size) (limits :max-body))
+        (fail st :too-large)
+
+        (zero? size)
+        (advance st :phase :trailers :pos next-pos)
+
+        (advance st :phase :data :pos next-pos :remaining size)))))
+
+(defn- step-data
+  "Inside a chunk: emit whatever of it has arrived, then require the
+  CRLF that closes it. Data is emitted as it comes rather than once the
+  whole chunk is in, so a caller that streams bodies can — and one that
+  does not merely appends."
+  [buf st out]
+  (def pos (st :pos))
+  (def remaining (st :remaining))
+  (def available (min remaining (- (length buf) pos)))
+  (cond
+    (pos? available)
+    (do
+      (buffer/push out (string/slice buf pos (+ pos available)))
+      (advance st
+               :pos (+ pos available)
+               :remaining (- remaining available)
+               :received (+ (st :received) available)))
+
+    (pos? remaining)
+    (need-bytes st (inc pos))
+
+    (< (length buf) (+ pos 2))
+    (need-bytes st (+ pos 2))
+
+    (= "\r\n" (string/slice buf pos (+ pos 2)))
+    (advance st :phase :size :pos (+ pos 2) :remaining nil)
+
+    (fail st :bad-terminator)))
+
+(defn- step-trailers
+  "After the last chunk: either an immediate CRLF or trailer lines
+  ending in a blank one, bounded by :max-line. Trailers are consumed,
+  not surfaced — nothing in void reads them yet."
+  [buf st limits]
+  (def pos (st :pos))
+  (cond
+    (< (length buf) (+ pos 2))
+    (need-bytes st (+ pos 2))
+
+    (= "\r\n" (string/slice buf pos (+ pos 2)))
+    (advance st :phase :done :pos (+ pos 2))
+
+    (string/find "\r\n\r\n" buf pos)
+    (advance st :phase :done :pos (+ (string/find "\r\n\r\n" buf pos) 4))
+
+    (line-too-long? buf pos limits)
+    (fail st :oversized-trailers)
+
+    (need-bytes st (inc (length buf)))))
+
+(defn- settled?
+  "Nothing more to do with the bytes at hand."
+  [st]
+  (or (st :need) (= :done (st :phase)) (= :error (st :phase))))
+
+(defn decode-chunked
+  ``Advance a chunked-body decoder over the bytes in buf, as far as
+  they go. `state` is `chunked-start`'s value or what the previous
+  call returned; `limits` is `{:max-body n :max-line n}`, either nil
+  for unbounded — `:max-body` caps the decoded body (checked at each
+  chunk-size line, before the chunk arrives), `:max-line` caps how
+  much may pile up in a chunk-size line or the trailer section
+  without ending. Pure: buf is read from `(state :pos)` on and never
+  consumed, so leftover pipelined bytes stay where the caller's loop
+  expects them.
+
+  Returns the next state, a struct, with `:out` — the body bytes
+  decoded by this call (possibly empty) — and exactly one of:
+
+    * `:need n` — buf must hold at least n bytes before the decoder
+      can go on; feed it and call again;
+    * `:phase :done` — `:pos` is the index just past the trailers;
+    * `:phase :error` — `:reason` is one of `chunked-reasons`, and
+      `:message` its sentence.``
+  [buf state &opt limits]
+  (default limits {})
+  (def out @"")
+  (var st (advance state :need nil :out nil))
+  (while (not (settled? st))
+    (set st (case (st :phase)
+              :size (step-size buf st limits)
+              :data (step-data buf st out)
+              :trailers (step-trailers buf st limits)
+              (errorf "decode-chunked: no such phase %q" (st :phase)))))
+  (advance st :out (string out)))
+
+(defn read-chunked
+  ``Decode a whole chunked body starting at `start` in buf, pulling
+  bytes through `want`: `(want n)` makes buf hold at least n bytes or
+  throws, and is the whole of the I/O — the timeout, the clock and
+  what a short read means belong to the caller that wrote it. Returns
+  the decoder's final state with `:body` (the decoded bytes, a
+  string): `:phase :done` and `:pos` just past the trailers, or
+  `:phase :error` with `:reason` and `:message` — the caller raises
+  in its own shape.``
+  [buf start limits want]
+  (def body @"")
+  (var st (decode-chunked buf (chunked-start start) limits))
+  (buffer/push body (st :out))
+  (while (st :need)
+    (want (st :need))
+    (set st (decode-chunked buf st limits))
+    (buffer/push body (st :out)))
+  (advance st :body (string body)))
+
+# -- what the socket said ------------------------------------------------
+
+(def net-error-texts
+  ``The texts janet's net raises, by the kind each means. janet's own
+  values first (`"timeout"` from a read with a timeout, `"stream is
+  closed"` from using a closed stream, `"stream closed"` / `"stream
+  err"` from a write the poll loop saw hang up or fail, the three
+  cancellation values); then the OS's `strerror` as the ev loop
+  re-raises it, in both spellings where macOS and Linux differ.``
+  {:timeout ["timeout"
+             "Operation timed out"   # macOS ETIMEDOUT
+             "Connection timed out"] # Linux ETIMEDOUT
+   :reset ["Connection reset by peer"
+           "Broken pipe"
+           "Software caused connection abort"
+           "stream closed"
+           "stream err"]
+   :closed ["stream is closed"
+            "Bad file descriptor"
+            "Socket is not connected"]
+   :cancelled [errors/deadline-message
+               "parent canceled"
+               "sibling canceled"]})
+
+(def- kind-of-text
+  (do
+    (def t @{})
+    (eachp [kind texts] net-error-texts
+      (each text texts (put t text kind)))
+    (freeze t)))
+
+(defn net-error-kind
+  ``What a caught socket error means, as one of a closed set:
+
+    * `:timeout`   — the read or write ran out of its timeout;
+    * `:reset`     — the peer broke the connection (reset, broken
+                     pipe, a hang-up the poll loop reported);
+    * `:closed`    — the stream was closed on this side, under a
+                     parked read or before the call;
+    * `:cancelled` — the fiber was cancelled: a deadline, a parent;
+    * `:other`     — anything else, which the caller re-raises.
+
+  Takes what `protect` or `try` caught: a string, an error envelope
+  (`void/core/errors`, ADR-0044 — a `:void/deadline` is `:cancelled`,
+  a `:void/panic` is classified by the text it wraps), or any value
+  a `cancel` carried. Exact texts, never substrings: an application
+  error that mentions a timeout is not one.``
+  [err]
+  (cond
+    (bytes? err) (get kind-of-text (string err) :other)
+    (errors/error? err)
+    (case (errors/kind err)
+      :void/deadline :cancelled
+      :void/panic (net-error-kind (get err :message ""))
+      :other)
+    :other))
+
+(defn peer-gone?
+  "Did the peer end the connection — reset it, or had it closed under
+  us — as opposed to a timeout, a cancellation or a real error? The
+  question both read loops ask: this is EOF, not a failure."
+  [kind]
+  (or (= :reset kind) (= :closed kind)))
 
 # -- url encoding --------------------------------------------------------
 

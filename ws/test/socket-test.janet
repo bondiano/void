@@ -138,6 +138,16 @@
   (assert (ws/open? server-conn))
   (assert (pos? ((ws/info server-conn) :received)))
 
+  # -- a silent peer is not a dead one -----------------------------------
+
+  # nothing is in flight, so this receive can only run out of its
+  # timeout; the classifier must tell that apart from the socket dying
+  (assert (nil? (wsc/receive c 0.05)) "a silent peer times out to nil")
+  (assert (wsc/open? c) "a receive timeout does not close the client")
+  (wsc/send! c "still-here")
+  (assert (= "still-here" ((wsc/receive c) :data))
+          "and the conversation goes on after it")
+
   # -- the close handshake -----------------------------------------------
 
   (wsc/close! c :normal "done")

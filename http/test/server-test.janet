@@ -167,6 +167,20 @@
                               "2\r\nok\r\n0\r\nx-check: 1\r\n\r\n")))
 (assert (= "ok" btr) "chunked body with trailers")
 
+# the chunked framing meets the same limits as a Content-Length: a
+# chunk announcing more than the route's max-body is a 413 before a
+# byte of it is read, and a broken size line is a 400 that says so
+(def [h413c _] (fetch (string "POST /echo HTTP/1.1\r\nHost: t\r\n"
+                              "Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+                              "FFFF\r\n")))
+(assert (= 413 (h413c :status)) "chunked body past max-body -> 413")
+
+(def [h400c b400c] (fetch (string "POST /echo HTTP/1.1\r\nHost: t\r\n"
+                                  "Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+                                  "zz\r\nhello\r\n0\r\n\r\n")))
+(assert (= 400 (h400c :status)) "malformed chunk framing -> 400")
+(assert (= "malformed chunk framing" b400c) "and the 400 names the reason")
+
 # 100-continue is acknowledged
 (do
   (def c (connect))

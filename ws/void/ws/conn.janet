@@ -34,6 +34,7 @@
 ### up to `[:ws :close-timeout]` before dropping the TCP connection.
 
 (import void/core/log :as log)
+(import void/http/wire :as wire)
 (import ./frame :as frame)
 
 (def log-ns
@@ -216,9 +217,14 @@
               (count! :bytes-out (length bytes)))
           (do
             # a peer that went away mid-write is not worth a stack
-            # trace; the reader is about to see the same EOF
-            (log/debug "websocket write failed — peer gone" :ns log-ns
-                       :conn (conn :id) :error (string err))
+            # trace; the reader is about to see the same EOF. Anything
+            # else that stops the writer is worth one line at warn
+            (def kind (wire/net-error-kind err))
+            (if (wire/peer-gone? kind)
+              (log/debug "websocket write failed — peer gone" :ns log-ns
+                         :conn (conn :id) :error (string err))
+              (log/warn "websocket write failed" :ns log-ns
+                        :conn (conn :id) :kind kind :error (string err)))
             (drop-socket! conn)
             (set running false))))))
   (put conn :writer-done true)

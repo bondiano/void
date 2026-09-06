@@ -1,4 +1,5 @@
-(import ../void/http/wire :as wire)
+(import ../test-support/paths)
+(import void/http/wire :as wire)
 
 # -- request heads -------------------------------------------------------
 

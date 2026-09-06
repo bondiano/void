@@ -287,13 +287,13 @@
   # a method call, not net/read: the connection may be a TLS stream,
   # which answers :read with the same signature
   (def [ok res] (protect (:read conn 8192 buf timeout)))
-  (cond
-    ok res
-    (string/find "timeout" (string res)) (error {:void.http/timeout true})
-    (or (string/find "closed" (string res))
-        (string/find "reset" (string res))
-        (string/find "broken" (string res))) nil
-    (error res)))
+  (if ok
+    res
+    (let [kind (wire/net-error-kind res)]
+      (cond
+        (= :timeout kind) (error {:void.http/timeout true})
+        (wire/peer-gone? kind) nil
+        (error res)))))
 
 (defn- header-str [headers name]
   (def v (get headers name))
@@ -326,47 +326,25 @@
       (error {:void.http/closed true :message "response body cut short"})))
   [(string/slice buf (head :head-size) need) need])
 
-(defn- read-chunked! [conn buf head max-body timeout]
-  (def body @"")
-  (var pos (head :head-size))
-  (defn want [n]
-    (while (< (length buf) n)
-      (unless (read-more! conn buf timeout)
-        (error {:void.http/closed true :message "chunked response cut short"}))))
-  (var done false)
-  (while (not done)
-    (def ch (wire/parse-chunk-head buf pos))
-    (case ch
-      nil (want (inc (length buf)))
-      :error (error {:void.http/protocol true :message "malformed chunk framing"})
-      (let [[size consumed] ch]
-        (when (> (+ (length body) size) max-body)
-          (error {:void.http/too-large true
-                  :message "chunked response is past :max-body"}))
-        (if (zero? size)
-          (do
-            # trailer section: either an immediate CRLF or trailer
-            # lines ending in a blank one (the server's own reader,
-            # read from this side)
-            (def tstart (+ pos consumed))
-            (var tend nil)
-            (while (nil? tend)
-              (want (+ tstart 2))
-              (if (= "\r\n" (string/slice buf tstart (+ tstart 2)))
-                (set tend (+ tstart 2))
-                (if-let [e (string/find "\r\n\r\n" buf tstart)]
-                  (set tend (+ e 4))
-                  (want (inc (length buf))))))
-            (set pos tend)
-            (set done true))
-          (do
-            (def data-start (+ pos consumed))
-            (want (+ data-start size 2))
-            (unless (= "\r\n" (string/slice buf (+ data-start size) (+ data-start size 2)))
-              (error {:void.http/protocol true :message "chunk not CRLF-terminated"}))
-            (buffer/push body (string/slice buf data-start (+ data-start size)))
-            (set pos (+ data-start size 2)))))))
-  [(string body) pos])
+(defn- chunked-response!
+  "Decode a chunked response with wire's decoder — the server's reader,
+  driven from this side: the body is bounded by :max-body, a short
+  read is a closed connection, and a decoder failure is a protocol
+  error carrying the decoder's sentence."
+  [conn buf head max-body timeout]
+  (def st (wire/read-chunked buf (head :head-size)
+                             {:max-body max-body}
+                             (fn want [n]
+                               (while (< (length buf) n)
+                                 (unless (read-more! conn buf timeout)
+                                   (error {:void.http/closed true
+                                           :message "chunked response cut short"}))))))
+  (when (= :error (st :phase))
+    (if (= :too-large (st :reason))
+      (error {:void.http/too-large true
+              :message "chunked response is past :max-body"})
+      (error {:void.http/protocol true :message (st :message)})))
+  [(st :body) (st :pos)])
 
 (defn- read-to-eof! [conn buf head max-body timeout]
   (while (read-more! conn buf timeout)
@@ -387,7 +365,7 @@
     (cond
       (bodyless? status method) [nil (head :head-size)]
       (and te (string/find "chunked" (string/ascii-lower te)))
-      (read-chunked! conn buf head max-body timeout)
+      (chunked-response! conn buf head max-body timeout)
       cl (read-sized! conn buf head (scan-number cl) max-body timeout)
       # no framing at all: the body is what arrives until the peer
       # closes, and the socket cannot be reused afterwards
@@ -543,10 +521,7 @@
     # a peer that closed the socket while it was parked reads as a
     # write failure here — the request reached nobody, which is what
     # `send!` needs to know to reopen and repeat it
-    (if (or (string/find "closed" (string err))
-            (string/find "reset" (string err))
-            (string/find "broken" (string err))
-            (string/find "pipe" (string err)))
+    (if (wire/peer-gone? (wire/net-error-kind err))
       (error {:void.http/closed true :message "connection closed while sending"})
       (error err)))
   nil)

@@ -183,10 +183,13 @@
       nil                                    the socket died, or the
                                              timeout expired
 
-  Ping frames are answered with a pong here, in the caller's fiber:
-  a client with no fiber of its own still has to be a well-behaved
-  peer, and a pong is one write. `timeout` defaults to the client's
-  `:timeout`; nil waits as long as the peer is willing to be silent.``
+  The two nils differ in what is left: after a dead socket `open?`
+  is false, after a silent peer the client is as open as it was and
+  the next `receive` waits again. Ping frames are answered with a
+  pong here, in the caller's fiber: a client with no fiber of its own
+  still has to be a well-behaved peer, and a pong is one write.
+  `timeout` defaults to the client's `:timeout`; nil waits as long
+  as the peer is willing to be silent.``
   [client &opt timeout]
   (default timeout (get-in client [:config :timeout]))
   (def sock (client :socket))
@@ -199,9 +202,16 @@
     (def f (frame/parse buf 0 {:expect-mask false :max-frame (cfg :max-frame)}))
     (if (nil? f)
       (let [[ok more] (protect (net/read sock 4096 buf timeout))]
-        (when (or (not ok) (nil? more))
-          (put client :state :closed)
-          (set out :gone)))
+        (cond
+          # the peer was merely silent for `timeout`: nothing died,
+          # and the socket is as open as it was
+          (and (not ok) (= :timeout (wire/net-error-kind more)))
+          (set out :quiet)
+
+          (or (not ok) (nil? more))
+          (do
+            (put client :state :closed)
+            (set out :gone))))
       (do
         (consume! buf (f :size))
         (case (f :opcode)
@@ -235,7 +245,10 @@
             (do
               (set frag-opcode (f :opcode))
               (buffer/push frag (f :payload))))))))
-  (unless (= :gone out) out))
+  (case out
+    :gone nil
+    :quiet nil
+    out))
 
 (defn close!
   ``Close the connection: send a close frame, wait for the peer's

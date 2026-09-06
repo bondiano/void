@@ -118,12 +118,14 @@
   "Grow buf from the socket: buf on data, nil on EOF, :timeout."
   [conn buf timeout]
   (def [ok res] (protect (net/read conn 8192 buf timeout)))
-  (cond
-    ok res
-    (string/find "timeout" (string res)) :timeout
-    # a peer reset or a drain-time close of a parked socket reads as EOF
-    (or (string/find "closed" (string res)) (string/find "reset" (string res))) nil
-    (error res)))
+  (if ok
+    res
+    (let [kind (wire/net-error-kind res)]
+      (cond
+        (= :timeout kind) :timeout
+        # a peer reset or a drain-time close of a parked socket reads as EOF
+        (wire/peer-gone? kind) nil
+        (error res)))))
 
 (defn- consume!
   "Drop the first `n` bytes of buf (the finished request) so leftover
@@ -208,65 +210,40 @@
           (= :timeout r) (if waiting? (error {:hangup true}) (reject! 408))))))
   head)
 
+(defn- fill!
+  "Make buf hold at least `need` bytes, each read under the clock's
+  timeout: a short read is a 400 carrying `cut-short`, a timeout (or
+  a spent body clock) a 408."
+  [conn buf need clock cut-short]
+  (while (< (length buf) need)
+    (def r (read-more conn buf (clock)))
+    (cond
+      (nil? r) (reject! 400 cut-short)
+      (= :timeout r) (reject! 408))))
+
 (defn- read-content-length-body [conn buf head len max-body clock]
   (when (> len max-body)
     (reject! 413))
   (def need (+ (head :head-size) len))
-  (while (< (length buf) need)
-    (def r (read-more conn buf (clock)))
-    (cond
-      (nil? r) (reject! 400 "body cut short")
-      (= :timeout r) (reject! 408)))
+  (fill! conn buf need clock "body cut short")
   [(string/slice buf (head :head-size) need) need])
 
-(defn- read-chunked-body [conn buf head max-body opts clock]
-  (def body @"")
-  (var pos (head :head-size))
-  (defn want [n]
-    (while (< (length buf) n)
-      (def r (read-more conn buf (clock)))
-      (cond
-        (nil? r) (reject! 400 "chunked body cut short")
-        (= :timeout r) (reject! 408))))
-  (var done false)
-  (while (not done)
-    (def ch (wire/parse-chunk-head buf pos))
-    (case ch
-      nil (do
-            (when (> (- (length buf) pos) (opts :max-header))
-              (reject! 400 "oversized chunk-size line"))
-            (want (inc (length buf))))
-      :error (reject! 400 "malformed chunk framing")
-      (do
-        (def [size consumed] ch)
-        (when (> (+ (length body) size) max-body)
-          (reject! 413))
-        (if (zero? size)
-          (do
-            # trailer section: either an immediate CRLF or trailer
-            # lines ending in a blank one; bounded by max-header
-            (def tstart (+ pos consumed))
-            (var tend nil)
-            (while (nil? tend)
-              (want (+ tstart 2))
-              (if (= "\r\n" (string/slice buf tstart (+ tstart 2)))
-                (set tend (+ tstart 2))
-                (if-let [e (string/find "\r\n\r\n" buf tstart)]
-                  (set tend (+ e 4))
-                  (do
-                    (when (> (- (length buf) tstart) (opts :max-header))
-                      (reject! 400 "oversized trailers"))
-                    (want (inc (length buf)))))))
-            (set pos tend)
-            (set done true))
-          (do
-            (def data-start (+ pos consumed))
-            (want (+ data-start size 2))
-            (unless (= "\r\n" (string/slice buf (+ data-start size) (+ data-start size 2)))
-              (reject! 400 "chunk not CRLF-terminated"))
-            (buffer/push body (string/slice buf data-start (+ data-start size)))
-            (set pos (+ data-start size 2)))))))
-  [(string body) pos])
+(defn- chunked-request-body
+  "Decode a chunked body with wire's decoder, pulling bytes under the
+  body clock. The chunk-size line and the trailer section are bounded
+  by :max-header, the body by the route's max-body; a body past it is
+  the same 413 a Content-Length past it gets, every other decoder
+  failure a 400 carrying the decoder's sentence."
+  [conn buf head max-body opts clock]
+  (def st (wire/read-chunked buf (head :head-size)
+                             {:max-body max-body :max-line (opts :max-header)}
+                             (fn want [n]
+                               (fill! conn buf n clock "chunked body cut short"))))
+  (when (= :error (st :phase))
+    (if (= :too-large (st :reason))
+      (reject! 413)
+      (reject! 400 (st :message))))
+  [(st :body) (st :pos)])
 
 (defn- read-body
   "Read the request body per its framing headers. Returns [body
@@ -283,7 +260,7 @@
 
     te
     (if (= "chunked" (string/ascii-lower (string/trim te)))
-      (read-chunked-body conn buf head max-body opts
+      (chunked-request-body conn buf head max-body opts
                          (deadline-clock opts (opts :body-timeout)))
       (reject! 501 "unsupported transfer-encoding"))
 
