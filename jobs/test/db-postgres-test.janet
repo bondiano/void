@@ -138,6 +138,32 @@
     (assert (= 1 (length (filter truthy? (seq [_ :range [0 lockers]] (ev/take leased)))))
             "one lease, however many ask at once — and no aborted transactions")
 
+    ((b :clear!) {})
+
+    # -- retention, through the builder on this engine -------------------
+    #
+    # The prune is a SELECT of one batch (`LIMIT` as a bound parameter)
+    # and a DELETE by id (`IN` over the batch). test/db-test.janet runs
+    # it on sqlite; here it runs on Postgres — `LIMIT $n` with a number
+    # parameter, a parameter list in `IN` — in batches of two, so that
+    # the batching is exercised rather than read.
+
+    (def keeper (backend/normalize (jobsdb/store {:table tbl :keep-for 0 :prune-batch 2})))
+    (def finished-at (- (os/clock :realtime) 10))
+    (def done-ids
+      (seq [_ :range [0 3]]
+        (def r ((keeper :push!) (record/make {:job :done :queue :default})))
+        (def c ((keeper :claim!) {:queues [:default] :now (os/clock :realtime) :token "w"}))
+        ((keeper :settle!) (record/complete! c nil finished-at))
+        (r :id)))
+    (defn still-there [] (filter |((keeper :fetch) $) done-ids))
+    (assert (= 3 (length (still-there))) "three finished records, kept for 0 seconds")
+    ((keeper :reap!) {:now (os/clock :realtime) :ttl 60 :token "w"})
+    (assert (= 1 (length (still-there)))
+            "one reaper pass prunes one batch — :prune-batch 2 of the three")
+    ((keeper :reap!) {:now (os/clock :realtime) :ttl 60 :token "w"})
+    (assert (empty? (still-there)) "and the next pass takes the rest")
+
     ((b :clear!) {})))
 
 (print "db-postgres-test ok")

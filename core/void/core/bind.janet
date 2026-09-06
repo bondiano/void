@@ -51,7 +51,10 @@
 (errors/define! :void.bind/unresolvable
   {:doc "a symbol standing in for a function does not name one — where it is declared or the table is built (fail fast), or after a reload, at the call; :data carries :what and :symbol"})
 
-(defn- refuse [what sym fmt & args]
+(defn- refuse
+  "Raise `:void.bind/unresolvable` for `sym`: the formatted sentence as
+  the message, `{:what :symbol}` as the data every caller can branch on."
+  [what sym fmt & args]
   (errors/raise :void.bind/unresolvable
                 (string/format fmt ;args)
                 {:what what :symbol sym}))
@@ -218,21 +221,35 @@
         (string/slice name 0 (- (length name) 5))
         name))))
 
-(defn- module-name-of
-  "Invert module/paths: the module name a source path was found under,
-  or nil when no template accounts for it."
+(defn- candidates
+  "Every [prefix-length name] a source path has across module/paths:
+  one per template that accounts for it, in the order of the paths."
   [src]
   (def cwd (string (os/cwd) "/"))
   (def relative (if (string/has-prefix? cwd src) (string/slice src (length cwd)) src))
-  (label found
-    (each entry module/paths
-      (def tpl (when (indexed? entry) (entry 0)))
-      (when (string? tpl)
-        (when-let [[pre post] (template-prefix tpl)]
-          (when-let [name (or (candidate pre post src)
-                              (candidate (if (= "." pre) "" pre) post relative))]
-            (return found name)))))
-    nil))
+  (seq [entry :in module/paths
+        :let [tpl (when (indexed? entry) (entry 0))]
+        :when (string? tpl)
+        :let [pair (template-prefix tpl)]
+        :when pair
+        :let [[pre post] pair
+              name (or (candidate pre post src)
+                       (candidate (if (= "." pre) "" pre) post relative))]
+        :when name]
+    [(length pre) name]))
+
+(defn- module-name-of
+  ``Invert module/paths: the module name a source path was found under,
+  or nil when no template accounts for it. Several templates may:
+  `void` run at the repository root (cli/init's `add-project-paths!`)
+  and scripts/dry-run put `<repo>/:all:.janet` *before* the packages'
+  own `<repo>/http/:all:.janet`, and the first textual match would
+  name the same lambda `http/void/http/router` there and
+  `void/http/router` everywhere else — one lock, two hashes. So the
+  most specific template wins, the one with the longest literal
+  prefix, whatever its position; a tie keeps module/paths order.``
+  [src]
+  (get (extreme (fn more-specific? [a b] (> (a 0) (b 0))) (candidates src)) 1))
 
 (defn origin
   ``The module a function was compiled from, as its module name

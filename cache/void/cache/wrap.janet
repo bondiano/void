@@ -20,15 +20,9 @@
 ### expensive and the remote: a rates table, a rendered fragment, a
 ### query that summarises a million rows.
 
+(import void/core/bind :as bind)
 (import ./key :as key)
 (import ./state :as state)
-
-(defn- fn-name
-  "The name a function was defined with, or nil for an anonymous one."
-  [f]
-  (when (function? f)
-    (def n (get (disasm f) :name))
-    (when (and (string? n) (not (empty? n))) n)))
 
 (defn key-for
   ``The key a `wrap`ped call is stored under — the handle for
@@ -75,7 +69,7 @@
   (default opts {})
   (def name
     (or (get opts :name)
-        (fn-name f)
+        (bind/fn-name f)
         (error "cache/wrap needs a :name for an anonymous function — the key is built from it, and it has to be the same name in every process sharing the cache")))
   (def key-fn (get opts :key))
   (def when-fn (get opts :when))

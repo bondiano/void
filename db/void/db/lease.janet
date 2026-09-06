@@ -23,7 +23,12 @@
 ### transaction open across arbitrary code, which is the thing void/db
 ### exists to keep from happening by accident. It also keeps the module
 ### inside the SQL every engine has, MySQL included: no RETURNING, no
-### ON CONFLICT, nothing version-dependent.
+### ON CONFLICT, nothing version-dependent. One thing it does rely on:
+### the UPDATE's count must be *rows matched*, not rows changed — a
+### holder renewing with the values the row already has must still
+### read as "mine" — which sqlite and Postgres report always and MySQL
+### only under CLIENT_FOUND_ROWS, `[:db-mysql :found-rows]`, which
+### defaults to true and must stay on for a deployment that leases.
 ###
 ### **The first taker inserts, and a lost insert is an answer.** A lease
 ### that has never been taken has no row; the UPDATE changes nothing,

@@ -143,15 +143,6 @@
     :sqlite [:seq "integer primary key autoincrement"]
     [:seq :bigserial {:primary-key true}]))
 
-(defn- index-if-not-exists?
-  ``Does this engine take `CREATE INDEX IF NOT EXISTS`? MySQL does not
-  (MariaDB does): there the clause is a syntax error, so the index is
-  created bare and a second boot's ER_DUP_KEYNAME is read as "done" —
-  see `already-there?`. The builder passes the clause through as
-  written; refusing or emulating it per dialect is its business (§8.6).``
-  [dialect]
-  (not= :mysql dialect))
-
 (defn- pending-index
   ``The forwarder's index. Partial — `WHERE forwarded_at IS NULL` — so
   it is the size of the backlog, not of the history; that clause is
@@ -184,9 +175,9 @@
               [:meta :text]
               [:published-at :double {:null false}]]}
    {:create-index (string messages "_id_idx") :on messages
-    :if-not-exists (index-if-not-exists? dialect) :columns [:id] :unique true}
+    :if-not-exists (db/index-if-not-exists? dialect) :columns [:id] :unique true}
    {:create-index (string messages "_topic_idx") :on messages
-    :if-not-exists (index-if-not-exists? dialect) :columns [:topic :seq]}
+    :if-not-exists (db/index-if-not-exists? dialect) :columns [:topic :seq]}
    {:create-table cursors :if-not-exists true
     :columns [[:group-name :string {:primary-key true}]
               [:position :bigint {:null false}]
@@ -214,22 +205,13 @@
   (tuple ;(map |(if (string? $) $ (first (builder/format $ dialect)))
                (statements dialect table))))
 
-(defn- already-there?
-  ``MySQL has no `CREATE INDEX IF NOT EXISTS` (MariaDB does), so on
-  that engine the second boot's index statements fail with
-  ER_DUP_KEYNAME — which for an idempotent schema pass is the answer
-  "done", not an error. Nowhere else: sqlite and Postgres take the
-  clause, and any failure there is real.``
-  [dialect e]
-  (and (= :mysql dialect) (= 1061 (get (errors/data e) :code))))
-
 (defn create-tables!
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
   (def dialect ((db/current-driver) :dialect))
   (each sql (ddl dialect table)
     (def [ok e] (protect (db/execute-sql sql [] {:kind :write :prepared false})))
-    (unless (or ok (already-there? dialect e))
+    (unless (or ok (db/duplicate-index? dialect e))
       (error e)))
   nil)
 
@@ -805,7 +787,7 @@
 (plugin/contribute! :void.core/cli
   {:name :bus-db/ddl
    :read-only? true
-   :doc "Print the DDL of the message log, the cursors and the outbox: void bus-db ddl"
+   :doc "Print the DDL of the message log, the cursors and the outbox (connects, to learn the dialect): void bus-db ddl"
    :needs [:db/pool]
    :fn (fn cli-ddl [_ & args]
          (unless (empty? args)

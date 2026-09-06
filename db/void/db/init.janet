@@ -44,6 +44,8 @@
 
 (def normalize-driver "See driver/normalize." driver/normalize)
 (def driver-result "See driver/result — sugar for driver authors." driver/result)
+(def index-if-not-exists? "See driver/index-if-not-exists? — does the dialect take the clause." driver/index-if-not-exists?)
+(def duplicate-index? "See driver/duplicate-index? — MySQL's \"index already there\" on a bare CREATE INDEX." driver/duplicate-index?)
 
 (def pool-stats "See pool/stats — checkouts, waits, query timing." pool/stats)
 

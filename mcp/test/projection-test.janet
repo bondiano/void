@@ -76,16 +76,6 @@
        :mime-type "text/plain"
        :read (fn [] "the note")}]}))
 
-# the module behind :test/sym — written here so that the test can
-# rewrite it, which is what a reload is
-(def module-dir (string (os/cwd) "/.tmp-mcp-test-" (os/time)))
-(os/mkdir module-dir)
-(array/insert module/paths 0 [(string module-dir "/:all:.janet") :source])
-(defn- write-symtool [version]
-  (spit (string module-dir "/symtool.janet")
-        (string "(defn hello [& args] (printf \"" version " %j\" args))")))
-(write-symtool "v1")
-
 (defn- boot-with [mcp-config]
   (def boot (plugin/bootstrap {:plugins [:void/mcp (app)]
                                :profile :test
@@ -176,21 +166,31 @@
 
 # -- a command named by a symbol is late-bound (void/core/bind) ----------
 
-(def sym1 (call "test_sym" @{:args ["x"]}))
-(assert (= `v1 ("x")` (string/trim (get-in sym1 [:result :content 0 :text])))
-        "a qualified symbol resolves through its module when the tool is called")
-(write-symtool "v2")
-(dofile (string module-dir "/symtool.janet") :env (require "symtool"))
-(def sym2 (call "test_sym" @{:args ["x"]}))
-(assert (= `v2 ("x")` (string/trim (get-in sym2 [:result :content 0 :text])))
-        "and a reload of that module is live for the next call — the server noticed nothing")
+# the module behind :test/sym — written here so that the test can
+# rewrite it, which is what a reload is; removed in `defer`, so a
+# failed assertion does not leave the directory behind
+(def module-dir (string (os/cwd) "/.tmp-mcp-test-" (os/time)))
+(os/mkdir module-dir)
+(array/insert module/paths 0 [(string module-dir "/:all:.janet") :source])
+(defn- write-symtool [version]
+  (spit (string module-dir "/symtool.janet")
+        (string "(defn hello [& args] (printf \"" version " %j\" args))")))
+(write-symtool "v1")
 
-(def nosym (call "test_nosym" @{}))
-(assert (get-in nosym [:result :isError]) "a symbol nothing answers to is a failed call")
-(assert (string/find "does not resolve to a function" (get-in nosym [:result :content 0 :text]))
-        "that says so in a sentence, not an address")
-(os/rm (string module-dir "/symtool.janet"))
-(os/rmdir module-dir)
+(defer (do (os/rm (string module-dir "/symtool.janet")) (os/rmdir module-dir))
+  (def sym1 (call "test_sym" @{:args ["x"]}))
+  (assert (= `v1 ("x")` (string/trim (get-in sym1 [:result :content 0 :text])))
+          "a qualified symbol resolves through its module when the tool is called")
+  (write-symtool "v2")
+  (dofile (string module-dir "/symtool.janet") :env (require "symtool"))
+  (def sym2 (call "test_sym" @{:args ["x"]}))
+  (assert (= `v2 ("x")` (string/trim (get-in sym2 [:result :content 0 :text])))
+          "and a reload of that module is live for the next call — the server noticed nothing")
+
+  (def nosym (call "test_nosym" @{}))
+  (assert (get-in nosym [:result :isError]) "a symbol nothing answers to is a failed call")
+  (assert (string/find "does not resolve to a function" (get-in nosym [:result :content 0 :text]))
+          "that says so in a sentence, not an address"))
 
 # -- typed tools are validated and coerced by the schema layer -----------
 

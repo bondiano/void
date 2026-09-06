@@ -1,10 +1,12 @@
-(import ../void/core/bind :as bind)
-(import ../void/core/errors :as errors)
-
-# The tests import the module under test relatively; a qualified symbol
-# goes through `require`, so the package root has to be a module path
-# for `'void.core.errors/message` to be findable from here
+# A qualified symbol goes through `require`, so the package root has to
+# be a module path for `'void.core.errors/message` to be findable from
+# here — and the test imports its modules through that same path, so
+# that the errors module the symbol resolves to is the one instance
+# `errors/message` below names (a relative import would load a second
+# copy under a second cache key, with a second kind registry)
 (array/insert module/paths 0 [(string (os/cwd) "/:all:.janet") :source])
+(import void/core/bind :as bind)
+(import void/core/errors :as errors)
 
 (defn expect-unresolvable [name needle thunk]
   (def [ok err] (protect (thunk)))
@@ -132,5 +134,26 @@
 (assert (= "main" (bind/origin in-project)) "a project module through the cwd template")
 (assert (= "void/core/errors" (bind/origin errors/message)) "a package module by its name")
 (assert (nil? (bind/origin string/find)) "a cfunction has no source")
+
+# the most specific template wins, wherever it sits: `void` run at the
+# repository root (cli/init's add-project-paths!) and scripts/dry-run
+# put `<repo>/:all:.janet` at index 0, *before* the package's own
+# `<repo>/core/:all:.janet` — and a name that depended on the order
+# would be `core/void/core/errors` in that process and
+# `void/core/errors` in every other: one lock, two hashes
+(def repo-root (string/slice (os/cwd) 0 (last (string/find-all "/" (os/cwd)))))
+(array/insert module/paths 0 [(string repo-root "/:all:.janet") :source])
+(assert (= "void/core/errors" (bind/origin errors/message))
+        "a project template above the package does not rename the package's modules")
+(assert (= "main" (bind/origin in-project))
+        "nor a project module under the cwd")
+# and the same rule with nothing on disk: a template at the root of
+# the filesystem accounts for every absolute path, and loses to each
+# more specific one
+(array/insert module/paths 0 ["/:all:.janet" :source])
+(assert (= "app/a" (bind/origin in-app)) "the longer prefix names the module")
+(assert (= "app/b" (bind/origin in-init)))
+(assert (= "elsewhere/c" (bind/origin elsewhere))
+        "a source only the root template accounts for is named by it")
 
 (print "void/core/bind tests OK")

@@ -77,7 +77,10 @@
 
   :found-rows makes an UPDATE report the rows it matched rather than
   the rows it changed — see ./worker for why that is the portable
-  reading and not a preference.``
+  reading and not a preference. void/db/lease depends on it: a holder
+  renewing a lease with the values its row already carries reads the
+  count as "still mine", and with :found-rows off that renewal would
+  answer 0 and the holder would drop a lease it holds.``
   {:host "127.0.0.1"
    :port 3306
    :charset "utf8mb4"

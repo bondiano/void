@@ -48,6 +48,13 @@
 (assert (string/find "#fn(named-fn)" (lock/canonical named-fn))
         "the canonical rendering names a function rather than addressing it")
 
+# a cfunction renders as `(string f)` spells it — the rendering locks
+# in the wild hold, which a lock-version 1 file must keep hashing to
+(assert (= "#fn(<cfunction string/find>)" (lock/canonical string/find))
+        "a cfunction keeps its <cfunction name> spelling")
+(assert (= (lock/digest string/find) (lock/fnv1a "#fn(<cfunction string/find>)"))
+        "and so its digest is the one an existing lock recorded")
+
 # -- a composition -------------------------------------------------------
 
 (defn- app-manifest [version extra-middleware]

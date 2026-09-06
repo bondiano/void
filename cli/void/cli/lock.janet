@@ -69,10 +69,16 @@
   anonymous one — the module it was compiled in (`anonymous in
   void/http`), so two lambdas from two plugins are two things rather
   than one "anonymous". `(string f)` would print an address for the
-  anonymous, and the address never gets into a digest.``
+  anonymous, and the address never gets into a digest. A cfunction
+  keeps the spelling `(string f)` gives it — `<cfunction string/find>`
+  — because that is what every lock taken so far holds, and a lock is
+  a public artifact: a rendering that moves is a "declares something
+  different" in every CI that checks one.``
   [f]
-  (or (bind/fn-name f)
-      (if-let [o (bind/origin f)] (string "anonymous in " o) "anonymous")))
+  (if (cfunction? f)
+    (if (bind/fn-name f) (string f) "anonymous")
+    (or (bind/fn-name f)
+        (if-let [o (bind/origin f)] (string "anonymous in " o) "anonymous"))))
 
 (defn canonical
   ``One spelling per value, so that two processes that resolved the
