@@ -24,9 +24,17 @@
 ### version table. `void db rollback` walks the recorded versions back
 ### through their `down`, newest first, and refuses to guess when a
 ### migration has none.
+###
+### The whole of `up!` runs under an advisory lock on the version
+### table's name, held by one connection for the pass: two processes
+### of a fleet starting together both find the same migration pending,
+### and the one that loses the race reads the pending list again and
+### finds nothing to do. Where the engine has no advisory lock
+### (sqlite) the pass says so at debug and runs — see `with-lock*`.
 
 (import void/core/log :as log)
 (import void/core/util :as util)
+(import ./builder :as builder)
 (import ./state :as state)
 
 (def default-dir
@@ -65,14 +73,21 @@
 
 # -- the version table ---------------------------------------------------
 
+(def version-table
+  ``The version table, as a declaration. `:string` rather than `:text`
+  for the key: on MySQL a TEXT column cannot be a primary key without
+  a prefix length, and this table was one hand-written string for
+  every engine until the builder had a spelling for the difference.``
+  {:columns [[:version :string {:primary-key true}]
+             [:name :string]
+             [:applied-at :string]]})
+
 (defn ensure-table!
   "Create the version table when missing (idempotent)."
   [&opt table]
   (default table default-table)
-  (state/execute-sql
-    (string "CREATE TABLE IF NOT EXISTS " table
-            " (version text primary key, name text, applied_at text)")
-    [] {:kind :write :prepared false})
+  (state/run (merge version-table {:create-table table :if-not-exists true})
+             {:kind :write :prepared false})
   nil)
 
 (defn applied
@@ -104,6 +119,57 @@
     (when (= true state)
       (array/push out {:version v :name "?" :applied true :missing true})))
   (sorted-by |($ :version) out))
+
+# -- the lock ------------------------------------------------------------
+#
+# Two processes of a fleet starting together both find the same
+# migration pending, and both run it. What happens next depends on the
+# migration and is never good: two `CREATE TABLE`s where one fails
+# halfway through a transaction the other is inside, a data backfill
+# applied twice, two rows in the version table.
+#
+# So the pass takes a lock on a *name* — an advisory lock, which
+# belongs to no table and is held by the connection rather than by a
+# transaction. That last part is why the whole pass runs inside one
+# `with-conn`: a lock taken on a connection that goes back to the pool
+# is a lock that has been released.
+#
+# Where the engine has no such thing (sqlite) the pass runs unlocked
+# and says so once, at debug: sqlite has a single writer, and a fleet
+# on a file in one filesystem is a deployment shape void/deploy
+# already refuses (`ready no — the store is per-process`).
+
+(defn lock-name
+  "The name the migration lock is taken under — the version table, so
+  two applications sharing a database do not wait for each other."
+  [table]
+  (string "void_migrate:" table))
+
+(defn- with-lock*
+  "Run (f) holding the migration lock, on one connection."
+  [table f]
+  (def dialect ((state/driver) :dialect))
+  (def spec (builder/capability dialect :advisory-lock))
+  (if-not spec
+    (do
+      (log/debug "migrating without a lock — this engine has no advisory lock"
+                 :ns "void.db.migrate" :dialect dialect)
+      (f))
+    (state/with-conn*
+      (fn locked [_]
+        (def name (lock-name table))
+        (def [sql params] ((spec :acquire) name))
+        (def rows (get (state/execute-sql sql params {:kind :select :prepared false})
+                       :rows []))
+        (def got? (get spec :acquired? (fn always [_] true)))
+        (unless (got? rows)
+          (errorf (string "could not take the migration lock %q — another process "
+                          "is migrating this database and has been for a while. "
+                          "Nothing was applied")
+                  name))
+        (defer (let [[rsql rparams] ((spec :release) name)]
+                 (protect (state/execute-sql rsql rparams {:kind :select :prepared false})))
+          (f))))))
 
 # -- running -------------------------------------------------------------
 
@@ -177,22 +243,27 @@
   [&opt opts]
   (default opts {})
   (def table (get opts :table default-table))
-  (def todo (pending (get opts :dir) table))
-  (def limited
-    (let [by-to (if-let [to (get opts :to)]
-                  (filter |(<= (compare ($ :version) to) 0) todo)
-                  todo)]
-      (if-let [n (get opts :step)] (take n by-to) by-to)))
-  (def done @[])
-  (each m limited
-    (def loaded (load-migration m))
-    (def t0 (os/clock :monotonic))
-    (apply-one table loaded :up)
-    (log/info "migration applied" :ns "void.db.migrate"
-              :version (m :version) :name (m :name)
-              :ms (math/round (* 1000 (- (os/clock :monotonic) t0))))
-    (array/push done m))
-  done)
+  (with-lock* table
+    (fn migrate-up []
+      # inside the lock, not before it: the pending list is what the
+      # process that lost the race has to read again, or it applies
+      # what the winner has just applied
+      (def todo (pending (get opts :dir) table))
+      (def limited
+        (let [by-to (if-let [to (get opts :to)]
+                      (filter |(<= (compare ($ :version) to) 0) todo)
+                      todo)]
+          (if-let [n (get opts :step)] (take n by-to) by-to)))
+      (def done @[])
+      (each m limited
+        (def loaded (load-migration m))
+        (def t0 (os/clock :monotonic))
+        (apply-one table loaded :up)
+        (log/info "migration applied" :ns "void.db.migrate"
+                  :version (m :version) :name (m :name)
+                  :ms (math/round (* 1000 (- (os/clock :monotonic) t0))))
+        (array/push done m))
+      done)))
 
 (defn down!
   ``Roll the newest applied migrations back through their `down`.

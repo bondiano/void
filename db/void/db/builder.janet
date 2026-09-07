@@ -138,7 +138,12 @@
         :share-lock (get spec :share-lock "FOR SHARE")
         # how an upsert is spelled: :on-conflict (Postgres, sqlite) or
         # :duplicate-key (MySQL's ON DUPLICATE KEY UPDATE)
-        :upsert (get spec :upsert :on-conflict)})
+        :upsert (get spec :upsert :on-conflict)
+        # a lock on a *name*, held by a connection and belonging to no
+        # table — what a migration pass takes so that two processes of
+        # a fleet booting together do not both apply it. nil where the
+        # engine has none; see `void/db/migrate`
+        :advisory-lock (get spec :advisory-lock)})
   name)
 
 (defn dialect
@@ -175,8 +180,28 @@
            :double "real" :timestamp "text" :timestamptz "text"
            :json "text" :jsonb "text" :uuid "text"}})
 
+(defn- advisory-key
+  ``A stable positive integer for a lock name: Postgres numbers its
+  advisory locks rather than naming them. A polynomial hash in plain
+  arithmetic (Janet's bit operations are 32-bit *signed*, and the
+  usual FNV constants do not fit), folded into the range a bigint
+  literal is certainly safe in. A collision would mean two unrelated
+  passes waiting for each other — inconvenient, never wrong — and the
+  number is the lock's identity rather than anybody's data, which is
+  why it is written into the statement instead of bound to it.``
+  [name]
+  (var h 7)
+  (each c name
+    (set h (mod (+ (* 31 h) c) 2147483647)))
+  h)
+
 (register-dialect! :postgres
   {:placeholder (fn [n] (string "$" n))
+   :advisory-lock
+   {:acquire (fn pg-lock [name]
+               [(string "SELECT pg_advisory_lock(" (advisory-key name) ")") []])
+    :release (fn pg-unlock [name]
+               [(string "SELECT pg_advisory_unlock(" (advisory-key name) ")") []])}
    :types {:serial "serial" :bigserial "bigserial"
            :string "text" :jsonb "jsonb"
            :blob "bytea" :bytes "bytea"}})
@@ -222,6 +247,13 @@
    :skip-locked false
    :share-lock "LOCK IN SHARE MODE"
    :upsert :duplicate-key
+   # GET_LOCK waits and then answers, where pg_advisory_lock waits
+   # until it has it: 0 is "somebody else is still migrating", NULL an
+   # error, and both have to be read rather than assumed
+   :advisory-lock
+   {:acquire (fn mysql-lock [name] ["SELECT GET_LOCK(?, ?) AS got" [name 300]])
+    :acquired? (fn mysql-got [rows] (= 1 (get (first rows) :got)))
+    :release (fn mysql-unlock [name] ["SELECT RELEASE_LOCK(?)" [name]])}
    # MySQL treats `\` as an escape inside a string literal (unless the
    # session runs NO_BACKSLASH_ESCAPES, which void/db-mysql refuses to
    # serve), so a DDL DEFAULT literal must double it — see `literal`

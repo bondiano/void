@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import ../test-support/fake-driver :as fake)
+(import void/core/errors :as errors)
 (import void/core/schema :as schema)
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
@@ -269,5 +270,52 @@
 (assert (string/find "brand_id FK" diagram) "foreign keys marked")
 (assert (string/find "User }o--|| Brand : brand" diagram) "belongs-to cardinality")
 (assert (string/find "User ||--o{ Bet : bets" diagram) "has-many cardinality")
+
+# -- db/check: the seam between the shape and the write ------------------
+
+(def ok-check (entity/check User {:email "a@b.c"}))
+(assert (empty? (ok-check :errors))
+        "the primary key is not something the caller has to have — the table numbers its own rows")
+(assert (deep= {:email "a@b.c"} (ok-check :value)) "and the attributes come back as they went in")
+
+(assert (empty? ((entity/check User {:id 7 :email "a@b.c"}) :errors))
+        "a caller that does have the key still validates")
+
+(def bad (entity/check User {:email "nope"}))
+(assert (= 1 (length (bad :errors))) "an invalid field is one error")
+(assert (= [:email] (tuple ;(get-in bad [:errors 0 :path]))) "with its path")
+
+(def missing (entity/check User {}))
+(assert (some |(= :email (first ($ :path))) (missing :errors))
+        "a required field that is not there is reported, not defaulted")
+
+(def unknown (entity/check User {:email "a@b.c" :emial "typo"}))
+(def unknown-err (find |(= :unknown ($ :code)) (unknown :errors)))
+(assert unknown-err "an unknown key is an error here, because it is an error at write time too")
+(assert (index-of :email (unknown-err :known)) "and the answer names the keys there are")
+
+# a patch is not a row: what is missing from it is missing from the
+# patch, not from the record
+(def patch (entity/check User {:email "b@c.d"} {:partial true}))
+(assert (empty? (patch :errors)) "a partial check asks only about what is there")
+(assert (not (empty? ((entity/check User {:email "b@c.d" :zz 1} {:partial true}) :errors)))
+        "and still refuses a key the entity does not have")
+
+# coercion is the form's half: a string from a form is an int in a column
+(def coerced (entity/check Bet {:user-id "7" :amount "1.5"} {:coerce true}))
+(assert (empty? (coerced :errors)))
+(assert (= 7 (get-in coerced [:value :user-id])) "coerced to what the column holds")
+
+(assert (not (first (protect (entity/check User {} {:parital true}))))
+        "a mistyped option is an error, not a silently ignored one")
+
+# check! is the refusal form: the same errors, as the envelope the
+# HTTP layer already knows how to answer
+(assert (deep= {:email "a@b.c"} (entity/check! User {:email "a@b.c"})))
+(def [ok e] (protect (entity/check! User {:email "nope"})))
+(assert (not ok))
+(assert (= :void.schema/invalid (errors/kind e)) "the envelope every schema failure raises")
+(assert (= 422 (errors/status e)))
+(assert (= :User (get (errors/data e) :entity)) "and it says which entity refused")
 
 (print "entity-test: ok")

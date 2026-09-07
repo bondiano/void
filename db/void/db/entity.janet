@@ -542,6 +542,77 @@
   (load-preloads (resolve ent) (if (indexed? insts) insts [insts]) spec)
   insts)
 
+# -- checking a write ----------------------------------------------------
+
+(def- check-opts {:partial true :coerce true})
+
+(defn check-schema
+  ``The schema a write is checked against: the entity's own
+  declaration, closed — an unknown key is an error at write time
+  (`to-row` refuses it), so it is an error here — and with the primary
+  key optional, because a table that numbers its own rows supplies it.
+
+  `partial?` makes every field optional, which is the shape of a
+  patch: a field missing from an `update!` is not a field missing from
+  the row.``
+  [ent &opt partial?]
+  (def desc (resolve ent))
+  (def n (schema/normalize (desc :schema)))
+  (def entries
+    (tabseq [[k sub] :in (n :children)]
+      k (if (or (= :optional (sub :type))
+                (and (not partial?) (not= k (desc :pk))))
+          sub
+          (schema/optional sub))))
+  (schema/closed [:map (n :props) entries]))
+
+(defn check
+  ``Would this write be accepted? Validates `attrs` against the
+  entity's declaration and answers in `schema/check`'s format —
+  `{:value ... :errors [...]}` — so a route, a form or a job renders
+  the failure the way it renders every other schema failure, and
+  nothing is written by asking.
+
+      (def res (db/check User attrs))
+      (if (empty? (res :errors))
+        (db/insert! User (res :value))
+        (render-form-errors (res :errors)))
+
+  opts: `:partial true` for a patch (see `check-schema`), `:coerce
+  true` to take the strings a form submits and hand back the values a
+  column holds.
+
+  Deliberately not a changeset: nothing is wrapped, nothing is
+  threaded through the write, and `insert!` does not secretly call
+  this. It is one question with one answer, asked where the caller
+  decides an invalid write is a *refusal* rather than a panic — the
+  seam between the shape and the write, and nothing more.``
+  [ent attrs &opt opts]
+  (default opts {})
+  (eachk k opts
+    (unless (in check-opts k)
+      (errorf "db/check: unknown option %q (allowed: %s)"
+              k (util/names-str (keys check-opts)))))
+  (schema/check (check-schema ent (get opts :partial))
+                attrs
+                (if (get opts :coerce) {:coerce true} {})))
+
+(defn check!
+  ``A `check` that raises: the (possibly coerced) attributes when they
+  validate, and otherwise the same `:void.schema/invalid` envelope
+  `schema/check!` raises — status 422, every error under `:data`. What
+  a route calls when an invalid write is a refusal to answer rather
+  than a branch to take.``
+  [ent attrs &opt opts]
+  (default opts {})
+  (def res (check ent attrs opts))
+  (if (empty? (res :errors))
+    (res :value)
+    (errors/raise :void.schema/invalid
+                  (string/join (map schema/error-str (res :errors)) "; ")
+                  {:errors (res :errors) :value (res :value)
+                   :entity ((resolve ent) :name)})))
+
 # -- writing -------------------------------------------------------------
 
 (defn- reload-by-pk [desc id]

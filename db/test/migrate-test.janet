@@ -154,4 +154,61 @@
   (assert (= "add_orders" (parsed :name)) "spaces become underscores")
   (assert (= 14 (length (parsed :version))) "the version is a UTC timestamp"))
 
+# -- the lock a fleet's boot needs ---------------------------------------
+#
+# Two processes starting together both find the same migration pending.
+# The pass takes an advisory lock — a lock on a name, held by the
+# connection — and reads the pending list *inside* it, so the one that
+# loses the race finds nothing left to do.
+
+(defn- lock-fixture [dialect got]
+  (def applied @[])
+  (def [d st]
+    (fake/make
+      {:dialect dialect
+       :responder
+       (fn [sql params]
+         (cond
+           (string/find "GET_LOCK" sql) @{:rows [{:got got}] :count 1}
+           (string/find "SELECT" sql)
+           @{:rows (seq [v :in (sorted applied)] {:version v}) :count (length applied)}
+           (string/find "INSERT INTO" sql)
+           (do (array/push applied (in params 2)) @{:rows [] :count 1})
+           @{:rows [] :count 0}))}))
+  [d st applied])
+
+(def lock-dir (string root "/.tmp-migrate-lock-" (os/time)))
+(os/mkdir lock-dir)
+(defer (rimraf lock-dir)
+  (spit (string lock-dir "/20260101_one.janet") `(defn up [] "CREATE TABLE one (id int)")`)
+
+  (def [pg-drv pg-st _] (lock-fixture :postgres nil))
+  (with-dyns [state/pool-dyn (pool/make (driver/normalize pg-drv) {:size 1})]
+    (migrate/up! {:dir lock-dir})
+    (def sqls (fake/sqls pg-st))
+    (def lock-at (find-index |(string/find "pg_advisory_lock" $) sqls))
+    (def begin-at (find-index |(= "BEGIN" $) sqls))
+    (assert lock-at "postgres takes the advisory lock")
+    (assert (< lock-at begin-at) "before it reads what is pending, let alone applies it")
+    (assert (some |(string/find "pg_advisory_unlock" $) sqls)
+            "and gives it back at the end of the pass"))
+
+  # MySQL's GET_LOCK waits and then *answers*: 0 is "somebody else is
+  # still migrating", and reading it is the difference between waiting
+  # and applying a migration twice
+  (def [my-drv my-st my-applied] (lock-fixture :mysql 0))
+  (with-dyns [state/pool-dyn (pool/make (driver/normalize my-drv) {:size 1})]
+    (def [ok err] (protect (migrate/up! {:dir lock-dir})))
+    (assert (not ok) "a lock nobody could take stops the pass")
+    (assert (string/find "another process" err) "and says why")
+    (assert (empty? my-applied) "with nothing applied")
+    (assert (not (some |(= "BEGIN" $) (fake/sqls my-st)))
+            "and no migration even started"))
+
+  (def [my2-drv my2-st my2-applied] (lock-fixture :mysql 1))
+  (with-dyns [state/pool-dyn (pool/make (driver/normalize my2-drv) {:size 1})]
+    (assert (= 1 (length (migrate/up! {:dir lock-dir}))) "with the lock, the pass runs")
+    (assert (some |(string/find "RELEASE_LOCK" $) (fake/sqls my2-st))
+            "and releases the lock after it")))
+
 (print "migrate-test: ok")
