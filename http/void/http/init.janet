@@ -699,7 +699,7 @@
 # nothing: an absent key is nil.
 (def- route-tags
   [[:void.admin/widget-route (fn [v] (when v "widget"))]
-   [:void.grpc/service (fn [v] (when v (string/format "rpc %q" v)))]])
+   [:void.grpc/method (fn [v] (when v (string/format "rpc %q" v)))]])
 
 (defn- tags-of [e]
   (string/join (seq [[k f] :in route-tags

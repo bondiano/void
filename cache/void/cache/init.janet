@@ -148,7 +148,7 @@
     and the one an application starts with — swapping it for redis is
     a config line once void/cache-redis is in the composition."
     :provides [:void/cache-store]
-    :config {:key :cache :schema Config}
+    :config {:key :cache}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
@@ -176,7 +176,7 @@
     to a miss instead of taking the request down with it."
     :deps [:void/cache-store]
     :provides [:void/cache]
-    :config {:key :cache :schema Config}
+    :config {:key :cache}
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))

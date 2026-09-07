@@ -187,7 +187,7 @@
     codec (:jdn by default), not the redis client's."
     :deps [:redis/client]
     :provides [:void/cache-store]
-    :config {:key :cache-redis :schema Config}
+    :config {:key :cache-redis}
     :start
     (fn start [deps cfg0]
       (def cfg (merge defaults (or cfg0 {})))

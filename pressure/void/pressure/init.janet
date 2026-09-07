@@ -159,7 +159,7 @@
     shedding middleware reads; in prefork one of these runs per worker,
     because each worker has the loop it is measuring."
     :provides [:void/pressure]
-    :config {:key :pressure :schema Config}
+    :config {:key :pressure}
     :start
     (fn start [_ cfg0]
       (def cfg (slice cfg0))
