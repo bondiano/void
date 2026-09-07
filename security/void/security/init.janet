@@ -352,7 +352,11 @@
 (plugin/contribute! :void.http/middleware
   {:name :void.security/csrf
    # after auth (4000): whether the credential rode on a cookie is
-   # something only the identity knows
+   # something only the identity knows — and auth is optional here,
+   # which is why this is a number and not `:after :void.auth/identity`.
+   # 4500 is this plugin's alone since ADR-0045: locale sits at 4100
+   # (a CSRF refusal is rendered translated), scopes right after
+   # identity
    :phase 4500
    :doc "Verify the CSRF token on unsafe requests whose credential rode on a cookie; bind the token for the form slot and the meta tag"
    # [:security :csrf :enabled false] takes the wrapper out of every

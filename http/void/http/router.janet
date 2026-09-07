@@ -19,6 +19,7 @@
 (import void/core/meta :as meta)
 (import void/core/bind :as bind)
 (import void/core/errors :as errors)
+(import void/core/log :as log)
 (import ./middleware :as mw)
 (import ./wire :as wire)
 (import void/core/util :as util)
@@ -315,8 +316,11 @@
   (def decls
     (let [[ok d] (protect (meta/declarations (get opts :meta-keys {})))]
       (if ok d (do (array/push errors (string d)) {}))))
-  (def contribs (get opts :middleware []))
+  # :before/:after become numbers here, once — a bad placement fails
+  # the build like any other table error
+  (def contribs (mw/resolve-phases (get opts :middleware [])))
   (def strict (get opts :strict false))
+  (def phase-warnings @{})
 
   # flatten every source
   (def flat @[])
@@ -357,17 +361,24 @@
       (array/push errors (string/format "%s: %s" label (errors/message resolved))))
     (def [c-ok chain-or-err]
       (protect
-        (let [selected (mw/select contribs rmeta)
+        (let [{:selected selected :declined declined} (mw/select contribs rmeta)
               staged (stage-hooks-for (get opts :stage-hooks {}) rmeta (d :env))
-              combined (sorted-by (fn [m] [(m :phase) (string (m :name))])
-                                  (array ;selected ;(staged :wrappers)))]
-          {:chain (mw/chain combined (if h-ok (resolved :call) identity) rmeta)
-           :middleware (tuple ;(map |($ :name) combined))
-           :hooks (staged :out)})))
+              # the stage wrappers are merged in through the one sort
+              # the chain has, so the plugin tie-break holds throughout
+              steps (mw/sort-contributions
+                      [;selected
+                       ;(map |{:plugin :void/http :value $ :stage true} (staged :wrappers))])]
+          {:chain (mw/chain (map |($ :value) steps) (if h-ok (resolved :call) identity) rmeta)
+           :middleware (tuple ;(map |(get-in $ [:value :name]) steps))
+           :steps (tuple ;(map mw/describe steps))
+           :declined declined
+           :hooks (staged :out)
+           :warnings (mw/shared-phase-warnings selected)})))
     (unless c-ok
       (array/push errors (string/format "%s: %s" label (string chain-or-err))))
     (when (and (keyword? name) (not (in by-name name))
                pat-ok h-ok c-ok (empty? (merged :errors)))
+      (each w (chain-or-err :warnings) (put phase-warnings w true))
       (def entry
         @{:name name
           :method (d :method)
@@ -379,9 +390,11 @@
           :no-reload (resolved :no-reload)
           :meta rmeta
           :provenance (freeze (merged :provenance))
-          :warnings (merged :warnings)
+          :warnings (tuple ;(merged :warnings) ;(chain-or-err :warnings))
           :chain (chain-or-err :chain)
           :middleware (chain-or-err :middleware)
+          :steps (chain-or-err :steps)
+          :declined (chain-or-err :declined)
           :hooks (chain-or-err :hooks)
           :source (d :source)})
       (put by-name name entry)
@@ -389,6 +402,11 @@
 
   (unless (empty? errors)
     (errorf "route table errors:\n  - %s" (string/join errors "\n  - ")))
+
+  # a phase two plugins share is an order nobody decided: said once per
+  # build in the log, and on every entry it concerns for explain-route
+  (each w (sorted (keys phase-warnings))
+    (log/warn w :ns "void.http.router"))
 
   # indexes: static lookup per method, ordered dynamic scan per method
   (def static @{})
@@ -501,6 +519,24 @@
 
 # -- explain -------------------------------------------------------------
 
+(defn step-str
+  "One chain step as `name@phase` (plus `stage` or the placement it
+  resolved from) — the spelling explain-route and `void routes --chain`
+  share."
+  [s]
+  (string/format "%q@%d%s" (s :name) (s :phase)
+                 (cond
+                   (s :stage) " (stage)"
+                   (s :after) (string/format " (after %q)" (s :after))
+                   (s :before) (string/format " (before %q)" (s :before))
+                   "")))
+
+(defn declined-str
+  "One declined contribution as `name@phase (plugin) — reason`."
+  [d]
+  (string/format "%s (%q) — %s" (step-str d) (d :plugin)
+                 (get mw/reasons (d :reason) (string (d :reason)))))
+
 (defn explain-route
   ``The routing verdict for a path — the matched entry plus the origin
   of every metadata value by layer:
@@ -509,11 +545,16 @@
       (explain-route table "/orders/42" :post)
 
   Returns {:name :method :pattern :params :handler :no-reload :meta
-  :layers {key [{:source :value} ...]} :source :middleware :warnings
-  :text <human summary>} or nil when nothing matches. :middleware is
-  the resolved chain for this route (outermost first), :source the
-  route-source contribution it came from, :warnings the bare-key
-  warnings from the metadata merge.``
+  :layers {key [{:source :value} ...]} :source :middleware :chain
+  :declined :hooks :warnings :text <human summary>} or nil when nothing
+  matches. :middleware is the resolved chain's names (outermost
+  first); :chain the same steps as data, [{:name :phase :plugin
+  :stage? :after?/:before?} ...]; :declined the contributions that
+  are *not* in the chain and why ([{:name :phase :plugin :reason}
+  ...], see middleware/reasons); :hooks the route's out-of-chain
+  hooks by stage; :source the route-source contribution it came from;
+  :warnings the bare-key warnings from the metadata merge plus the
+  phases two plugins share in this chain.``
   [table path &opt method]
   (default method :get)
   (when-let [[e params] (match table method path)]
@@ -522,6 +563,7 @@
     (each k (sorted (keys (e :meta)))
       (array/push lines (meta/explain-str merge-result k)))
     (def warnings (get e :warnings []))
+    (def declined (get e :declined []))
     {:name (e :name)
      :method (e :method)
      :pattern (e :pattern)
@@ -532,14 +574,21 @@
      :layers (e :provenance)
      :source (e :source)
      :middleware (e :middleware)
+     :chain (e :steps)
+     :declined declined
+     :hooks (e :hooks)
      :warnings warnings
-     :text (string/format "%q %s -> %q (handler %q, source %q)\n  middleware: %s\n  %s%s"
+     :text (string/format "%q %s -> %q (handler %q, source %q)\n  middleware: %s\n  %s%s%s"
                           (e :method) (e :pattern) (e :name) (e :handler)
                           (e :source)
-                          (if (empty? (e :middleware))
+                          (if (empty? (e :steps))
                             "none"
-                            (string/join (map |(string/format "%q" $) (e :middleware)) " -> "))
+                            (string/join (map step-str (e :steps)) " -> "))
                           (string/join lines "\n  ")
+                          (if (empty? declined)
+                            ""
+                            (string "\n  declined:\n    "
+                                    (string/join (map declined-str declined) "\n    ")))
                           (if (empty? warnings)
                             ""
                             (string "\n  warnings:\n    "

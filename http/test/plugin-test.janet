@@ -275,7 +275,15 @@
   (assert (= "yes" (get-in blown [:headers "x-stamped"]))
           "and a 500 the panic guard rendered, because the edge is outside it")
   (assert (= "yes" (get-in blown [:headers "x-order"]))
-          "lowest phase is outermost, so the phase-100 wrapper sees what the phase-9000 one did"))
+          "lowest phase is outermost, so the phase-100 wrapper sees what the phase-9000 one did")
+  # explain-route names the edge layer, outermost first, with its plugin
+  (assert (deep= ((http/explain-route "/fine") :edge)
+                 [{:name :test/outer :phase 100 :plugin :test/edge}
+                  {:name :test/stamp :phase 9000 :plugin :test/edge}])
+          "explain-route lists the edge wrappers every response passes through")
+  (assert (some |(string/find "edge     :test/outer@100  :test/edge" $)
+                (http/chain-lines (http/explain-route "/fine")))
+          "and `void routes --chain` prints them on the edge line"))
 
 # -- an early refusal carries a request id -------------------------------
 #

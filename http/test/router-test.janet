@@ -182,6 +182,87 @@
                                           :wrap (fn [handler] handler)}}]}))))
         "a :route-aware contribution whose :wrap takes one argument fails the table build, not a request")
 
+# -- the chain as data: phases, plugins, and who declined why ------------
+
+(def ex-orders (router/explain-route table "/orders/42"))
+(assert (deep= (map |[($ :name) ($ :phase) ($ :plugin)] (ex-orders :chain))
+               @[[:guard 0 :void/http] [:obs 1000 :void/obs]])
+        ":chain carries name, phase and the contributing plugin, outermost first")
+(assert (deep= (map |[($ :name) ($ :reason)] (ex-orders :declined))
+               @[[:admin-only :when] [:audit :named]])
+        "the declined are kept with their reason: :when refused the meta, :named was not listed")
+(assert (string/find "declined:" (ex-orders :text)) "and the human text lists them")
+(assert (string/find ":admin-only@5000 (:my-app) — :when declined" (ex-orders :text)))
+(assert (empty? ((router/explain-route table "/admin/users") :declined))
+        "a route that takes everything declines nothing")
+
+# -- placement by name: :before/:after resolve to a number at build ------
+
+(def placed
+  (router/build-table
+    {:sources [{:name :app :routes src}]
+     :meta-keys meta-keys
+     :middleware
+     [;middleware
+      {:plugin :my-app :value {:name :after-obs :after :obs :wrap (tracing :after-obs)}}
+      {:plugin :my-app :value {:name :chained :after :after-obs :wrap (tracing :chained)}}
+      {:plugin :my-app :value {:name :outermost :before :guard :wrap (tracing :outermost)}}]}))
+(def placed-ex (router/explain-route placed "/health"))
+(assert (deep= (map |[($ :name) ($ :phase)] (placed-ex :chain))
+               @[[:outermost 0] [:guard 0] [:obs 1000] [:after-obs 1001] [:chained 1002]])
+        ":after is the target's phase + 1, :before its phase - 1 clamped to the scale, and a relative may target a relative")
+(assert (= :obs (get-in placed-ex [:chain 3 :after])) "the step remembers what it was placed after")
+(assert (string/find ":after-obs@1001 (after :obs)" (placed-ex :text)))
+(array/clear trace)
+(router/dispatch placed @{:method :get :path "/health"})
+(assert (= [:outermost :guard :obs :after-obs :chained] (freeze trace))
+        "and the chain runs in the resolved order")
+
+(defn- build-error [mws]
+  (def [ok err] (protect (router/build-table {:sources [{:name :app :routes src}]
+                                              :meta-keys meta-keys
+                                              :middleware [;middleware ;mws]})))
+  (assert (not ok))
+  (string err))
+
+(def unknown (build-error [{:plugin :my-app :value {:name :lost :after :obz :wrap identity}}]))
+(assert (string/find "placed :after :obz, which no active plugin contributes" unknown)
+        "a target nobody contributes fails the build")
+(assert (string/find "did you mean :obs?" unknown) "with a did-you-mean")
+(def ring (build-error [{:plugin :my-app :value {:name :a :after :b :wrap identity}}
+                        {:plugin :my-app :value {:name :b :before :a :wrap identity}}]))
+(assert (string/find "in a ring: :a :b" ring) "relatives that point at each other are refused")
+
+(assert (not (first (protect (mw/check-placement [{:name :both :phase 10 :after :obs :wrap identity}]))))
+        "a contribution placed two ways fails the point's cross-check")
+(assert (not (first (protect (mw/check-placement [{:name :neither :wrap identity}]))))
+        "and so does one placed no way")
+(mw/check-placement [{:name :one :phase 10 :wrap identity} {:name :two :after :one :wrap identity}])
+
+# -- one phase, two plugins: ordered by plugin name, and said so ---------
+
+(def shared
+  (router/build-table
+    {:sources [{:name :app :routes src}]
+     :meta-keys meta-keys
+     :middleware
+     # plugin order says :void/a before :void/b; name order says the
+     # opposite — the chain follows the plugin, through the merge with
+     # the stage wrappers too
+     [;middleware
+      {:plugin :void/b :value {:name :alpha :phase 7000 :wrap (tracing :b-alpha)}}
+      {:plugin :void/a :value {:name :zeta :phase 7000 :wrap (tracing :a-zeta)}}]}))
+(array/clear trace)
+(router/dispatch shared @{:method :get :path "/health"})
+(assert (= [:guard :obs :a-zeta :b-alpha] (freeze trace))
+        "the tie-break is the plugin name first, then the middleware name")
+(def shared-ex (router/explain-route shared "/health"))
+(assert (= 1 (length (shared-ex :warnings))))
+(assert (string/find "phase 7000 is shared by :zeta (:void/a), :alpha (:void/b)" (first (shared-ex :warnings)))
+        "and the route's warnings say the order was nobody's decision")
+(assert (empty? ((router/explain-route table "/health") :warnings))
+        "one plugin per phase warns about nothing")
+
 # -- late binding --------------------------------------------------------
 
 (def henv (require "test-support/fixtures/handlers"))

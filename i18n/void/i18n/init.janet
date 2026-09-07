@@ -65,7 +65,7 @@
   :cardinality :many)
 
 (plugin/defextension-point :void.i18n/locale-source
-  :doc "The application's locale resolver, asked before cookie and Accept-Language: {:name :fn}, :fn is (fn [req] locale-or-nil) — it runs after auth (phase 4500), so (dyn :void.auth/identity) is bound. The returned value is normalized and must be one of [:i18n :locales]; anything else falls through to the next source"
+  :doc "The application's locale resolver, asked before cookie and Accept-Language: {:name :fn}, :fn is (fn [req] locale-or-nil) — it runs after auth (phase 4100), so (dyn :void.auth/identity) is bound. The returned value is normalized and must be one of [:i18n :locales]; anything else falls through to the next source"
   :schema {:name :keyword
            :fn :function
            :doc [:optional :string]}
@@ -159,7 +159,14 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.i18n/locale
-   :phase 4500
+   # 4100: after auth (4000), because the :void.i18n/locale-source hook
+   # is promised the identity; before everything that can refuse a
+   # request with a rendered message — the subject rate limit (4400),
+   # CSRF (4500), authz (5000), validation (6000) — so that every such
+   # refusal is translated. A number rather than `:after
+   # :void.auth/identity`: auth is not a requirement of this plugin,
+   # and a name may only point at middleware that is there
+   :phase 4100
    :doc "Resolve the request's locale (hook -> cookie -> Accept-Language -> default) and bind it, with the matching :void.schema/messages and :void.errors/messages tables, for everything deeper in the chain — validation, the handler, the error renderers, the template render at phase 9000 and every fiber they spawn"
    :wrap
    (fn [handler]

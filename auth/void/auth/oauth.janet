@@ -562,11 +562,12 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.auth/scopes
-   # between authentication (4000, which bound the identity) and
+   # right after the identity middleware that bound the token, before
    # authorization (5000): a scope is what the token was issued for,
    # which is a fact about the credential rather than a decision about
-   # the actor
-   :phase 4500
+   # the actor. Named, not numbered: void/auth-http is a hard
+   # requirement of this plugin, so the middleware is always there
+   :after :void.auth/identity
    :doc "Enforce :void.auth/scopes — a 403 with insufficient_scope for a token that is valid and insufficient"
    # in the chain for a route that names scopes, and for every route
    # when [:auth-oauth :required-scopes] says every route needs one —

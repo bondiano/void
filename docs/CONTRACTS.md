@@ -370,12 +370,12 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.http/middleware`
 
 - **owner:** `:void/http` · **cardinality:** `:many`
-- Phased HTTP middleware: {:name :phase 0-10000 :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request
+- Phased HTTP middleware: {:name :phase 0-10000 | :before <middleware name> | :after <middleware name> :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request. A contribution is placed exactly one way: a number on the scale, or :before/:after naming another middleware — resolved to that middleware's phase ∓ 1 at table build, an error when no active plugin contributes the name (so name only middleware of plugins you require; an optional neighbour is a number). Two plugins on one phase are ordered by plugin name and warned about at build
 - **key:** `:name` · folded by the point's own :reduce · a repeat fails the boot with `duplicate middleware <name>`
 - **contribution schema:**
 
   ```janet
-  {:doc [:optional :string] :name :keyword :named [:optional :boolean] :phase [:int {:max 10000 :min 0}] :route-aware [:optional :boolean] :when [:optional :function] :wrap :function}
+  {:after [:optional :keyword] :before [:optional :keyword] :doc [:optional :string] :name :keyword :named [:optional :boolean] :phase [:optional [:int {:max 10000 :min 0}]] :route-aware [:optional :boolean] :when [:optional :function] :wrap :function}
   ```
 
 ### `:void.http/route-meta-key`
@@ -415,7 +415,7 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.i18n/locale-source`
 
 - **owner:** `:void/i18n` · **cardinality:** `:single`
-- The application's locale resolver, asked before cookie and Accept-Language: {:name :fn}, :fn is (fn [req] locale-or-nil) — it runs after auth (phase 4500), so (dyn :void.auth/identity) is bound. The returned value is normalized and must be one of [:i18n :locales]; anything else falls through to the next source
+- The application's locale resolver, asked before cookie and Accept-Language: {:name :fn}, :fn is (fn [req] locale-or-nil) — it runs after auth (phase 4100), so (dyn :void.auth/identity) is bound. The returned value is normalized and must be one of [:i18n :locales]; anything else falls through to the next source
 - **contribution schema:**
 
   ```janet

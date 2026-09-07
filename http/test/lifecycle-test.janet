@@ -127,6 +127,23 @@
   (def ex (http/explain-route "/g/inner"))
   (assert (index-of :void.http.stage/on-request (ex :middleware)))
   (assert (index-of :void.http.stage/pre-handler (ex :middleware)))
+  # and as data, with their slot and marked as stages
+  (def on-request-step (first (filter |(= :void.http.stage/on-request ($ :name)) (ex :chain))))
+  (assert (deep= on-request-step {:name :void.http.stage/on-request :phase 1500
+                                  :plugin :void/http :stage true}))
+  (assert (nil? (get-in ex [:hooks :on-timeout])))
+  (assert (= 1 (length (get-in (http/explain-route "/slow") [:hooks :on-timeout])))
+          ":hooks carries the route's out-of-chain hooks by stage")
+  # what `void routes --chain` prints
+  (def lines (http/chain-lines ex))
+  (assert (string/has-prefix? "GET /g/inner -> :inner" (first lines)))
+  (assert (some |(string/find "chain    :void.http/panic-guard@0  :void/http" $) lines)
+          "the chain, outermost first, as name@phase with the plugin")
+  (assert (some |(string/find ":void.http.stage/on-request@1500 (stage)" $) lines)
+          "a stage wrapper says it is one")
+  (assert (some |(string/find ":void.http/session@3000 (:void/http) — :when declined" $) lines)
+          "the declined say why: no session store is configured, so the session middleware declined")
+  (assert (some |(string/find "edge     none" $) lines) "the edge layer has its own line")
 
   # -- short-circuit: a response from :on-request skips the handler ------
   (assert (= 403 ((http/with-request {:uri "/gate?block=1"}) :status)))

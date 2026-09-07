@@ -17,6 +17,8 @@
 ### closure, and never read off the request. The default stays the
 ### one-argument :wrap of contract v1; the flag is additive.
 
+(import void/core/util :as util)
+
 (def phases
   "The standard phase constants."
   {:panic-guard 0
@@ -119,10 +121,90 @@
              (when (dictionary? r) (set resp r)))
            resp)))}))
 
+# -- placement: a number, or a name ---------------------------------------
+#
+# The phase scale is the substrate; a contribution may place itself on
+# it by number (:phase) or by naming another middleware (:before /
+# :after). A name resolves to a number once, at table build — the
+# target's phase minus or plus one — and everything downstream
+# (selection, ordering, explain) works on the one scale. A name is a
+# claim about a middleware that is *there*: naming one no active
+# plugin contributes is an error, so a plugin may only name middleware
+# of plugins it requires. An optional neighbour is a number, by
+# definition (void/i18n's locale runs after auth when auth is in the
+# composition — and without it).
+
+(def- phase-min 0)
+(def- phase-max 10000)
+
+(defn- placement-of
+  "[:after target] / [:before target] of a contribution value, or nil."
+  [v]
+  (cond
+    (v :after) [:after (v :after)]
+    (v :before) [:before (v :before)]))
+
+(defn check-placement
+  ``The point's cross-check: every contribution places itself exactly
+  one way — a numeric :phase, or one of :before/:after. Runs at boot
+  over every value (dry-run included), so a contribution that says
+  nothing, or two things, fails the composition rather than a table
+  build.``
+  [values]
+  (each v values
+    (def ways (filter |(not (nil? (get v $))) [:phase :before :after]))
+    (unless (= 1 (length ways))
+      (errorf "middleware %q must be placed exactly one way (:phase, :before or :after), got %s"
+              (v :name)
+              (if (empty? ways)
+                "none of them"
+                (string/join (map |(string/format "%q" $) ways) " and "))))))
+
+(defn resolve-phases
+  ``Contributions ({:plugin :value}) with every :before/:after turned
+  into a numeric :phase — the named middleware's phase ∓ 1, clamped to
+  the scale. Once per table build. Errors: a target no active plugin
+  contributes (with a did-you-mean), or a ring of relatives.``
+  [contribs]
+  (def by-name (tabseq [c :in contribs] (get-in c [:value :name]) c))
+  (def phases @{})
+  (var pending @[])
+  (each c contribs
+    (def v (c :value))
+    (cond
+      (v :phase) (put phases (v :name) (v :phase))
+      (placement-of v) (array/push pending c)
+      # a contribution outside a booted composition (a bare table
+      # build) may say nothing: it lands in the business phase
+      (put phases (v :name) phase/business)))
+  (while (not (empty? pending))
+    (def still @[])
+    (each c pending
+      (def v (c :value))
+      (def [side target] (placement-of v))
+      (unless (in by-name target)
+        (errorf "middleware %q is placed %q %q, which no active plugin contributes%s"
+                (v :name) side target (util/suggest target (keys by-name))))
+      (if-let [tp (get phases target)]
+        (put phases (v :name)
+             (max phase-min (min phase-max (if (= :after side) (inc tp) (dec tp)))))
+        (array/push still c)))
+    (when (= (length still) (length pending))
+      (errorf "middleware placed relative to each other in a ring: %s"
+              (string/join (map |(string/format "%q" (get-in $ [:value :name])) still)
+                           " ")))
+    (set pending still))
+  (seq [c :in contribs]
+    (if (nil? (get-in c [:value :phase]))
+      (freeze (merge c {:value (merge (c :value)
+                                      {:phase (get phases (get-in c [:value :name]))})}))
+      c)))
+
 (defn sort-contributions
   ``Deterministic chain order for middleware contributions of the shape
   {:plugin <keyword> :value {:name :phase :wrap ...}}: ascending phase,
-  ties broken by plugin name, then middleware name.``
+  ties broken by plugin name, then middleware name. The one sort the
+  chain has — a route's stage wrappers are merged in through it too.``
   [contribs]
   (sorted-by
     (fn [c] [(get-in c [:value :phase] phase/business)
@@ -130,12 +212,28 @@
              (string (get-in c [:value :name] ""))])
     contribs))
 
+(defn describe
+  ``One chain step as data, for explain-route and `void routes --chain`:
+  {:name :phase :plugin :stage? :after?/:before?} — :stage true marks a
+  synthetic stage wrapper, :after/:before carry the name a relative
+  placement resolved from.``
+  [c]
+  (def v (c :value))
+  (freeze
+    (merge {:name (v :name) :phase (v :phase) :plugin (c :plugin)}
+           (if (c :stage) {:stage true} {})
+           (if-let [[side target] (placement-of v)] {side target} {}))))
+
 (defn select
   ``The middleware that apply to one route: global (un-:named)
   contributions whose :when predicate (if any) accepts the route's
   merged metadata, plus the :named ones the route lists under
   :void.http/middleware. An unknown name in that list is an error —
-  table build fails fast. Returns the sorted contribution values.``
+  table build fails fast. Returns {:selected <sorted contributions>
+  :declined [{:name :phase :plugin :reason} ...]} — the declined are
+  kept so that a route can say why a middleware is not in its chain:
+  :reason :named (the route did not list it) or :when (the predicate
+  refused the route's metadata).``
   [contribs route-meta]
   (def by-name (tabseq [c :in contribs] (get-in c [:value :name]) c))
   (def wanted
@@ -147,11 +245,41 @@
               n (string/join (map |(string/format "%q" $)
                                   (sorted (keys by-name)))
                              " "))))
-  (seq [c :in (sort-contributions contribs)
-        :let [v (c :value)]
-        :when (if (v :named) (in wanted (v :name)) true)
-        :when (if-let [pred (v :when)] (pred route-meta) true)]
-    v))
+  (def selected @[])
+  (def declined @[])
+  (each c (sort-contributions contribs)
+    (def v (c :value))
+    (cond
+      (and (v :named) (not (in wanted (v :name))))
+      (array/push declined (merge (describe c) {:reason :named}))
+      (and (v :when) (not ((v :when) route-meta)))
+      (array/push declined (merge (describe c) {:reason :when}))
+      (array/push selected c)))
+  {:selected (tuple ;selected) :declined (tuple ;declined)})
+
+(def reasons
+  "Why a middleware is not in a route's chain, as text."
+  {:named ":named — the route does not list it under :void.http/middleware"
+   :when ":when declined the route's metadata"})
+
+(defn shared-phase-warnings
+  ``One warning per phase that two or more *different* plugins occupy
+  among `selected` contributions: their order is by plugin name, which
+  nobody decided. A stage wrapper is not a contribution and does not
+  count.``
+  [selected]
+  (def by-phase @{})
+  (each c selected
+    (unless (c :stage)
+      (def p (get-in c [:value :phase]))
+      (array/push (or (get by-phase p) (let [a @[]] (put by-phase p a) a)) c)))
+  (seq [p :in (sorted (keys by-phase))
+        :let [cs (by-phase p)]
+        :when (< 1 (length (distinct (map |($ :plugin) cs))))]
+    (string/format "phase %d is shared by %s — their order is by plugin name, which nobody decided; place one :before/:after the other"
+                   p
+                   (string/join (map |(string/format "%q (%q)" (get-in $ [:value :name]) ($ :plugin)) cs)
+                                ", "))))
 
 (defn chain
   ``Compose selected middleware values around a handler: the lowest

@@ -56,16 +56,22 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.http/middleware
-  :doc "Phased HTTP middleware: {:name :phase 0-10000 :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request"
+  :doc "Phased HTTP middleware: {:name :phase 0-10000 | :before <middleware name> | :after <middleware name> :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request. A contribution is placed exactly one way: a number on the scale, or :before/:after naming another middleware — resolved to that middleware's phase ∓ 1 at table build, an error when no active plugin contributes the name (so name only middleware of plugins you require; an optional neighbour is a number). Two plugins on one phase are ordered by plugin name and warned about at build"
   :schema {:name :keyword
-           :phase [:int {:min 0 :max 10000}]
+           :phase [:optional [:int {:min 0 :max 10000}]]
+           :before [:optional :keyword]
+           :after [:optional :keyword]
            :wrap :function
            :when [:optional :function]
            :named [:optional :boolean]
            :route-aware [:optional :boolean]
            :doc [:optional :string]}
   :key :name :what "middleware"
-  :reduce |(sorted-by |[($ :phase) ($ :name)] $))
+  :validate middleware/check-placement
+  # a :before/:after has no number until the table build resolves it
+  # (middleware/resolve-phases); the fold keeps such a contribution
+  # after the numbered ones
+  :reduce |(sorted-by |[(get $ :phase 10001) ($ :name)] $))
 
 (plugin/defextension-point :void.http/hook
   :doc "Global request-lifecycle hooks: {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata"
@@ -451,6 +457,14 @@
       :codecs (resolved :void.http/body-codec)
       :access-log (not= false (cfg :access-log))
       :edge (tuple ;(or (resolved :void.http/edge) []))
+      # the edge layer as data, for explain-route: the resolved tuple
+      # above has lost which plugin contributed what
+      :edge-info (tuple ;(sorted-by
+                           (fn [s] [(s :phase) (string (s :name))])
+                           (seq [c :in (get-in boot [:extensions :void.http/edge :contributions] [])]
+                             {:name (get-in c [:value :name])
+                              :phase (get-in c [:value :phase] 9000)
+                              :plugin (c :plugin)})))
       :on-error-global (tuple ;(get global-hooks :on-error []))
       :on-timeout-global (tuple ;(get global-hooks :on-timeout []))
       :on-response-global (tuple ;(get global-hooks :on-response []))
@@ -666,19 +680,39 @@
 
 (defn explain-route
   "The routing verdict and per-key metadata provenance for a path (see
-  router/explain-route); nil when nothing matches."
+  router/explain-route), plus :edge — the :void.http/edge layer every
+  response passes through, [{:name :phase :plugin} ...] outermost
+  first; nil when nothing matches."
   [path &opt method]
-  (router/explain-route (routes-table) path method))
+  (when-let [ex (router/explain-route (routes-table) path method)]
+    (merge ex {:edge (get (context) :edge-info [])})))
 
 (defn url-for
   "Reverse routing by route name against the current table."
   [name &opt params query]
   (router/url-for (routes-table) name params query))
 
+# Metadata keys other packages declare so that a `void routes` line
+# says what it is — a widget's helper under the admin prefix, an RPC
+# method — read here because this command is their consumer (the
+# admin docstring promises it). Reading a key no plugin declared costs
+# nothing: an absent key is nil.
+(def- route-tags
+  [[:void.admin/widget-route (fn [v] (when v "widget"))]
+   [:void.grpc/service (fn [v] (when v (string/format "rpc %q" v)))]])
+
+(defn- tags-of [e]
+  (string/join (seq [[k f] :in route-tags
+                     :let [t (f (get-in e [:meta k]))]
+                     :when t]
+                 t)
+               " "))
+
 (defn print-routes
   ``Print the route table (the `void routes` CLI command). With :keys
   each route also lists its merged metadata, one key per line — :name
-  aside, since it is already a column.``
+  aside, since it is already a column. A widget route and an RPC
+  method are tagged after their source.``
   [table &opt opts]
   (def entries
     (sorted-by |[($ :pattern) (string ($ :method))] (table :routes)))
@@ -688,29 +722,92 @@
        (e :pattern)
        (string/format "%q" (e :name))
        (bind/describe (e :handler))
-       (string/format "%q" (e :source))]))
+       (string/format "%q" (e :source))
+       (tags-of e)]))
   (def widths
-    (seq [i :range [0 4]]
+    (seq [i :range [0 5]]
       (max 1 ;(map |(length ($ i)) rows))))
   (each [row e] (map tuple rows entries)
-    (printf "%s  %s  %s  %s  %s"
-            ;(seq [i :range [0 4]]
+    (printf "%s  %s  %s  %s  %s%s"
+            ;(seq [i :range [0 5]]
                (string/format (string "%-" (widths i) "s") (row i)))
-            (row 4))
+            (if (empty? (row 5)) "" (string "  " (row 5))))
     (when (get opts :keys)
       (each k (sorted (filter |(not= :name $) (keys (e :meta))))
         (printf "  %q %q" k (get-in e [:meta k]))))))
 
+(defn chain-lines
+  ``The lines `void routes --chain <path>` prints for one explain-route
+  verdict: the edge layer (every response passes it, outside routing),
+  the chain outermost first as name@phase with the plugin — stage
+  wrappers and relative placements marked — the route's out-of-chain
+  hooks, the contributions that declined this route and why, and the
+  warnings.``
+  [ex]
+  (def out @[])
+  (defn line [& parts] (array/push out (string ;parts)))
+  (defn block [label items]
+    (each [i s] (pairs items)
+      (line "  " (if (zero? i) (string/format "%-9s" label) "         ") s)))
+  (line (string/format "%s %s -> %q (handler %s, source %q%s)"
+                       (string/ascii-upper (string (ex :method))) (ex :pattern) (ex :name)
+                       (bind/describe (ex :handler)) (ex :source)
+                       (let [t (tags-of ex)] (if (empty? t) "" (string ", " t)))))
+  (block "edge" (if (empty? (ex :edge))
+                  ["none"]
+                  (map |(string/format "%q@%d  %q" ($ :name) ($ :phase) ($ :plugin)) (ex :edge))))
+  (block "chain" (if (empty? (ex :chain))
+                   ["none"]
+                   (map |(string/format "%s  %q" (router/step-str $) ($ :plugin)) (ex :chain))))
+  (block "hooks" (if (empty? (ex :hooks))
+                   ["none out of chain"]
+                   (seq [s :in (sorted (keys (ex :hooks)))]
+                     (string/format "%q  %d route hook(s), called by the transport"
+                                    s (length (get-in ex [:hooks s]))))))
+  (unless (empty? (ex :declined))
+    (block "declined" (map router/declined-str (ex :declined))))
+  (unless (empty? (ex :warnings))
+    (block "warnings" (ex :warnings)))
+  out)
+
+(defn print-chain
+  "Print what `chain-lines` says about one path, or that nothing matches."
+  [path &opt method]
+  (if-let [ex (explain-route path method)]
+    (each l (chain-lines ex) (print l))
+    (printf "no route matches %s %s" (string/ascii-upper (string (or method :get))) path)))
+
+(defn- routes-args
+  ``The flags of `void routes`: --keys, --chain <path>, --method <m>.
+  Anything else is refused by name.``
+  [args]
+  (def opts @{})
+  (var i 0)
+  (while (< i (length args))
+    (def a (in args i))
+    (cond
+      (= a "--keys") (put opts :keys true)
+      (or (= a "--chain") (= a "--method"))
+      (do
+        (when (>= (inc i) (length args))
+          (errorf "void routes: %s takes a value" a))
+        (put opts (if (= a "--chain") :chain :method) (in args (inc i)))
+        (++ i))
+      (errorf "void routes: unknown flag %q (--keys, --chain <path>, --method <m>)" a))
+    (++ i))
+  (when (and (opts :method) (nil? (opts :chain)))
+    (error "void routes: --method only makes sense with --chain <path>"))
+  opts)
+
 (plugin/contribute! :void.core/cli
   {:name :routes
    :read-only? true
-   :doc "Print the route table: void routes [--keys]"
+   :doc "Print the route table: void routes [--keys] | void routes --chain <path> [--method <m>] (the chain with phases, the edge layer, out-of-chain hooks, declined middleware)"
    :fn (fn cli-routes [& args]
-         (each a args
-           (unless (= a "--keys")
-             (errorf "void routes: unknown flag %q (only --keys)" a)))
-         (print-routes (routes-table)
-                       {:keys (truthy? (index-of "--keys" args))}))})
+         (def opts (routes-args args))
+         (if-let [path (opts :chain)]
+           (print-chain path (when (opts :method) (keyword (string/ascii-lower (opts :method)))))
+           (print-routes (routes-table) {:keys (opts :keys)})))})
 
 (defn- live-sources
   ``Route sources re-read from the live manifest registry: a dofile
