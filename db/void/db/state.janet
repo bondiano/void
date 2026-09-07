@@ -267,15 +267,40 @@
 (def- rollback-signal :void.db/rollback)
 
 (defn rollback!
-  "Abort the innermost `with-tx` scope without an error: the
-  transaction (or savepoint) rolls back and `with-tx` returns nil."
-  []
+  ``Abort the innermost `with-tx` scope without an error: the
+  transaction (or savepoint) rolls back and `with-tx` returns nil.
+
+  Given a `reason`, `with-tx` returns `[:rolled-back reason]` instead,
+  and that is how the reason gets *out*. A rollback unwinds the stack,
+  so whatever the aborted body was going to say has to travel with the
+  signal; without this it travelled in a `var` declared outside the
+  transaction — a mutable box holding the answer to "why did this not
+  happen", set in one scope and read in another. `rollback-reason`
+  reads the answer back.``
+  [&opt reason]
   (unless (in-transaction?)
     (error "db/rollback! called outside a transaction"))
-  (error rollback-signal))
+  (error (if (nil? reason) rollback-signal [rollback-signal reason])))
+
+(defn rollback-reason
+  ``The reason a `with-tx` scope was rolled back with, or nil when the
+  value is an ordinary result:
+
+      (def outcome (db/with-tx ... (db/rollback! {:reason :out-of-stock}) ...))
+      (if-let [refused (db/rollback-reason outcome)] ... )``
+  [v]
+  (when (and (indexed? v) (= 2 (length v)) (= :rolled-back (first v)))
+    (in v 1)))
 
 (defn- rollback-signal? [e]
-  (= rollback-signal e))
+  (or (= rollback-signal e)
+      (and (indexed? e) (= 2 (length e)) (= rollback-signal (first e)))))
+
+(defn- rollback-answer
+  "What `with-tx` returns for a rollback: nil when no reason was
+  given, [:rolled-back reason] when one was."
+  [e]
+  (unless (= rollback-signal e) [:rolled-back (in e 1)]))
 
 (defn- tx-error [entry what e]
   # a failed COMMIT/ROLLBACK leaves the connection in an unknown state:
@@ -310,7 +335,7 @@
                    ((drv :rollback-to-savepoint) (entry :conn) sp)
                    ((drv :rollback) (entry :conn)))))
       (unless rok (tx-error entry "rollback" re))
-      (if (rollback-signal? res) nil (error res)))))
+      (if (rollback-signal? res) (rollback-answer res) (error res)))))
 
 (defn with-tx*
   ``Run (f) inside a transaction on one connection. Nested scopes take
@@ -332,8 +357,9 @@
       (db/with-tx {:isolation :serializable} ...)
 
   Nested `with-tx` scopes become savepoints. The body's value is the
-  result; any error rolls back and propagates, and `(db/rollback!)`
-  rolls back returning nil.``
+  result; any error rolls back and propagates, `(db/rollback!)` rolls
+  back returning nil, and `(db/rollback! reason)` rolls back returning
+  `[:rolled-back reason]` — see `rollback-reason`.``
   [& body]
   (def [opts forms]
     (if (and (> (length body) 1) (dictionary? (first body)))

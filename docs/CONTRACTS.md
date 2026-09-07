@@ -687,7 +687,7 @@ written elsewhere runs the same assertions.
 
 ### `:void/jobs-backend`
 
-- Job persistence: {:push! :claim! :settle! :fetch :list :counts :remove! :clear!} plus the optional :reap!, :touch!, :lock!/:unlock!, :rate-take! and :release-parent! keys (see void/jobs/backend). A backend component declares :provides [:void/jobs-backend]; {:void/jobs-backend {:impl <key>}} picks between several.
+- Job persistence: {:push! :claim! :settle! :fetch :list :counts :remove! :clear!} plus the optional :reap!, :touch!, :lock!/:unlock!, :rate-take! and :release-parent! keys (see void/jobs/backend), and the flag :transactional? — true when a push! commits with the caller's database transaction, which is what jobs/enqueue-tx! asks for and what enqueue inside a transaction refuses to be quiet about. A backend component declares :provides [:void/jobs-backend]; {:void/jobs-backend {:impl <key>}} picks between several.
 - **methods:**
 
   - `:claim!` — (fn [opts] job-or-nil) — atomic, or the queue is not one

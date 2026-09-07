@@ -193,6 +193,26 @@
   []
   (not= false (get-in (active-queue) [:config :enabled])))
 
+(def db-tx-dyn
+  ``The dynamic binding void/db opens a transaction under. Read by
+  keyword rather than through an import, and that is the whole of the
+  agreement between the two packages: a job queue that had to require
+  the database kernel in order to ask "am I inside a transaction"
+  would be a job queue that depends on it. void/db's half is
+  `state/tx-dyn`, and the keyword is as much a contract as a function
+  name.``
+  :void.db/tx)
+
+(defn in-db-transaction?
+  ``True when this fiber is inside a `db/with-tx` scope. False when
+  there is no database in the composition at all — the same answer for
+  the purpose it is asked for, which is "would this enqueue be
+  committing with something".``
+  []
+  # `db/detached` binds it to false to sever a parent's transaction
+  # across an ev/go, so the question is truthiness, not presence
+  (truthy? (dyn db-tx-dyn)))
+
 (defn enqueue-with
   ``Queue a job with per-call overrides:
 
@@ -232,6 +252,20 @@
   (if (enabled?)
     (do
       (def b (q :backend))
+      # a job queued inside a transaction on a backend whose rows are
+      # not part of it: the worker may claim the job before the commit
+      # and run it against rows that are not there yet, and a rollback
+      # leaves the job behind with nothing to act on. The composition
+      # decides this, not the call, so it is an error at the call
+      # rather than a line in a README
+      (when (and (in-db-transaction?) (not (backend/transactional? b)))
+        (errorf (string "jobs/enqueue %q inside (db/with-tx ...): the %q backend's "
+                        "rows do not commit with your transaction — the worker can "
+                        "claim the job before you commit, and a rollback leaves it "
+                        "queued against data that never existed. Enqueue after the "
+                        "commit, or compose void/jobs-db ({:void/jobs-backend {:impl "
+                        ":jobs/db}}), whose row is written on your connection")
+                name (b :name)))
       (def stored ((b :push!) r))
       (cond
         stored
@@ -270,6 +304,35 @@
   Everything about how it runs comes from the definition and the
   config; `enqueue-with` is the same call with overrides.``
   [name & args]
+  (enqueue-with {} name ;args))
+
+(defn enqueue-tx!
+  ``Queue a job **in the transaction the caller is already in**: the
+  row is written on that connection, and the job becomes visible to a
+  worker when — and only when — the transaction commits.
+
+      (db/with-tx
+        (def order (db/insert! Order attrs))
+        (jobs/enqueue-tx! :charge-card (order :id)))
+
+  The same call as `enqueue`, with the two things it relies on
+  asserted instead of assumed: that there is a transaction, and that
+  this backend's rows are part of it. Both are properties of the
+  composition rather than of the moment, so each error names what to
+  add — the shape `bus/publish-tx!` has for the outbox.
+
+  `enqueue` inside a transaction is not a lesser version of this: on a
+  transactional backend it does exactly the same thing, and on one
+  that is not it is refused. What this call adds is the refusal on the
+  *first* count — a composition where the caller thought there was a
+  transaction and there was none.``
+  [name & args]
+  (unless (in-db-transaction?)
+    (errorf (string "jobs/enqueue-tx! %q must be called inside (db/with-tx ...) — "
+                    "outside one there is no transaction for the job to commit "
+                    "with, which is the whole of what it buys")
+            name))
+  (backend/require-transaction! ((active-queue) :backend))
   (enqueue-with {} name ;args))
 
 (defn enqueue-in

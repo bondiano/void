@@ -64,7 +64,8 @@
 (def execute! "See state/execute! — a write, returning the affected count." state/execute!)
 (def ddl! "See state/ddl! — run schema statements as an idempotent pass." state/ddl!)
 (def in-transaction? "See state/in-transaction?." state/in-transaction?)
-(def rollback! "See state/rollback! — abort the innermost with-tx." state/rollback!)
+(def rollback! "See state/rollback! — abort the innermost with-tx, optionally with a reason." state/rollback!)
+(def rollback-reason "See state/rollback-reason — the reason a with-tx rolled back, or nil." state/rollback-reason)
 (def with-conn* "See state/with-conn*." state/with-conn*)
 (defmacro with-conn
   ``See state/with-conn — run the body on one pooled connection. A fiber

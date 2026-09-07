@@ -24,16 +24,20 @@
 ### application). Here the interesting outcome is a *rollback that is
 ### not an error*: the last unit went to somebody else half a
 ### millisecond ago, which is a page with a message on it and not a
-### 500. `db/rollback!` unwinds to the `with-tx` that opened it, which
-### returns nil, and the reason — set before the unwind — is what the
-### controller renders.
+### 500. `db/rollback!` unwinds to the `with-tx` that opened it, and
+### the reason travels with it — `(db/rollback! {:reason …})` is what
+### the scope answers with, so the controller reads the refusal off the
+### return value instead of out of a `var` that outlived the unwind.
 ###
 ### **The announcement rides the transaction.** `bus/publish-tx!`
 ### writes `:order/placed` into the outbox in this same transaction, and
-### `jobs/enqueue` writes the payment capture into the same one again
-### (void/jobs-db). So the order, the fact that it happened and the work
-### it causes commit together: no receipt for an order that rolled back,
-### and no order that nobody charges.
+### `jobs/enqueue-tx!` writes the payment capture into the same one
+### again (void/jobs-db). So the order, the fact that it happened and
+### the work it causes commit together: no receipt for an order that
+### rolled back, and no order that nobody charges. Both calls are the
+### `-tx!` ones, which is the difference between relying on that and
+### asserting it: each refuses a composition where its write would not
+### have been part of this transaction.
 ###
 ### Nothing in this file mentions a request, a session or a page. The
 ### controller hands it a cart and a customer and renders what comes
@@ -65,29 +69,29 @@
     (telemetry/checkout-rejected! :empty)
     (break {:ok false :reason :empty}))
 
-  # set inside the transaction, read after it: a rollback unwinds the
-  # stack, so the reason has to be somewhere the unwind does not reach
-  (var refused nil)
   (def now (values/now))
 
-  (def order
+  (def outcome
     (db/with-tx
-      (var total 0)
-      (def priced @[])
-      (each line lines
-        (def product (db/rel line :product))
-        (cond
-          (or (nil? product) (not= "active" (product :status)))
-          (do (set refused {:reason :gone :line line})
-              (db/rollback!))
+      # a line is priced from the product and never from the cart, and
+      # taking the stock is what decides whether it can be priced at
+      # all — either branch of the cond leaves through the rollback,
+      # so what the seq collects is only the lines that are going on
+      # the order
+      (def priced
+        (seq [line :in lines]
+          (def product (db/rel line :product))
+          (cond
+            (or (nil? product) (not= "active" (product :status)))
+            (db/rollback! {:reason :gone :line line})
 
-          (not (catalog-repo/reserve-stock! (product :id) (line :quantity)))
-          (do (set refused {:reason :out-of-stock :product product})
-              (db/rollback!))
+            (not (catalog-repo/reserve-stock! (product :id) (line :quantity)))
+            (db/rollback! {:reason :out-of-stock :product product}))
+          [line product]))
 
-          (do
-            (+= total (* (line :quantity) (product :price-cents)))
-            (array/push priced [line product]))))
+      (def total
+        (sum (seq [[line product] :in priced]
+               (* (line :quantity) (product :price-cents)))))
 
       (def order (repo/create! {:number (values/order-number)
                                 :customer-id (customer :id)
@@ -103,7 +107,7 @@
       # the work this order causes, written into the same transaction
       # by void/jobs-db: an order nobody charges cannot exist, and a
       # capture for an order that rolled back cannot either
-      (jobs/enqueue :capture-payment (order :id))
+      (jobs/enqueue-tx! :capture-payment (order :id))
 
       # and the fact, through the outbox: ./orders.events mails the
       # receipt and the audit module records the line, neither of them
@@ -117,23 +121,25 @@
                         :at now})
       order))
 
-  (cond
-    order
-    (do
-      (telemetry/order-placed! (order :total-cents))
-      (log/info "order placed" :ns log-ns
-                :order (order :number) :total (order :total-cents))
-      {:ok true :order order})
+  (def refused (db/rollback-reason outcome))
 
+  (cond
     refused
     (do
       (telemetry/checkout-rejected! (refused :reason))
       (log/info "checkout refused" :ns log-ns :reason (refused :reason))
       (merge {:ok false} refused))
 
-    # `with-tx` returned nil and nobody set a reason: the transaction
-    # was rolled back by something other than this code, and saying so
-    # is better than inventing a reason for the page
+    outcome
+    (do
+      (telemetry/order-placed! (outcome :total-cents))
+      (log/info "order placed" :ns log-ns
+                :order (outcome :number) :total (outcome :total-cents))
+      {:ok true :order outcome})
+
+    # the scope ended without an order and without a reason of ours:
+    # something else rolled the transaction back, and saying that is
+    # better than inventing a reason for the page
     (do
       (telemetry/checkout-rejected! :rolled-back)
       {:ok false :reason :rolled-back})))

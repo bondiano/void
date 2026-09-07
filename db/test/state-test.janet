@@ -85,6 +85,37 @@
           "rollback! ends the scope with nil"))
 (assert (= "ROLLBACK" (last (fake/sqls st6))) "and rolls back")
 
+# ... and with a reason the abort answers with it, which is how the
+# reason leaves a scope the unwind has already left
+(def [p6b st6b] (setup))
+(with-db p6b
+  (def outcome
+    (db/with-tx
+      (db/execute! {:insert "users" :values {:email "a"}})
+      (db/rollback! {:reason :out-of-stock :product 7})
+      :never))
+  (assert (deep= [:rolled-back {:reason :out-of-stock :product 7}] outcome)
+          "the reason travels with the signal")
+  (def refused (db/rollback-reason outcome))
+  (assert (= :out-of-stock (refused :reason)) "and reads back off the answer")
+  (assert (= 7 (refused :product)))
+  (assert (nil? (db/rollback-reason {:id 1}))
+          "an ordinary result is not a rollback")
+  (assert (nil? (db/rollback-reason nil)) "and neither is a quiet one"))
+(assert (= "ROLLBACK" (last (fake/sqls st6b))))
+
+# a savepoint that rolls back with a reason answers its own scope, not
+# the transaction around it
+(def [p6c st6c] (setup))
+(with-db p6c
+  (def outer
+    (db/with-tx
+      (def inner (db/with-tx (db/rollback! :nope)))
+      (assert (deep= [:rolled-back :nope] inner) "the savepoint's answer")
+      :outer-kept))
+  (assert (= :outer-kept outer) "and the transaction around it committed"))
+(assert (= "COMMIT" (last (fake/sqls st6c))))
+
 # -- nesting is savepoints, not a silent merge ---------------------------
 
 (def [p7 st7] (setup))

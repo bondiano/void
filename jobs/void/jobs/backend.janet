@@ -78,6 +78,16 @@
 ###                     losing the parent
 ###   :stats / :close
 ###
+### plus one flag that is not a function: `:transactional?` — does a
+### `push!` join the database transaction the caller is already in? It
+### is true of exactly one shipped backend, void/jobs-db, which writes
+### its row through void/db on the caller's connection; a queue in
+### redis or in this process's heap has nothing to join. It is what
+### makes "the order, the fact and the job it causes are one commit"
+### either a guarantee or a sentence in a README, so `enqueue` refuses
+### to be quiet about it: inside a transaction, on a backend that
+### cannot join it, it is an error (see void/jobs/state).
+###
 ### `normalize` validates a backend and fills the fallbacks in, so the
 ### runtime can call every key unconditionally — the same shape
 ### void/db/driver and void/cache/store have, for the same reason.
@@ -163,6 +173,8 @@
         # a backend several processes see; false means "this heap only",
         # which changes what a rate limit and a schedule lock mean
         :shared? false
+        # does a push! commit with the caller's database transaction?
+        :transactional? false
         :reap! nil
         :touch! nil
         :release-parent! nil
@@ -184,6 +196,13 @@
   [b]
   (truthy? (get b :release-parent!)))
 
+(defn transactional?
+  ``True when a `push!` on this backend commits with the database
+  transaction the caller is in — the property `jobs/enqueue-tx!`
+  needs, and the one `enqueue` refuses to be quiet about.``
+  [b]
+  (truthy? (get b :transactional?)))
+
 (defn supports-reaping?
   "True when the backend can return an abandoned claim to the queue."
   [b]
@@ -202,11 +221,23 @@
   [b]
   {:name (b :name)
    :shared (truthy? (get b :shared?))
+   :transactional (transactional? b)
    :flows (supports-flows? b)
    :reaping (supports-reaping? b)
    :heartbeat (supports-heartbeat? b)
    :rate-limit (if (b :shared-rate?) :shared :process)
    :locks (if (b :shared-locks?) :shared :process)})
+
+(defn require-transaction!
+  ``Throw unless this backend's writes commit with the caller's
+  database transaction — what `jobs/enqueue-tx!` asks before it
+  queues, named the way `require-flows!` is: the error says which
+  backend answered no and what to compose instead.``
+  [b]
+  (unless (transactional? b)
+    (errorf "the %q jobs backend cannot enqueue inside a transaction: its rows do not commit with yours. jobs/enqueue-tx! needs void/jobs-db ({:void/jobs-backend {:impl :jobs/db}}), which writes the job through void/db on the connection your transaction is open on"
+            (b :name)))
+  true)
 
 (defn require-flows!
   "Throw unless the backend can hold flow parents — named, so that the

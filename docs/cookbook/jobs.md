@@ -38,7 +38,21 @@ One line, inside the request that caused the work
 ```
 
 With the db backend, enqueue participates in the surrounding
-transaction — a rolled-back request enqueues nothing.
+transaction — a rolled-back request enqueues nothing. Where that
+matters, say so and let the composition be checked:
+
+```janet
+(db/with-tx
+  (def order (db/insert! Order attrs))
+  (jobs/enqueue-tx! :charge-card (order :id)))
+```
+
+`enqueue-tx!` refuses two compositions the plain call cannot see: no
+transaction open, and a backend whose rows do not commit with yours
+(redis, or the in-process queue). A plain `enqueue` inside a
+transaction on such a backend is an error for the same reason — the
+worker could claim the job before the commit, and a rollback would
+leave it queued against data that never existed.
 
 ## Cron
 

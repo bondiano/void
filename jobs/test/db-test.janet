@@ -138,6 +138,48 @@
       (assert (= 1 (length ((state/fetch (root :id)) :children)))
               "with the child's result on the parent"))
 
+    (job/defjob db-plain [x] x)
+
+    # -- one commit: the order and the job it causes ---------------------
+    #
+    # What the db backend is *for*, and until now a convention: its
+    # rows are written on the caller's connection, so a job enqueued
+    # inside a transaction commits with it and a rolled-back
+    # transaction leaves no job behind.
+
+    (def q (state/make (backend/normalize (jobsdb/store {})) {}))
+    (with-dyns [state/queue-dyn q]
+      (assert (backend/transactional? (q :backend))
+              "the db backend's rows are part of the caller's transaction")
+      (assert (get (backend/capabilities (q :backend)) :transactional)
+              "and it says so where an operator reads it")
+
+      (def before (get-in (state/counts) [:default :pending] 0))
+      (def rolled
+        (db/with-tx*
+          {}
+          (fn []
+            (assert (state/in-db-transaction?) "the seam void/jobs reads")
+            (def r (state/enqueue-tx! :db-plain 1))
+            (assert (state/fetch (r :id)) "the row is there, inside the transaction")
+            (db/rollback!)
+            r)))
+      (assert (= before (get-in (state/counts) [:default :pending] 0))
+              "a rolled-back transaction leaves no job behind")
+
+      (def kept
+        (db/with-tx* {} (fn [] (state/enqueue-tx! :db-plain 2))))
+      (assert (state/fetch (kept :id)) "and a committed one leaves exactly the job")
+
+      (def [ok err] (protect (state/enqueue-tx! :db-plain 3)))
+      (assert (not ok) "outside a transaction enqueue-tx! is an error")
+      (assert (string/find "must be called inside" err))
+
+      (assert (state/enqueue :db-plain 4)
+              "a plain enqueue outside a transaction is untouched")
+      (assert (db/with-tx* {} (fn [] (state/enqueue :db-plain 5)))
+              "and inside one it is allowed, because these rows do commit with it"))
+
     # -- the plugin ------------------------------------------------------
 
     (def report

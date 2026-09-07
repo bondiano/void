@@ -292,6 +292,10 @@
 
   {:name :db
    :shared? true
+   # every statement below goes through void/db's connection dyn, so a
+   # push! inside the caller's `db/with-tx` is part of it and commits
+   # with it — the property `jobs/enqueue-tx!` asks for
+   :transactional? true
 
    :push!
    (fn db-push [r]

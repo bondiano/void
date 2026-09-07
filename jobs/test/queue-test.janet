@@ -148,4 +148,35 @@
 
 (assert (= 5 (state/perform :plain 5)) "perform runs the work with no queue at all")
 
+# -- a queue that cannot join a transaction says so ----------------------
+#
+# The dyn is void/db's, bound here by hand: the memory backend and the
+# database kernel never meet in this suite, and the seam between the
+# two packages is exactly this keyword.
+
+(with-queue (queue)
+  (assert (not (state/in-db-transaction?)) "no transaction outside one")
+
+  (with-dyns [state/db-tx-dyn {:depth 0}]
+    (assert (state/in-db-transaction?))
+    (def [ok err] (protect (state/enqueue :plain 1)))
+    (assert (not ok) "enqueueing inside a transaction on a heap queue is refused")
+    (assert (string/find "do not commit with your transaction" err)
+            "and says what would have gone wrong")
+    (assert (string/find "void/jobs-db" err) "and what to compose instead")
+
+    (def [ok2 err2] (protect (state/enqueue-tx! :plain 1)))
+    (assert (not ok2) "and enqueue-tx! refuses for the same reason")
+    (assert (string/find "cannot enqueue inside a transaction" err2)))
+
+  # `detached` severs the parent's transaction with a false, which has
+  # to read as "not in one" rather than as "no answer"
+  (with-dyns [state/db-tx-dyn false]
+    (assert (not (state/in-db-transaction?)) "a detached fiber is not in the transaction")
+    (assert (state/enqueue :plain 1) "and enqueues as it always did"))
+
+  (def [ok3 err3] (protect (state/enqueue-tx! :plain 1)))
+  (assert (not ok3) "enqueue-tx! outside a transaction is an error, not a plain enqueue")
+  (assert (string/find "must be called inside" err3)))
+
 (print "queue-test ok")

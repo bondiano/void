@@ -84,7 +84,7 @@
 (plugin/contribute! :void.core/interface
   {:name :void/jobs-backend
    :conformance "void/jobs/conformance/backend"
-   :doc "Job persistence: {:push! :claim! :settle! :fetch :list :counts :remove! :clear!} plus the optional :reap!, :touch!, :lock!/:unlock!, :rate-take! and :release-parent! keys (see void/jobs/backend). A backend component declares :provides [:void/jobs-backend]; {:void/jobs-backend {:impl <key>}} picks between several."
+   :doc "Job persistence: {:push! :claim! :settle! :fetch :list :counts :remove! :clear!} plus the optional :reap!, :touch!, :lock!/:unlock!, :rate-take! and :release-parent! keys (see void/jobs/backend), and the flag :transactional? — true when a push! commits with the caller's database transaction, which is what jobs/enqueue-tx! asks for and what enqueue inside a transaction refuses to be quiet about. A backend component declares :provides [:void/jobs-backend]; {:void/jobs-backend {:impl <key>}} picks between several."
    :methods {:push! "(fn [job] job-or-nil) — nil when a unique key is held"
              :claim! "(fn [opts] job-or-nil) — atomic, or the queue is not one"
              :settle! "(fn [job] job) — write a record back in its new state"
@@ -203,6 +203,7 @@
 
 (def enqueue "See state/enqueue — queue a job by name." state/enqueue)
 (def enqueue-with "See state/enqueue-with — queue with per-call overrides." state/enqueue-with)
+(def enqueue-tx! "See state/enqueue-tx! — queue in the caller's database transaction." state/enqueue-tx!)
 (def enqueue-in "See state/enqueue-in — queue with a delay." state/enqueue-in)
 (def enqueue-at "See state/enqueue-at — queue for an absolute time." state/enqueue-at)
 (def perform "See state/perform — run a job here and now, no queue." state/perform)
@@ -436,6 +437,9 @@
          (printf "backend     %q%s" (caps :name)
                  (if (caps :shared) " (shared)" " (this process only)"))
          (printf "flows       %s" (if (caps :flows) "yes" "no"))
+         (printf "in a tx     %s" (if (caps :transactional)
+                                    "commits with yours"
+                                    "no — enqueue after the commit"))
          (printf "rate limit  %q" (caps :rate-limit))
          (printf "locks       %q" (caps :locks))
          (printf "enqueued    %d (%d duplicates)" (s :enqueued) (s :duplicates))
