@@ -26,14 +26,21 @@
   (seq [rname :in (sorted (keys (desc :rels)))]
     (def rel (get-in desc [:rels rname]))
     # left side is always this entity: belongs-to points many->one,
-    # has-many one->many, has-one one->one
+    # has-many one->many, has-one one->one — and a relation through a
+    # middle is many-to-many however it is declared, because the row
+    # in between is what makes it one
     (def cardinality
-      (case (rel :kind)
-        :belongs-to "}o--||"
-        :has-many "||--o{"
-        "||--o|"))
+      (cond
+        (rel :through) "}o--o{"
+        (case (rel :kind)
+          :belongs-to "}o--||"
+          :has-many "||--o{"
+          "||--o|")))
     (string "  " (desc :name) " " cardinality " " (rel :entity)
-            " : " (string rname))))
+            " : " (string rname)
+            (if-let [t (rel :through)]
+              (string " (through " (string (t :entity)) ")")
+              ""))))
 
 (defn mermaid
   ``Render the registered entities (or a given subset of names) as a

@@ -177,6 +177,126 @@
 (assert (nil? (entity/rel orphan :brand)) "a missing parent is nil")
 (assert (empty? (fake/log st)) "and is not re-queried per access")
 
+# -- a relation through a middle -----------------------------------------
+#
+# The join table a many-to-many is, declared as the entity it already
+# is: two queries for any number of parents — the links, then the rows
+# they name.
+
+(entity/defentity Group
+  {:id [:int {:db/pk true}]
+   :name :string}
+  :db/table "groups")
+
+(entity/defentity Membership
+  {:id [:int {:db/pk true}]
+   :user-id [:int {:db/fk :User}]
+   :group-id [:int {:db/fk :Group}]}
+  :db/table "memberships"
+  :db/rels {:user [:belongs-to :User :user-id]
+            :group [:belongs-to :Group :group-id]})
+
+(entity/defentity Member
+  {:id [:int {:db/pk true}]
+   :email :string}
+  :db/table "users"
+  :db/rels {:groups {:kind :has-many :entity :Group :key :user-id
+                     :through {:entity :Membership :key :group-id}}})
+
+(fake/clear! st)
+(set responder
+     (fn [sql _]
+       (cond
+         (string/find `FROM "users"` sql)
+         @{:rows [{:id 1 :email "a@b.c"} {:id 2 :email "c@d.e"}] :count 2}
+         (string/find `FROM "memberships"` sql)
+         @{:rows [{:id 100 :user_id 1 :group_id 10}
+                  {:id 101 :user_id 1 :group_id 11}
+                  {:id 102 :user_id 2 :group_id 10}]
+           :count 3}
+         (string/find `FROM "groups"` sql)
+         @{:rows [{:id 10 :name "ten"} {:id 11 :name "eleven"}] :count 2}
+         @{:rows [] :count 0})))
+
+(def members (entity/query Member {:preload [:groups]}))
+(assert (= 3 (length (fake/log st)))
+        "three queries for two parents: the rows, the links, the targets")
+(assert (deep= @["ten" "eleven"]
+               (map |($ :name) (entity/rel (first members) :groups)))
+        "each parent gets the rows its links name")
+(assert (= 1 (length (entity/rel (in members 1) :groups)))
+        "and only those")
+(def targets-sql (get-in (fake/log st) [2 :sql]))
+(assert (and (string/find `FROM "groups"` targets-sql)
+             (string/find `"id" IN` targets-sql))
+        "the targets are one IN over the ids the links carried")
+(assert (deep= [10 11] (tuple ;(get-in (fake/log st) [2 :params])))
+        "each id once, however many links named it")
+
+# the through query is batched the same way the direct one is
+(assert (string/find `"user_id" IN` (get-in (fake/log st) [1 :sql])))
+
+(assert (not (first (protect
+                      (entity/descriptor :Bad {:id [:int {:db/pk true}]}
+                                         :db/table "bad"
+                                         :db/rels {:x {:kind :belongs-to :entity :Group
+                                                       :key :group-id
+                                                       :through {:entity :Membership
+                                                                 :key :group-id}}}))))
+        "a belongs-to through a middle is refused — that is a has-one, or the other side's relation")
+
+# -- per-relation preload options ----------------------------------------
+
+(fake/clear! st)
+(set responder
+     (fn [sql _]
+       (cond
+         (string/find `FROM "users"` sql) @{:rows [{:id 1 :email "a@b.c"}] :count 1}
+         (string/find `FROM "bets"` sql)
+         @{:rows [{:id 10 :user_id 1 :amount 500}] :count 1}
+         @{:rows [] :count 0})))
+(def big (entity/query User {:preload [[:bets {:where [:> :amount 100]
+                                               :order-by [[:amount :desc]]}]]}))
+(def bets-sql (get-in (fake/log st) [1 :sql]))
+(assert (string/find `"user_id" IN` bets-sql) "the batch is still one IN")
+(assert (string/find `"amount" >` bets-sql) "with the relation's own condition ANDed on")
+(assert (string/find `ORDER BY "amount" DESC` bets-sql) "and its order")
+(assert (= 1 (length (entity/rel (first big) :bets))))
+
+(def [lim-ok lim-err]
+  (protect (entity/query User {:preload [[:bets {:limit 5}]]})))
+(assert (not lim-ok) ":limit in a preload is refused")
+(assert (string/find "cap the whole batch" lim-err)
+        "because that is the mistake it would be, and the message says so")
+(assert (not (first (protect (entity/query User {:preload [[:bets {:wher 1}]]}))))
+        "and a mistyped option is an error like every other one")
+
+# -- :extra: what a join brings back -------------------------------------
+
+(fake/clear! st)
+(set responder
+     (fn [_ _] @{:rows [{:id 1 :email "a@b.c" :brand_name "eight"}] :count 1}))
+(def joined
+  (first (entity/query User
+                       {:join [["brands" [:= :brands.id :users.brand-id]]]
+                        :extra {:brand-name :brands.name}})))
+(def join-sql (get-in (fake/log st) [0 :sql]))
+(assert (string/find `"brands"."name" AS "brand_name"` join-sql)
+        "the extra column is selected under the name the query gave it")
+(assert (= "eight" (joined :brand-name))
+        "and arrives under that name, kebab as it was written")
+(assert (empty? (entity/changes joined))
+        "an extra is not a change — it is in the snapshot, so save! never writes it")
+(assert (not (first (protect (entity/query User {:extra [:brands.name]}))))
+        ":extra is a map of alias to expression")
+
+# and a query can take the row lock a claim needs, the same way the
+# builder spells it everywhere else
+(fake/clear! st)
+(entity/query User {:where [:= :id 1] :lock {:mode :update :skip-locked true}})
+(assert (string/has-suffix? "FOR UPDATE SKIP LOCKED" (get-in (fake/log st) [0 :sql]))
+        ":lock reaches the statement")
+
 # -- the N+1 guard -------------------------------------------------------
 
 (fake/clear! st)

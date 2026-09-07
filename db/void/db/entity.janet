@@ -38,6 +38,25 @@
 
 (def- rel-kinds {:belongs-to true :has-many true :has-one true})
 
+(defn- through-spec
+  ``The middle of a through-relation: {:entity :PostTag :key :tag-id} —
+  the entity the rows are joined through and the field on it that
+  points at the target. The relation's own `:key` keeps its meaning
+  (the field on the other side that points back at us), so the two
+  read as one sentence: a Post has many Tags through PostTag, whose
+  :post-id points here and whose :tag-id points there.``
+  [ename rname form]
+  (unless (dictionary? form)
+    (errorf "entity %q: relation %q :through must be {:entity :Name :key :field}, got %q"
+            ename rname form))
+  (unless (keyword? (get form :entity))
+    (errorf "entity %q: relation %q :through must name an entity keyword, got %q"
+            ename rname (get form :entity)))
+  (unless (keyword? (get form :key))
+    (errorf "entity %q: relation %q :through must name the key that points at the target, got %q"
+            ename rname (get form :key)))
+  (freeze {:entity (form :entity) :key (form :key)}))
+
 (defn- rel-spec [ename rname form]
   (def spec
     (cond
@@ -60,7 +79,13 @@
   (unless (keyword? (get spec :key))
     (errorf "entity %q: relation %q must name a key field, got %q"
             ename rname (get spec :key)))
-  (freeze (merge @{:name rname} spec)))
+  (def through (when-let [t (get spec :through)] (through-spec ename rname t)))
+  (when (and through (= :belongs-to kind))
+    (errorf (string "entity %q: relation %q is :belongs-to :through — a row that "
+                    "points at one other row does not need a middle; declare the "
+                    "relation on the other side, or make it :has-one")
+            ename rname))
+  (freeze (merge @{:name rname} spec (if through {:through through} {}))))
 
 (defn- field-map [node ename]
   (unless (= :map (node :type))
@@ -185,7 +210,11 @@
          :brand-id [:uuid {:db/fk :Brand}]}
         :db/table "users"
         :db/rels  {:brand [:belongs-to :Brand :brand-id]
-                   :bets  [:has-many :Bet :user-id]})
+                   :bets  [:has-many :Bet :user-id]
+                   # through the join table, which is an entity like
+                   # any other: :user-id points here, :group-id there
+                   :groups {:kind :has-many :entity :Group :key :user-id
+                            :through {:entity :Membership :key :group-id}}})
 
   The binding is the normalized schema — registered as :User, so
   (schema/select User [:email]) projects a DTO and [:ref :User] works —
@@ -227,13 +256,22 @@
 
 (defn from-row
   ``Map a driver row onto an entity instance: known columns become
-  field keys, unknown ones (join extras) are kept as they came. The
-  prototype carries the descriptor and the snapshot.``
-  [desc row]
+  field keys, unknown ones (join extras) are kept as they came, and
+  `aliases` — a column-keyword to field-keyword table — renames the
+  ones the query named itself (`:extra`), so a caller reads them back
+  under the spelling it wrote.
+
+  The extras are part of the snapshot, deliberately: they are not
+  fields, and a snapshot without them would make every one of them a
+  "change" that `save!` then refused to write.``
+  [desc row &opt aliases]
   (def inst @{})
   (eachp [col v] row
-    (def field (get-in desc [:column->field (keyword col)]))
-    (put inst (or field (keyword col)) v))
+    (def k (keyword col))
+    (put inst (or (get-in desc [:column->field k])
+                  (get aliases k)
+                  k)
+         v))
   (table/setproto inst (proto-for desc (own-values inst))))
 
 (defn to-row
@@ -354,7 +392,8 @@
 
 (def- query-opts
   {:where true :order-by true :limit true :offset true :join true
-   :left-join true :group-by true :having true :preload true :sql-opts true})
+   :left-join true :group-by true :having true :preload true :sql-opts true
+   :extra true :lock true})
 
 (defn- check-opts
   "A mistyped query option must fail, not quietly change the query."
@@ -365,34 +404,88 @@
               who k
               (util/names-str (keys allowed))))))
 
+(defn- extra-aliases
+  ``The `:extra` map as {column-keyword field-keyword}: what a joined
+  column comes back as, and what the caller asked to read it under.
+  The builder snake_cases the alias into the statement, so that is the
+  key the driver hands back.``
+  [opts]
+  (def extra (get opts :extra))
+  (when extra
+    (unless (dictionary? extra)
+      (errorf "db :extra must be a map of alias -> expression, got %q" extra))
+    (tabseq [k :keys extra] (keyword (builder/snake k)) k)))
+
 (defn- select-stmt [desc opts]
   # [:col name], not (keyword name): the column names are the descriptor's
   # own spelling (a :db/column may be "createdAt"), and the keyword path
   # would snake_case them into columns that do not exist
-  (def stmt @{:select (tuple ;(map |[:col $] (desc :columns)))
-              :from (desc :table)})
-  (each k [:where :order-by :limit :offset :join :left-join :group-by :having]
+  (def cols (array ;(map |[:col $] (desc :columns))))
+  # the joined columns a query asks for by name — a join could always
+  # filter, and this is what lets it bring something back
+  (when-let [extra (get opts :extra)]
+    (each k (sorted (keys extra))
+      (array/push cols [:as (get extra k) k])))
+  (def stmt @{:select (tuple ;cols) :from (desc :table)})
+  (each k [:where :order-by :limit :offset :join :left-join :group-by :having :lock]
     (unless (nil? (get opts k))
       (put stmt k (get opts k))))
   stmt)
 
+(def- preload-opts
+  {:where true :order-by true :preload true :sql-opts true})
+
+(defn- preload-options
+  ``One relation's preload options, checked. `:limit` and `:offset` are
+  refused by name rather than by the allow-list, because the mistake
+  they are is worth stating: a preload is **one** query for every
+  parent, so a LIMIT would cap the batch and not each parent's rows —
+  five rows in total rather than five per user.``
+  [rname opts]
+  (unless (dictionary? opts)
+    (errorf "db :preload %q: options must be a map, got %q" rname opts))
+  (eachk k opts
+    (unless (in preload-opts k)
+      (if (or (= :limit k) (= :offset k))
+        (errorf (string "db :preload %q: %q would cap the whole batch rather than "
+                        "each parent's rows — a preload is one query for all of "
+                        "them. Narrow it with :where, or load the few rows you "
+                        "want per parent yourself")
+                rname k)
+        (errorf "db :preload %q: unknown option %q (allowed: %s)"
+                rname k (util/names-str (keys preload-opts))))))
+  (table ;(kvs opts)))
+
 (defn- normalize-preload
-  ``Preload spec -> {rel-key nested-spec-or-false}:
-  [:brand {:bets [:market]}] plans two relations, the second with a
-  nested preload of its own. (`false` rather than nil: a table cannot
-  hold a nil value, and "no nesting" must still register the key.)``
+  ``Preload spec -> {rel-key options}:
+
+      [:brand {:bets [:market]}]              two relations, the second
+                                              with a nested preload
+      [[:bets {:where [:> :amount 100]
+               :order-by [[:placed-at :desc]]
+               :preload [:market]}]]          one, with options
+
+  The two spellings never collide: the value of a *map* entry is a
+  nested preload spec, and the second half of a *tuple* entry is
+  options. Options may carry their own :preload, which is the same
+  nesting one level down.``
   [spec]
   (def out @{})
-  (defn add [k v] (put out k (or v false)))
+  (defn add-nested [k v] (put out k (if (nil? v) @{} @{:preload v})))
   (cond
     (nil? spec) nil
-    (keyword? spec) (add spec nil)
-    (dictionary? spec) (eachp [k v] spec (add k v))
-    (indexed? spec) (each item spec
-                      (cond
-                        (keyword? item) (add item nil)
-                        (dictionary? item) (eachp [k v] item (add k v))
-                        (errorf "db :preload entry must be a keyword or a map, got %q" item)))
+    (keyword? spec) (add-nested spec nil)
+    (dictionary? spec) (eachp [k v] spec (add-nested k v))
+    (indexed? spec)
+    (each item spec
+      (cond
+        (keyword? item) (add-nested item nil)
+        (dictionary? item) (eachp [k v] item (add-nested k v))
+        (and (indexed? item) (= 2 (length item)) (keyword? (first item)))
+        (put out (first item) (preload-options (first item) (in item 1)))
+        (errorf (string "db :preload entry must be a keyword, a map or "
+                        "[:relation {options}], got %q")
+                item)))
     (errorf "db :preload must be a keyword, tuple or map, got %q" spec))
   out)
 
@@ -400,7 +493,8 @@
 
 (defn- load-rows [desc opts]
   (def rows (state/query (select-stmt desc opts) (get opts :sql-opts)))
-  (def out (seq [r :in rows] (from-row desc r)))
+  (def aliases (extra-aliases opts))
+  (def out (seq [r :in rows] (from-row desc r aliases)))
   (each inst out
     (id-cache! desc (get inst (desc :pk)) inst))
   (when-let [spec (get opts :preload)]
@@ -434,33 +528,80 @@
       (array/push (or (get out k) (let [a @[]] (put out k a) a)) i)))
   out)
 
+(defn- column-of [desc field]
+  (or (get-in desc [:fields field :column])
+      (errorf "entity %q has no field %q" (desc :name) field)))
+
+(defn- values-of
+  "The distinct non-nil values of `field` across instances — the right
+  side of the one IN a batched load is."
+  [insts field]
+  (distinct (filter |(not (nil? $)) (map |(get $ field) insts))))
+
+(defn- load-batch
+  ``The rows of `target` whose `field` is one of `values`, under this
+  relation's preload options: the options' :where is ANDed onto the
+  IN rather than replacing it, and their :preload is the nesting one
+  level down.``
+  [target field values opts]
+  (if (empty? values)
+    @[]
+    (load-rows target
+               (merge (table ;(kvs opts))
+                      {:where (builder/all-of
+                                [:in [:col (column-of target field)] (tuple ;values)]
+                                (get opts :where))
+                       :preload (get opts :preload)}))))
+
+(defn- attach-hits! [relation inst rname hits]
+  (attach! inst rname
+           (if (= :has-many (relation :kind)) (tuple ;hits) (first hits))))
+
+(defn- load-direct
+  ``A relation with no middle: one batched IN, never one query per
+  row. belongs-to reads our :key against the target's primary key;
+  has-many / has-one read our primary key against the target's :key.``
+  [desc insts relation target opts]
+  (def belongs? (= :belongs-to (relation :kind)))
+  (def local (if belongs? (relation :key) (desc :pk)))
+  (def remote (if belongs? (get target :pk) (relation :key)))
+  (def related (load-batch target remote (values-of insts local) opts))
+  (def by-key (group-by-key related remote))
+  (each inst insts
+    (attach-hits! relation inst (relation :name)
+                  (get by-key (get inst local) @[]))))
+
+(defn- load-through
+  ``A relation through a middle entity — the join table a many-to-many
+  is: two queries for any number of parents, one for the links and one
+  for the targets they name. The link rows are entities like any
+  other, so a join table declared as an entity is the only thing this
+  needs.``
+  [desc insts relation target opts]
+  (def middle (resolve (get-in relation [:through :entity])))
+  # the field on the middle that points back at us, and the one that
+  # points at the target
+  (def back (relation :key))
+  (def forward (get-in relation [:through :key]))
+  (def links (load-batch middle back (values-of insts (desc :pk)) {}))
+  (def related
+    (load-batch target (target :pk) (values-of links forward) opts))
+  (def by-id (tabseq [r :in related] (get r (target :pk)) r))
+  (def links-by-parent (group-by-key links back))
+  (each inst insts
+    (def rows (get links-by-parent (get inst (desc :pk)) @[]))
+    (attach-hits! relation inst (relation :name)
+                  (filter |(not (nil? $)) (map |(get by-id (get $ forward)) rows)))))
+
 (set load-preloads
   (fn load-preloads [desc insts spec]
     (when (empty? insts) (break))
-    (eachp [rname nested] (normalize-preload spec)
+    (eachp [rname opts] (normalize-preload spec)
       (def relation (rel-of desc rname))
       (def target (resolve (relation :entity)))
-      (def belongs? (= :belongs-to (relation :kind)))
-      # belongs-to: our :key holds the target's pk; has-*: the target's
-      # :key holds our pk — one batched IN query either way, never one
-      # query per row
-      (def local (if belongs? (relation :key) (desc :pk)))
-      (def remote (if belongs? (get target :pk) (relation :key)))
-      (def ids (distinct (filter |(not (nil? $)) (map |(get $ local) insts))))
-      (def related
-        (if (empty? ids)
-          @[]
-          (load-rows target
-                     {:where [:in [:col (get-in target [:fields remote :column])]
-                              (tuple ;ids)]
-                      :preload (or nested nil)})))
-      (def by-key (group-by-key related remote))
-      (each inst insts
-        (def hits (get by-key (get inst local) @[]))
-        (attach! inst rname
-                 (if (= :has-many (relation :kind))
-                   (tuple ;hits)
-                   (first hits)))))))
+      (if (relation :through)
+        (load-through desc insts relation target opts)
+        (load-direct desc insts relation target opts)))))
 
 (defn query
   ``Load entities (Data Mapper — plain data in, plain data out):
@@ -470,8 +611,27 @@
                       :preload [:brand]})
 
   Keys: :where :order-by :limit :offset :join :left-join :group-by
-  :having (see void/db/builder) plus :preload — the explicit, batched
-  relation load. Returns an array of instances.``
+  :having :lock (see void/db/builder), plus two of this layer's own:
+
+  `:extra` — columns from a joined table, under names of your own:
+
+      (db/query Order {:join [["users" [:= :users.id :orders.user-id]]]
+                       :extra {:buyer-email :users.email}})
+
+  A join could always *filter*; this is what lets it bring something
+  back. The extras are ordinary keys on the instance and are part of
+  its snapshot, so they are not fields and `save!` never tries to
+  write them.
+
+  `:preload` — the explicit, batched relation load. A relation name, a
+  map for nesting, or a tuple entry with options of its own:
+
+      :preload [:brand
+                {:bets [:market]}
+                [:bets {:where [:> :amount 100]
+                        :order-by [[:placed-at :desc]]}]]
+
+  Returns an array of instances.``
   [ent &opt opts]
   (default opts {})
   (check-opts opts query-opts "db/query")

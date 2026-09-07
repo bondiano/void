@@ -630,6 +630,19 @@
       (errorf "sql join entry must be [table on-clause], got %q" p))
     (string word " " (table-str ctx (first p)) " ON " (clause ctx (in p 1)))))
 
+(defn- selected-str
+  ``One entry of a select list: an operand, or `[:as <operand>
+  :alias]`. The alias is only legal here — a name a result column is
+  read back under, which is how a join's extra columns arrive with
+  names of their own.``
+  [ctx x]
+  (if (and (indexed? x) (= :as (first x)))
+    (do
+      (unless (= 3 (length x))
+        (errorf "sql [:as expr alias] takes an expression and a name, got %q" x))
+      (string (operand ctx (in x 1)) " AS " (ident (ctx :d) (in x 2))))
+    (operand ctx x)))
+
 (defn- compile-select [ctx stmt]
   (check-keys stmt select-keys ":select")
   (def from (or (get stmt :from)
@@ -639,7 +652,7 @@
     @[(string "SELECT "
               (if (or (nil? cols) (empty? cols) (deep= cols [:*]))
                 "*"
-                (string/join (map |(operand ctx $) cols) ", ")))
+                (string/join (map |(selected-str ctx $) cols) ", ")))
       (string "FROM " (table-str ctx from))])
   (array/concat parts (join-strs ctx "JOIN" (get stmt :join [])))
   (array/concat parts (join-strs ctx "LEFT JOIN" (get stmt :left-join [])))

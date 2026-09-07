@@ -366,6 +366,18 @@
                          :if-not-exists true} :mysql) 0))
         "IF NOT EXISTS is dropped where the engine has not got it — the bare statement is the same statement")
 
+# -- a select list can name what it selects ------------------------------
+
+(assert (= (string `SELECT "id", "users"."email" AS "buyer_email", `
+                   `count(*) AS "n" FROM "orders"`)
+           ((sql/format {:select [:id
+                                  [:as :users.email :buyer-email]
+                                  [:as [:raw "count(*)"] :n]]
+                         :from "orders"}) 0))
+        "[:as expr alias] — how a joined column comes back under a name of its own")
+(assert (not (first (protect (sql/format {:select [[:as :users.email]] :from "t"}))))
+        "an alias without a name is an error")
+
 # -- composing clauses ---------------------------------------------------
 
 (assert (= [:and [:= :a 1] [:= :b 2]] (sql/all-of nil [:= :a 1] nil [:= :b 2]))
