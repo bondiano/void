@@ -91,10 +91,14 @@
 
 (var current
   ``The started :db.postgres/driver component's value. Postgres-only
-  operations (`stream`, `pipeline`, `cancel!`) reach the driver
-  through it, the way void/db's state reaches its pool — they are not
-  part of the :void/db-driver contract, so the kernel cannot route
-  them.``
+  operations (`pipeline`, `cancel!`) reach the driver through it, the
+  way void/db's state reaches its pool — they are not part of the
+  :void/db-driver contract, so the kernel cannot route them.
+
+  Single-row streaming used to be on that list and is not any more:
+  `:stream` is a contract key as of §8.6, so the way to ask for it is
+  `db/each-row`, which is the same loop on every engine and this
+  driver's own when it is this driver underneath.``
   nil)
 
 (defn- driver-now []
@@ -108,18 +112,6 @@
   transaction's own connection.``
   [f]
   (db-state/with-conn* (fn [entry] (f (entry :conn)))))
-
-(defn stream
-  ``Run a statement in single-row mode, calling (f row) per row as it
-  arrives, and return how many there were — a million-row export in a
-  constant amount of memory. `f` runs while the query is still
-  running, so it must not touch the database itself.
-
-      (pg/stream "SELECT * FROM events WHERE day = $1" [day]
-                 (fn [row] (write-line out row)))``
-  [sql params f]
-  (def drv (driver-now))
-  (with-checkout (fn [h] ((drv :stream) h sql params f))))
 
 (defn pipeline
   ``Send several statements without waiting for each answer — one

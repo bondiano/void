@@ -638,9 +638,13 @@
       (def returned (first (get res :rows [])))
       (cond
         returned (from-row desc returned)
+        # the id the row got, from the one place the contract has for
+        # it: what the caller supplied, or what the driver's :insert-id
+        # says the INSERT made. There used to be a third reading here —
+        # `(get res :inserted-id)` off the driver result — which no
+        # driver has ever written
         (let [id (or (get attrs (desc :pk))
-                     (when-let [f (drv :insert-id)] (f (entry :conn) res))
-                     (get res :inserted-id))]
+                     (when-let [f (drv :insert-id)] (f (entry :conn) res)))]
           (or (when id (reload-by-pk desc id))
               # no RETURNING and no id: hand back what was written
               (from-row desc row)))))))

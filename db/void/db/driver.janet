@@ -24,9 +24,36 @@
 ###   :savepoint / :release-savepoint / :rollback-to-savepoint
 ###                                 nested transactions (falls back to
 ###                                 SAVEPOINT SQL)
-###   :ping                         liveness check for pooled entries
-###   :insert-id                    (fn [conn result] id) — last insert
-###                                 id where RETURNING is unavailable
+###   :ping                         (fn [conn] alive?) — is this
+###                                 connection still there? The pool
+###                                 asks it of a connection that has
+###                                 been idle longer than [:db :pool
+###                                 :validate-after] before handing it
+###                                 out, because the other end (a
+###                                 server's idle timeout, a proxy, a
+###                                 restart) can close one while it
+###                                 sits. Falls back to never asking
+###   :insert-id                    (fn [conn result] id) — the key the
+###                                 INSERT that produced `result` made.
+###                                 The kernel asks it after an insert
+###                                 on a driver whose :returning is
+###                                 false, and nowhere else; where it
+###                                 comes from is the driver's business
+###                                 (sqlite reads the connection, MySQL
+###                                 the result), and there is no second
+###                                 spelling of the answer
+###   :stream                       (fn [conn sql params f] n) — run a
+###                                 select and hand each row to `f` as
+###                                 it arrives, returning how many
+###                                 there were. What makes
+###                                 `db/each-row` a million rows in a
+###                                 constant amount of memory on a
+###                                 driver that can do it (void/db-postgres,
+###                                 through libpq's single-row mode).
+###                                 Falls back to executing the
+###                                 statement and walking the rows,
+###                                 which is the same answer and the
+###                                 same memory as before
 ###   :reusable?                    (fn [conn] bool) — is the connection
 ###                                 safe to return to the pool, or was an
 ###                                 operation left mid-protocol (a
@@ -159,7 +186,7 @@
 (def- optional
   [:prepare :execute-prepared :begin :commit :rollback
    :savepoint :release-savepoint :rollback-to-savepoint
-   :ping :insert-id :reusable?])
+   :ping :insert-id :reusable? :stream])
 
 (defn normalize
   ``Validate a driver dictionary and fill in the documented fallbacks.
@@ -196,6 +223,15 @@
         :execute-prepared nil
         :ping nil
         :insert-id nil
+        # every driver answers `:stream`; only some of them stream. The
+        # fallback executes the statement and walks what came back, so
+        # a caller writes the loop once and gets the memory back when
+        # the driver under it grows the ability
+        :stream (fn stream-rows [conn sql params f]
+                  (def res (execute conn sql params {:kind :select}))
+                  (var n 0)
+                  (each row (get res :rows []) (f row) (++ n))
+                  n)
         # a synchronous driver is never mid-protocol: a cancel can only
         # land at an ev yield, and it has none inside a statement
         :reusable? (fn reusable [conn] true)
@@ -211,12 +247,24 @@
         (fn release [conn n] (raw conn (string "RELEASE SAVEPOINT " n)))
         :rollback-to-savepoint
         (fn rollback-to [conn n] (raw conn (string "ROLLBACK TO SAVEPOINT " n)))}
-      drv)))
+      drv
+      # derived, never declared: whether the rows really do arrive one
+      # at a time is whether this driver brought its own :stream, and a
+      # driver cannot be wrong about it by accident
+      @{:streams? (truthy? (get drv :stream))})))
 
 (defn supports-prepared?
   "True when the driver implements the prepared-statement pair."
   [drv]
   (and (drv :prepare) (drv :execute-prepared) true))
+
+(defn streams?
+  ``True when this driver hands rows over as they arrive rather than
+  after the last one — what tells `db/each-row` apart from a query in
+  a loop's clothing. False means the fallback, which is correct and
+  buffers.``
+  [drv]
+  (truthy? (get drv :streams?)))
 
 (defn reusable?
   ``Is `conn` safe to return to the pool — no operation left

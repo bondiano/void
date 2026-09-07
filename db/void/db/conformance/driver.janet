@@ -209,6 +209,41 @@
                  (get (db/one {:select [:email] :from table :where [:= :id new-id]}) :email))
               (note "and the id names the stored row"))
 
+      # -- rows one at a time, or their fallback -----------------------
+      #
+      # every driver answers `:stream`; only some of them stream. The
+      # answer has to be the same either way — the rows, in order, and
+      # how many there were — because that is what lets a caller write
+      # the loop once and get the memory back when the driver grows
+      # the ability
+      (db/execute! {:insert table
+                    :values [{:email "s1@x.y"} {:email "s2@x.y"} {:email "s3@x.y"}]})
+      (def streamed @[])
+      (def n-streamed
+        (db/each-row {:select [:email] :from table
+                      :where [:like :email [:val "s%@x.y"]]
+                      :order-by [:email]}
+                     |(array/push streamed ($ :email))))
+      (assert (= 3 n-streamed) (note "each-row answers how many rows there were"))
+      (assert (deep= @["s1@x.y" "s2@x.y" "s3@x.y"] streamed)
+              (note (if (driver/streams? drv)
+                      "and the driver handed them over one at a time, in order"
+                      "and the fallback walked them in order")))
+      (assert (zero? (db/each-row {:select [:email] :from table
+                                   :where [:= :email "nobody@x.y"]}
+                                  (fn [_] (error "the callback ran for no rows"))))
+              (note "a select with no rows calls nothing and answers zero"))
+      # a table that is not there, rather than a column that is not:
+      # sqlite reads a double-quoted unknown identifier as a string
+      # literal, so a bad column is not an error on every engine
+      (def [stream-ok stream-err]
+        (protect (db/each-row {:select [:email] :from "void_conformance_absent"}
+                              (fn [_] nil))))
+      (assert (not stream-ok) (note "a failing stream raises"))
+      (assert (= :void.db/syntax (errors/kind stream-err))
+              (note "as the same envelope every other statement raises"))
+      (db/execute! {:delete table :where [:like :email [:val "s%@x.y"]]})
+
       # -- prepared statements, or their fallback ----------------------
       #
       # the kernel prefers the prepared pair when a driver has one and

@@ -12,7 +12,11 @@
   ``[driver state]. opts:
     :dialect    builder dialect (default :ansi)
     :returning  does INSERT ... RETURNING give the row back
+    :insert-id  the key an INSERT made, for a driver without
+                RETURNING — the contract's one reading of it
     :responder  (fn [sql params] result-or-nil)
+    :stream     true to hand rows over one at a time (the driver's own
+                :stream) instead of taking the contract's fallback
     :gate       a channel every :execute parks on (ev/take) before
                 answering — how a test simulates a slow query it can
                 cancel mid-protocol. While parked the connection is
@@ -40,6 +44,8 @@
       # a synchronous statement is never mid-protocol; a gated one is,
       # until it clears :in-exchange after the (simulated) reply
       :reusable? (fn fake-reusable [conn] (not (conn :in-exchange)))
+      :ping (fn fake-ping [conn] (put st :pings (inc (get st :pings 0)))
+              (not (get conn :dead)))
       :execute (fn fake-execute [conn sql params &opt o]
                  (put conn :in-exchange true)
                  (when gate (ev/take gate))
@@ -50,6 +56,16 @@
                                  @{:rows [] :count 0}))
                  (put conn :in-exchange false)
                  result)})
+  (when-let [id (get opts :insert-id)]
+    (put drv :insert-id (fn fake-insert-id [_conn _res] id)))
+  (when (get opts :stream)
+    (put drv :stream
+         (fn fake-stream [conn sql params f]
+           (def res ((drv :execute) conn sql params {:kind :select}))
+           (var n 0)
+           (each row (get res :rows []) (f row) (++ n))
+           (put st :streamed (inc (get st :streamed 0)))
+           n)))
   [drv st])
 
 (defn log

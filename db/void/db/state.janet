@@ -146,19 +146,13 @@
         (put-in entry [:stmts sql] stmt)
         stmt)))
 
-(defn execute-sql
-  ``Run raw SQL with positional parameters on the current connection
-  (checking one out when none is bound). Returns the driver result
-  {:rows [...] :count n}.
-
-  opts: :kind (:select | :write, a hint drivers may use), :prepared
-  (false disables the prepared-statement cache for this call).
-
-  Parameter values reach the log only on the :debug line (and on a
-  failure): keep them out of production sinks with the level, or with
-  a :redact path if a query carries secrets.``
-  [sql params &opt opts]
-  (default opts {})
+(defn- statement*
+  ``One statement on this fiber's connection, through the funnel every
+  statement passes: the owner check, the pool's timing, the error
+  envelope and the :debug line. `run` gets [entry drv] and answers
+  whatever it answers; `rows-of` reads a row count off that answer for
+  the log.``
+  [sql params rows-of run]
   (with-conn*
     (fn run-statement [entry]
       # the pool hands one connection to one fiber; a statement run from
@@ -173,13 +167,7 @@
       (def p (active-pool))
       (def drv (pool/driver-of p))
       (def t0 (os/clock :monotonic))
-      (def [ok res]
-        (protect
-          (if (and (driver/supports-prepared? drv)
-                   (not= false (get opts :prepared)))
-            ((drv :execute-prepared) (entry :conn) (prepared-for drv entry sql)
-                                     params opts)
-            ((drv :execute) (entry :conn) sql params opts))))
+      (def [ok res] (protect (run entry drv)))
       (def us (math/round (* 1_000_000 (- (os/clock :monotonic) t0))))
       (pool/note-query! p us)
       (unless ok
@@ -192,8 +180,39 @@
         (error env))
       (log/debug "db query" :ns log-ns
                  :sql sql :params params :us us
-                 :rows (length (get res :rows [])))
+                 :rows (rows-of res))
       res)))
+
+(defn execute-sql
+  ``Run raw SQL with positional parameters on the current connection
+  (checking one out when none is bound). Returns the driver result
+  {:rows [...] :count n}.
+
+  opts: :kind (:select | :write, a hint drivers may use), :prepared
+  (false disables the prepared-statement cache for this call).
+
+  Parameter values reach the log only on the :debug line (and on a
+  failure): keep them out of production sinks with the level, or with
+  a :redact path if a query carries secrets.``
+  [sql params &opt opts]
+  (default opts {})
+  (statement*
+    sql params
+    (fn rows-of [res] (length (get res :rows [])))
+    (fn execute [entry drv]
+      (if (and (driver/supports-prepared? drv)
+               (not= false (get opts :prepared)))
+        ((drv :execute-prepared) (entry :conn) (prepared-for drv entry sql)
+                                 params opts)
+        ((drv :execute) (entry :conn) sql params opts)))))
+
+(defn each-row-sql
+  ``Run a select and call (f row) for each row as it arrives; returns
+  how many there were. The raw-SQL half of `each-row`.``
+  [sql params f]
+  (statement* sql params
+              (fn rows-of [n] n)
+              (fn stream [entry drv] ((drv :stream) (entry :conn) sql params f))))
 
 (defn run
   ``Compile a statement map (see void/db/builder) for the driver's
@@ -237,6 +256,35 @@
           (errorf "db/value expects a single-column row, got columns %q" (sorted ks)))
         (get row (first ks)))
       (first row))))
+
+(defn each-row
+  ``Run a select and call (f row) for each row **as it arrives**,
+  returning how many there were:
+
+      (db/each-row {:select [:*] :from "events" :where [:= :day d]}
+                   (fn [row] (write-line out row)))
+
+  The loop a report, an export or a backfill wants, and the one thing
+  `query` cannot be: `query` is a tuple of every row, so a million of
+  them are a million rows in this process's heap. Where the driver can
+  hand rows over one at a time (void/db-postgres, through libpq's
+  single-row mode) this is a constant amount of memory; where it
+  cannot, the fallback runs the statement and walks the result, which
+  is the same answer at the same cost as `query` — the loop is written
+  once either way, and gets the memory back when the driver under it
+  grows the ability (`driver/streams?` is who to ask).
+
+  `f` runs while the statement is still running, so on a streaming
+  driver it must not use the connection: no query, no write, no
+  `db/rel` inside the loop. Collect what it needs and act after.``
+  [stmt f &opt opts]
+  (default opts {})
+  (def [sql params]
+    (cond
+      (indexed? stmt) [(first stmt) (get stmt 1 [])]
+      (dictionary? stmt) (builder/format stmt ((driver) :dialect))
+      (errorf "db/each-row: expected a statement map or [sql params], got %q" stmt)))
+  (each-row-sql sql params f))
 
 (defn execute!
   "Run a write statement and return the affected-row count."

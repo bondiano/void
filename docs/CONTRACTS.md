@@ -665,7 +665,7 @@ written elsewhere runs the same assertions.
 
 ### `:void/db-driver`
 
-- A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint and :ping keys (see void/db/driver). A failing statement raises {:db/error <name> :message :sqlstate} — the SQLSTATE is what the kernel classifies into a :void.db/* error kind, the same on every engine. A driver component declares :provides [:void/db-driver]; {:void/db-driver {:impl <key>}} picks between several.
+- A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint, :insert-id, :stream (rows one at a time, behind db/each-row) and :ping (the pool asks it of a connection idle longer than [:db :pool :validate-after]) keys (see void/db/driver). A failing statement raises {:db/error <name> :message :sqlstate} — the SQLSTATE is what the kernel classifies into a :void.db/* error kind, the same on every engine. A driver component declares :provides [:void/db-driver]; {:void/db-driver {:impl <key>}} picks between several.
 - **methods:**
 
   - `:close` — (fn [conn])

@@ -137,4 +137,47 @@
 (assert (= 1 (st7 :conns)) "no replacement was opened")
 (pool/checkin p7 c7)
 
+# -- a connection that died while it sat --------------------------------
+#
+# The other end can close a connection while it is idle in the pool —
+# a server's idle timeout, a proxy, a restart — and handing that one
+# out is an error in a caller that did nothing wrong. So a connection
+# idle longer than :validate-after is asked (the driver's :ping)
+# before it goes out.
+
+(def [drv8 st8] (fake/make))
+(def p8 (pool/make (driver/normalize drv8) {:size 2 :validate-after 0}))
+(def a8 (pool/checkout p8))
+(pool/checkin p8 a8)
+(def b8 (pool/checkout p8))
+(assert (= 1 (get st8 :pings 0)) "an idle connection is asked before it goes out")
+(assert (= (a8 :id) (b8 :id)) "and a live one is the same connection")
+(pool/checkin p8 b8)
+
+# now let it die on the stack
+(put (b8 :conn) :dead true)
+(def c8 (pool/checkout p8))
+(assert (not= (b8 :id) (c8 :id)) "a dead one is not handed out")
+(assert (= 2 (st8 :conns)) "a fresh connection is opened in its place")
+(assert (= 1 (st8 :closed)) "and the dead one is closed rather than leaked")
+(pool/checkin p8 c8)
+
+# the window is what keeps a busy pool from paying for this
+(def [drv9 st9] (fake/make))
+(def p9 (pool/make (driver/normalize drv9) {:size 1 :validate-after 60}))
+(def a9 (pool/checkout p9))
+(pool/checkin p9 a9)
+(pool/checkin p9 (pool/checkout p9))
+(assert (zero? (get st9 :pings 0))
+        "a connection that came back a moment ago is not asked anything")
+
+# a driver with no :ping is never asked, whatever the window says
+(def [drv10 st10] (fake/make))
+(def bare (table ;(kvs (driver/normalize drv10))))
+(put bare :ping nil)
+(def p10 (pool/make bare {:size 1 :validate-after 0}))
+(pool/checkin p10 (pool/checkout p10))
+(pool/checkin p10 (pool/checkout p10))
+(assert (zero? (get st10 :pings 0)) "no :ping, no question")
+
 (print "pool-test: ok")

@@ -30,7 +30,7 @@
 (plugin/contribute! :void.core/interface
   {:name :void/db-driver
    :conformance "void/db/conformance/driver"
-   :doc "A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint and :ping keys (see void/db/driver). A failing statement raises {:db/error <name> :message :sqlstate} — the SQLSTATE is what the kernel classifies into a :void.db/* error kind, the same on every engine. A driver component declares :provides [:void/db-driver]; {:void/db-driver {:impl <key>}} picks between several."
+   :doc "A database driver: {:dialect :connect :close :execute} plus the optional :prepare/:execute-prepared, :begin/:commit/:rollback, savepoint, :insert-id, :stream (rows one at a time, behind db/each-row) and :ping (the pool asks it of a connection idle longer than [:db :pool :validate-after]) keys (see void/db/driver). A failing statement raises {:db/error <name> :message :sqlstate} — the SQLSTATE is what the kernel classifies into a :void.db/* error kind, the same on every engine. A driver component declares :provides [:void/db-driver]; {:void/db-driver {:impl <key>}} picks between several."
    :methods {:connect "(fn [] conn)"
              :close "(fn [conn])"
              :execute "(fn [conn sql params opts] {:rows [...] :count n}) — raises {:db/error :message :sqlstate ...}"}})
@@ -47,6 +47,7 @@
 
 (def normalize-driver "See driver/normalize." driver/normalize)
 (def driver-result "See driver/result — sugar for driver authors." driver/result)
+(def driver-streams? "See driver/streams? — does this driver hand rows over as they arrive." driver/streams?)
 (def duplicate-index? "See driver/duplicate-index? — MySQL's \"index already there\" on a bare CREATE INDEX." driver/duplicate-index?)
 (def capability "See builder/capability — one flag of a dialect, by name." builder/capability)
 
@@ -62,6 +63,7 @@
 (def one-row "See state/one — the first row of a statement, or nil." state/one)
 (def value "See state/value — the single column of the first row." state/value)
 (def execute! "See state/execute! — a write, returning the affected count." state/execute!)
+(def each-row "See state/each-row — a select, one row at a time." state/each-row)
 (def ddl! "See state/ddl! — run schema statements as an idempotent pass." state/ddl!)
 (def in-transaction? "See state/in-transaction?." state/in-transaction?)
 (def rollback! "See state/rollback! — abort the innermost with-tx, optionally with a reason." state/rollback!)
@@ -147,7 +149,11 @@
 (def Config
   "Schema of the :db config slice."
   {:pool [:optional {:size [:optional [:int {:min 1}]]
-                     :checkout-timeout [:optional [:number {:min 0.001}]]}]
+                     :checkout-timeout [:optional [:number {:min 0.001}]]
+                     # seconds idle before a checkout asks the driver's
+                     # :ping whether the connection is still there;
+                     # false never asks
+                     :validate-after [:optional [:or [:number {:min 0}] :boolean]]}]
    :n1-guard [:optional [:enum :off :warn :strict]]
    :migrations [:optional {:dir [:optional :string]
                            :table [:optional :string]}]})
@@ -182,8 +188,9 @@
   (system/component :db/pool
     :doc "The connection pool over the active :void/db-driver: lazy
     connections up to :size, fiber-parking checkout with a deadline,
-    per-connection prepared-statement cache and the pool metrics
-    (:waits, :wait-us, :queries) void/obs will export."
+    a liveness check on a connection that has been idle longer than
+    :validate-after, per-connection prepared-statement cache and the
+    pool metrics (:waits, :wait-us, :queries) void/obs will export."
     :deps [:void/db-driver]
     :config {:key :db}
     :start
@@ -295,5 +302,5 @@
   :requires {:void/core ">=0.0.1"}
   :config-key :db
   :config-schema Config
-  :config-defaults {:pool {:size 10 :checkout-timeout 5}}
+  :config-defaults {:pool {:size 10 :checkout-timeout 5 :validate-after 30}}
   :components [pool-component])

@@ -249,4 +249,38 @@
 (assert (not (driver/duplicate-index? :mysql (driver/wrap-error {:db/error :mysql :sqlstate "42S01" :code 1050 :message "Table exists"})))
         "another errno is not")
 
+# -- each-row: the loop query cannot be ----------------------------------
+
+(def [pe ste]
+  (let [[d st] (fake/make
+                 {:responder (fn [_ _] @{:rows [{:id 1} {:id 2} {:id 3}] :count 3})})]
+    [(pool/make (driver/normalize d) {:size 1}) st]))
+(with-db pe
+  (def seen @[])
+  (def n (db/each-row {:select [:id] :from "events"} |(array/push seen ($ :id))))
+  (assert (= 3 n) "each-row answers how many rows there were")
+  (assert (deep= @[1 2 3] seen) "and hands them over in order")
+  (assert (= `SELECT "id" FROM "events"` (get-in (fake/log ste) [0 :sql]))
+          "a statement map compiles the way every other one does")
+  (assert (not (driver/streams? (pool/driver-of pe)))
+          "this driver takes the contract's fallback")
+  (db/each-row ["SELECT * FROM events WHERE day = ?" [7]] (fn [_] nil))
+  (assert (deep= [7] (get-in (fake/log ste) [1 :params])) "raw SQL works too")
+  (assert (not (first (protect (db/each-row "SELECT 1" (fn [_] nil)))))
+          "and a bare string is not a statement"))
+
+# a driver that really does stream is the same call, one flag apart
+(def [ps sts]
+  (let [[d st] (fake/make
+                 {:stream true
+                  :responder (fn [_ _] @{:rows [{:id 1} {:id 2}] :count 2})})]
+    [(pool/make (driver/normalize d) {:size 1}) st]))
+(with-db ps
+  (assert (driver/streams? (pool/driver-of ps))
+          "a driver that brought its own :stream says so — derived, not declared")
+  (def seen @[])
+  (assert (= 2 (db/each-row {:select [:id] :from "t"} |(array/push seen ($ :id)))))
+  (assert (deep= @[1 2] seen))
+  (assert (= 1 (get sts :streamed 0)) "and it is the driver's own loop that ran"))
+
 (print "state-test: ok")

@@ -71,7 +71,11 @@
 # -- test harness --------------------------------------------------------
 
 (var responder nil)
-(def [drv st] (fake/make {:responder (fn [sql params] (responder sql params))}))
+(def [drv st] (fake/make {:responder (fn [sql params] (responder sql params))
+                          # a driver without RETURNING answers "which row"
+                          # through :insert-id, and that is the only reading
+                          # of it there is
+                          :insert-id 42}))
 (def p (pool/make (driver/normalize drv) {:size 2 :checkout-timeout 1}))
 (setdyn state/pool-dyn p)
 
@@ -220,7 +224,7 @@
 (fake/clear! st)
 (set responder (fn [sql _]
                  (cond
-                   (string/has-prefix? "INSERT" sql) @{:rows [] :count 1 :inserted-id 42}
+                   (string/has-prefix? "INSERT" sql) @{:rows [] :count 1}
                    (string/find `FROM "users"` sql)
                    @{:rows [{:id 42 :email "new@b.c"}] :count 1}
                    @{:rows [] :count 0})))
