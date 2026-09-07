@@ -49,8 +49,10 @@
             "on sqlite the log's sequence is an autoincrementing integer")
     (assert (some |(string/find "bigserial" $) (busdb/ddl :postgres))
             "and on Postgres a bigserial — the one thing SQL does not agree on")
-    (assert (some |(string/find "forwarded_at IS NULL" $) statements)
+    (assert (some |(string/find `"forwarded_at" IS NULL` $) statements)
             "the outbox index is partial: it is the size of the backlog, not of the history")
+    (assert (some |(string/find "(`forwarded_at`, `created_at`)" $) (busdb/ddl :mysql))
+            "and on an engine without partial indexes it is led by the column the read filters on")
     (assert (not (first (protect (busdb/ddl :oracle))))
             "an engine with no known spelling is refused with its name, not guessed at")
 

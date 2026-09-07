@@ -124,17 +124,6 @@
         nil)
       :void.db/error))
 
-(defn index-if-not-exists?
-  ``Does this engine take `CREATE INDEX IF NOT EXISTS`? MySQL does not
-  (MariaDB does): there the clause is a syntax error, so a schema pass
-  creates the index bare and reads the second boot's ER_DUP_KEYNAME as
-  "done" — see `duplicate-index?`. The one copy of that workaround,
-  for void/jobs-db and void/bus-db; the builder passes the clause
-  through as written, and whether it should refuse or emulate it per
-  dialect is the builder's decision — §8.6's, not this function's.``
-  [dialect]
-  (not= :mysql dialect))
-
 (defn duplicate-index?
   ``Is the envelope `e` MySQL's ER_DUP_KEYNAME (errno 1061) — a
   `CREATE INDEX` without `IF NOT EXISTS` that found its index already

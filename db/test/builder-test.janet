@@ -218,4 +218,169 @@
                                           :where [:= :a :b :c]}))))
         "malformed comparison is rejected")
 
+# -- [:sql fragment params]: raw SQL that carries values -----------------
+
+# the whole point: the same fragment on both placeholder styles, and
+# numbered by its position in the statement rather than in itself
+(def with-fragment
+  {:update "rates" :set {:n [:sql "n + ?" [1]]} :where [:= :queue "q"]})
+(assert (= [`UPDATE "rates" SET "n" = n + ? WHERE "queue" = ?` [1 "q"]]
+           (sql/format with-fragment))
+        "[:sql] parameters take their place among the statement's")
+(assert (= [`UPDATE "rates" SET "n" = n + $1 WHERE "queue" = $2` [1 "q"]]
+           (sql/format with-fragment :postgres))
+        "and are renumbered for a $n dialect")
+
+(assert (= [`SELECT * FROM "t" WHERE now() - "seen_at" > $1` [60]]
+           (sql/format {:select [:*] :from "t"
+                        :where [:sql "now() - \"seen_at\" > ?" [60]]} :postgres))
+        "a fragment is a whole where clause too")
+
+(assert (not (first (protect (sql/format {:select [[:sql "? + ?" [1]]] :from "t"}))))
+        "a placeholder count that disagrees with the parameters is an error")
+(assert (not (first (protect (sql/format {:select [[:sql 5 []]] :from "t"}))))
+        "and the fragment must be a string")
+
+# -- subqueries ----------------------------------------------------------
+
+(assert (= [(string `SELECT * FROM "users" WHERE "id" IN `
+                    `(SELECT "user_id" FROM "bans" WHERE "until" > ?)`)
+            [5]]
+           (sql/format {:select [:*] :from "users"
+                        :where [:in :id {:select [:user-id] :from "bans"
+                                         :where [:> :until 5]}]}))
+        "IN over a statement is a subquery, not a list of values")
+
+(assert (= (string `SELECT * FROM "orders" WHERE EXISTS `
+                   `(SELECT 1 FROM "items" WHERE "items"."order_id" = "orders"."id")`)
+           ((sql/format {:select [:*] :from "orders"
+                         :where [:exists {:select [[:raw "1"]] :from "items"
+                                          :where [:= :items.order-id :orders.id]}]}) 0))
+        "EXISTS takes a statement")
+(assert (not (first (protect (sql/format {:select [:*] :from "t"
+                                          :where [:exists [:= :a 1]]}))))
+        "and refuses a where clause where a statement belongs")
+
+# a map in a *value* position is data — a json column, not a subquery
+(assert (deep= [{:a 1}] ((sql/format {:update "t" :set {:meta {:a 1}}}) 1))
+        "a map in :set is a parameter, because that is what a json column takes")
+
+(assert (= (string `SELECT "u"."id" FROM "users" AS "u" `
+                   `JOIN (SELECT "user_id" FROM "rates") AS "r" ON "r"."user_id" = "u"."id"`)
+           ((sql/format {:select [:u.id] :from ["users" :u]
+                         :join [[[{:select [:user-id] :from "rates"} :r]
+                                 [:= :r.user-id :u.id]]]}) 0))
+        "a table position takes an alias, and a derived table with one")
+(assert (not (first (protect (sql/format {:select [:*]
+                                          :from {:select [:id] :from "t"}}))))
+        "a subquery in a FROM without an alias is refused, not guessed at")
+
+# -- :lock ---------------------------------------------------------------
+
+(def claim {:select [:id] :from "jobs" :where [:= :state "pending"] :limit 1
+            :lock {:mode :update :skip-locked true}})
+(assert (string/has-suffix? "FOR UPDATE SKIP LOCKED" ((sql/format claim :postgres) 0))
+        "the claim postgres runs")
+(assert (string/has-suffix? "FOR UPDATE" ((sql/format claim :mysql) 0))
+        "mysql keeps the lock and loses SKIP LOCKED — one dialect for four engines")
+(assert (string/has-suffix? "LIMIT ?" ((sql/format claim :sqlite) 0))
+        "sqlite drops the clause: its writer is serialized already")
+(assert (string/has-suffix? "LOCK IN SHARE MODE"
+                            ((sql/format {:select [:*] :from "t" :lock :share} :mysql) 0))
+        "the share lock is spelled MariaDB's way, which MySQL also takes")
+(assert (not (first (protect (sql/format {:select [:*] :from "t" :lock :exclusive}))))
+        "an unknown lock mode is an error")
+
+# -- :on-conflict --------------------------------------------------------
+
+(def upsert
+  {:insert "rates" :values {:queue "q" :window-start 10 :n 1}
+   :on-conflict {:on [:queue :window-start] :set {:n [:sql "n + ?" [1]]}}})
+(assert (= [(string `INSERT INTO "rates" ("n", "queue", "window_start") VALUES ($1, $2, $3) `
+                    `ON CONFLICT ("queue", "window_start") DO UPDATE SET "n" = n + $4`)
+            [1 "q" 10 1]]
+           (sql/format upsert :postgres))
+        "the upsert, with the fragment numbered after the row")
+(assert (= (string "INSERT INTO `rates` (`n`, `queue`, `window_start`) VALUES (?, ?, ?) "
+                   "ON DUPLICATE KEY UPDATE `n` = n + ?")
+           ((sql/format upsert :mysql) 0))
+        "mysql spells the same declaration its way")
+
+(assert (string/has-suffix? "ON CONFLICT DO NOTHING"
+                            ((sql/format {:insert "log" :values {:id "a"}
+                                          :on-conflict :nothing} :postgres) 0))
+        ":nothing is the shorthand for the whole of a dropped row")
+(assert (string/has-suffix? "ON DUPLICATE KEY UPDATE `id` = `id`"
+                            ((sql/format {:insert "log" :values {:id "a"}
+                                          :on-conflict :nothing} :mysql) 0))
+        "which on mysql is a column set to itself")
+
+(assert (string/find `"n" = excluded."n"`
+                     ((sql/format {:insert "t" :values {:id 1 :n 2}
+                                   :on-conflict {:on [:id] :set {:n [:excluded :n]}}}
+                                  :postgres) 0))
+        "[:excluded col] is the value the losing INSERT proposed")
+(assert (string/find "`n` = VALUES(`n`)"
+                     ((sql/format {:insert "t" :values {:id 1 :n 2}
+                                   :on-conflict {:on [:id] :set {:n [:excluded :n]}}}
+                                  :mysql) 0))
+        "and mysql's spelling of the same thing")
+
+(assert (string/find `WHERE "n" < $4`
+                     ((sql/format {:insert "t" :values {:id 1 :n 2}
+                                   :on-conflict {:on [:id] :set {:n 5} :where [:< :n 10]}}
+                                  :postgres) 0))
+        "a conditional upsert")
+(assert (not (first (protect (sql/format {:insert "t" :values {:id 1 :n 2}
+                                          :on-conflict {:on [:id] :set {:n 5}
+                                                        :where [:< :n 10]}}
+                                         :mysql))))
+        "mysql has no condition for it, and a dropped condition would update rows it should not")
+(assert (not (first (protect (sql/format {:insert "t" :values {:id 1}
+                                          :on-conflict {:set {:n 5}}} :postgres))))
+        "a DO UPDATE needs the conflict target postgres arbitrates by")
+
+# -- partial indexes -----------------------------------------------------
+
+(def unique-idx
+  {:create-index "jobs_unique_idx" :on "jobs" :unique true :if-not-exists true
+   :columns [:unique-key] :where [:<> :unique-key nil]})
+(assert (= (string `CREATE UNIQUE INDEX IF NOT EXISTS "jobs_unique_idx" `
+                   `ON "jobs" ("unique_key") WHERE "unique_key" IS NOT NULL`)
+           ((sql/format unique-idx :postgres) 0))
+        "a partial index is a statement, not a hand-written string")
+(assert (not (first (protect (sql/format unique-idx :mysql))))
+        "mysql has no partial index, and the caller decides what the index there is")
+
+# a DDL predicate renders its values as literals: an engine takes no
+# parameters in a CREATE INDEX
+(assert (= [(string `CREATE INDEX "t_live_idx" ON "t" ("id") `
+                    `WHERE ("state" = 'live' AND "n" > 3)`)
+            []]
+           (sql/format {:create-index "t_live_idx" :on "t" :columns [:id]
+                        :where [:and [:= :state "live"] [:> :n 3]]}))
+        "and takes no parameters")
+
+(assert (= "CREATE INDEX `t_idx` ON `t` (`id`)"
+           ((sql/format {:create-index "t_idx" :on "t" :columns [:id]
+                         :if-not-exists true} :mysql) 0))
+        "IF NOT EXISTS is dropped where the engine has not got it — the bare statement is the same statement")
+
+# -- composing clauses ---------------------------------------------------
+
+(assert (= [:and [:= :a 1] [:= :b 2]] (sql/all-of nil [:= :a 1] nil [:= :b 2]))
+        "all-of skips the conditions that were not there")
+(assert (= [:= :a 1] (sql/all-of [:= :a 1] nil)) "one clause is itself")
+(assert (nil? (sql/all-of nil nil)) "and none is no condition at all")
+(assert (= [:or [:= :a 1] [:= :b 2]] (sql/any-of [:= :a 1] [:= :b 2])) "any-of ORs")
+
+(assert (= [:and [:= :a 1] [:= :b 2]]
+           (get (sql/and-where {:select [:*] :from "t" :where [:= :a 1]} [:= :b 2]) :where))
+        "and-where grows a partial statement")
+(assert (= [:= :b 2]
+           (get (sql/and-where {:select [:*] :from "t"} [:= :b 2]) :where))
+        "onto a statement that had no condition")
+(assert (deep= {:select [:*] :from "t"} (sql/and-where {:select [:*] :from "t"} nil))
+        "and a nil clause leaves it alone")
+
 (print "builder-test: ok")

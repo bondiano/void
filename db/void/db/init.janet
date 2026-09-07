@@ -41,11 +41,14 @@
 (def format "See builder/format — statement map -> [sql params]." builder/format)
 (def snake "See builder/snake — identifier spelling." builder/snake)
 (def register-dialect! "See builder/register-dialect!." builder/register-dialect!)
+(def all-of "See builder/all-of — the clauses that are there, ANDed." builder/all-of)
+(def any-of "See builder/any-of — the clauses that are there, ORed." builder/any-of)
+(def and-where "See builder/and-where — grow a partial statement's :where." builder/and-where)
 
 (def normalize-driver "See driver/normalize." driver/normalize)
 (def driver-result "See driver/result — sugar for driver authors." driver/result)
-(def index-if-not-exists? "See driver/index-if-not-exists? — does the dialect take the clause." driver/index-if-not-exists?)
 (def duplicate-index? "See driver/duplicate-index? — MySQL's \"index already there\" on a bare CREATE INDEX." driver/duplicate-index?)
+(def capability "See builder/capability — one flag of a dialect, by name." builder/capability)
 
 (def pool-stats "See pool/stats — checkouts, waits, query timing." pool/stats)
 
@@ -59,6 +62,7 @@
 (def one-row "See state/one — the first row of a statement, or nil." state/one)
 (def value "See state/value — the single column of the first row." state/value)
 (def execute! "See state/execute! — a write, returning the affected count." state/execute!)
+(def ddl! "See state/ddl! — run schema statements as an idempotent pass." state/ddl!)
 (def in-transaction? "See state/in-transaction?." state/in-transaction?)
 (def rollback! "See state/rollback! — abort the innermost with-tx." state/rollback!)
 (def with-conn* "See state/with-conn*." state/with-conn*)

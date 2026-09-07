@@ -20,14 +20,16 @@
 ###
 ### `session-ddl` returns SQL strings rather than statement maps, which
 ### migrations execute as they are: `CREATE TABLE IF NOT EXISTS`
-### spelled once by the plugin that owns the shape, for whichever engine
-### is under it.
+### spelled once by the plugin that owns the shape, for the engine this
+### migration is running against — which is why it is handed the
+### dialect, exactly like the queue's tables one migration ago.
+(import void/db :as db)
 (import void/db/http :as db-http)
 
 (def sessions-table "void_sessions")
 
 (defn up []
-  (db-http/session-ddl sessions-table))
+  (db-http/session-ddl ((db/current-driver) :dialect) sessions-table))
 
 (defn down []
   [{:drop-table sessions-table}])

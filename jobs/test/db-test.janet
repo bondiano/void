@@ -49,8 +49,11 @@
 
     (assert (>= (length (jobsdb/ddl :sqlite)) 6)
             "the ddl covers the queue, its indexes, the locks and the rate windows")
-    (assert (some |(string/find "unique_key IS NOT NULL" $) (jobsdb/ddl :sqlite))
+    (assert (some |(string/find `"unique_key" IS NOT NULL` $) (jobsdb/ddl :sqlite))
             "the uniqueness index is partial — a released key is a NULL, not a deleted row")
+    (assert (some |(string/find "UNIQUE INDEX `void_jobs_unique_idx`" $)
+                  (jobsdb/ddl :mysql))
+            "and on an engine without partial indexes it is the plain unique index, which promises the same")
     (jobsdb/create-tables!)
     (assert true "creating the tables twice is not an error")
 

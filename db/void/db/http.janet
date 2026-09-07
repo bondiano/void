@@ -78,27 +78,30 @@
 
 (defn session-ddl
   ``The statements the session table needs, as a tuple of SQL strings
-  — what `[:db-http :session :auto-create]` runs at boot and what
-  `void db-http session-ddl` prints for a deployment that would rather
-  run its own migration.``
-  [&opt table]
+  spelled for `dialect` — what `[:db-http :session :auto-create]` runs
+  at boot and what `void db-http session-ddl` prints for a deployment
+  that would rather run its own migration.
+
+  The dialect is an argument for the reason void/jobs-db's `ddl` takes
+  one: the same declaration is a different string on each engine. It
+  used to be one hand-written string for all three, and the string was
+  wrong on MySQL — a `text` primary key needs a prefix length there,
+  so the table this store needs could not be created on the one engine
+  nobody had run it against.``
+  [dialect &opt table]
   (default table (get-in defaults [:session :table]))
-  [(string "CREATE TABLE IF NOT EXISTS " table " (\n"
-           "  sid text primary key,\n"
-           "  data text not null,\n"
-           "  expires double precision not null\n)")
-   (string "CREATE INDEX IF NOT EXISTS " table "_expires_idx ON " table
-           " (expires)")])
+  (tuple ;(map |(first (builder/format $ dialect))
+               [{:create-table table :if-not-exists true
+                 :columns [[:sid :string {:primary-key true}]
+                           [:data :text {:null false}]
+                           [:expires :double {:null false}]]}
+                {:create-index (string table "_expires_idx") :on table
+                 :if-not-exists true :columns [:expires]}])))
 
 (defn create-session-table!
   "Run `session-ddl` — idempotent, and safe to run at every boot."
   [&opt table]
-  (each sql (session-ddl table)
-    (state/execute-sql sql [] {:kind :write :prepared false}))
-  nil)
-
-(defn- ph [n]
-  (((builder/dialect ((state/driver) :dialect)) :placeholder) n))
+  (state/ddl! (session-ddl ((state/driver) :dialect) table)))
 
 (defn session-store
   ``A `:void.http/session-store` over the running void/db pool. Which
@@ -110,19 +113,15 @@
   (def tbl (get opts :table (get-in defaults [:session :table])))
   (defn now [] (os/clock :realtime))
   (defn sweep []
-    (state/execute-sql (string "DELETE FROM " tbl " WHERE expires <= " (ph 1))
-                       [(now)] {:kind :write})
+    (state/execute! {:delete tbl :where [:<= :expires [:val (now)]]})
     nil)
   {:name :db
    :table tbl
    :load (fn load [sid]
-           (when-let [row (first (state/query
-                                   [(string "SELECT data, expires FROM " tbl
-                                            " WHERE sid = " (ph 1)) [sid]]))]
+           (when-let [row (state/one {:select [:data :expires] :from tbl
+                                      :where {:sid sid}})]
              (if (<= (get row :expires 0) (now))
-               (do (state/execute-sql
-                     (string "DELETE FROM " tbl " WHERE sid = " (ph 1))
-                     [sid] {:kind :write})
+               (do (state/execute! {:delete tbl :where {:sid sid}})
                    nil)
                # the middleware mutates what it is given, so it has to
                # be a table: a struct read out of jdn would fail on the
@@ -132,25 +131,17 @@
    :save (fn save [sid data ttl]
            (def expires (+ (now) ttl))
            (def encoded (string/format "%j" data))
-           # UPDATE-then-INSERT rather than a dialect-specific upsert:
-           # ON CONFLICT is spelled differently everywhere, and a
-           # session id is 128 bits of randomness, so the INSERT that
-           # races another INSERT of the same id is a thing that does
-           # not happen
-           (def n (get (state/execute-sql
-                         (string "UPDATE " tbl " SET data = " (ph 1)
-                                 ", expires = " (ph 2) " WHERE sid = " (ph 3))
-                         [encoded expires sid] {:kind :write})
-                       :count 0))
-           (when (zero? n)
-             (state/execute-sql
-               (string "INSERT INTO " tbl " (sid, data, expires) VALUES ("
-                       (ph 1) ", " (ph 2) ", " (ph 3) ")")
-               [sid encoded expires] {:kind :write}))
+           # one upsert, spelled by the dialect. It used to be an
+           # UPDATE and then an INSERT, because the two engines write
+           # this differently and the builder had no word for it; now
+           # they are one statement and one round trip
+           (state/execute!
+             {:insert tbl :values {:sid sid :data encoded :expires expires}
+              :on-conflict {:on [:sid] :set {:data [:excluded :data]
+                                             :expires [:excluded :expires]}}})
            sid)
    :delete (fn delete [sid]
-             (state/execute-sql (string "DELETE FROM " tbl " WHERE sid = " (ph 1))
-                                [sid] {:kind :write})
+             (state/execute! {:delete tbl :where {:sid sid}})
              nil)
    :sweep sweep})
 
@@ -176,11 +167,14 @@
 (plugin/contribute! :void.core/cli
   {:name :db-http/session-ddl
    :read-only? true
-   :doc "Print the SQL the database session store needs: void db-http session-ddl"
-   :fn (fn cli-ddl [& args]
+   :doc "Print the SQL the database session store needs (connects, to learn the dialect): void db-http session-ddl"
+   # the pool, for its dialect — the statement to print is the one this
+   # composition would run
+   :needs [:db/pool]
+   :fn (fn cli-ddl [_ & args]
          (unless (empty? args)
            (errorf "void db-http session-ddl takes no arguments (got %q)" (string/join args " ")))
-         (each sql (session-ddl ((session-cfg) :table))
+         (each sql (session-ddl ((state/driver) :dialect) ((session-cfg) :table))
            (printf "%s;\n" sql)))})
 
 # -- declarative route transactions --------------------------------------

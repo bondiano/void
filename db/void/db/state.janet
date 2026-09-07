@@ -243,6 +243,25 @@
   [stmt &opt opts]
   (get (run stmt opts) :count 0))
 
+(defn ddl!
+  ``Run schema statements (SQL strings) as an idempotent pass — what a
+  plugin that creates its own tables at boot runs, and what it runs
+  again at every boot after.
+
+  The one thing it knows that a plain loop does not: an engine without
+  `CREATE INDEX IF NOT EXISTS` (MySQL) says "index already there"
+  instead, and for a pass whose whole job is idempotence that is the
+  answer *done*. The builder compiles the clause away there; this is
+  the other half of the same workaround, in the one place, for the
+  three plugins that create their own tables.``
+  [sqls]
+  (def dialect ((driver) :dialect))
+  (each sql sqls
+    (def [ok e] (protect (execute-sql sql [] {:kind :write :prepared false})))
+    (unless (or ok (driver/duplicate-index? dialect e))
+      (error e)))
+  nil)
+
 # -- transactions --------------------------------------------------------
 
 (def- rollback-signal :void.db/rollback)

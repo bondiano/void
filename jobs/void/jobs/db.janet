@@ -127,33 +127,35 @@
    [:failures :text]
    [:token :string]])
 
-(def- col-names (map |(builder/snake ($ 0)) columns))
-(def- col-list (string/join col-names ", "))
+(def- col-keys
+  "The record columns, as the keywords a statement names them by."
+  (tuple ;(map |($ 0) columns)))
 
 (defn- unique-index
   ``The index that makes unique jobs exact. Partial — `WHERE unique_key
   IS NOT NULL` — so it is the size of the keys in play, not of the
-  history; that clause is the one piece of DDL here the builder has no
-  spelling for, so it stays a string. MySQL has no partial indexes at
-  all, and a plain unique index is the same promise there: a NULL is
-  distinct from every other NULL in a unique index on every one of
-  the three engines, which is exactly what a released key relies on.``
+  history. An engine without partial indexes gets the plain unique
+  index, which is the same promise: a NULL is distinct from every
+  other NULL in a unique index on every one of the three engines, and
+  that is exactly what a released key relies on. The branch is on the
+  capability, because it is the capability that decides which index
+  this is.``
   [dialect table]
   (def name (string table "_unique_idx"))
-  (if (= :mysql dialect)
-    {:create-index name :on table :columns [:unique-key] :unique true}
-    (string "CREATE UNIQUE INDEX IF NOT EXISTS " name " ON " table
-            " (unique_key) WHERE unique_key IS NOT NULL")))
+  (def idx {:create-index name :on table :if-not-exists true
+            :columns [:unique-key] :unique true})
+  (if (db/capability dialect :partial-indexes)
+    (merge idx {:where [:<> :unique-key nil]})
+    idx))
 
 (defn- statements
-  "The schema as builder statements (and the one string), in creation order."
+  "The schema as builder statements, in creation order."
   [dialect table]
-  (def idempotent-index (db/index-if-not-exists? dialect))
   [{:create-table table :if-not-exists true :columns columns}
-   {:create-index (string table "_claim_idx") :on table :if-not-exists idempotent-index
+   {:create-index (string table "_claim_idx") :on table :if-not-exists true
     :columns [:state :queue :priority :run-at]}
    (unique-index dialect table)
-   {:create-index (string table "_parent_idx") :on table :if-not-exists idempotent-index
+   {:create-index (string table "_parent_idx") :on table :if-not-exists true
     :columns [:parent]}
    (lease/statement (string table "_locks"))
    {:create-table (string table "_rates") :if-not-exists true
@@ -172,31 +174,14 @@
   (`((db/current-driver) :dialect)`).``
   [dialect &opt table]
   (default table (defaults :table))
-  (tuple ;(map |(if (string? $) $ (first (builder/format $ dialect)))
-               (statements dialect table))))
+  (tuple ;(map |(first (builder/format $ dialect)) (statements dialect table))))
 
 (defn create-tables!
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
-  (def dialect ((db/current-driver) :dialect))
-  (each sql (ddl dialect table)
-    (def [ok e] (protect (db/execute-sql sql [] {:kind :write :prepared false})))
-    (unless (or ok (db/duplicate-index? dialect e))
-      (error e)))
-  nil)
+  (db/ddl! (ddl ((db/current-driver) :dialect) table)))
 
 # -- rows <-> records ----------------------------------------------------
-
-(defn- ph
-  "The dialect's placeholder for parameter `n` (1-based): `?` on
-  sqlite, `$n` on Postgres."
-  [n]
-  (((builder/dialect ((db/current-driver) :dialect)) :placeholder) n))
-
-(defn- phs
-  "`n` placeholders from `start`, comma separated."
-  [start n]
-  (string/join (seq [i :range [0 n]] (ph (+ start i))) ", "))
 
 (defn record->row
   "A record as the columns that store it — the two structured fields
@@ -263,16 +248,21 @@
 
 # -- the backend ---------------------------------------------------------
 
-(defn- live-states-sql []
-  "('pending','running','waiting')")
+(def- live-states
+  "The states that still hold a unique key."
+  ["pending" "running" "waiting"])
 
-(defn- select-one [table where params]
-  (row->record
-    (first (db/query-sql
-             [(string "SELECT " col-list " FROM " table " WHERE " where) params]))))
+(defn- select-one [table where]
+  (row->record (db/one-row {:select col-keys :from table :where where})))
 
-(defn- postgres? []
-  (= :postgres ((db/current-driver) :dialect)))
+(defn- skip-locked?
+  ``Can this engine claim with one statement — `FOR UPDATE SKIP
+  LOCKED` inside the id subquery? Where it can, the claim is that
+  statement; where it cannot, it is a SELECT and an UPDATE inside a
+  transaction. Asked of the dialect rather than of the engine's name:
+  it is the capability the two claims differ by.``
+  []
+  (db/capability ((db/current-driver) :dialect) :skip-locked))
 
 (defn store
   ``A `:void/jobs-backend` over the running void/db pool. Nothing is
@@ -290,19 +280,15 @@
   (def prune-batch (get opts :prune-batch (defaults :prune-batch)))
 
   (defn insert-row! [row]
-    (db/execute-sql
-      (string "INSERT INTO " tbl " (" col-list ") VALUES ("
-              (phs 1 (length col-names)) ")")
-      (map |(get row ($ 0)) columns)
-      {:kind :write}))
+    (db/execute! {:insert tbl :values row}))
 
   (defn unique-holder [k now]
     (when k
       (select-one tbl
-                  (string "unique_key = " (ph 1)
-                          " AND (state IN " (live-states-sql)
-                          " OR (unique_until IS NOT NULL AND unique_until > " (ph 2) "))")
-                  [k now])))
+                  [:and [:= :unique-key k]
+                   [:or [:in :state live-states]
+                    [:and [:<> :unique-until nil]
+                     [:> :unique-until [:val now]]]]])))
 
   {:name :db
    :shared? true
@@ -342,59 +328,47 @@
      (def now (get o :now (os/clock :realtime)))
      (def token (get o :token))
      (def skip (sorted (keys (get o :skip-groups {}))))
-     (defn group-clause [n]
-       (if (empty? skip)
-         ""
-         (string " AND (group_key IS NULL OR group_key NOT IN ("
-                 (phs n (length skip)) "))")))
+     # the claim, as one value both paths read: an attempt is `attempt
+     # + 1` because the column's own value is on the right-hand side,
+     # which is what a fragment with parameters is for
+     (def taken {:state "running" :token token
+                 :attempt [:sql "attempt + ?" [1]]
+                 :started-at now :claimed-at now})
      (var out nil)
      (each qn (get o :queues [])
        (when (nil? out)
          (def where
-           (string "state = 'pending' AND queue = " (ph 1)
-                   " AND run_at <= " (ph 2) (group-clause 3)))
-         (def params (array (string qn) now ;skip))
-         (if (postgres?)
-           # every placeholder is used once and the repeated value is
-           # passed twice: `?` dialects count placeholders, not indices,
-           # and a reused $2 is a portability trap waiting for a dialect
-           (let [n (length params)
-                 rows (db/query-sql
-                        [(string "UPDATE " tbl
-                                 " SET state = 'running', token = " (ph (+ n 1))
-                                 ", attempt = attempt + 1"
-                                 ", started_at = " (ph (+ n 2))
-                                 ", claimed_at = " (ph (+ n 3))
-                                 " WHERE id = (SELECT id FROM " tbl
-                                 " WHERE " where
-                                 " ORDER BY priority, run_at, id LIMIT 1"
-                                 " FOR UPDATE SKIP LOCKED)"
-                                 " RETURNING " col-list)
-                         (array ;params token now now)])]
-             (set out (row->record (first rows))))
+           (db/all-of [:= :state "pending"]
+                      [:= :queue (string qn)]
+                      [:<= :run-at [:val now]]
+                      (unless (empty? skip)
+                        [:or [:= :group-key nil] [:not-in :group-key skip]])))
+         (def candidate
+           {:select [:id] :from tbl :where where
+            :order-by [:priority :run-at :id] :limit 1})
+         (if (skip-locked?)
+           # one statement: the inner SELECT locks the row it picks and
+           # steps over the rows other workers hold
+           (set out
+                (row->record
+                  (first (db/query-sql
+                           {:update tbl :set taken
+                            :where [:= :id (merge candidate
+                                                  {:lock {:mode :update
+                                                          :skip-locked true}})]
+                            :returning col-keys}))))
            # no SKIP LOCKED: select then update, inside a transaction,
            # with the state re-checked in the UPDATE so a lost race is
            # a lost race and not a second run
            (db/with-tx*
              {}
              (fn claim-tx []
-               (def cand
-                 (first (db/query-sql
-                          [(string "SELECT id FROM " tbl " WHERE " where
-                                   " ORDER BY priority, run_at, id LIMIT 1")
-                           params])))
-               (when cand
-                 (def id (get cand :id))
-                 (def n (db/execute-sql
-                          (string "UPDATE " tbl
-                                  " SET state = 'running', token = " (ph 1)
-                                  ", attempt = attempt + 1"
-                                  ", started_at = " (ph 2)
-                                  ", claimed_at = " (ph 3)
-                                  " WHERE id = " (ph 4) " AND state = 'pending'")
-                          [token now now id] {:kind :write}))
-                 (when (pos? (get n :count 0))
-                   (set out (select-one tbl (string "id = " (ph 1)) [id])))))))))
+               (when-let [cand (db/one-row candidate)
+                          id (get cand :id)]
+                 (when (pos? (db/execute! {:update tbl :set taken
+                                           :where [:and [:= :id id]
+                                                   [:= :state "pending"]]}))
+                   (set out (select-one tbl {:id id})))))))))
      out)
 
    :settle!
@@ -427,31 +401,26 @@
        nil
        (record/copy r)))
 
-   :fetch (fn db-fetch [id] (select-one tbl (string "id = " (ph 1)) [id]))
+   :fetch (fn db-fetch [id] (select-one tbl {:id id}))
 
    :list
    (fn db-list [o0]
      (def o (or o0 {}))
-     (def clauses @[])
-     (def params @[])
-     (each [k col] [[:queue "queue"] [:state "state"] [:job "job"] [:parent "parent"]]
-       (when-let [v (get o k)]
-         (array/push params (string v))
-         (array/push clauses (string col " = " (ph (length params))))))
-     (def where (if (empty? clauses) "1 = 1" (string/join clauses " AND ")))
+     (def where
+       (db/all-of ;(seq [k :in [:queue :state :job :parent]
+                         :when (not (nil? (get o k)))]
+                    [:= k (string (get o k))])))
      (tuple ;(map row->record
                   (db/query-sql
-                    [(string "SELECT " col-list " FROM " tbl " WHERE " where
-                             " ORDER BY enqueued_at DESC, id DESC LIMIT "
-                             (math/floor (get o :limit 50)))
-                     params]))))
+                    {:select col-keys :from tbl :where where
+                     :order-by [[:enqueued-at :desc] [:id :desc]]
+                     :limit (math/floor (get o :limit 50))}))))
 
    :counts
    (fn db-counts [&opt _]
      (def out @{})
-     (each row (db/query-sql
-                 [(string "SELECT queue, state, count(*) AS n FROM " tbl
-                          " GROUP BY queue, state") []])
+     (each row (db/query-sql {:select [:queue :state [:raw "count(*) AS n"]]
+                              :from tbl :group-by [:queue :state]})
        (def q (keyword (get row :queue)))
        (def t (or (get out q) (let [t @{}] (put out q t) t)))
        (put t (keyword (get row :state)) (get row :n 0)))
@@ -503,20 +472,19 @@
      (def stale
        (map row->record
             (db/query-sql
-              [(string "SELECT " col-list " FROM " tbl
-                       " WHERE state = 'running' AND claimed_at < " (ph 1)
-                       " ORDER BY claimed_at LIMIT " (math/floor (get o :limit 100)))
-               [cutoff]])))
+              {:select col-keys :from tbl
+               :where [:and [:= :state "running"] [:< :claimed-at [:val cutoff]]]
+               :order-by [:claimed-at] :limit (math/floor (get o :limit 100))})))
      (def out @[])
      (each r stale
        # take it over rather than release it: the row stays :running
        # under this worker's token, so a second reaper cannot take it
        # as well
-       (def n (db/execute-sql
-                (string "UPDATE " tbl " SET token = " (ph 1) ", claimed_at = " (ph 2)
-                        " WHERE id = " (ph 3) " AND state = 'running' AND token = " (ph 4))
-                [token now (r :id) (r :token)] {:kind :write}))
-       (when (pos? (get n :count 0))
+       (def n (db/execute! {:update tbl :set {:token token :claimed-at now}
+                            :where [:and [:= :id (r :id)]
+                                    [:= :state "running"]
+                                    [:= :token (r :token)]]}))
+       (when (pos? n)
          (put r :token token)
          (put r :claimed-at now)
          (array/push out r)))
@@ -528,14 +496,10 @@
        0
        # the token fences the heartbeat the way it fences the settle: a
        # claim a reaper took away is not this worker's to keep alive
-       (let [fence (if token (string " AND token = " (ph 2)) "")
-             from (if token 3 2)]
-         (get (db/execute-sql
-                (string "UPDATE " tbl " SET claimed_at = " (ph 1)
-                        " WHERE state = 'running'" fence
-                        " AND id IN (" (phs from (length ids)) ")")
-                (array now ;(if token [token] []) ;ids) {:kind :write})
-              :count 0))))
+       (db/execute! {:update tbl :set {:claimed-at now}
+                     :where (db/all-of [:= :state "running"]
+                                       (when token [:= :token token])
+                                       [:in :id ids])})))
 
    :release-parent!
    (fn db-release-parent [child]
@@ -543,7 +507,7 @@
        (db/with-tx*
          {}
          (fn release-tx []
-           (when-let [parent (select-one tbl (string "id = " (ph 1)) [pid])]
+           (when-let [parent (select-one tbl {:id pid})]
              (array/push (or (get parent :children) (put parent :children @[]))
                          {:id (child :id) :job (child :job)
                           :result (get child :result)})
@@ -579,40 +543,27 @@
        0
        (do
          (def start (* duration (math/floor (/ now duration))))
+         (def window {:queue (string queue) :window-start start})
+         (defn wait [] (max 0.001 (- (+ start duration) now)))
          (db/with-tx*
            {}
            (fn rate-tx []
-             (def n (db/execute-sql
-                      (string "UPDATE " rates " SET n = n + 1"
-                              " WHERE queue = " (ph 1) " AND window_start = " (ph 2)
-                              " AND n < " (ph 3))
-                      [(string queue) start limit] {:kind :write}))
-             (cond
-               (pos? (get n :count 0)) 0
-
-               (first (db/query-sql
-                        [(string "SELECT n FROM " rates
-                                 " WHERE queue = " (ph 1) " AND window_start = " (ph 2))
-                         [(string queue) start]]))
-               (max 0.001 (- (+ start duration) now))
-
-               # a savepoint for the same reason lock! takes one: the
-               # losing INSERT must not abort the transaction around it
-               (let [[ok e] (protect
-                              (db/with-tx*
-                                {}
-                                (fn rate-insert-sp []
-                                  (db/execute-sql
-                                    (string "INSERT INTO " rates
-                                            " (queue, window_start, n) VALUES (" (phs 1 3) ")")
-                                    [(string queue) start 1] {:kind :write}))))]
-                 (cond
-                   ok 0
-                   # somebody inserted the window between our UPDATE and
-                   # our INSERT: count against it on the next pass
-                   (errors/kind? e :void.db/unique-violation)
-                   (max 0.001 (- (+ start duration) now))
-                   (error e)))))))))
+             (if (pos? (db/execute! {:update rates
+                                     :set {:n [:sql "n + ?" [1]]}
+                                     :where [:and window [:< :n limit]]}))
+               0
+               # no window row yet, or one that is full. The INSERT
+               # says what to do about the race in the statement — a
+               # dropped duplicate — so a lost race needs neither a
+               # savepoint (the losing INSERT would otherwise abort the
+               # transaction around it on Postgres) nor a second
+               # SELECT to tell "full" from "somebody else got there
+               # first": both answers are "count against it next pass"
+               (if (pos? (db/execute! {:insert rates
+                                       :values (merge window {:n 1})
+                                       :on-conflict {:on [:queue :window-start]}}))
+                 0
+                 (wait))))))))
 
    :stats
    (fn db-stats []

@@ -15,13 +15,22 @@
 
 # -- the DDL is what it says ---------------------------------------------
 
-(def ddl (db-http/session-ddl "sess"))
+(def ddl (db-http/session-ddl :postgres "sess"))
 (assert (= 2 (length ddl)))
-(assert (string/find "CREATE TABLE IF NOT EXISTS sess" (first ddl)))
-(assert (string/find "sid text primary key" (first ddl)))
-(assert (string/find "expires double precision not null" (first ddl)))
+(assert (string/find `CREATE TABLE IF NOT EXISTS "sess"` (first ddl)))
+(assert (string/find `"sid" text PRIMARY KEY` (first ddl)))
+(assert (string/find `"expires" double precision NOT NULL` (first ddl)))
 (assert (string/find "sess_expires_idx" (ddl 1))
         "the sweep has an index to walk")
+
+# the same declaration on the engine that used to be unable to run it:
+# a TEXT primary key needs a prefix length in MySQL, and `:string` is
+# the type that knows it
+(def my-ddl (db-http/session-ddl :mysql "sess"))
+(assert (string/find "`sid` varchar(255) PRIMARY KEY" (first my-ddl))
+        "mysql gets an indexable key column")
+(assert (not (string/find "IF NOT EXISTS" (my-ddl 1)))
+        "and a CREATE INDEX it can parse")
 
 # -- the driver ----------------------------------------------------------
 
@@ -66,14 +75,15 @@
   (assert (empty? (deploy/per-process (boot :stores)))
           "and the composition starts, where before it could not")
 
-  # the SQL the store makes: an UPDATE that misses, then an INSERT
+  # the SQL the store makes: one upsert, spelled by the dialect
   (def store (get-in http/current-context [:session :store]))
   (fake/clear! fake-state)
   ((store :save) "abc" @{:user 7} 60)
   (def sqls (fake/sqls fake-state))
-  (assert (string/find "UPDATE void_sessions" (first sqls)))
-  (assert (string/find "INSERT INTO void_sessions" (sqls 1))
-          "no dialect-specific upsert — an UPDATE that changed nothing, then an INSERT")
+  (assert (= 1 (length sqls)) "a save is one statement and one round trip")
+  (assert (string/find `INSERT INTO "void_sessions"` (first sqls)))
+  (assert (string/find `ON CONFLICT ("sid") DO UPDATE SET` (first sqls))
+          "the upsert the builder learned to spell in 8.6")
 
   # a load reads what the row holds, as a table the middleware can mutate
   (set rows @[@{:data "@{:user 7}" :expires (+ (os/clock :realtime) 60)}])
@@ -85,7 +95,7 @@
   (set rows @[@{:data "@{:user 7}" :expires 1}])
   (fake/clear! fake-state)
   (assert (nil? ((store :load) "abc")))
-  (assert (not (empty? (fake/matching fake-state "DELETE FROM void_sessions")))
+  (assert (not (empty? (fake/matching fake-state `DELETE FROM "void_sessions"`)))
           "expiry is swept, because a database has no TTL"))
 
 (deploy/reset!)

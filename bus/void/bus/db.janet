@@ -145,20 +145,22 @@
 
 (defn- pending-index
   ``The forwarder's index. Partial — `WHERE forwarded_at IS NULL` — so
-  it is the size of the backlog, not of the history; that clause is
-  the one piece of DDL here the builder has no spelling for, so it
-  stays a string. MySQL has no partial indexes: there the index is
-  led by the column the read filters on and is the size of the
-  history, which is a slower forwarder and not a wrong one.``
+  it is the size of the backlog, not of the history. An engine without
+  partial indexes gets an index led by the column the read filters on,
+  which is the size of the history: a slower forwarder and not a wrong
+  one. Both are statements; the branch is on the capability rather
+  than on the engine's name, because it is the capability that decides
+  which index this is.``
   [dialect outbox]
   (def name (string outbox "_pending_idx"))
-  (if (= :mysql dialect)
-    {:create-index name :on outbox :columns [:forwarded-at :created-at]}
-    (string "CREATE INDEX IF NOT EXISTS " name " ON " outbox
-            " (created_at) WHERE forwarded_at IS NULL")))
+  (if (db/capability dialect :partial-indexes)
+    {:create-index name :on outbox :if-not-exists true :columns [:created-at]
+     :where [:= :forwarded-at nil]}
+    {:create-index name :on outbox :if-not-exists true
+     :columns [:forwarded-at :created-at]}))
 
 (defn- statements
-  "The schema as builder statements (and the one string), in creation order."
+  "The schema as builder statements, in creation order."
   [dialect table]
   (def messages table)
   (def cursors (string table "_cursors"))
@@ -175,9 +177,9 @@
               [:meta :text]
               [:published-at :double {:null false}]]}
    {:create-index (string messages "_id_idx") :on messages
-    :if-not-exists (db/index-if-not-exists? dialect) :columns [:id] :unique true}
+    :if-not-exists true :columns [:id] :unique true}
    {:create-index (string messages "_topic_idx") :on messages
-    :if-not-exists (db/index-if-not-exists? dialect) :columns [:topic :seq]}
+    :if-not-exists true :columns [:topic :seq]}
    {:create-table cursors :if-not-exists true
     :columns [[:group-name :string {:primary-key true}]
               [:position :bigint {:null false}]
@@ -202,37 +204,17 @@
   builder does not know is refused by name.``
   [dialect &opt table]
   (default table (defaults :table))
-  (tuple ;(map |(if (string? $) $ (first (builder/format $ dialect)))
-               (statements dialect table))))
+  (tuple ;(map |(first (builder/format $ dialect)) (statements dialect table))))
 
 (defn create-tables!
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
-  (def dialect ((db/current-driver) :dialect))
-  (each sql (ddl dialect table)
-    (def [ok e] (protect (db/execute-sql sql [] {:kind :write :prepared false})))
-    (unless (or ok (db/duplicate-index? dialect e))
-      (error e)))
-  nil)
+  (db/ddl! (ddl ((db/current-driver) :dialect) table)))
 
 # -- statement helpers ---------------------------------------------------
 
-(defn- ph
-  "The dialect's placeholder for parameter `n` (1-based): `?` on
-  sqlite, `$n` on Postgres."
-  [n]
-  (((builder/dialect ((db/current-driver) :dialect)) :placeholder) n))
-
-(defn- phs
-  "`n` placeholders from `start`, comma separated."
-  [start n]
-  (string/join (seq [i :range [0 n]] (ph (+ start i))) ", "))
-
 (defn- postgres? []
   (= :postgres ((db/current-driver) :dialect)))
-
-(defn- mysql? []
-  (= :mysql ((db/current-driver) :dialect)))
 
 (defn- as-text
   ``A codec's output as something a text column can hold. Every codec
@@ -319,7 +301,7 @@
   (defn bump! [k &opt n] (put counters k (+ (get counters k 0) (or n 1))))
 
   (defn insert-message! [env now]
-    # ON CONFLICT DO NOTHING, because a message id is a message: a
+    # a dropped duplicate, because a message id is a message: a
     # forwarder that published and died before marking its outbox row
     # republishes on its next pass, and the log is the one place that
     # can turn that duplicate back into one message. The alternative —
@@ -328,18 +310,14 @@
     # duplicates are the direction to fail in (./state on publish-tx!).
     # On Postgres it matters twice over: a failed statement poisons the
     # transaction it is in, and `bus/publish` is allowed inside one.
-    # MySQL has no ON CONFLICT; its ON DUPLICATE KEY UPDATE of a key to
-    # itself is the same no-op (INSERT IGNORE would also swallow every
-    # other error, which is not the bargain)
-    (db/execute-sql
-      (string "INSERT INTO " tbl " (id, topic, body, meta, published_at) VALUES ("
-              (phs 1 5) ")"
-              (if (mysql?)
-                " ON DUPLICATE KEY UPDATE id = id"
-                " ON CONFLICT (id) DO NOTHING"))
-      [(env :id) (string (env :topic)) (as-text (env :body))
-       (as-text (env :meta-body)) now]
-      {:kind :write})
+    # The two spellings of it (ON CONFLICT, ON DUPLICATE KEY UPDATE of
+    # a key to itself) are the builder's, not this file's
+    (db/execute!
+      {:insert tbl
+       :values {:id (env :id) :topic (string (env :topic))
+                :body (as-text (env :body)) :meta (as-text (env :meta-body))
+                :published-at now}
+       :on-conflict {:on [:id]}})
     # on the same connection, so it rides the caller's transaction when
     # there is one and commits with it
     (when (and notify? (postgres?))
@@ -358,64 +336,56 @@
     nil)
 
   (defn cursor-of [group]
-    (first (db/query-sql
-             [(string "SELECT group_name, position, stuck_seq, stuck_attempts FROM "
-                      cursors " WHERE group_name = " (ph 1))
-              [(string group)]])))
+    (db/one-row {:select [:group-name :position :stuck-seq :stuck-attempts]
+                 :from cursors :where {:group-name (string group)}}))
 
   (defn ensure-cursor! [group now]
-    (unless (cursor-of group)
-      (protect
-        (db/execute-sql
-          (string "INSERT INTO " cursors
-                  " (group_name, position, stuck_seq, stuck_attempts, updated_at) VALUES ("
-                  (phs 1 5) ")")
-          [(string group) 0 nil 0 now] {:kind :write})))
+    # one statement rather than a SELECT and a swallowed INSERT: two
+    # consumers of the same group starting together is the race, and
+    # the primary key is what refuses the second row — saying so in
+    # the statement means no protect and, on Postgres, no poisoned
+    # transaction to recover from
+    (db/execute! {:insert cursors
+                  :values {:group-name (string group) :position 0
+                           :stuck-attempts 0 :updated-at now}
+                  :on-conflict {:on [:group-name]}})
     nil)
 
   (defn save-cursor! [group position stuck-seq stuck-attempts now]
-    (db/execute-sql
-      (string "UPDATE " cursors " SET position = " (ph 1)
-              ", stuck_seq = " (ph 2) ", stuck_attempts = " (ph 3)
-              ", updated_at = " (ph 4)
-              " WHERE group_name = " (ph 5))
-      [position stuck-seq stuck-attempts now (string group)]
-      {:kind :write})
+    (db/execute!
+      {:update cursors
+       # db/null, not nil: a nil disappears from the map, and a column
+       # left out of the UPDATE is a group still marked stuck on a
+       # message it has just got past
+       :set {:position position
+             :stuck-seq (if (nil? stuck-seq) db/null stuck-seq)
+             :stuck-attempts stuck-attempts
+             :updated-at now}
+       :where {:group-name (string group)}})
     nil)
 
   (defn read-batch [position topics]
-    (def exact (and topics (not (empty? topics))))
-    (def params @[position])
-    (def where
-      (if exact
-        (do
-          (each t topics (array/push params (string t)))
-          (string " AND topic IN (" (phs 2 (length topics)) ")"))
-        ""))
-    (array/push params batch)
     (db/query-sql
-      [(string "SELECT seq, id, topic, body, meta, published_at FROM " tbl
-               " WHERE seq > " (ph 1) where
-               " ORDER BY seq LIMIT " (ph (length params)))
-       (tuple ;params)]))
+      {:select [:seq :id :topic :body :meta :published-at]
+       :from tbl
+       :where (db/all-of [:> :seq position]
+                         (when (and topics (not (empty? topics)))
+                           [:in :topic (map string topics)]))
+       :order-by [:seq]
+       :limit batch}))
 
   (defn prune! [now]
     (when (and (number? keep-for) (pos? keep-for))
-      (def low
-        (get (first (db/query-sql
-                      [(string "SELECT min(position) AS low FROM " cursors) []]))
-             :low))
+      (def low (db/value {:select [[:raw "min(position)"]] :from cursors}))
+      (def horizon (- now keep-for))
       (when low
-        (def n
-          (db/execute-sql
-            (string "DELETE FROM " tbl " WHERE seq <= " (ph 1)
-                    " AND published_at < " (ph 2))
-            [low (- now keep-for)] {:kind :write}))
-        (bump! :pruned (get n :count 0)))
-      (db/execute-sql
-        (string "DELETE FROM " outbox " WHERE forwarded_at IS NOT NULL"
-                " AND forwarded_at < " (ph 1))
-        [(- now keep-for)] {:kind :write}))
+        (bump! :pruned
+               (db/execute! {:delete tbl
+                             :where [:and [:<= :seq low]
+                                     [:< :published-at [:val horizon]]]})))
+      (db/execute! {:delete outbox
+                    :where [:and [:<> :forwarded-at nil]
+                            [:< :forwarded-at [:val horizon]]]}))
     nil)
 
   (defn row->envelope [row cur]
@@ -560,9 +530,8 @@
    (fn db-stats []
      (def [ok rows]
        (protect
-         (db/query-sql
-           [(string "SELECT group_name, position, stuck_seq, stuck_attempts FROM "
-                    cursors " ORDER BY group_name") []])))
+         (db/query-sql {:select [:group-name :position :stuck-seq :stuck-attempts]
+                        :from cursors :order-by [:group-name]})))
      (merge (table/to-struct counters)
             {:groups (sorted (keys subs))
              :cursors (if ok (map |{:group (get $ :group_name)
@@ -582,36 +551,31 @@
    (fn outbox-write [env]
      (unless (db/in-transaction?)
        (error "bus/publish-tx! must be called inside (db/with-tx ...) — outside one there is no transaction for the message to commit with, which is the whole of what it buys"))
-     (db/execute-sql
-       (string "INSERT INTO " outbox " (id, topic, body, meta, created_at, forwarded_at) VALUES ("
-               (phs 1 6) ")")
-       [(env :id) (string (env :topic)) (as-text (env :body))
-        (as-text (env :meta-body))
-        (or (get-in env [:meta :published-at]) (os/clock :realtime)) nil]
-       {:kind :write})
+     (db/execute!
+       {:insert outbox
+        :values {:id (env :id) :topic (string (env :topic))
+                 :body (as-text (env :body)) :meta (as-text (env :meta-body))
+                 :created-at (or (get-in env [:meta :published-at])
+                                 (os/clock :realtime))}})
      env)
 
    :outbox-pending
    (fn outbox-pending [limit]
-     (db/query-sql
-       [(string "SELECT id, topic, body, meta, created_at FROM " outbox
-                " WHERE forwarded_at IS NULL ORDER BY created_at, id LIMIT " (ph 1))
-        [limit]]))
+     (db/query-sql {:select [:id :topic :body :meta :created-at] :from outbox
+                    :where [:= :forwarded-at nil]
+                    :order-by [:created-at :id] :limit limit}))
 
    :outbox-mark!
    (fn outbox-mark [id now]
-     (db/execute-sql
-       (string "UPDATE " outbox " SET forwarded_at = " (ph 1)
-               " WHERE id = " (ph 2) " AND forwarded_at IS NULL")
-       [now id] {:kind :write})
+     (db/execute! {:update outbox :set {:forwarded-at now}
+                   :where [:and [:= :id id] [:= :forwarded-at nil]]})
      nil)
 
    :outbox-count
    (fn outbox-count []
-     (get (first (db/query-sql
-                   [(string "SELECT count(*) AS n FROM " outbox
-                            " WHERE forwarded_at IS NULL") []]))
-          :n 0))
+     (or (db/value {:select [[:raw "count(*)"]] :from outbox
+                    :where [:= :forwarded-at nil]})
+         0))
 
    :lease! (fn lease [name tok now ttl] (take-lease! name tok now ttl))
    :counters counters})

@@ -205,13 +205,11 @@
 (assert (= :void.db/serialization-failure (driver/classify {:db/error :postgres :sqlstate "40001"})))
 (assert (= :void.db/error (driver/classify {})))
 
-# the idempotent-schema workaround jobs-db and bus-db share: MySQL has
-# no `CREATE INDEX IF NOT EXISTS`, and its "index already there" on the
-# second boot is errno 1061 — read off the envelope, so it has to
-# survive wrap-error
-(assert (driver/index-if-not-exists? :postgres))
-(assert (driver/index-if-not-exists? :sqlite))
-(assert (not (driver/index-if-not-exists? :mysql)) "MySQL does not take the clause")
+# the idempotent-schema workaround jobs-db and bus-db share. Its first
+# half is the builder's — a dialect without `CREATE INDEX IF NOT
+# EXISTS` compiles the clause away — and its second half is here:
+# MySQL's "index already there" on the second boot is errno 1061, read
+# off the envelope, so it has to survive wrap-error
 (def dup-index (driver/wrap-error {:db/error :mysql :sqlstate "42000" :code 1061
                                    :message "Duplicate key name 'x_idx'"}))
 (assert (driver/duplicate-index? :mysql dup-index) "1061 on MySQL is \"done\"")
