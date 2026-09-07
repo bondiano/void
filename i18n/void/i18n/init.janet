@@ -11,9 +11,11 @@
 ### do catalogs that two parties write.
 ###
 ### The request's locale is resolved once per request (application hook ->
-### cookie -> Accept-Language -> default) by a middleware at phase 4500 —
-### after auth, so the hook sees the identity — and bound as (dyn
-### :void.i18n/locale) together with (dyn :void.schema/messages), the seam
+### cookie -> Accept-Language -> default) by a middleware at phase 4100 —
+### after auth (4000), so the hook sees the identity, and before every
+### middleware that can refuse with a rendered message, so the refusal
+### is translated — and bound as (dyn :void.i18n/locale) together with
+### (dyn :void.schema/messages), the seam
 ### void/core/schema has carried since wave 0. Everything deeper in the
 ### chain sees both: the validation middleware, the handler, the template
 ### rendering at phase 9000, the fibers the handler spawns, and mail/send,

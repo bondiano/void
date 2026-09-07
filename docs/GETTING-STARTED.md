@@ -108,6 +108,26 @@ void routes
 Routes are data. `void routes --keys` adds the metadata; later,
 `void authz routes` will show which policy guards each one.
 
+`void routes --chain /entries --method post` answers the other
+question — *what runs around this route, and in what order*:
+
+    POST /entries -> :entries/create (handler create-entry, source :demo/routes)
+      edge     none
+      chain    :void.http/panic-guard@0  :void/http
+               :void.http/request-id@50  :void/http
+               :void.http/parsing@2000  :void/http
+               :void.html/render@9000  :void/html
+               :void.htmx/partial@9500  :void/htmx
+      hooks    none out of chain
+      declined :void.http/session@3000 (:void/http) — :when declined the route's metadata
+
+Every middleware with the phase it sits on and the plugin that
+contributed it, outermost first; the edge layer every response passes
+through outside routing; the route's out-of-chain hooks; and the
+contributions that are *not* in this chain, with the reason. Nothing
+here is computed per request — the chain is fixed when the route table
+is built, and this is that value printed.
+
 ## 5. Scaffold a resource
 
 ```sh

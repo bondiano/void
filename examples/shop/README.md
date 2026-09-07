@@ -15,7 +15,8 @@ environment variable, and the suite runs twice to keep that honest.
 void db migrate       # create the schema
 void shop seed        # a catalog, a customer and a staff account
 void dev              # dev profile: watcher + netrepl + the app
-void routes           # the route table, `void routes --keys` with metadata
+void routes           # the route table; --keys adds metadata, --chain <path>
+                      # the middleware chain with phases, plugins and refusals
 void db erd           # the ER diagram, from the same declarations
 void admin resources  # the back office, as the declarations describe it
 void admin widgets    # which widget draws which field, and why

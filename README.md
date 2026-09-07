@@ -25,7 +25,8 @@ void new guestbook
 cd guestbook
 jpm --local deps    # pin this void in ./jpm_tree (the binary prefers it)
 void dev            # dev profile: file watcher + netrepl + the app
-void routes         # the route table, `void routes --keys` with metadata
+void routes         # the route table; --keys adds metadata, --chain <path>
+                    # the middleware chain with phases, plugins and refusals
 void repl           # repl into the running process
 
 void make resource Product name:string price:int notes:text?

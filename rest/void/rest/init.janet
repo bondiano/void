@@ -1,23 +1,22 @@
 ### void/rest — REST/JSON API plugin, sugar over void/http.
 ###
-### Three moves, all driven by the :void.schema/* route metadata keys this
-### plugin declares (the reserved rows): validation, serialization,
-### problems. The validation middleware
-### (phase 6000) coerces and checks :params/:query/:headers/:body
-### against the route's schemas before the handler runs — the handler
-### only ever sees typed, valid data — and answers violations with RFC
-### 7807 problem+json. Handlers return lazy `(rest/json data)`
-### responses; the serialization middleware (phase 9000, the JSON twin
-### of void/html's render middleware) encodes them on the way out and,
-### with [:rest :validate-responses] (default: dev), checks the payload
-### against the :void.schema/response schema for the status — contract
-### drift fails loudly in dev instead of silently in prod. The
-### problem+json error renderer answers API clients (schema'd routes,
-### or any client whose Accept mentions json) for every abort and
-### panic, so an API never sees an HTML error page. defresource
-### (./resource) builds conventional CRUD route groups whose action
-### specs land on routes as exactly these metadata keys; ./pagination
-### carries the list-endpoint conventions.
+### Three moves, all driven by the :void.schema/* route metadata keys
+### this plugin declares (the reserved rows): validation, serialization,
+### problems. The validation middleware (phase 6000) coerces and checks
+### :params/:query/:headers/:body against the route's schemas before the
+### handler runs — the handler only ever sees typed, valid data — and
+### answers violations with RFC 7807 problem+json. Handlers return lazy
+### `(rest/json data)` responses; the serialization middleware (phase
+### 9010, just inside void/html's render middleware, whose JSON twin it
+### is) encodes them on the way out and, with [:rest :validate-responses]
+### (default: dev), checks the payload against the :void.schema/response
+### schema for the status — contract drift fails loudly in dev instead of
+### silently in prod. The problem+json error renderer answers API clients
+### (schema'd routes, or any client whose Accept mentions json) for every
+### abort and panic, so an API never sees an HTML error page. defresource
+### (./resource) builds conventional CRUD route groups whose action specs
+### land on routes as exactly these metadata keys; ./pagination carries
+### the list-endpoint conventions.
 
 (import void/core/plugin :as plugin)
 (import void/core/schema :as schema)
@@ -207,7 +206,17 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.rest/serialize
-   :phase middleware/phase/response
+   # the response phase + 10, not the phase itself: void/html renders
+   # lazy views on 9000, and a composition with both would otherwise be
+   # two plugins on one number, ordered by plugin name and warned about
+   # at build. The order is free — a lazy view (:void.html/content) and
+   # a lazy rest value (:void.rest/data) are disjoint markers, and
+   # neither wrapper touches the other's response — so the number only
+   # says the order was chosen rather than spelled. A name (:after
+   # :void.html/render) is not available: void/rest does not require
+   # void/html, and a relative placement may only point at a middleware
+   # that is certainly there (ADR-0045 §3)
+   :phase (+ middleware/phase/response 10)
    :doc "Encode lazy (rest/json data) responses; with [:rest :validate-responses] check the payload against the route's :void.schema/response schema first"
    :route-aware true
    :wrap (fn [handler rmeta]
