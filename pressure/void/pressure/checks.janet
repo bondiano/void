@@ -104,7 +104,7 @@
   call, never captured."
   []
   (when-let [stats (module-fn "void/db/pool" 'stats)
-             boot plugin/current-boot
+             boot (plugin/running-boot)
              sys (get boot :system)]
     (def [ok pool] (protect (system/instance sys :db/pool)))
     (when (and ok pool)

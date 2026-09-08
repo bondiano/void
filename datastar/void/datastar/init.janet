@@ -174,14 +174,13 @@
 
 # -- the live half: streams, rooms, poke! --------------------------------
 
-(var current-registry
-  "The registry of the running :datastar/registry component — one per
-  process, like plugin/current-boot."
-  nil)
+(def current-registry
+  "The registry of the running :datastar/registry component, which
+  holds it as its `:ambient`."
+  (system/ambient :void.datastar/registry :of "the morph-stream registry"
+                  :from :void/datastar :component :datastar/registry))
 
-(defn- registry []
-  (or current-registry
-      (error "void/datastar is not started — add :void/datastar to :plugins (the :datastar/registry component holds the streams)")))
+(defn- registry [] (system/active current-registry))
 
 (defn- join! [reg rooms conn]
   (each r rooms (put-in reg [:rooms r conn] true)))
@@ -244,11 +243,10 @@
     before the listener goes: stopping runs in reverse dependency
     order."
     :deps [:http/server]
+    :ambient current-registry
     :start
     (fn start [_ _]
-      (def reg @{:rooms @{}})
-      (set current-registry reg)
-      reg)
+      @{:rooms @{}})
     :stop
     (fn stop [reg]
       # closing a channel wakes its taker with nil — every stream
@@ -256,7 +254,6 @@
       (each members (values (reg :rooms))
         (eachk conn members
           (ev/chan-close (conn :chan))))
-      (set current-registry nil)
       reg)
     :health
     (fn health [reg]

@@ -32,8 +32,8 @@
 
 (var current-context
   "The running rest context (set by the :before-start hook):
-  :validate-responses, :config. One per process, like
-  plugin/current-boot."
+  :validate-responses, :config. One per process — a hook builds it,
+  not a component, so it is a var rather than a `system/ambient`."
   nil)
 
 (defn- context []

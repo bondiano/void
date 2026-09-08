@@ -43,10 +43,12 @@
 # -- boot context --------------------------------------------------------
 
 (var current-context
-  "The running http context (set by the :before-start table build):
-  :cell (route table holder), :handler, :limits-fn, :renderers,
-  :codecs, :session, :workers, :config, :dev. One per process, like
-  plugin/current-boot."
+  ``The running http context (set by the :before-start table build):
+  the :boot it was built from, :cell (route table holder), :handler,
+  :limits-fn, :renderers, :codecs, :session, :workers, :config, :dev.
+  One per process — the table build is a hook, not a component, so
+  this is not a `system/ambient`; it carries its boot instead, which
+  is what the hook-firing and route-rebuilding paths read.``
   nil)
 
 (defn- context []
@@ -450,7 +452,8 @@
        :env (get-in c [:value :env])}))
   (def global-hooks (resolve-global-hooks (resolved :void.http/hook)))
   (def ctx
-    @{:config cfg
+    @{:boot boot
+      :config cfg
       :workers workers
       :dev dev?
       :renderers (resolved :void.http/error-renderer)
@@ -582,11 +585,16 @@
 # -- the kernel and server components ------------------------------------
 
 (defn- run-app-hook
-  "Run an app-level http hook (:void.http/listening / :draining) on
-  the current boot's registry, protected — transport notifications
-  never block start/stop."
+  ``Run an app-level http hook (:void.http/listening / :draining) on
+  the registry of the boot this context was built from, protected —
+  transport notifications never block start/stop.
+
+  The boot travels on the context rather than being read from the
+  process, because the two are not the same value: a suite that boots
+  a second composition would otherwise announce this server's port to
+  the other one's handlers.``
   [hook & args]
-  (when-let [b plugin/current-boot]
+  (when-let [b (get (context) :boot)]
     (each e (corehooks/run-protected! (b :hooks) hook b ;args)
       (eprint e))))
 
@@ -847,7 +855,7 @@
   (def ctx (context))
   (def args (ctx :build-args))
   (def sources
-    (if-let [boot plugin/current-boot]
+    (if-let [boot (get ctx :boot)]
       (live-sources boot (args :sources))
       (args :sources)))
   (router/swap! (ctx :cell)

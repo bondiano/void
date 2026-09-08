@@ -108,11 +108,6 @@
   "Every contributed channel, by name — resolved at :before-start."
   @{})
 
-(var hook-registry
-  "The running boot's hook registry (the tracking `plugin/current-boot`
-  is not set on the inject path — the void/mail pose)."
-  nil)
-
 (var enqueue
   ``How a projected payload reaches a worker, or nil when this
   composition has no queue. `void/notify-jobs` installs a function
@@ -147,7 +142,12 @@
   (put listeners name nil))
 
 (defn- emit! [receipt]
-  (when-let [reg hook-registry]
+  # the hook registry of the boot in force. This was a var captured at
+  # :before-start, because the global used to be the process's most
+  # recent *bootstrap* and a fixture's is untracked; it is now the boot
+  # that is actually running, which is the value the capture was
+  # standing in for
+  (when-let [reg (get (plugin/running-boot) :hooks)]
     (each e (hooks/handlers reg sent-hook)
       (def [ok err] (protect ((e :fn) receipt)))
       (unless ok
@@ -337,7 +337,6 @@
    :name :notify/configure
    :doc "Resolve the [:notify] slice and the channels this process delivers on"
    :fn (fn configure [boot]
-         (set hook-registry (get boot :hooks))
          (def resolved (or (get-in boot [:extensions :void.notify/channel :resolved]) @{}))
          (def cfg (merge-slice (get-in boot [:config :values :notify])))
          (check-channels cfg (get boot :profile :dev) resolved)

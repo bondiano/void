@@ -33,6 +33,7 @@
 (import void/core/log :as log)
 (import void/core/hooks :as hooks)
 (import void/core/plugin :as plugin)
+(import void/core/system :as system)
 (import ./backend :as backend)
 (import ./job :as job)
 (import ./record :as record)
@@ -42,23 +43,22 @@
   default would carry the install path."
   "void.jobs")
 
-(def queue-dyn
-  "Dynamic binding: queue override — bind it to run a scope against a
-  queue other than the started :jobs/queue component."
-  :void.jobs/queue)
+(def queue
+  ``The queue this package's functions run against: what the running
+  :jobs/queue component holds, or the `:void.jobs/queue` dyn where a
+  scope overrides it (tests, tooling, a second queue).``
+  (system/ambient :void.jobs/queue :of "the job queue"
+                  :from :void/jobs :component :jobs/queue))
 
-(var current-queue
-  "The value of the running :jobs/queue component (set by its :start).
-  One per process, like plugin/current-boot."
-  nil)
+(def queue-dyn
+  "Dynamic binding of the queue ambient — the name a scope binds."
+  (queue :dyn))
 
 (defn active-queue
   "The queue this fiber runs against: the `queue-dyn` override, else
   the started component."
   []
-  (or (dyn queue-dyn)
-      current-queue
-      (error "void/jobs is not started — no :jobs/queue component (or bind the queue-dyn dynamic)")))
+  (system/active queue))
 
 (defn active-backend
   "The `:void/jobs-backend` behind the active queue."
@@ -102,7 +102,7 @@
   [event r &opt extra]
   (def payload
     (merge {:event event :job r :at (os/clock :realtime)} (or extra {})))
-  (when-let [hooks (get plugin/current-boot :hooks)]
+  (when-let [hooks (get (plugin/running-boot) :hooks)]
     (each e (hooks/handlers hooks event-hook)
       (def [ok err] (protect ((e :fn) payload)))
       (unless ok

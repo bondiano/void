@@ -32,11 +32,16 @@
                       ["void/core/plugin" "plugin/"]
                       ["void/core/hooks" "hooks/"]]
     (merge-module e (require mod) prefix))
+  # the boot this process is running, else the last one bootstrapped —
+  # the same fallback plugin/inspect and friends make, and the reason
+  # for it is a REPL attached to a process that bootstrapped without
+  # starting (dry-run, a half-built composition being poked at)
+  (defn repl-boot [] (or (plugin/running-boot) plugin/last-boot))
   (put e 'boot
-       @{:value (fn boot [] plugin/current-boot)
-         :doc "The boot value of the running system (plugin/start!)."})
+       @{:value repl-boot
+         :doc "The boot value of the running system (plugin/start!), else the most recent bootstrap."})
   (put e 'sys
-       @{:value (fn sys [] (get plugin/current-boot :system))
+       @{:value (fn sys [] (get (repl-boot) :system))
          :doc "The running system value — (system/restart (sys) :key) etc."})
   e)
 

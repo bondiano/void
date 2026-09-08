@@ -6,8 +6,10 @@
 ### batch that names the source plugin; phases 6-7 (`start!`: the
 ### logger, the lifecycle hooks, the component graph, the deploy
 ### survey) and `shutdown!`; `dry-run`, phases 1-5 alone as CI's
-### validation of a composition; `current-boot`, the process's most
-### recent tracked boot; and the REPL tools that read a boot —
+### validation of a composition; the two ways to name a boot without
+### being handed one — `running-boot`, the one this process has up,
+### and `last-boot`, the most recent bootstrap, which is the REPL's
+### fallback and nothing else's; and the REPL tools that read a boot —
 ### `extension`, `health`, `inspect`, `why`. The seam is here because
 ### this is the only module that sequences the others: semver answers
 ### compatibility, manifest says what a plugin is, extension resolves
@@ -124,8 +126,9 @@
   are declared here rather than in a manifest in the :plugins list
   because the core is not a plugin there: its extension points are
   injected by extension/declared-points and its version is seeded by
-  check-compat, and a :void/core entry in every lock file and plugin
-  list is a question for 8.5 (boot as a dependency), not for config.
+  check-compat, and 8.5 (boot as a dependency) left it that way: the
+  boot reaches a component through `:deps [:void/boot]`, which needs
+  no :void/core entry in every lock file and plugin list.
   Both slices are validated by the same config/validate call as every
   plugin's, in phase 2, before anything starts (ADR-0046).``
   [{:plugin :void/core :key log/config-key :schema log/Config}
@@ -257,11 +260,30 @@
       (do (array/push errors (util/err-str sys))
           nil))))
 
-(var current-boot
-  "The boot value of the most recent bootstrap/start! in this process —
-  the default subject of the zero-argument REPL tools (inspect, why,
-  extension)."
+(var last-boot
+  ``The boot value of the most recent bootstrap/start! in this process,
+  and nothing more: the fallback subject of the zero-argument REPL
+  tools (inspect, why, extension) when nothing is running.
+
+  Code that needs "the boot in force" wants `running-boot`. The
+  difference is the reason this binding is named the way it is: the
+  most recent bootstrap is not the running one under a test suite
+  (test bootstraps are untracked on purpose) and not the right one in
+  any process that bootstraps twice.``
   nil)
+
+(defn running-boot
+  ``The boot this process is running — what `plugin/start!` attached and
+  has not shut down, or the `:void/boot` dyn where a scope overrides
+  it. Nil when nothing is up.
+
+  This is the reader for a package's module-level functions: the hook
+  registry an event fires on, a resolved extension point, a config
+  slice. A component does not use it — it declares `:deps [:void/boot]`
+  and is handed the boot of *its* system, which is the same value here
+  and a stricter statement about where it came from.``
+  []
+  (system/current system/running-boot))
 
 (defn- build-hooks
   ``Fold the :void.core/hooks contributions into a hooks/registry, each
@@ -291,7 +313,7 @@
 (defn- bootstrap*
   "Phases 1-5 in order, each `checked` before the next runs on its
   output; the boot value is assembled at the end and, with `track?`,
-  becomes `current-boot`. `bootstrap` tracks unless told otherwise,
+  becomes `last-boot`. `bootstrap` tracks unless told otherwise,
   `start!` always does, `dry-run` never."
   [opts track?]
   (unless (dictionary? opts)
@@ -344,7 +366,7 @@
       :hooks (build-hooks active extensions)
       :system sys})
   (when track?
-    (set current-boot boot))
+    (set last-boot boot))
   boot)
 
 (defn bootstrap
@@ -394,6 +416,11 @@
                                     ;(map |($ :fn) sinks)))))
   (log/set-serializers!
     (or (get-in boot [:extensions :void.core/log-serializer :resolved]) {}))
+  # from here this boot is the one in force: components asking for
+  # `:deps [:void/boot]` get it, and module-level code reads it through
+  # plugin/running-boot. Before the hooks, because a :config-loaded
+  # handler is already code of the composition being started
+  (system/attach-boot! (boot :system) boot)
   (hooks/run! (boot :hooks) :config-loaded boot)
   (hooks/run! (boot :hooks) :before-start boot)
   (system/start (boot :system))
@@ -414,6 +441,7 @@
       (put boot :stores (deploy/check! boot)))
     ([e f]
       (try (system/stop (boot :system)) ([_]))
+      (system/detach-boot! (boot :system))
       (put boot :phase :stopped)
       (log/close!)
       (propagate e f)))
@@ -434,6 +462,9 @@
   (put boot :phase :stopped)
   (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
     (eprint e))
+  # the :after-stop handlers are still code of this composition, so the
+  # boot stops being the one in force only once they have run
+  (system/detach-boot! (boot :system))
   (log/close!)                    # stop async log writers
   boot)
 
@@ -460,10 +491,11 @@
 # -- REPL tools ----------------------------------------------------------
 
 (defn- pick-boot
-  "The boot a REPL tool works on: the one given, else `current-boot`,
-  else an error saying nothing has been bootstrapped in this process."
+  "The boot a REPL tool works on: the one given, else the one this
+  process is running, else the most recent bootstrap, else an error
+  saying nothing has been bootstrapped in this process."
   [boot]
-  (or boot current-boot
+  (or boot (running-boot) last-boot
       (error "no bootstrapped system — run plugin/bootstrap or plugin/start! first")))
 
 (defn extension

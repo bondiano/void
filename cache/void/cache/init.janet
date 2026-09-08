@@ -177,12 +177,12 @@
     :deps [:void/cache-store]
     :provides [:void/cache]
     :config {:key :cache}
+    :ambient state/cache
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))
       (def st (deps :void/cache-store))
       (def value (state/make st cfg))
-      (set state/current-cache value)
       (log/info "cache ready" :ns log-ns
                 :store (get-in value [:store :name])
                 :prefix (value :prefix)
@@ -191,9 +191,6 @@
                 :on-error (value :on-error)
                 :enabled (not= false (cfg :enabled)))
       value)
-    :stop
-    (fn stop [_]
-      (set state/current-cache nil))
     :health
     (fn health [c]
       (merge {:status :up} (with-dyns [state/cache-dyn c] (state/stats))))))

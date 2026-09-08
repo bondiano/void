@@ -111,7 +111,7 @@
 
 (var boot-ref
   "The boot value this process's projection reads. One per process,
-  like plugin/current-boot — a tool call resolves its components
+  set by a hook rather than handed to a component — a tool call resolves its components
   through it."
   nil)
 

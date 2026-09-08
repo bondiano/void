@@ -36,7 +36,8 @@
 
 (var codecs-ref
   "The resolved :void.grpc/codec point, set at :before-start — one per
-  process, like plugin/current-boot."
+  process. A hook builds it, not a component, so it is a var rather
+  than a `system/ambient`."
   [])
 
 (var settings-ref

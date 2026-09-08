@@ -1,9 +1,11 @@
 ### void/cache/state — the runtime: the active cache, the funnel every
 ### call passes through, and single-flight.
 ###
-### The shape is void/db's and void/redis's: one component value in a
-### module-level var, a dyn (`cache-dyn`) that overrides it for a
-### scope, and one funnel where the counters, the logging and the error
+### The shape is void/db's and void/redis's, and since 8.5 it is
+### literally the same code: a `system/ambient` the :cache/store
+### component declares, so the system holds the value while the
+### component runs and the `cache-dyn` override wins inside a scope —
+### plus one funnel where the counters, the logging and the error
 ### policy live. void/obs (wave 3) hangs its instrumentation on the
 ### same funnel.
 ###
@@ -48,17 +50,25 @@
 (import void/core/log :as log)
 (import ./key :as key)
 (import ./store :as store)
+(import void/core/system :as system)
 
 (def log-ns
   "Log namespace of the cache funnel — spelled out, since the
   file-derived default would carry the install path."
   "void.cache")
 
+(def cache
+  ``The cache this package's functions run against: what the running
+  :cache/store component holds, or the `:void.cache/cache` dyn where a
+  scope overrides it (tests, tooling, a second cache). The component
+  declares it as its `:ambient`, so the system fills it at :start and
+  empties it at :stop.``
+  (system/ambient :void.cache/cache :of "the cache"
+                 :from :void/cache :component :cache/store))
+
 (def cache-dyn
-  "Dynamic binding: cache override — set it to run a scope against a
-  cache other than the started :cache/store component (tests, tooling,
-  a second cache)."
-  :void.cache/cache)
+  "Dynamic binding of the cache ambient — the name a scope binds."
+  (cache :dyn))
 
 (def nil-sentinel
   "What a cached nil is stored as. A keyword, so a jdn or Janet-valued
@@ -71,18 +81,11 @@
   counts every one of them."
   10)
 
-(var current-cache
-  "The value of the running :cache/store component (set by its
-  :start). One per process, like plugin/current-boot."
-  nil)
-
 (defn active-cache
   "The cache this fiber runs against: the `cache-dyn` override, else
   the started component."
   []
-  (or (dyn cache-dyn)
-      current-cache
-      (error "void/cache is not started — no :cache/store component (or bind the cache-dyn dynamic)")))
+  (system/active cache))
 
 (defn active-store
   "The backend behind the active cache."

@@ -66,7 +66,12 @@
   (put boot :system sub)
   # the full lifecycle, like plugin/start! — :before-start is where route
   # tables and contexts build (the inject path must be the production
-  # wiring, not a shortcut)
+  # wiring, not a shortcut). The attach is what makes the untracked
+  # bootstrap above safe: this boot is the one in force for as long as
+  # the fixture runs, so a component asking for `:deps [:void/boot]`
+  # and a module-level `plugin/running-boot` both see the composition
+  # this suite built rather than whichever one bootstrapped last
+  (system/attach-boot! sub boot)
   (hooks/run! (boot :hooks) :config-loaded boot)
   (hooks/run! (boot :hooks) :before-start boot)
   (system/start sub)
@@ -91,6 +96,7 @@
   (put boot :phase :stopped)
   (each e (hooks/run-protected! (boot :hooks) :after-stop boot)
     (eprint e))
+  (system/detach-boot! (boot :system))
   boot)
 
 (defmacro with-system

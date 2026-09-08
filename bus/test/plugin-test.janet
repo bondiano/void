@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/core/system :as system)
 (import void/core/plugin :as plugin)
 (import void/test :as test)
 (import void/bus :as bus)
@@ -58,7 +59,7 @@
 (def boot (start {:bus {:group :app}}))
 
 (defer (test/stop! boot)
-  (def br state/current-broker)
+  (def br (system/current state/broker))
   (assert br "the :bus/broker component sets the process's broker")
   (assert (= :memory (get-in br [:backend :name])))
   (assert (= :json (get-in br [:codec :name])))
@@ -100,7 +101,7 @@
 
 (def quiet (start {:bus {:consume false}}))
 (defer (test/stop! quiet)
-  (assert (empty? (get state/current-broker :consumers))
+  (assert (empty? (get (system/current state/broker) :consumers))
           "[:bus :consume] false leaves the handlers declared and unread")
   (bus/publish :app/thing {:n 2})
   (ev/sleep 0.05)
@@ -112,7 +113,7 @@
 (each n (router/defined) (router/forget! n))
 (def publisher (start {}))
 (defer (test/stop! publisher)
-  (assert (empty? (get state/current-broker :consumers))
+  (assert (empty? (get (system/current state/broker) :consumers))
           "a process that declares no handlers starts no consumer, and that is not an error")
   (assert (bus/publish :app/thing {:n 3})
           "and can still publish, which is the ordinary web-tier shape"))

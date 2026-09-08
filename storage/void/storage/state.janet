@@ -9,26 +9,25 @@
 
 (import ./key :as key)
 (import ./store :as store)
+(import void/core/system :as system)
+
+(def store-ambient
+  ``The store this package's functions run against: what the running
+  :storage/store component holds, or the `:void.storage/store` dyn
+  where a scope overrides it (tests, tooling, a migration between
+  stores).``
+  (system/ambient :void.storage/store :of "the file store"
+                  :from :void/storage :component :storage/store))
 
 (def storage-dyn
-  "Dynamic binding: storage override — set it to run a scope against a
-  store other than the started :storage/store component (tests,
-  tooling, a migration between stores)."
-  :void.storage/store)
-
-(var current-store
-  "The value of the running :storage/store component (set by its
-  :start). One per process, like plugin/current-boot."
-  nil)
+  "Dynamic binding of the store ambient — the name a scope binds."
+  (store-ambient :dyn))
 
 (defn active-store
   "The store this fiber runs against: the `storage-dyn` override, else
   the started component."
   []
-  (or (dyn storage-dyn)
-      current-store
-      (error (string "void/storage is not started — no :storage/store component "
-                     "(or bind the storage-dyn dynamic)"))))
+  (system/active store-ambient))
 
 (defn put!
   ``Store `value` (bytes) under `key`. opts: :content-type. Returns the

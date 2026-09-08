@@ -90,24 +90,17 @@
    :synchronous :normal
    :tx-mode :immediate})
 
-(var current-boot
-  ``Boot value, captured at :before-start. Two things are read off it:
-  the profile (an in-memory database in :prod is worth a warning) and
-  void/db's pool size, which decides whether an in-memory path can
-  work at all.``
-  nil)
-
-(plugin/contribute! :void.core/hooks
-  {:hook :before-start
-   :phase 450
-   :name :db-sqlite/capture-boot
-   :doc "Remember the boot value — the profile and void/db's pool size"
-   :fn (fn capture [boot] (set current-boot boot))})
-
 (defn pool-size
-  "The [:db :pool :size] void/db will run with (1 when unknown)."
-  []
-  (get-in current-boot [:config :values :db :pool :size] 1))
+  ``The [:db :pool :size] void/db will run with (1 when unknown).
+
+  The boot is an argument because the component has one — `:deps
+  [:void/boot]` — and the tooling that has none falls back to whatever
+  this process is running. It used to be captured in a :before-start
+  hook of this plugin's own, which is the same fallback with a copy of
+  the machinery around it.``
+  [&opt boot]
+  (default boot (plugin/running-boot))
+  (get-in boot [:config :values :db :pool :size] 1))
 
 (defn pragmas
   ``The pragmas applied to every connection, in order: the timeout
@@ -143,15 +136,17 @@
     :doc "The :void/db-driver void/db's pool runs on: janet-lang/sqlite3
     with the configured pragmas, plus the keeper connection that fails
     a bad path at boot and holds an in-memory database open."
+    :deps [:void/boot]
     :provides [:void/db-driver]
     :config {:key :db-sqlite}
     :start
-    (fn start [_ cfg0]
+    (fn start [deps cfg0]
+      (def boot (deps :void/boot))
       (def cfg (merge defaults (or cfg0 {})))
       (def path (cfg :path))
       (def memory? (sqlite/memory-path? path))
       (when memory?
-        (def size (pool-size))
+        (def size (pool-size boot))
         (unless (= 1 size)
           (errorf (string "sqlite: %q is a single-connection database — set "
                           "[:db :pool :size] to 1 (it is %d), or give "
@@ -164,7 +159,7 @@
       (def returning
         (let [v (get cfg :returning)]
           (if (nil? v) (sqlite/supports-returning? ver) v)))
-      (when (and memory? (= :prod (get current-boot :profile)))
+      (when (and memory? (= :prod (get boot :profile)))
         (log/warn "sqlite runs in memory in :prod — nothing is persisted"
                   :ns log-ns :path path))
       (log/info "sqlite driver ready" :ns log-ns

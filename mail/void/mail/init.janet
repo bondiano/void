@@ -134,11 +134,6 @@
   "Every contributed transport, by name — resolved at :before-start."
   @{})
 
-(var hook-registry
-  "The running boot's hook registry (the tracking `plugin/current-boot`
-  is not set on the inject path — see void/auth's init)."
-  nil)
-
 (var enqueue
   ``How a message reaches a worker, or nil when this composition has
   no queue. `void/mail-jobs` installs a function here at :before-start;
@@ -168,7 +163,9 @@
   (put listeners name nil))
 
 (defn- emit! [receipt]
-  (when-let [reg hook-registry]
+  # the hook registry of the boot in force — see void/notify's emit!
+  # for why this is no longer a var captured at :before-start
+  (when-let [reg (get (plugin/running-boot) :hooks)]
     (each e (hooks/handlers reg sent-hook)
       (def [ok err] (protect ((e :fn) receipt)))
       (unless ok
@@ -359,7 +356,6 @@
    :name :mail/configure
    :doc "Resolve the [:mail] slice, the transports and the base URL letters link against"
    :fn (fn configure [boot]
-         (set hook-registry (get boot :hooks))
          (set transports (or (get-in boot [:extensions :void.mail/transport :resolved]) @{}))
          (def cfg (reveal-password (merge-slice (get-in boot [:config :values :mail]))))
          (check-transport cfg (get boot :profile :dev))

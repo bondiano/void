@@ -17,6 +17,7 @@
 
 (import void/core/log :as log)
 (import void/core/errors :as errors)
+(import void/core/system :as system)
 (import ./builder :as builder)
 (import ./driver :as driver)
 (import ./pool :as pool)
@@ -30,27 +31,28 @@
   "Dynamic binding: the checked-out connection entry of this fiber."
   :void.db/conn)
 
+(def db-pool
+  ``The pool this package's functions run against: what the running
+  :db/pool component holds, or the `:void.db/pool` dyn where a scope
+  overrides it (tests, tooling, a second pool). The component declares
+  it as its `:ambient`, so the system fills it at :start and empties it
+  at :stop — nobody here sets it.``
+  (system/ambient :void.db/pool :of "the database pool"
+                 :from :void/db :component :db/pool))
+
 (def pool-dyn
-  "Dynamic binding: pool override — set it to run a scope against a
-  pool other than the started :db/pool component (tests, tooling)."
-  :void.db/pool)
+  "Dynamic binding of the pool ambient — the name a scope binds."
+  (db-pool :dyn))
 
 (def tx-dyn
   "Dynamic binding: {:depth n} inside `with-tx`."
   :void.db/tx)
 
-(var current-pool
-  "The pool of the running :db/pool component (set by its :start). One
-  per process, like plugin/current-boot."
-  nil)
-
 (defn active-pool
   "The pool this fiber runs against: the `pool-dyn` override, else the
   started component's pool."
   []
-  (or (dyn pool-dyn)
-      current-pool
-      (error "void/db is not started — no :db/pool component (or bind the pool-dyn dynamic)")))
+  (system/active db-pool))
 
 (defn driver
   "The driver behind the active pool."

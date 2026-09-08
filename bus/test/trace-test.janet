@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/core/system :as system)
 (import void/test :as test)
 (import void/obs :as obs)
 (import void/obs/trace :as trace)
@@ -52,7 +53,7 @@
 (defer (test/stop! boot)
   (trace/set-exporters! [{:name :collect :fn (fn [span] (array/push spans span))}])
 
-  (assert (get state/current-broker :tracer)
+  (assert (get (system/current state/broker) :tracer)
           "with obs started the broker found the three functions it needs")
 
   # a request's span — what void/obs-http would have opened
@@ -100,7 +101,7 @@
 
 (def bare (start ["void/bus/init"]))
 (defer (test/stop! bare)
-  (assert (nil? (get state/current-broker :tracer))
+  (assert (nil? (get (system/current state/broker) :tracer))
           "without obs in the composition there is no tracer, and that is not an error")
   (def msg (bus/publish :trace/one {:amount 11}))
   (assert (nil? (get-in msg [:meta :traceparent]))

@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/bus/conformance/backend :as conformance)
+(import void/core/system :as system)
 (import void/core/log :as log)
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
@@ -162,7 +163,7 @@
                     :bus-db {:poll-interval 0.05 :forwarder {:interval 0.02}}}}}))
 
 (defer (do (test/stop! boot) (rimraf boot-sandbox))
-  (def br state/current-broker)
+  (def br (system/current state/broker))
   (assert (= :db (get-in br [:backend :name])))
   (assert (bus/outbox-writer br)
           "the outbox writer is the backend's own, so it is there whether or not the :after-start hooks ran — which a CLI subset boot does not")

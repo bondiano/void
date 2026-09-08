@@ -30,7 +30,8 @@
 
 (var current-context
   "The running openapi context (set by the :before-start hook):
-  :enabled, :info, :config. One per process, like plugin/current-boot."
+  :enabled, :info, :config. One per process — a hook builds it, not a
+  component, so it is a var rather than a `system/ambient`."
   nil)
 
 (defn- context []

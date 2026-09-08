@@ -6,16 +6,41 @@
 ### topological sort -> start in dependency order, stop in reverse.
 ### All runtime state lives inside the system value itself, fully
 ### inspectable from the REPL (`pp sys`) — no hidden singletons.
+###
+### Two things here exist because "no hidden singletons" is a promise
+### about *ownership*, not about reach. A component that needs the
+### boot it was started in declares `:deps [:void/boot]` and is handed
+### that boot — not the process's most recent one, which is a
+### different value the moment a test bootstraps a second composition.
+### And a package whose module-level functions must reach the running
+### instance without being handed the system (`db/query`, `cache/fetch`)
+### declares an `ambient`: one dyn, one cell the system fills at :start
+### and empties at :stop, and one reader that says what is not started
+### when neither is set. The reachability is the same as the eight
+### hand-written `(var current-X)` it replaces; what changed is that
+### the lifetime is the component's and no package writes the cell.
 
 (import ./config :as config)
 (import ./util :as util)
 
 (def- allowed-component-keys
-  {:key true :doc true :plugin true :scope true
+  {:key true :doc true :plugin true :ambient true
    :deps true :provides true :config true
-   :start true :stop true :health true :suspend true :resume true})
+   :start true :stop true :health true})
 
-(def- allowed-scopes {:singleton true :factory true})
+(def boot-ref
+  ``The pseudo-dependency that hands a component its boot.
+
+  `:deps [:void/boot]` puts the boot value in the deps struct under
+  this key — the boot *this system* was attached to, which is the
+  point: `plugin/last-boot` is the process's most recent bootstrap,
+  and a component that reads it sees whichever composition happened
+  to bootstrap last (a test bootstrap is untracked on purpose, so
+  under a suite it sees the previous one, or none).
+
+  It is not a component: nothing starts it, nothing may provide it,
+  and it never enters the graph or the start order.``
+  :void/boot)
 
 (defn- plugin-of
   "The plugin a component definition came from, for a message; a
@@ -25,13 +50,108 @@
     (string/format "plugin %q" p)
     "<unknown plugin>"))
 
+# -- ambients ------------------------------------------------------------
+
+(def- ambient-marker :void.system/ambient)
+
+(defn ambient
+  ``Declare an ambient value: what a running component holds, a dyn
+  that overrides it for a scope, and a reader that explains the
+  absence.
+
+      (def pool (system/ambient :void.db/pool
+                                :of "the database pool"
+                                :from :void/db :component :db/pool))
+
+      (system/current pool)   # the value in force, or nil
+      (system/active pool)    # the value in force, or an error
+
+  The component that owns it says so — `:ambient pool` in its
+  definition — and the system fills the cell when it starts and empties
+  it when it stops. Nothing else writes it: an ambient set by hand
+  outlives the component that set it, and that is the whole class of
+  bug this replaces.
+
+  `of` names the value for the error message, `from` the plugin to add
+  to :plugins and `component` the component that would have held it —
+  the two halves of "why is this empty", since a plugin can be in the
+  composition with its component left out of a subset start.
+
+  The cell is a closure and the declaration itself is an immutable
+  struct, because a component definition travels inside a manifest and
+  `defplugin` freezes a manifest whole — a table here would arrive at
+  :start as a struct nobody could write to.``
+  [dyn-key &named of from component]
+  (unless (keyword? dyn-key)
+    (errorf "ambient: the dyn key must be a keyword, got %q" dyn-key))
+  (var held nil)
+  {ambient-marker true
+   :dyn dyn-key
+   :of (or of (string/format "%q" dyn-key))
+   :from from
+   :component component
+   :held (fn held-value [] held)
+   :hold (fn hold-value [v] (set held v) v)})
+
+(defn ambient?
+  "Is this an ambient declaration?"
+  [a]
+  (and (dictionary? a) (truthy? (get a ambient-marker))))
+
+(defn current
+  "The ambient value in force: the dyn override, else what the running
+  component holds; nil when neither is set."
+  [a]
+  (def v (dyn (a :dyn)))
+  (if (nil? v) ((a :held)) v))
+
+(defn active
+  "The ambient value in force, or an error naming what is not running
+  — `current` for the callers who cannot go on without it."
+  [a]
+  (or (current a)
+      (errorf "%s is not available%s%s (or bind %q for a scope)"
+              (a :of)
+              (if-let [p (a :from)]
+                (string/format " — %q is not started" p)
+                "")
+              (if-let [c (a :component)]
+                (string/format ", no %q component" c)
+                "")
+              (a :dyn))))
+
+(defn hold!
+  "Put a value in the ambient. The system does this for a component's
+  `:ambient`; a REPL or a test standing a value up without a system is
+  the only other caller."
+  [a value]
+  ((a :hold) value))
+
+(defn release!
+  "Empty the ambient — the counterpart of `hold!`."
+  [a]
+  ((a :hold) nil))
+
+(defmacro with-ambient
+  ``Run the body with the ambient bound to `value` for this scope — the
+  dyn override, so it is per-fiber and it nests:
+
+      (system/with-ambient pool other-pool
+        (db/query ...))``
+  [a value & body]
+  (with-syms [$a]
+    ~(let [,$a ,a]
+       (with-dyns [(,$a :dyn) ,value] ,;body))))
+
 # -- component definitions -----------------------------------------------
 
 (defn component
   ``Build and validate a component definition (a plain struct).
 
   Options:
-    :deps     tuple of dependency refs — component keys or interfaces
+    :deps     tuple of dependency refs — component keys, interfaces, or
+              `:void/boot` (see `boot-ref`), which is not a component
+              and is handed over as the boot this system is attached to
     :provides tuple of interface keywords this component implements
     :config   {:key <config-key>} — the component's slice of the
               config map, passed to :start. A :schema here is
@@ -43,13 +163,11 @@
               keyed by the refs from :deps
     :stop     (fn [inst]) — optional
     :health   (fn [inst] {:status :up ...}) — optional
-    :suspend  (fn [inst]) / :resume (fn [inst deps cfg] instance) —
-              optional pair used by `restart` on dependents: instead of
-              a full stop/start the component is suspended and later
-              resumed with freshly resolved deps
-    :scope    :singleton (default) or :factory — factory components are
-              not started with the system; dependents receive a nullary
-              constructor returning a fresh instance per call
+    :ambient  an `ambient` this component owns: the system holds the
+              instance in it while the component runs and releases it
+              after :stop, so the package's module-level functions
+              reach the running instance and nothing reaches a stopped
+              one
     :plugin   source plugin keyword, used in error messages
     :doc      docstring``
   [key & kvs]
@@ -65,17 +183,15 @@
               (string/join (map |(string/format "%q" $)
                                 (sorted (keys allowed-component-keys)))
                            " "))))
-  (def scope (get opts :scope :singleton))
-  (unless (in allowed-scopes scope)
-    (errorf "component %q: :scope must be :singleton or :factory, got %q" key scope))
   (unless (util/callable? (get opts :start))
     (errorf "component %q: a :start function is required" key))
-  (each fk [:stop :health :suspend :resume]
+  (each fk [:stop :health]
     (when-let [f (get opts fk)]
       (unless (util/callable? f)
         (errorf "component %q: %q must be a function, got %q" key fk f))))
-  (when (not= (nil? (get opts :suspend)) (nil? (get opts :resume)))
-    (errorf "component %q: :suspend and :resume must be declared together" key))
+  (when-let [a (get opts :ambient)]
+    (unless (ambient? a)
+      (errorf "component %q: :ambient must be a `system/ambient` declaration, got %q" key a)))
   (def deps (get opts :deps []))
   (unless (and (indexed? deps) (all keyword? deps))
     (errorf "component %q: :deps must be a tuple of keywords, got %q" key deps))
@@ -88,7 +204,6 @@
               key cfg-spec)))
   (table/to-struct
     (merge opts {:key key
-                 :scope scope
                  :deps (tuple ;deps)
                  :provides (tuple ;provides)})))
 
@@ -271,11 +386,21 @@
     :order       topological start order
     :config      the config map
     :instances   key -> running instance
-    :states      key -> :running | :suspended | :stopped``
+    :states      key -> :running | :stopped
+    :boot        the boot value, once `attach-boot!` gave it one``
   [components &opt config]
   (default config {})
   (def comps (collect-components components))
+  # `:void/boot` is a ref the graph never resolves; a component wearing
+  # the name would be resolvable by it, and then nobody could say which
+  # of the two a `:deps [:void/boot]` meant
+  (when (in comps boot-ref)
+    (errorf "%q is reserved — it is the boot pseudo-dependency, not a component (%s)"
+            boot-ref (plugin-of (comps boot-ref))))
   (def providers (interface-providers comps))
+  (when-let [ps (get providers boot-ref)]
+    (errorf "component %q (%s) provides %q, which is reserved for the boot pseudo-dependency"
+            (first ps) (plugin-of (comps (first ps))) boot-ref))
   # >1 implementation demands an explicit config {:impl ...} choice even
   # when nothing depends on the interface yet — instance lookup by
   # interface must never be ambiguous.
@@ -287,10 +412,14 @@
     (def comp (comps k))
     (def res @{})
     (each ref (get comp :deps [])
-      (put res ref
-           (resolve-ref comps providers config
-                        (string/format "component %q (%s)" k (plugin-of comp))
-                        ref)))
+      # the boot is handed over at :start, not resolved here: it is not
+      # a node, so it stays out of the order and out of the closure
+      # `needed-keys` walks
+      (unless (= ref boot-ref)
+        (put res ref
+             (resolve-ref comps providers config
+                          (string/format "component %q (%s)" k (plugin-of comp))
+                          ref))))
     (put resolution k res))
   (def order (topo-sort comps resolution))
   (check-component-config comps config)
@@ -313,37 +442,55 @@
     (get config (spec :key))))
 
 (defn- resolved-deps
-  "Build the deps struct passed to :start/:resume. Factory dependencies
-  become nullary constructors producing a fresh instance per call."
+  "Build the deps struct passed to :start. Every ref is the instance of
+  the component it resolved to, except `boot-ref`, which is the boot
+  the system was attached to — a system started outside a bootstrap has
+  none, and a component that asked for one says so rather than
+  receiving nil."
   [sys k]
   (def out @{})
   (eachp [ref rk] (get-in sys [:resolution k] {})
-    (def target (get-in sys [:components rk]))
-    (put out ref
-         (if (= :factory (get target :scope))
-           (fn factory []
-             ((target :start) (resolved-deps sys rk)
-                              (component-config target (sys :config))))
-           (get-in sys [:instances rk]))))
+    (put out ref (get-in sys [:instances rk])))
+  (when (index-of boot-ref (get-in sys [:components k :deps] []))
+    (put out boot-ref
+         (or (get sys :boot)
+             (errorf (string "component %q depends on %q, but this system has no boot "
+                             "— it was built by system/init and never attached to one "
+                             "(plugin/start! and test/start! do that; system/attach-boot! is the seam)")
+                     k boot-ref))))
   (table/to-struct out))
 
 (defn- start-instance
-  "Call the component's :start with its resolved deps and config slice;
-  returns the instance."
+  "Call the component's :start with its resolved deps and config slice,
+  put the instance in the component's `:ambient` when it declares one,
+  and return it."
   [sys k]
   (def comp (get-in sys [:components k]))
-  ((comp :start) (resolved-deps sys k)
-                 (component-config comp (sys :config))))
+  (def inst ((comp :start) (resolved-deps sys k)
+                           (component-config comp (sys :config))))
+  (when-let [a (get comp :ambient)] (hold! a inst))
+  inst)
 
-(defn- stop-instance
-  "Call the component's :stop with its instance, when it declares one;
-  then forget the instance and mark it :stopped."
+(defn- forget-instance
+  "Drop what the system remembers about a stopped component: the
+  instance, the state, and the `:ambient` cell — the last one because a
+  package's module-level functions read it, and an ambient left full
+  after :stop is a pool that answers queries on closed connections."
   [sys k]
-  (def comp (get-in sys [:components k]))
-  (when-let [stop-fn (get comp :stop)]
-    (stop-fn (get-in sys [:instances k])))
+  (when-let [a (get-in sys [:components k :ambient])] (release! a))
   (put (sys :instances) k nil)
   (put (sys :states) k :stopped))
+
+(defn- stop-instance
+  "Call the component's :stop with its instance, when it declares one —
+  the ambient is still full while it runs, since a :stop that closes
+  what it built often goes through the package's own functions — then
+  forget the instance and mark it :stopped."
+  [sys k]
+  (def comp (get-in sys [:components k]))
+  (defer (forget-instance sys k)
+    (when-let [stop-fn (get comp :stop)]
+      (stop-fn (get-in sys [:instances k])))))
 
 (defn needed-keys
   "Expand a set of component keys to their transitive dependency
@@ -365,30 +512,33 @@
   wanted)
 
 (defn start
-  "Start singleton components in dependency order — all of them, or,
-  with `subset` (component keys), only those plus their transitive
-  dependencies (partial bootstrap for CLI commands and fixtures). If a
-  component fails to start, the ones already started are stopped in
-  reverse order (best effort) and the error is rethrown. Returns the
-  system."
+  ``Start components in dependency order — all of them, or, with
+  `subset` (component keys), only those plus their transitive
+  dependencies (partial bootstrap for CLI commands and fixtures).
+
+  If a component fails to start, **this call's** work is undone: the
+  components it started are stopped in reverse order (best effort) and
+  the error is rethrown. What was already running when the call began
+  is left running, which is the difference that matters on the subset
+  path — `void jobs work` starts its queue, then starts what the jobs
+  need, and a missing library in the second call used to take the
+  first one's pool down with it.
+
+  Returns the system.``
   [sys &opt subset]
   (def wanted (when subset (needed-keys sys subset)))
+  (def started @[])
   (each k (sys :order)
-    (def comp (get-in sys [:components k]))
     (when (and (or (nil? wanted) (in wanted k))
-               (= :singleton (get comp :scope))
                (not= :running (get-in sys [:states k])))
       (try
         (do
           (put (sys :instances) k (start-instance sys k))
-          (put (sys :states) k :running))
+          (put (sys :states) k :running)
+          (array/push started k))
         ([e f]
-          (each j (reverse (sys :order))
-            (when (= :running (get-in sys [:states j]))
-              (try (stop-instance sys j)
-                ([_]
-                  (put (sys :instances) j nil)
-                  (put (sys :states) j :stopped)))))
+          (each j (reverse started)
+            (try (stop-instance sys j) ([_] (forget-instance sys j))))
           (propagate e f)))))
   sys)
 
@@ -407,8 +557,7 @@
              (ev/with-deadline timeout (stop-instance sys k))
              (stop-instance sys k))
         ([e]
-          (put (sys :instances) k nil)
-          (put (sys :states) k :stopped)
+          (forget-instance sys k)
           (array/push failures (string/format "%q: %s" k (describe e)))))))
   (unless (empty? failures)
     (errorf "errors while stopping components: %s" (string/join failures "; ")))
@@ -430,53 +579,57 @@
   (visit k)
   (filter |(in affected $) (sys :order)))
 
+(defn stop-key
+  ``Stop component `k` and its transitive dependents, in reverse
+  dependency order — the counterpart of a subset `start`, and what a
+  caller needs when it opened part of the graph for one piece of work
+  and that work is done. Nothing else is touched. A stop error is
+  collected and rethrown at the end, as in `stop`. Returns the
+  system.``
+  [sys k]
+  (unless (get-in sys [:components k])
+    (errorf "unknown component %q%s" k (util/suggest k (keys (sys :components)))))
+  (def failures @[])
+  # [k ;dependents] is start order — a dependent starts after what it
+  # depends on — so the reverse is the order to stop them in
+  (each j (reverse [k ;(dependents-of sys k)])
+    (when (= :running (get-in sys [:states j]))
+      (try (stop-instance sys j)
+        ([e]
+          (forget-instance sys j)
+          (array/push failures (string/format "%q: %s" j (describe e)))))))
+  (unless (empty? failures)
+    (errorf "errors while stopping %q: %s" k (string/join failures "; ")))
+  sys)
+
 (defn restart
   ``Stop component `k` and its transitive dependents, then start them
-  again — the reloaded workflow. Dependents declaring :suspend/:resume
-  are suspended instead of stopped and resumed with freshly resolved
-  deps, keeping their instance alive across the restart.
+  again — the reloaded workflow.
 
   A restart that fails half-way (the new :start throws — a port in
   TIME_WAIT, code that does not compile) does not lose what it took
-  down: the components it left stopped or suspended are remembered on
-  the system as :restart-pending, and the next `restart` of `k` picks
-  them up again — so a dev-server restart that failed once recovers on
-  the next attempt instead of staying down.``
+  down: the components it left stopped are remembered on the system as
+  :restart-pending, and the next `restart` of `k` picks them up again —
+  so a dev-server restart that failed once recovers on the next attempt
+  instead of staying down.``
   [sys k]
-  (def comp (get-in sys [:components k]))
-  (unless comp
+  (unless (get-in sys [:components k])
     (errorf "unknown component %q" k))
-  (when (= :factory (get comp :scope))
-    (errorf "component %q has :factory scope — its instances are not managed by the system" k))
   (def pending (get sys :restart-pending {}))
   (def affected
-    (filter |(let [s (get-in sys [:states $])]
-               (or (= :running s) (= :suspended s) (in pending $)))
+    (filter |(or (= :running (get-in sys [:states $])) (in pending $))
             (dependents-of sys k)))
+  # a dependent a previous failed restart already stopped is left as it
+  # is — it only needs the start half below
   (each j (reverse affected)
-    (def c (get-in sys [:components j]))
-    # a dependent a previous failed restart already suspended or
-    # stopped is left as it is — it only needs the start half below
     (when (= :running (get-in sys [:states j]))
-      (if (get c :suspend)
-        (do
-          ((c :suspend) (get-in sys [:instances j]))
-          (put (sys :states) j :suspended))
-        (stop-instance sys j))))
+      (stop-instance sys j)))
   (when (= :running (get-in sys [:states k]))
     (stop-instance sys k))
   (try
     (do
-      (put (sys :instances) k (start-instance sys k))
-      (put (sys :states) k :running)
-      (each j affected
-        (def c (get-in sys [:components j]))
-        (if (= :suspended (get-in sys [:states j]))
-          (put (sys :instances) j
-               ((c :resume) (get-in sys [:instances j])
-                            (resolved-deps sys j)
-                            (component-config c (sys :config))))
-          (put (sys :instances) j (start-instance sys j)))
+      (each j [k ;affected]
+        (put (sys :instances) j (start-instance sys j))
         (put (sys :states) j :running))
       (put sys :restart-pending nil))
     ([e f]
@@ -491,31 +644,70 @@
 # -- inspection ----------------------------------------------------------
 
 (defn health
-  "Aggregate component health: {:status :up|:down :components {...}}.
+  ``Aggregate component health: {:status :up|:down :components {...}}.
   A running component without a :health function reports {:status :up};
-  the aggregate is :down if any component reports :down."
+  the aggregate is :down if any component reports :down.
+
+  A :health function that throws is `{:status :down :reason <the
+  throw>}`, not a throw out of here: the one caller that matters is an
+  endpoint answering "is this process healthy?", and a check that
+  failed is the answer, not an accident. `plugin/health` folds the
+  contributed checks the same way.``
   [sys]
   (def out @{})
   (each k (sys :order)
     (def comp (get-in sys [:components k]))
-    (case (get-in sys [:states k])
-      :running (put out k (if-let [h (get comp :health)]
-                            (h (get-in sys [:instances k]))
-                            {:status :up}))
-      :suspended (put out k {:status :suspended})
-      nil))
+    (when (= :running (get-in sys [:states k]))
+      (put out k (if-let [h (get comp :health)]
+                   (let [[ok v] (protect (h (get-in sys [:instances k])))]
+                     (if ok v {:status :down :reason (util/err-str v)}))
+                   {:status :up}))))
   {:status (if (some |(= :down (get $ :status)) (values out)) :down :up)
    :components (table/to-struct out)})
 
 (defn instance
-  "Return the running instance for a component key or interface ref.
-  For :factory components a fresh instance is created on every call."
+  "Return the running instance for a component key or interface ref."
   [sys ref]
   (def comps (sys :components))
   (def k (if (in comps ref)
            ref
            (resolve-ref comps (sys :providers) (sys :config)
                         "instance lookup" ref)))
-  (if (= :factory (get-in comps [k :scope]))
-    (start-instance sys k)
-    (get-in sys [:instances k])))
+  (get-in sys [:instances k]))
+
+# -- the boot a system belongs to ----------------------------------------
+
+(def running-boot
+  ``The boot the system in this process is running: `attach-boot!` puts
+  it there, `detach-boot!` takes it away, and the dyn `:void/boot`
+  overrides it for a scope.
+
+  This is what a package's module-level functions read when they need
+  the hook registry, a resolved extension point or a config slice and
+  have no system in hand — `plugin/boot`. It is not
+  `plugin/last-boot`: that one is the most recent *bootstrap*, which is
+  a different value under a test suite (test bootstraps are untracked)
+  and under any process that bootstraps twice.``
+  (ambient boot-ref :of "the running boot" :from :void/core))
+
+(defn attach-boot!
+  ``Give `sys` its boot and make it the process's running boot.
+
+  Two things at once, because they are one fact: from here until
+  `detach-boot!`, this boot is the one in force. Components declaring
+  `:deps [:void/boot]` receive it at :start; module-level code reads it
+  through `running-boot`. `plugin/start!` and `test/start!` call this
+  before starting the graph — a bootstrap that never starts is not
+  running anything, so `plugin/bootstrap` and `dry-run` do not.``
+  [sys boot]
+  (put sys :boot boot)
+  (hold! running-boot boot)
+  sys)
+
+(defn detach-boot!
+  "Release the process's running boot — what `plugin/shutdown!` and
+  `test/stop!` do after the graph is down. The system keeps its own
+  `:boot`, so a stopped system can still be inspected."
+  [sys]
+  (release! running-boot)
+  sys)

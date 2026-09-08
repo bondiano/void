@@ -53,17 +53,17 @@
 
 # -- the running registry ------------------------------------------------
 
-(var current-registry
-  "The registry of the running :ws/registry component — one per
-  process, like plugin/current-boot. With prefork workers each has its
-  own, and that boundary is the worker's (see ./rooms)."
-  nil)
+(def current-registry
+  ``The registry of the running :ws/registry component, which holds it
+  as its `:ambient`. With prefork workers each worker has its own, and
+  that boundary is the worker's (see ./rooms).``
+  (system/ambient :void.ws/registry :of "the websocket registry"
+                  :from :void/ws :component :ws/registry))
 
 (defn registry
   "The running registry, or a readable error."
   []
-  (or current-registry
-      (error "void/ws is not started — add :void/ws to :plugins (the :ws/registry component holds the connections)")))
+  (system/active current-registry))
 
 # -- config --------------------------------------------------------------
 
@@ -311,11 +311,11 @@
     listener goes: stopping runs in reverse dependency order."
     :deps [:http/server]
     :config {:key :ws}
+    :ambient current-registry
     :start
     (fn start [_ cfg]
       (def reg (rooms/make (merge defaults (or cfg {}))))
       (rooms/start-sweeper! reg)
-      (set current-registry reg)
       reg)
     :stop
     (fn stop [reg]
@@ -324,7 +324,6 @@
       # give the close frames a moment to reach the wire before the
       # HTTP server (which stops next) cuts the sockets underneath
       (ev/sleep 0.05)
-      (set current-registry nil)
       reg)
     :health
     (fn health [reg]

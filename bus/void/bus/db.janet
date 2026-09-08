@@ -682,7 +682,7 @@
    # composition that cannot keep what it publishes should say so at
    # boot rather than at the first payment
    :fn (fn check-outbox [_]
-         (when-let [br state/current-broker]
+         (when-let [br (system/current state/broker)]
            (def b (br :backend))
            (if (get b :outbox-write!)
              (do

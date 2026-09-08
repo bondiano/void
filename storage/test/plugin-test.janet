@@ -136,7 +136,7 @@
 (assert (empty? (filter |(string/has-prefix? "storage" (string $)) (bare :components)))
         "drop it from :plugins and no component of it remains")
 
-(assert (nil? state/current-store) "shutdown leaves no store behind")
+(assert (nil? (system/current state/store-ambient)) "shutdown leaves no store behind")
 (def [gone] (protect (storage/get "docs/readme.txt")))
 (assert (not gone) "and the surface says so instead of pretending")
 

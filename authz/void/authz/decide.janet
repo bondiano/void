@@ -28,6 +28,7 @@
 (import void/core/errors :as errors)
 (import void/core/log :as log)
 (import void/core/hooks :as hooks)
+(import void/core/plugin :as plugin)
 (import ./policy :as policy)
 (import ./context :as context)
 
@@ -37,12 +38,6 @@
   "Core-hook name every decision passes through. void/bus turns
   these into audit events; obs can count them."
   :void.authz/decision)
-
-(var hook-registry
-  "The running boot's hook registry, captured at :before-start (the
-  tracking `plugin/current-boot` is not set on the inject path, see
-  void/auth's init)."
-  nil)
 
 (var log-mode
   ``What reaches the log: :deny (default), :all or :none. Allows are
@@ -67,7 +62,9 @@
   (put listeners name nil))
 
 (defn- emit! [decision]
-  (when-let [reg hook-registry]
+  # the hook registry of the boot in force — see void/notify's emit!
+  # for why this is no longer a var captured at :before-start
+  (when-let [reg (get (plugin/running-boot) :hooks)]
     (each e (hooks/handlers reg decision-hook)
       (def [ok err] (protect ((e :fn) decision)))
       (unless ok

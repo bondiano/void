@@ -173,23 +173,16 @@
 
 # -- the client component ------------------------------------------------
 
-(var current-boot
-  ``Boot value, captured at :before-start — the codecs contributed to
-  :void.redis/codec are read off it, and the profile decides whether a
-  missing server is worth a warning.``
-  nil)
-
-(plugin/contribute! :void.core/hooks
-  {:hook :before-start
-   :phase 450
-   :name :redis/capture-boot
-   :doc "Remember the boot value — the resolved codecs and the profile"
-   :fn (fn capture [boot] (set current-boot boot))})
-
 (defn contributed-codecs
-  "The resolved :void.redis/codec point: name -> codec."
-  []
-  (or (get-in current-boot [:extensions :void.redis/codec :resolved])
+  ``The resolved :void.redis/codec point of `boot`: name -> codec.
+
+  The boot is handed in rather than read off a global — this package
+  used to capture it in a :before-start hook of its own, because the
+  process's most recent bootstrap is the wrong one under a suite. The
+  component asks for `:deps [:void/boot]` instead and there is nothing
+  left to capture.``
+  [boot]
+  (or (get-in boot [:extensions :void.redis/codec :resolved])
       # started outside a bootstrap (a test, a REPL): the built-ins are
       # what the point would have resolved to anyway
       (tabseq [c :in codec/builtin] (c :name) c)))
@@ -202,13 +195,15 @@
     refused password fails the boot rather than the first request —
     and so the health check has a connection to use that no request is
     waiting on."
+    :deps [:void/boot]
     :provides [:void/redis]
     :config {:key :redis}
+    :ambient state/client
     :start
-    (fn start [_ cfg0]
+    (fn start [deps cfg0]
       (def cfg (merge config/defaults (or cfg0 {})))
       (def conn-opts (config/options cfg0))
-      (def codecs (contributed-codecs))
+      (def codecs (contributed-codecs (deps :void/boot)))
       (def chosen (codec/find-codec codecs (get cfg :codec :raw)))
       (def p (pool/make conn-opts (config/pool-options cfg0)))
       # the keeper proves the configuration before anything depends on
@@ -236,11 +231,9 @@
           :retry (not= false (get cfg :retry))
           :conn-opts conn-opts
           :describe (config/describe cfg0)})
-      (set state/current-client value)
       value)
     :stop
     (fn stop [client]
-      (set state/current-client nil)
       (pool/close-all! (client :pool))
       (protect (conn/close (client :keeper))))
     :health
@@ -254,15 +247,22 @@
 
 # -- the subscriber component --------------------------------------------
 
-(var current-pubsub
+(def pubsub-ambient
   "The started :redis/pubsub component, for `subscribe!`."
-  nil)
+  (system/ambient :void.redis/pubsub :of "void/redis's subscriber"
+                  :from :void/redis :component :redis/pubsub))
 
 (defn pubsub-now
-  "The running subscriber, or an error naming what to add."
+  ``The running subscriber, or an error saying which of the two things
+  is the matter: the component is not in this composition at all, or it
+  is there and switched off. The component exists either way — a graph
+  that changes shape with a config value is a graph nobody can read —
+  so the second case has to be its own sentence.``
   []
-  (or current-pubsub
-      (error "void/redis's subscriber is not started — no :redis/pubsub component (is [:redis :pubsub :enabled] false?)")))
+  (def l (system/active pubsub-ambient))
+  (unless (l :enabled)
+    (error "void/redis's subscriber is switched off — [:redis :pubsub :enabled] is false"))
+  l)
 
 (defn subscribe!
   ``Call `f` with every message published to `channel`
@@ -309,6 +309,7 @@
     application that never subscribes never opens one."
     :deps [:redis/client]
     :config {:key :redis}
+    :ambient pubsub-ambient
     :start
     (fn start [deps cfg0]
       (def cfg (merge config/defaults (or cfg0 {})))
@@ -323,12 +324,10 @@
       # simply never reads, and `subscribe!` says which key turned it
       # off rather than failing on a connection that was never opened
       (when enabled
-        (pubsub/start! l)
-        (set current-pubsub l))
+        (pubsub/start! l))
       l)
     :stop
     (fn stop [l]
-      (set current-pubsub nil)
       (pubsub/stop! l))
     :health
     (fn health [l]

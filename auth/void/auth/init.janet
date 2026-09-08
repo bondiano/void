@@ -334,29 +334,19 @@
 
 # -- the registry component ----------------------------------------------
 
-(var contributions
-  ``What the extension points resolved to, captured at :before-start.
+(defn- resolved
+  ``One of this package's extension points, as the boot the component
+  was started in resolved it.
 
-  Read from a hook rather than from `plugin/current-boot` on purpose:
-  that var is only set by the tracking start path, and `test/start!`
- does not use it — a component that reached for it would
-  work under `plugin/start!` and silently register no strategies under
-  the inject client, which is precisely the arrangement every test in
-  this package uses.``
-  @{})
-
-(plugin/contribute! :void.core/hooks
-  {:hook :before-start
-   :phase 400
-   :name :auth/collect-extensions
-   :doc "Capture the resolved :void.auth/* contributions before components start"
-   :fn (fn collect [boot]
-         (each point [:void.auth/strategy :void.auth/hasher :void.auth/deliver]
-           (put contributions point
-                (or (get-in boot [:extensions point :resolved]) []))))})
-
-(defn- resolved [name]
-  (get contributions name []))
+  This used to be a `:before-start` hook writing into a module-level
+  table, because the process's most recent bootstrap is not the one a
+  fixture built: a component reading the global would work under
+  `plugin/start!` and silently register no strategies under the inject
+  client, which is the arrangement every test in this package uses.
+  `:deps [:void/boot]` is that workaround's replacement — the boot the
+  component is handed is its own by construction.``
+  [boot name]
+  (or (get-in boot [:extensions name :resolved]) []))
 
 (def registry-component
   (system/component :auth/registry
@@ -365,15 +355,18 @@
     strategy, and the hashing settings. Registering happens here, at
     :start, so that a strategy contributed by a plugin and one
     registered from a REPL are the same thing."
-    :deps [:void/auth-user-store :void/auth-token-store :void/auth-challenge-store]
+    :deps [:void/auth-user-store :void/auth-token-store :void/auth-challenge-store
+           :void/boot]
     :provides [:void/auth]
     :config {:key :auth}
+    :ambient state/auth
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))
+      (def boot (deps :void/boot))
       (set hash-mod/settings cfg)
       (set strategy/order (get cfg :strategies))
-      (each h (resolved :void.auth/hasher)
+      (each h (resolved boot :void.auth/hasher)
         (put hash-mod/hashers (h :name)
              (merge {:version nil :cost-keys []} h)))
       (def users (deps :void/auth-user-store))
@@ -382,27 +375,22 @@
                      :tokens (deps :void/auth-token-store)
                      :challenges (deps :void/auth-challenge-store)
                      :settings cfg
-                     :deliver (resolved :void.auth/deliver)}))
+                     :deliver (resolved boot :void.auth/deliver)}))
       # the built-in first, so a contribution named :password replaces
       # it rather than colliding with it
       (strategy/register! (password/strategy users))
-      (each s (resolved :void.auth/strategy) (strategy/register! s))
-      (set state/current value)
+      (each s (resolved boot :void.auth/strategy) (strategy/register! s))
       (log/info "auth ready" :ns log-ns
                 :hasher (hash-mod/active-hasher)
                 :user-store (get users :name)
                 :strategies (strategy/known)
                 :order (get cfg :strategies)
-                :deliver (map |($ :name) (resolved :void.auth/deliver)))
+                :deliver (map |($ :name) (resolved boot :void.auth/deliver)))
       (unless (get (hash-mod/hashers (hash-mod/active-hasher)) :derive)
         (errorf "[:auth :hasher] names %q, which is not a registered hasher (have %s)"
                 (hash-mod/active-hasher)
                 (string/join (map string (sorted (keys hash-mod/hashers))) " ")))
       value)
-    :stop
-    (fn stop [_]
-      (set state/current nil)
-      nil)
     :health
     (fn health [value]
       {:status :up

@@ -304,21 +304,20 @@
 
 # -- the broker component ------------------------------------------------
 
-(plugin/contribute! :void.core/hooks
-  {:hook :config-loaded
-   :phase 100
-   :name :bus/capture
-   :doc "Remember the boot value — the resolved backends, codecs and middleware"
-   :fn (fn capture [boot] (set state/current-boot boot))})
+(defn- extension
+  "One of this package's extension points, as the boot the broker was
+  started in resolved it."
+  [boot name]
+  (get-in boot [:extensions name :resolved]))
 
-(defn- resolve-backend [cfg]
-  (def factories (or (state/extension :void.bus/backend) @{}))
+(defn- resolve-backend [boot cfg]
+  (def factories (or (extension boot :void.bus/backend) @{}))
   (def name (cfg :backend))
   (def factory (backend/find-factory factories name))
   (backend/normalize ((factory :make) cfg)))
 
-(defn- resolve-codec [cfg]
-  (def cs (or (state/extension :void.bus/codec)
+(defn- resolve-codec [boot cfg]
+  (def cs (or (extension boot :void.bus/codec)
               # started outside a bootstrap (a REPL, a unit test): the
               # built-ins are what the point would have resolved to
               (tabseq [c :in codec/builtin] (c :name) (codec/normalize c))))
@@ -331,17 +330,19 @@
     message runs through. Publishing needs nothing else; consuming
     starts at :after-start, once the components a handler is going to
     reach for are running."
+    :deps [:void/boot]
     :provides [:void/bus]
     :config {:key :bus}
+    :ambient state/broker
     :start
-    (fn start [_ cfg0]
+    (fn start [deps cfg0]
+      (def boot (deps :void/boot))
       (def cfg (slice cfg0))
-      (def b (resolve-backend cfg))
-      (def c (resolve-codec cfg))
-      (def contribs (or (state/extension :void.bus/middleware) []))
+      (def b (resolve-backend boot cfg))
+      (def c (resolve-codec boot cfg))
+      (def contribs (or (extension boot :void.bus/middleware) []))
       (def tracer (state/resolve-tracer))
       (def br (state/make b c cfg contribs tracer))
-      (set state/current-broker br)
       (def caps (backend/capabilities b))
       (log/info "bus ready" :ns log-ns
                 :backend (caps :name) :codec (c :name)
@@ -358,7 +359,6 @@
     (fn stop [br]
       (state/stop-consumers! br)
       (protect ((get-in br [:backend :close])))
-      (set state/current-broker nil)
       (set memory-state nil))
     :health
     (fn health [br]
@@ -382,7 +382,7 @@
    :name :bus/consume
    :doc "Start a consumer per group the declared handlers ask for"
    :fn (fn start-consuming [boot]
-         (when-let [br state/current-broker]
+         (when-let [br (system/current state/broker)]
            (if (get-in br [:config :consume])
              (let [groups (state/start-consumers! br)]
                (when (empty? groups)
@@ -397,7 +397,7 @@
    :name :bus/stop-consuming
    :doc "Stop the consumers before the components they reach for go away"
    :fn (fn stop-consuming [_]
-         (when-let [br state/current-broker]
+         (when-let [br (system/current state/broker)]
            (state/stop-consumers! br)))})
 
 # -- the in-process backend ----------------------------------------------

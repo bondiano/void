@@ -192,17 +192,14 @@
     :deps [:void/storage-store]
     :provides [:void/storage]
     :config {:key :storage}
+    :ambient state/store-ambient
     :start
     (fn start [deps _cfg]
       (def st (store/normalize (deps :void/storage-store)))
-      (set state/current-store st)
       (log/info "storage ready" :ns log-ns
                 :store (st :name)
                 :shared (store/shared? st))
       st)
-    :stop
-    (fn stop [_]
-      (set state/current-store nil))
     :health
     (fn health [st]
       {:status :up :store (st :name) :shared (store/shared? st)})))

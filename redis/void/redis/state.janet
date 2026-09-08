@@ -37,6 +37,7 @@
 ### one — that error goes to the caller.
 
 (import void/core/log :as log)
+(import void/core/system :as system)
 (import ./codec :as codec)
 (import ./conn :as conn)
 (import ./pool :as pool)
@@ -50,24 +51,22 @@
   "Dynamic binding: the checked-out connection of this fiber."
   :void.redis/conn)
 
-(def client-dyn
-  "Dynamic binding: client override — set it to run a scope against a
-  client other than the started :redis/client component (tests,
-  tooling, a second redis)."
-  :void.redis/client)
+(def client
+  ``The client this package's functions run against: what the running
+  :redis/client component holds, or the `:void.redis/client` dyn where
+  a scope overrides it (tests, tooling, a second redis).``
+  (system/ambient :void.redis/client :of "the redis client"
+                  :from :void/redis :component :redis/client))
 
-(var current-client
-  "The value of the running :redis/client component (set by its
-  :start). One per process, like plugin/current-boot."
-  nil)
+(def client-dyn
+  "Dynamic binding of the client ambient — the name a scope binds."
+  (client :dyn))
 
 (defn active-client
   "The client this fiber runs against: the `client-dyn` override, else
   the started component."
   []
-  (or (dyn client-dyn)
-      current-client
-      (error "void/redis is not started — no :redis/client component (or bind the client-dyn dynamic)")))
+  (system/active client))
 
 (defn active-pool
   "The connection pool of the active client."

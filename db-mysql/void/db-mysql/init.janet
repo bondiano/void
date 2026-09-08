@@ -123,22 +123,18 @@
 
 # -- pool width ----------------------------------------------------------
 
-(var current-boot
-  "Boot value, captured at :before-start — read for void/db's pool
-  size, which here is also a thread count."
-  nil)
-
-(plugin/contribute! :void.core/hooks
-  {:hook :before-start
-   :phase 450
-   :name :db-mysql/capture-boot
-   :doc "Remember the boot value — void/db's pool size is this plugin's thread count"
-   :fn (fn capture [boot] (set current-boot boot))})
-
 (defn pool-size
-  "The [:db :pool :size] void/db will run with (its own default is 10)."
-  []
-  (get-in current-boot [:config :values :db :pool :size] 10))
+  ``The [:db :pool :size] void/db will run with (its own default is 10)
+  — here it is also a thread count.
+
+  The boot is an argument because the component has one — `:deps
+  [:void/boot]` — and the tooling that has none falls back to whatever
+  this process is running. It used to be captured in a :before-start
+  hook of this plugin's own, which is the same fallback with a copy of
+  the machinery around it.``
+  [&opt boot]
+  (default boot (plugin/running-boot))
+  (get-in boot [:config :values :db :pool :size] 10))
 
 (def thread-warning-at
   ``Pool size past which the component says out loud that these are
@@ -156,10 +152,12 @@
     a worker thread per connection, with real isolation levels and
     savepoints. Holds a keeper connection so a wrong host or a missing
     client library fails the boot rather than the first request."
+    :deps [:void/boot]
     :provides [:void/db-driver]
     :config {:key :db-mysql}
     :start
-    (fn start [_ cfg0]
+    (fn start [deps cfg0]
+      (def boot (deps :void/boot))
       (def drv (mysql/from-config cfg0))
       # the keeper proves the configuration before anything depends on
       # it, and answers the health check without borrowing from the
@@ -175,7 +173,7 @@
                 :library (info :library)
                 :charset (info :charset)
                 ;(mapcat |[$ (get described $)] (sorted (keys described))))
-      (def size (pool-size))
+      (def size (pool-size boot))
       (when (>= size thread-warning-at)
         (log/warn (string "[:db :pool :size] is " size ", and this driver runs "
                           "one OS thread per pooled connection — "

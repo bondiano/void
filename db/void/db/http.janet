@@ -74,7 +74,7 @@
 
 (defn- session-cfg []
   (merge (defaults :session)
-         (or (get-in plugin/current-boot [:config :values :db-http :session]) {})))
+         (or (get-in (plugin/running-boot) [:config :values :db-http :session]) {})))
 
 (defn session-ddl
   ``The statements the session table needs, as a tuple of SQL strings

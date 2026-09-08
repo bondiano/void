@@ -618,7 +618,7 @@
          (unless (empty? args)
            (errorf "void jobs-db ddl takes no arguments (got %q)" (string/join args " ")))
          (def cfg (merge defaults
-                         (or (get-in plugin/current-boot [:config :values :jobs-db]) {})))
+                         (or (get-in (plugin/running-boot) [:config :values :jobs-db]) {})))
          (each sql (ddl ((db/current-driver) :dialect) (cfg :table))
            (printf "%s;\n" sql)))})
 

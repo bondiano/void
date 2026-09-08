@@ -110,7 +110,7 @@
 
 # -- the cache is gone with the plugin -----------------------------------
 
-(assert (nil? state/current-cache) "shutdown leaves no cache behind")
+(assert (nil? (system/current state/cache)) "shutdown leaves no cache behind")
 (def [gone] (protect (cache/get "answer")))
 (assert (not gone) "and the surface says so instead of pretending")
 

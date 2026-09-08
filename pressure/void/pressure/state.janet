@@ -30,6 +30,7 @@
 ### rather than allowed to break the sampler.
 
 (import void/core/log :as log)
+(import void/core/system :as system)
 (import void/core/hooks :as hooks)
 (import void/core/plugin :as plugin)
 (import ./sample :as sample)
@@ -52,11 +53,6 @@
   []
   pressed)
 
-(var current
-  "The value of the running :pressure/sampler component (set by its
-  :start). One per process, like plugin/current-boot."
-  nil)
-
 (var mode
   ``What this process is, as far as pressure is concerned.
 
@@ -73,16 +69,22 @@
   measurement nobody took.``
   :process)
 
+(def pressure
+  ``The state this package's functions read: what the running
+  :pressure/sampler component holds, or the `:void.pressure/state` dyn
+  where a scope overrides it (tests, REPL).``
+  (system/ambient :void.pressure/state :of "the pressure state"
+                  :from :void/pressure :component :pressure/sampler))
+
 (def state-dyn
-  "Dynamic binding: state override — bind it to run a scope against a
-  state other than the started component (tests, REPL)."
-  :void.pressure/state)
+  "Dynamic binding of the pressure ambient — the name a scope binds."
+  (pressure :dyn))
 
 (defn active
   "The state this fiber reads: the `state-dyn` override, else the
   started component's."
   []
-  (or (dyn state-dyn) current))
+  (system/current pressure))
 
 # -- events --------------------------------------------------------------
 
@@ -122,7 +124,7 @@
   still run.``
   [event payload]
   (def ev (merge {:event event :at (os/clock :realtime)} (or payload {})))
-  (when-let [reg (get plugin/current-boot :hooks)]
+  (when-let [reg (get (plugin/running-boot) :hooks)]
     (each e (hooks/handlers reg event-hook)
       (def [ok err] (protect ((e :fn) ev)))
       (unless ok

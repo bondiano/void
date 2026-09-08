@@ -292,12 +292,12 @@
     :deps [:void/jobs-backend]
     :provides [:void/jobs]
     :config {:key :jobs}
+    :ambient state/queue
     :start
     (fn start [deps cfg0]
       (def cfg (slice cfg0))
       (def b (deps :void/jobs-backend))
       (def q (state/make b cfg))
-      (set state/current-queue q)
       (def caps (backend/capabilities (q :backend)))
       (log/info "jobs queue ready" :ns log-ns
                 :backend (caps :name) :shared (caps :shared)
@@ -309,9 +309,6 @@
         (log/warn "[:jobs :enabled] is false — enqueued jobs run inline, on the caller's fiber"
                   :ns log-ns))
       q)
-    :stop
-    (fn stop [_]
-      (set state/current-queue nil))
     :health
     (fn health [q]
       (merge {:status :up}
@@ -545,7 +542,7 @@
                        {"--queues" [:queues as-keywords]
                         "--concurrency" [:concurrency as-number]
                         "--poll-interval" [:poll-interval as-number]}))
-         (def cfg (slice (get-in plugin/current-boot [:config :values :jobs])))
+         (def cfg (slice (get-in (plugin/running-boot) [:config :values :jobs])))
          (def w (worker/make q (merge (cfg :worker) o)))
          # `:needs [:jobs/queue]` above is true of the worker and not of
          # the **work**: a job that posts to an https API needs
@@ -557,7 +554,7 @@
          # `run-command`'s stop takes it down with everything else
          (def extra (job/needs (w :queues) (get-in q [:defaults :queue])))
          (unless (empty? extra)
-           (system/start (get plugin/current-boot :system) extra)
+           (system/start (get (plugin/running-boot) :system) extra)
            (log/info "started what the work needs" :ns log-ns
                      :queues (w :queues) :needs extra))
          (printf "working %s at concurrency %d — ^C to stop"

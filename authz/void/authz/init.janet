@@ -165,25 +165,17 @@
 
 # -- the component -------------------------------------------------------
 
-(var contributions
-  ``What the extension points resolved to, captured at :before-start —
-  `plugin/current-boot` is not set on the inject path, so a component that
-  read it would register nothing under a test.``
-  @{})
+(defn- resolved
+  ``One of this package's extension points, as the boot the component
+  was started in resolved it.
 
-(plugin/contribute! :void.core/hooks
-  {:hook :before-start
-   :phase 400
-   :name :authz/collect-extensions
-   :doc "Capture the resolved :void.authz/* contributions and the hook registry before components start"
-   :fn (fn collect [boot]
-         (each point [:void.authz/provider :void.authz/policy]
-           (put contributions point
-                (or (get-in boot [:extensions point :resolved]) [])))
-         (set decide/hook-registry (get boot :hooks)))})
-
-(defn- resolved [name]
-  (get contributions name []))
+  This used to be a :before-start hook writing into a module-level
+  table, because the global was the process's most recent *bootstrap*
+  and a fixture's is untracked — a component that read it would
+  register nothing under a test. `:deps [:void/boot]` is that
+  workaround's replacement.``
+  [boot name]
+  (or (get-in boot [:extensions name :resolved]) []))
 
 (def registry-component
   (system/component :authz/registry
@@ -192,16 +184,18 @@
     the role table. Registration happens at :start so that a policy a
     plugin ships and one an application wrote with `defpolicy` are the
     same kind of thing."
+    :deps [:void/boot]
     :provides [:void/authz]
     :config {:key :authz}
     :start
-    (fn start [_ cfg0]
+    (fn start [deps cfg0]
+      (def boot (deps :void/boot))
       (def cfg (conf cfg0))
       (set rbac/roles (get cfg :roles {}))
       (set decide/log-mode (get cfg :log :deny))
       (each p builtin-policies (policy/register! p))
-      (each p (resolved :void.authz/policy) (policy/register! p))
-      (each p (resolved :void.authz/provider) (context/register-provider! p))
+      (each p (resolved boot :void.authz/policy) (policy/register! p))
+      (each p (resolved boot :void.authz/provider) (context/register-provider! p))
       (log/info "authz ready" :ns log-ns
                 :policies (policy/policies)
                 :providers (context/provider-names)

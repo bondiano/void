@@ -11,20 +11,25 @@
 ### A dyn overrides it, so a test stands a different set of stores in
 ### front of the same code without booting anything.
 
+(import void/core/system :as system)
+
+(def auth
+  ``What the :auth/registry component resolved: the stores, the
+  strategies and the settings. The `:void.auth/state` dyn overrides it
+  for a scope — the test seam that stands a different set of stores in
+  front of the same code without booting anything.``
+  (system/ambient :void.auth/state :of "the auth registry"
+                  :from :void/auth :component :auth/registry))
+
 (def auth-dyn
   "Dyn that overrides the resolved auth value — the test seam."
-  :void.auth/state)
-
-(var current
-  "What the :auth/registry component resolved, or nil before it
-  started."
-  nil)
+  (auth :dyn))
 
 (defn active
   "The resolved auth value: the dyn override, or what the component
   put there."
   []
-  (or (dyn auth-dyn) current))
+  (system/current auth))
 
 (defn- part [key what]
   (def a (active))

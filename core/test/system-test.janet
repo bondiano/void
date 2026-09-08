@@ -15,10 +15,8 @@
   |(system/component :a :start (fn [d c] 1) :strat 2))
 (expect-error "odd option count" "odd"
   |(system/component :a :start))
-(expect-error "bad scope" ":scope"
-  |(system/component :a :start (fn [d c] 1) :scope :global))
-(expect-error "suspend without resume" ":resume"
-  |(system/component :a :start (fn [d c] 1) :suspend (fn [i] i)))
+(expect-error "bad :ambient" ":ambient"
+  |(system/component :a :start (fn [d c] 1) :ambient @{:dyn :x}))
 (expect-error "non-keyword key" "keyword"
   |(system/component "a" :start (fn [d c] 1)))
 (expect-error "bad :deps" ":deps"
@@ -166,7 +164,7 @@
 (expect-error "restart unknown component" "unknown component"
   |(system/restart sys4 :nope))
 
-# -- restart with :suspend/:resume --------------------------------------
+# -- restart brings the dependent back with the new dependency ----------
 
 (def slog @[])
 (def sys5
@@ -178,43 +176,61 @@
        :start (fn [deps cfg]
                 (array/push slog :start-server)
                 @{:conn (deps :conn)})
-       :stop (fn [i] (array/push slog :stop-server))
-       :suspend (fn [inst] (array/push slog :suspend-server) inst)
-       :resume (fn [inst deps cfg]
-                 (array/push slog :resume-server)
-                 (put inst :conn (deps :conn))
-                 inst))]))
+       :stop (fn [i] (array/push slog :stop-server)))]))
 (system/start sys5)
-(def server-before (system/instance sys5 :server))
 (array/clear slog)
 (system/restart sys5 :conn)
-(assert (= (freeze slog) [:suspend-server :start-conn :resume-server])
-        "dependent with :suspend/:resume is suspended, not stopped")
-(assert (= (system/instance sys5 :server) server-before)
-        "suspended instance survives the restart")
-(assert (= (get server-before :conn) (system/instance sys5 :conn))
-        "resume receives the freshly started dependency")
+(assert (= (freeze slog) [:stop-server :start-conn :start-server])
+        "restart takes the dependent down and brings it back around the new dependency")
+(assert (= (get (system/instance sys5 :server) :conn) (system/instance sys5 :conn))
+        "the restarted dependent holds the freshly started dependency")
 
-# -- :factory scope ------------------------------------------------------
+# -- stop-key: one component and its dependents, nothing else ------------
 
-(var made 0)
-(def sys6
-  (system/init
-    [(system/component :maker
-       :scope :factory
-       :start (fn [d c] (++ made) made))
-     (system/component :consumer
-       :deps [:maker]
-       :start (fn [deps cfg] (deps :maker)))]))
+(def klog @[])
+(defn- kcomp [key deps]
+  (system/component key
+    :deps deps
+    :start (fn [d c] (array/push klog [:start key]) key)
+    :stop (fn [i] (array/push klog [:stop key]))))
+
+(def sys6 (system/init [(kcomp :base []) (kcomp :mid [:base]) (kcomp :leaf [:mid]) (kcomp :side [])]))
 (system/start sys6)
-(assert (= made 0) "factory component is not started with the system")
-(def make (system/instance sys6 :consumer))
-(assert (= (make) 1) "dependent receives a constructor for factory deps")
-(assert (= (make) 2) "each constructor call makes a fresh instance")
-(assert (= (system/instance sys6 :maker) 3)
-        "instance lookup on a factory makes a fresh instance")
-(expect-error "restart factory" ":factory"
-  |(system/restart sys6 :maker))
+(array/clear klog)
+(system/stop-key sys6 :mid)
+(assert (= (freeze klog) [[:stop :leaf] [:stop :mid]])
+        "stop-key stops the component and its dependents, in reverse order")
+(assert (= :running (get-in sys6 [:states :base])) "what it depended on is left running")
+(assert (= :running (get-in sys6 [:states :side])) "and so is everything unrelated")
+(expect-error "stop-key on an unknown component" "unknown component"
+  |(system/stop-key sys6 :nope))
+(system/stop sys6)
+
+# -- ambients ------------------------------------------------------------
+
+(def probe (system/ambient :test/probe :of "the probe" :from :test/plugin))
+(assert (nil? (system/current probe)) "an ambient starts empty")
+(expect-error "an empty ambient names what is not started" ":test/plugin is not started"
+  |(system/active probe))
+
+(def sys13
+  (system/init
+    [(system/component :prober
+       :ambient probe
+       :start (fn [d c] @{:live true})
+       :stop (fn [i]
+               (assert (= i (system/active probe))
+                       ":stop still sees the ambient it is about to release")
+               (put i :live false)))]))
+(system/start sys13)
+(assert (= (system/instance sys13 :prober) (system/active probe))
+        "the system holds the started instance in the component's ambient")
+(system/with-ambient probe :override
+  (assert (= :override (system/current probe)) "the dyn overrides the held value"))
+(assert (= (system/instance sys13 :prober) (system/current probe))
+        "and only for the scope")
+(system/stop sys13)
+(assert (nil? (system/current probe)) "a stopped component leaves its ambient empty")
 
 # -- health --------------------------------------------------------------
 
@@ -227,10 +243,17 @@
        :start (fn [d c] :i)
        :health (fn [i] {:status :down}))
      (system/component :plain
-       :start (fn [d c] :i))]))
+       :start (fn [d c] :i))
+     (system/component :throws
+       :start (fn [d c] :i)
+       :health (fn [i] (error "the probe itself broke")))]))
 (system/start sys7)
 (def h (system/health sys7))
 (assert (= (h :status) :down) "one :down component makes the aggregate :down")
+(assert (= (get-in h [:components :throws :status]) :down)
+        "a :health function that throws counts as down")
+(assert (string/find "the probe itself broke" (get-in h [:components :throws :reason]))
+        "with the throw as its reason")
 (assert (= (get-in h [:components :plain :status]) :up)
         "running component without :health reports :up")
 (assert (= (get-in h [:components :ok :latency-ms]) 1)
@@ -254,6 +277,60 @@
 (assert (= (freeze flog) [:start-first :stop-first])
         "already-started components are stopped on start failure")
 (assert (= (get-in sys8 [:states :first]) :stopped) "rollback updates state")
+
+# a failing start undoes *this call*, not the process: the subset path
+# starts a second time over a system that is already partly up, and a
+# failure there used to take the first call's components down with it
+(def rlog2 @[])
+(defn- rc [key deps]
+  (system/component key
+    :deps deps
+    :start (fn [d c]
+             (when (= key :late-boom) (error "late boom"))
+             (array/push rlog2 [:start key]) key)
+    :stop (fn [i] (array/push rlog2 [:stop key]))))
+
+(def sys8b (system/init [(rc :early []) (rc :late []) (rc :late-boom [:late])]))
+(system/start sys8b [:early])
+(array/clear rlog2)
+(expect-error "the second start fails" "late boom" |(system/start sys8b [:late-boom]))
+(assert (= (freeze rlog2) [[:start :late] [:stop :late]])
+        "the failed call rolls back only what it started")
+(assert (= :running (get-in sys8b [:states :early]))
+        "what was already running before the call is left running")
+(system/stop sys8b)
+
+# -- :void/boot, the pseudo-dependency -----------------------------------
+
+(def sys14
+  (system/init
+    [(system/component :needs-boot
+       :deps [:void/boot]
+       :start (fn [deps cfg] (get (deps :void/boot) :profile)))]))
+(assert (nil? (get-in sys14 [:resolution :needs-boot :void/boot]))
+        ":void/boot is not resolved as a component — it is not in the graph")
+(assert (deep= (sorted (keys (system/needed-keys sys14 [:needs-boot]))) @[:needs-boot])
+        "and it is not in the dependency closure either")
+(expect-error "a system with no boot says so" "never attached to one"
+  |(system/start sys14))
+
+(def fake-boot @{:profile :test})
+(system/attach-boot! sys14 fake-boot)
+(assert (= fake-boot (system/current system/running-boot))
+        "attach-boot! makes it the running boot")
+(system/start sys14)
+(assert (= :test (system/instance sys14 :needs-boot))
+        "the component is handed the boot the system was attached to")
+(system/stop sys14)
+(system/detach-boot! sys14)
+(assert (nil? (system/current system/running-boot))
+        "detach-boot! leaves no running boot behind")
+
+(expect-error ":void/boot cannot be a component key" "reserved"
+  |(system/init [(system/component :void/boot :start (fn [d c] 1))]))
+(expect-error ":void/boot cannot be provided" "reserved"
+  |(system/init [(system/component :impostor :provides [:void/boot]
+                                   :start (fn [d c] 1))]))
 
 # -- config schema hook --------------------------------------------------
 

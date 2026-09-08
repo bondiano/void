@@ -42,8 +42,8 @@
 (var current-context
   "The running html context (set by the :before-start hook):
   :engine-name, :engines (name -> engine contribution), :assets
-  ({:prefix :manifest}), :config. One per process, like
-  plugin/current-boot."
+  ({:prefix :manifest}), :config. One per process — a hook builds it,
+  not a component, so it is a var rather than a `system/ambient`."
   nil)
 
 (defn- context []
@@ -269,7 +269,7 @@
   A composition without TLS starts nothing and gets `install!`'s refusal,
   which names both ways out.``
   []
-  (def sys (get plugin/current-boot :system))
+  (def sys (get (plugin/running-boot) :system))
   (when sys
     (each k (get-in sys [:providers :void/tls] [])
       (unless (= :running (get-in sys [:states k]))

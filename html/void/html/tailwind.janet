@@ -31,7 +31,6 @@
 ### can speak TLS" is a fact about the composition and not something to
 ### work around here.
 
-(import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/http/client :as client)
 (import void/core/deadline :as deadline)
@@ -518,7 +517,8 @@
   as long as the process it belongs to."
   (system/component :html/tailwind
     :doc "The standalone tailwind compiler in --watch: a dev process rebuilds the stylesheet as you type, a :prod one serves what `void assets build` wrote."
+    :deps [:void/boot]
     :config {:key :html}
-    :start (fn [_ cfg] (start (or cfg {}) (get plugin/current-boot :profile :dev)))
+    :start (fn [deps cfg] (start (or cfg {}) (get (deps :void/boot) :profile :dev)))
     :stop stop
     :health health))

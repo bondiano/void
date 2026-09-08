@@ -73,7 +73,8 @@
 (defn affected-components
   "Component keys to restart after `file` changed: the components of
   every manifest in `boot` whose :source is this file, that hold state
-  (:stop or :suspend) and are currently :running — in start order.
+  (they declare a :stop, or an :ambient the system fills for them) and
+  are currently :running — in start order.
   A component a failed restart left down (:restart-pending on the
   system) counts too: saving the fixed file is the retry. Everything
   else is already covered by the env reload."
@@ -83,7 +84,7 @@
     (def [ok rp] (protect (os/realpath (or (m :source) ""))))
     (when (and ok (= rp file))
       (each c (m :components)
-        (when (or (c :stop) (c :suspend))
+        (when (or (c :stop) (c :ambient))
           (put wanted (c :key) true)))))
   (def pending (get-in boot [:system :restart-pending] {}))
   (filter |(and (in wanted $)
@@ -135,15 +136,15 @@
 
 (defn tick!
   "One watcher pass: rescan, reload what changed against the current
-  boot (plugin/current-boot). Returns the report, or nil when nothing
+  boot (plugin/running-boot). Returns the report, or nil when nothing
   changed."
   [inst]
   (def new (scan (inst :paths) (inst :excludes)))
   (def files (changed (inst :snapshot) new))
   (put inst :snapshot new)
   (unless (empty? files)
-    (def report (apply-changes! plugin/current-boot files))
-    (notify-reloaded! plugin/current-boot report)
+    (def report (apply-changes! (plugin/running-boot) files))
+    (notify-reloaded! (plugin/running-boot) report)
     (report-print report)
     report))
 

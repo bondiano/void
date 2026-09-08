@@ -158,21 +158,9 @@
    :migrations [:optional {:dir [:optional :string]
                            :table [:optional :string]}]})
 
-(var current-profile
-  "Boot profile, captured at :before-start — it decides the default
-  N+1 guard mode (warn while developing, off in :prod)."
-  nil)
-
-(plugin/contribute! :void.core/hooks
-  {:hook :before-start
-   :phase 450
-   :name :db/capture-profile
-   :doc "Remember the boot profile for the N+1 guard default"
-   :fn (fn capture [boot] (set current-profile (boot :profile)))})
-
-(defn- guard-default [cfg]
+(defn- guard-default [cfg profile]
   (or (get cfg :n1-guard)
-      (if (= :prod current-profile) :off :warn)))
+      (if (= :prod profile) :off :warn)))
 
 (defn migration-opts
   "Migration options from the :db config slice merged with overrides."
@@ -191,29 +179,32 @@
     a liveness check on a connection that has been idle longer than
     :validate-after, per-connection prepared-statement cache and the
     pool metrics (:waits, :wait-us, :queries) void/obs will export."
-    :deps [:void/db-driver]
+    :deps [:void/db-driver :void/boot]
     :config {:key :db}
+    :ambient state/db-pool
     :start
     (fn start [deps cfg0]
       (def cfg (or cfg0 {}))
       (def drv (driver/normalize (deps :void/db-driver)))
       (def p (pool/make drv (get cfg :pool {})))
-      (set state/current-pool p)
-      (set entity/default-guard (guard-default cfg))
+      # the profile decides the default N+1 guard mode — warn while
+      # developing, off in :prod — and it is read off the boot this pool
+      # was started in, not off whichever one bootstrapped last
+      (def guard (guard-default cfg (get (deps :void/boot) :profile)))
+      (set entity/default-guard guard)
       (log/info "db pool ready" :ns "void.db"
                 :driver (drv :name) :dialect (drv :dialect)
-                :size (p :size) :n1-guard (guard-default cfg))
+                :size (p :size) :n1-guard guard)
       p)
     :stop
     (fn stop [p]
-      (pool/close-all! p)
-      (set state/current-pool nil))
+      (pool/close-all! p))
     :health (fn health [p] (pool/health p))))
 
 # -- CLI commands --------------------------------------------------------
 
 (defn- config-slice []
-  (or (get-in plugin/current-boot [:config :values :db]) {}))
+  (or (get-in (plugin/running-boot) [:config :values :db]) {}))
 
 (defn- print-status [rows]
   (if (empty? rows)

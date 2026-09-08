@@ -18,10 +18,10 @@
 ### void/core/semver (versions and constraints), void/core/extension
 ### (point contracts, the collector, resolution), void/core/manifest
 ### (what a plugin declares, the registry, `defplugin`) and
-### void/core/boot (the phases, the lifecycle, `current-boot`, the
-### REPL tools). Each binding below is the owner's own — docstring,
-### macro flag and, for `current-boot`, the var cell — so `(doc
-### plugin/x)` and a read of `plugin/current-boot` see exactly what
+### void/core/boot (the phases, the lifecycle, `running-boot`,
+### `last-boot`, the REPL tools). Each binding below is the owner's own
+### — docstring, macro flag and, for `last-boot`, the var cell — so
+### `(doc plugin/x)` and a read of `plugin/last-boot` see exactly what
 ### the owner has. The owner modules are importable on their own; the
 ### facade exports only what it always did.
 
@@ -50,5 +50,5 @@
            ['manifest 'manifest-registry 'register-manifest! 'defplugin])
 
 (re-export "./boot"
-           ['current-boot 'bootstrap 'start! 'shutdown! 'dry-run
+           ['running-boot 'last-boot 'bootstrap 'start! 'shutdown! 'dry-run
             'extension 'health 'inspect 'why])

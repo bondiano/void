@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/core/system :as system)
 (import void/pressure/state :as state)
 
 (log/set-level! "void.pressure" :error)
@@ -125,14 +126,14 @@
   (state/observe! live @{:loop-lag 150})
   (assert (not (state/under-pressure?)) "still not the active one"))
 
-(set state/current isolated)
+(system/hold! state/pressure isolated)
 (state/observe! isolated @{:loop-lag 1})
 (state/observe! isolated @{:loop-lag 1})
 (assert (not (state/under-pressure?)))
 (state/observe! isolated @{:loop-lag 150})
 (assert (state/under-pressure?) "the active state does flip it")
 (set state/pressed false)
-(set state/current nil)
+(system/release! state/pressure)
 
 # -- the sampler fiber ---------------------------------------------------
 

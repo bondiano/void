@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/core/system :as system)
 (import void/core/plugin :as plugin)
 (import void/test :as test)
 (import void/jobs :as jobs)
@@ -94,7 +95,7 @@
   # A bus having a bad afternoon must not turn a completed job into a
   # failed one, so the bridge swallows what it cannot publish.
 
-  (def br state/current-broker)
+  (def br (system/current state/broker))
   (def real (br :backend))
   (put br :backend
        (merge (table ;(kvs real))

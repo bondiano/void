@@ -147,8 +147,11 @@
 
 # -- the sampler component -----------------------------------------------
 
-(defn- resolved-checks []
-  (or (get-in plugin/current-boot [:extensions :void.pressure/check :resolved]) []))
+(defn- resolved-checks
+  "The :void.pressure/check contributions of the boot this sampler was
+  started in."
+  [boot]
+  (or (get-in boot [:extensions :void.pressure/check :resolved]) []))
 
 (def sampler-component
   (system/component :pressure/sampler
@@ -158,14 +161,15 @@
     plus every :void.pressure/check contribution. Sets the flag the
     shedding middleware reads; in prefork one of these runs per worker,
     because each worker has the loop it is measuring."
+    :deps [:void/boot]
     :provides [:void/pressure]
     :config {:key :pressure}
+    :ambient state/pressure
     :start
-    (fn start [_ cfg0]
+    (fn start [deps cfg0]
       (def cfg (slice cfg0))
-      (def checks (resolved-checks))
+      (def checks (resolved-checks (deps :void/boot)))
       (def st (state/make cfg checks))
-      (set state/current st)
       (set state/pressed false)
       (state/start-sampler! st)
       (def avail (sample/available))
@@ -184,8 +188,7 @@
     :stop
     (fn stop [st]
       (state/stop-sampler! st)
-      (set state/pressed false)
-      (set state/current nil))
+      (set state/pressed false))
     :health
     (fn health [st]
       (def s (state/status st))

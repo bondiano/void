@@ -36,6 +36,7 @@
 
 (import void/core/log :as log)
 (import void/core/plugin :as plugin)
+(import void/core/system :as system)
 (import ./backend :as backend)
 (import ./codec :as codec)
 (import ./message :as message)
@@ -44,19 +45,18 @@
 
 (def log-ns "void.bus")
 
-(var current-boot
-  ``The boot this bus was bootstrapped in, captured at :config-loaded.
-  `plugin/current-boot` is not enough on its own: a test bootstrap is
-  *untracked* on purpose (void/test), so a component that read the
-  global would see the previous boot's extensions or none at all —
-  which is how a suite ends up testing a composition it did not
-  build. void/redis captures the same way, for the same reason.``
-  nil)
-
 (defn boot
-  "The boot value in force: the captured one, else the tracked global."
+  ``The boot in force. This package used to capture its own in a
+  :config-loaded hook, because the process's most recent bootstrap is
+  not the one a fixture built — a test bootstrap is untracked on
+  purpose (void/test), and a component reading the global would see
+  the previous boot's extensions or none at all. `plugin/running-boot`
+  is now the boot that is actually up rather than the last one
+  bootstrapped, so there is nothing left to capture; the component
+  itself asks for `:deps [:void/boot]` and does not come through
+  here.``
   []
-  (or current-boot plugin/current-boot))
+  (plugin/running-boot))
 
 (defn config-slice
   "One slice of the resolved configuration, or {}."
@@ -69,23 +69,22 @@
   [name]
   (get-in (boot) [:extensions name :resolved]))
 
-(def broker-dyn
-  "Dynamic binding: broker override — bind it to run a scope against a
-  bus other than the started :bus/broker component."
-  :void.bus/broker)
+(def broker
+  ``The broker this package's functions run against: what the running
+  :bus/broker component holds, or the `:void.bus/broker` dyn where a
+  scope overrides it (tests, tooling, a second bus).``
+  (system/ambient :void.bus/broker :of "the bus"
+                  :from :void/bus :component :bus/broker))
 
-(var current-broker
-  "The value of the running :bus/broker component (set by its :start).
-  One per process, like plugin/current-boot."
-  nil)
+(def broker-dyn
+  "Dynamic binding of the broker ambient — the name a scope binds."
+  (broker :dyn))
 
 (defn active
   "The broker this fiber runs against: the `broker-dyn` override, else
   the started component."
   []
-  (or (dyn broker-dyn)
-      current-broker
-      (error "void/bus is not started — no :bus/broker component (or bind the broker-dyn dynamic)")))
+  (system/active broker))
 
 (defn active-backend
   "The backend behind the active broker."
