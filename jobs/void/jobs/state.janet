@@ -130,6 +130,23 @@
   (each v vs (when (and (nil? out) (not (nil? v))) (set out v)))
   out)
 
+(var trace-context
+  ``How a queued job learns which trace it was queued in, or nil for
+  "nothing is tracing" — the seam `void/obs` fills:
+
+      (fn [] "00-<trace id>-<span id>-01")   # or nil
+
+  It is asked once per enqueue and its answer is stored on the record
+  (`:traceparent`), so a worker that picks the job up an hour later
+  hangs its span off the request that asked for the work. void/bus
+  carries the same string in a message's `:meta`, spelled the same
+  way.
+
+  The var seam rather than a `require` of void/obs: this package has
+  no edge to obs, and obs is where the decision to observe is made
+  (./worker's `around-run` is the other half).``
+  nil)
+
 (defn resolve-policy
   ``The policy of one call: the enqueue overrides over the job
   definition over the queue slice over the [:jobs] slice over the
@@ -246,6 +263,11 @@
   (def now (os/clock :realtime))
   (def fields (resolve-policy q d args opts now))
   (def r (record/make fields))
+  # a retry keeps it: the second attempt is the same job the request
+  # asked for, and a trace with a gap of an hour in it is still the
+  # trace that explains why the job exists
+  (when trace-context
+    (when-let [tp (trace-context)] (put r :traceparent tp)))
   # a job whose arguments cannot be stored must fail in the caller's
   # stack, not in a worker an hour later
   (record/encode-value (r :args) (string/format "the arguments of job %q" name))

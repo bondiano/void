@@ -41,7 +41,7 @@
    :attempt :max-attempts :backoff :timeout
    :run-at :enqueued-at :started-at :finished-at
    :unique-key :unique-until :group :parent :children-left :children
-   :result :error :failures :token])
+   :result :error :failures :token :traceparent])
 
 (def max-failures
   ``How many failures a record carries with it. The last one is the
@@ -106,7 +106,13 @@
     :result nil
     :error nil
     :failures @[]
-    :token nil})
+    :token nil
+    # the W3C trace context of whoever queued this, so a worker an
+    # hour later can hang its span off the request that asked for the
+    # work. Written by `state/enqueue-with` when something is tracing
+    # and nil otherwise — the same field void/bus carries in a
+    # message's :meta, spelled the same way
+    :traceparent (get f :traceparent)})
 
 (defn copy
   "A shallow copy of a record — what a backend hands out so that a

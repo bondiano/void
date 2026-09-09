@@ -125,7 +125,8 @@
    [:result :text]
    [:error :text]
    [:failures :text]
-   [:token :string]])
+   [:token :string]
+   [:traceparent :string]])
 
 (def- col-keys
   "The record columns, as the keywords a statement names them by."
@@ -212,7 +213,8 @@
               (record/encode-value (get r :result) "the result"))
     :error (get r :error)
     :failures (record/encode-value (get r :failures []) "the failures")
-    :token (get r :token)})
+    :token (get r :token)
+    :traceparent (get r :traceparent)})
 
 (defn- kw [v] (when v (keyword v)))
 
@@ -244,7 +246,8 @@
       :result (record/decode-value (get row :result))
       :error (get row :error)
       :failures (array ;(or (record/decode-value (get row :failures)) []))
-      :token (get row :token)}))
+      :token (get row :token)
+      :traceparent (get row :traceparent)}))
 
 # -- the backend ---------------------------------------------------------
 

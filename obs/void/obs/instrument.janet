@@ -238,19 +238,35 @@
         resp))
     (run)))
 
+(defn queued-in
+  ``The `void/jobs/state` seam: the trace a job is being queued in, as
+  a `traceparent` for the record to carry. nil outside a span, which
+  is what a job queued by a cron tick or a CLI command gets.``
+  []
+  (when-let [span (trace/current)] (trace/traceparent span)))
+
 (defn traced-job
   ``The `void/jobs/worker` seam: one span around running a job, from
   the claim to the settle. The worker's own log lines land inside it,
-  which is how a job's records come to carry trace ids.``
+  which is how a job's records come to carry trace ids.
+
+  The parent is the request that queued the job — the `:traceparent`
+  `queued-in` wrote on the record, hours ago and in another process,
+  which is the whole reason the field exists. Without one the span
+  hangs off whatever this fiber is already in (a `drain!` inside a
+  test or a request) and is a root otherwise.``
   [r run]
   (if (trace/consuming?)
-    (trace/with-span* (string "job " (get r :job "-"))
-      {:kind :consumer
-       :attrs @{:messaging.operation "process"
-                :messaging.destination.name (string (get r :queue "-"))
-                :messaging.message.id (get r :id)
-                :void.jobs/attempt (get r :attempt)}}
-      run)
+    (let [remote (trace/parse-traceparent (get r :traceparent))]
+      (trace/with-span* (string "job " (get r :job "-"))
+        {:kind :consumer
+         :parent (when (nil? remote) (trace/current))
+         :remote remote
+         :attrs @{:messaging.operation "process"
+                  :messaging.destination.name (string (get r :queue "-"))
+                  :messaging.message.id (get r :id)
+                  :void.jobs/attempt (get r :attempt)}}
+        run))
     (run)))
 
 # -- void/db -------------------------------------------------------------
@@ -467,7 +483,7 @@
                  (module-var! "void/http/client" 'around-request traced-request)))}
 
    {:name :void.jobs/events
-    :doc "Job lifecycle events and execution time off the :void.jobs/event hook, and a span around running one job"
+    :doc "Job lifecycle events and execution time off the :void.jobs/event hook, the traceparent a queued job carries, and a span around running one under it"
     :needs [:void/jobs]
     :install (fn install-jobs [boot _]
                (hooks/add! (boot :hooks) :void.jobs/event
@@ -478,7 +494,8 @@
                (teardowns
                  (fn detach-jobs []
                    (hooks/remove! (boot :hooks) :void.jobs/event :obs/jobs))
-                 (module-var! "void/jobs/worker" 'around-run traced-job)))}])
+                 (module-var! "void/jobs/worker" 'around-run traced-job)
+                 (module-var! "void/jobs/state" 'trace-context queued-in)))}])
 
 (defn install!
   ``Apply the instrumentations that can be applied. `contribs` are the

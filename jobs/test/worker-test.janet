@@ -253,6 +253,25 @@
   (assert (= :completed (r :state)) "the job finished, it was not left :running")
   (assert (= :eventually (r :result)) "with its result settled"))
 
+# -- the trace a job was queued in ---------------------------------------
+#
+# `trace-context` is what void/obs fills so a record remembers the
+# request that asked for the work; the worker's half is the seam
+# below, which is where obs reads it back.
+
+(def tp "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+(def tpq (queue))
+(with-queue tpq
+  (assert (nil? ((state/enqueue :adder 1 2) :traceparent))
+          "nothing tracing, nothing carried")
+  (set state/trace-context (fn [] tp))
+  (assert (= tp ((state/enqueue :adder 1 2) :traceparent))
+          "the record carries the trace it was queued in, so a worker an hour later can join it")
+  (set state/trace-context (fn [] nil))
+  (assert (nil? ((state/enqueue :adder 1 2) :traceparent))
+          "a seam that answers nil — a job queued by a cron tick — leaves the field alone")
+  (set state/trace-context nil))
+
 # -- the wrapper seam ----------------------------------------------------
 #
 # `around-run` is what void/obs fills to put a span around a job (and
