@@ -123,6 +123,40 @@
                     " · shed " (string (get h :shed 0)))])
     (vital "Pressure" (view/absent "load shedding" ":void/pressure"))))
 
+(def- health-facts-shown
+  ``How many numbers one lamp shows. A patch panel that grew a table
+  in every cell would stop being one, and the sixth number is already
+  the one a page nobody reads is made of.``
+  6)
+
+(defn- scalar-str [v]
+  (if (or (string? v) (keyword? v)) (string v) (view/value-str v 24)))
+
+(defn- health-facts
+  ``The scalars a component's own `:health` carries beside its status:
+  the pool's occupancy, the queue's backend, the subscriber's channel
+  count. dash computes none of them — they are what `GET /health` and
+  `void health` already answer with, and printing them here is the
+  fourth projection this package is (see the module docstring), not a
+  fifth source. Which is also how void/db, void/jobs and void/bus
+  reach the dashboard at all: none of them knows it exists.
+
+  Scalars only: a health value may carry a nested reading (per-queue
+  counts, a backend's own health), and that belongs on the page of the
+  plugin that owns it.``
+  [c]
+  (def shown
+    (take health-facts-shown
+          (sorted (filter |(and (not= $ :status) (not= $ :reason)
+                                (let [v (get c $)]
+                                  (or (number? v) (boolean? v)
+                                      (string? v) (keyword? v))))
+                          (keys c)))))
+  (unless (empty? shown)
+    [:span {:class "dash-health-facts"}
+     (string/join (seq [k :in shown] (string k " " (scalar-str (get c k))))
+                  " · ")]))
+
 (defn- health-tiles [boot]
   (def h (plugin/health boot))
   [:div
@@ -142,6 +176,7 @@
                                ""))}
         [:span (string name)]
         (view/status-word status)
+        (health-facts c)
         (when-let [r (get c :reason)]
           [:span {:class "dash-health-reason"} (view/value-str r 120)])])]])
 
