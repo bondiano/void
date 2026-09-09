@@ -54,7 +54,12 @@
                     :err (rk/err-str (msg :err))))
         (do
           (put-in co [:stats :received] (inc (get-in co [:stats :received] 0)))
-          ((co :deliver) (merge msg {:headers (rk/message-headers ptr)}))
+          # what the handler logs says which message it was reading: a
+          # consumer is a loop over other people's data, and a line
+          # without the offset cannot be looked up again
+          (log/with-context {:group (co :group) :topic (msg :topic)
+                             :partition (msg :partition) :offset (msg :offset)}
+            ((co :deliver) (merge msg {:headers (rk/message-headers ptr)})))
           # only reached when deliver returned: the offset moves
           # behind the handler, which is the whole at-least-once
           (rk/rd_kafka_offset_store (msg :rkt) (msg :partition) (msg :offset))

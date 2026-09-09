@@ -14,9 +14,13 @@
 (import void/obs/prometheus :as prom)
 (import void/obs/trace :as trace)
 (import void/db/state :as dbstate)
+(import void/jobs/job :as job)
+(import void/jobs/state :as jobstate)
+(import void/jobs/worker :as jobworker)
 (require "void/cache/init")
 (require "void/db/init")
 (require "void/db-sqlite/init")
+(require "void/jobs/init")
 
 (log/set-level! "void.obs" :error)
 (log/set-level! "void.cache" :error)
@@ -300,6 +304,40 @@
                               (instrument/traced-command "GET" (fn [] (error "boom")))))))
         "a wrapper does not swallow what it wrapped")
 (assert (= :error ((span-named "redis GET") :status)))
+
+# jobs: the record carries the trace it was queued in, and the worker
+# hangs its span off it — the one assertion that is only worth making
+# end to end, because the two halves are minutes and a process apart
+(job/defjob traced-ping [] :pong)
+
+(test/with-system [boot {:plugins [:void/jobs]
+                         :config {:cli {:log {:level :error}}}}]
+  (def on (instrument/install! boot (filter |(= :void.jobs/events ($ :name))
+                                            instrument/built-ins)))
+  (assert (= instrument/queued-in (var-of "void/jobs/state" 'trace-context))
+          "obs fills the enqueue-side seam")
+
+  (array/clear spans)
+  (def queued
+    (trace/with-span "request" {:sampled true}
+      (jobstate/enqueue :traced-ping)))
+  (assert (trace/parse-traceparent (queued :traceparent))
+          "the record remembers the trace it was queued in")
+
+  # the worker: another fiber, and in production another process
+  (assert (= 1 (jobworker/drain!)))
+  (def js (span-named "job traced-ping"))
+  (def req (span-named "request"))
+  (assert js)
+  (assert (= (req :trace-id) (js :trace-id))
+          "a request that queued and a worker that ran it are one trace, not two nobody can join")
+  (assert (= (req :span-id) (js :parent-id)))
+  (assert (js :remote) "joined through the header, not through a shared fiber")
+
+  (instrument/remove! on)
+  (assert (nil? (var-of "void/jobs/state" 'trace-context)))
+  (assert (nil? ((jobstate/enqueue :traced-ping) :traceparent))
+          "and with nothing tracing, a record carries no trace context"))
 
 # nothing to read the span, nothing built
 (array/clear spans)

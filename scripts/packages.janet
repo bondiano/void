@@ -189,8 +189,12 @@
    # suite's as well: instrument-test proves the :void.db/pool gauges
    # against a live pool (in-memory sqlite) — the sources reach
    # void/db/pool only through a protected `require`, never an import.
+   # void/jobs is the suite's too: the traceparent a queued job carries
+   # is only worth asserting end to end — enqueued inside a span here,
+   # picked up by a worker there, one trace.
    {:dir "obs" :deps [:void/core :void/http :void/pressure :void/proto]
-    :test-deps [:void/dev :void/cache :void/rest :void/db :void/db-sqlite]
+    :test-deps [:void/dev :void/cache :void/rest :void/db :void/db-sqlite
+                :void/jobs]
     :jpm [:spork]}
 
    :void/auth

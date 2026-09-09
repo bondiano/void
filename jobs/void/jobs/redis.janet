@@ -107,7 +107,8 @@
    [:result "result" :jdn]
    [:error "error" :string]
    [:failures "failures" :jdn]
-   [:token "token" :string]])
+   [:token "token" :string]
+   [:traceparent "traceparent" :string]])
 
 (defn record->hash
   "A record as HSET arguments: field, value, field, value. Absent

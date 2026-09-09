@@ -355,21 +355,7 @@
       # the failure was ours
       (close! conn :internal-error "handler error"))))
 
-(defn serve
-  ``Run one connection to its end: read frames, assemble messages,
-  answer control frames and hand every complete message to
-  `(:on-message handlers)`. Returns the close info
-  `{:code :name :reason}`.
-
-  `handlers` may carry :on-open (fn [conn]), :on-message
-  (fn [conn message]), :on-close (fn [conn close-info]) and the
-  :on-detach the registry unregisters with. A message is
-  `{:type :text|:binary :data <string>}`.
-
-  `leftover` are the bytes that arrived behind the handshake — the
-  kernel hands them over rather than dropping them (ring/upgrade),
-  because a client is allowed to send its first frame in the same
-  packet as its request.``
+(defn- serve* "`serve` with nothing bound around it."
   [conn handlers &opt leftover]
   (def sock (conn :socket))
   (def cfg (conn :config))
@@ -489,3 +475,29 @@
       (dictionary? out)
       (set result out)))
   (finish! conn result handlers))
+
+(defn serve
+  ``Run one connection to its end: read frames, assemble messages,
+  answer control frames and hand every complete message to
+  `(:on-message handlers)`. Returns the close info
+  `{:code :name :reason}`.
+
+  `handlers` may carry :on-open (fn [conn]), :on-message
+  (fn [conn message]), :on-close (fn [conn close-info]) and the
+  :on-detach the registry unregisters with. A message is
+  `{:type :text|:binary :data <string>}`.
+
+  `leftover` are the bytes that arrived behind the handshake — the
+  kernel hands them over rather than dropping them (ring/upgrade),
+  because a client is allowed to send its first frame in the same
+  packet as its request.
+
+  Everything logged for the length of the connection — by this
+  module, by the writer fiber it starts and by the application's own
+  handlers — carries `:conn`, the way a request's records carry
+  `:request-id`. A connection lives for minutes and logs from two
+  fibers; without it, two connections interleave into one stream
+  nobody can read back.``
+  [conn handlers &opt leftover]
+  (log/with-context {:conn (conn :id)}
+    (serve* conn handlers leftover)))

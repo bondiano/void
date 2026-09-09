@@ -222,7 +222,7 @@
   # that counts — writing ours over it would be last-writer-wins on a
   # record somebody else owns
   (log/warn "job finished but its claim was gone — a reaper gave it to another worker"
-            :ns log-ns :job (r :job) :id (r :id) :queue (r :queue) :outcome what)
+            :ns log-ns :outcome what)
   r)
 
 (defn- settle-completed! [w r result t]
@@ -251,9 +251,7 @@
         (do
           (update (w :stats) :failed inc)
           (log/warn "job failed — retrying" :ns log-ns
-                    :job (r :job) :id (r :id) :queue (r :queue)
-                    :attempt (r :attempt) :of (r :max-attempts)
-                    :retry-in (math/round wait) :err msg)
+                    :of (r :max-attempts) :retry-in (math/round wait) :err msg)
           (state/emit! :failed r {:retry-in wait})
           r)))
     (do
@@ -262,9 +260,7 @@
         (claim-lost! w r :dead)
         (do
           (update (w :stats) :dead inc)
-          (log/error "job died" :ns log-ns
-                     :job (r :job) :id (r :id) :queue (r :queue)
-                     :attempts (r :attempt) :err msg)
+          (log/error "job died" :ns log-ns :err msg)
           (state/emit! :dead r)
           (kill-parents! b r t)
           r)))))
@@ -311,9 +307,7 @@
   [w r]
   (note-start! w r)
   (state/emit! :started r)
-  (log/debug "job started" :ns log-ns
-             :job (r :job) :id (r :id) :queue (r :queue)
-             :attempt (r :attempt))
+  (log/debug "job started" :ns log-ns)
   (def t0 (os/clock :monotonic))
   (def [ok res]
     (protect
@@ -324,8 +318,7 @@
   (def [sok serr]
     (protect
       (if ok
-        (do (log/debug "job completed" :ns log-ns
-                       :job (r :job) :id (r :id) :us us)
+        (do (log/debug "job completed" :ns log-ns :us us)
             (settle-completed! w r res t))
         (do (when (errors/kind? res :void.jobs/timeout)
               (update (w :stats) :timeouts inc))
@@ -335,19 +328,25 @@
     # :running, its claim goes stale, and a reaper picks it up — which
     # is the same path a killed worker takes, and the reason that path
     # exists
-    (log/error "could not settle a finished job" :ns log-ns
-               :job (r :job) :id (r :id) :err (err-str serr)))
+    (log/error "could not settle a finished job" :ns log-ns :err (err-str serr)))
   (note-end! w r)
   r)
 
 (defn run-one!
   ``Run one claimed record to its conclusion and settle it. Never
   throws: a job's failure is the queue's data, not the worker's
-  error.``
+  error.
+
+  Everything logged while it runs — by the worker and by the handler
+  — carries which job it was: `log/with-context` here is what
+  `{:request-id id}` is in void/http, and the reason a worker's log
+  can be read by job id at all.``
   [w r]
-  (if around-run
-    (around-run r (fn run-wrapped [] (run-one-inner! w r)))
-    (run-one-inner! w r)))
+  (log/with-context {:job (r :job) :job-id (r :id)
+                     :queue (r :queue) :attempt (r :attempt)}
+    (if around-run
+      (around-run r (fn run-wrapped [] (run-one-inner! w r)))
+      (run-one-inner! w r))))
 
 # -- the loops -----------------------------------------------------------
 
