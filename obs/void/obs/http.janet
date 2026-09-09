@@ -346,8 +346,7 @@
   [req]
   (and trace/enabled
        (settings :trace)
-       (or (not (empty? trace/exporters))
-           trace/always
+       (or (trace/consuming?)
            (truthy? (ring/request-header req trace/traceparent-header)))))
 
 (defn- traced [handler req info]

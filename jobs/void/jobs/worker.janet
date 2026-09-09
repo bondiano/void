@@ -291,10 +291,23 @@
                                  (string/format "timed out after %.3g s" timeout)
                                  {:timeout timeout}))))
 
-(defn run-one!
-  ``Run one claimed record to its conclusion and settle it. Never
-  throws: a job's failure is the queue's data, not the worker's
-  error.``
+(var around-run
+  ``How running one job is wrapped, or nil for "not at all" — the seam
+  `void/obs` installs a span into:
+
+      (fn [record run] ... (run) ...)
+
+  Around the *whole* of `run-one!` and not around the handler alone:
+  the claim, the handler and the settle are what a job took, and the
+  worker's own log lines belong inside whatever context the wrapper
+  binds (which is how a job's records come to carry its trace ids).
+
+  The same var seam `tls-connect` is in void/http/client — filled by
+  the composition, nil when nothing is observing.``
+  nil)
+
+(defn- run-one-inner!
+  "`run-one!` with nothing wrapped around it."
   [w r]
   (note-start! w r)
   (state/emit! :started r)
@@ -326,6 +339,15 @@
                :job (r :job) :id (r :id) :err (err-str serr)))
   (note-end! w r)
   r)
+
+(defn run-one!
+  ``Run one claimed record to its conclusion and settle it. Never
+  throws: a job's failure is the queue's data, not the worker's
+  error.``
+  [w r]
+  (if around-run
+    (around-run r (fn run-wrapped [] (run-one-inner! w r)))
+    (run-one-inner! w r)))
 
 # -- the loops -----------------------------------------------------------
 

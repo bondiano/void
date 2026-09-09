@@ -56,7 +56,11 @@
 ### The counters this module keeps are read by void/obs through
 ### `stats` — the public-function seam every instrumentation in
 ### `void/obs/instrument` uses, so the client stays free of any
-### knowledge that observability exists.
+### knowledge that observability exists. `around-request` is the same
+### bargain one level up: obs fills the var, the client calls it with
+### the headers it is about to write, and the `traceparent` this
+### module's first paragraph had nobody to write finally goes out —
+### still without an import in either direction.
 
 (import void/core/deadline :as deadline)
 (import ./wire :as wire)
@@ -530,34 +534,27 @@
   (count! :bytes-in (resp :bytes))
   resp)
 
-(defn send!
-  ``Send one request on this client and return the response:
+(var around-request
+  ``How one outbound request is wrapped, or nil for "not at all" — the
+  seam `void/obs` installs a child span into:
 
-      (client/send! c {:method :post :target "/v1/traces"
-                       :headers {"content-type" "application/json"}
-                       :body payload})
+      (fn [client method target headers run] ... (run) ...)
 
-  The response is `{:status :message :headers :body :http-version}`,
-  whatever the status: a 500 is an answer, not an error. Errors are
-  what happened *instead* of an answer — no connection, a timeout, a
-  body past `:max-body`, framing the peer got wrong.
+  `headers` is the table this request is about to be formatted with,
+  and it is handed over *mutable and before the head is written*: the
+  half of trace propagation this client could never do by itself is
+  `trace/inject!` on that table, and a wrapper that has the span also
+  has the one moment when a header can still be added.
 
-  A socket the peer closed while it was idle is the one failure this
-  retries by itself, once, because it is not a decision: the request
-  never reached anybody.``
-  [client req]
-  (def method (method-str (req :method)))
-  (def close? (or (req :close) (not (client :keep-alive))))
-  (def headers (merge (lower-keys (client :headers)) (lower-keys (req :headers))))
-  (def target (target-of req))
-  (def [body content-type] (body-of req))
-  # what the caller wrote wins over what the body implies: a form
-  # posted as text/plain is somebody testing a server, not a bug here
-  (when (and content-type (not (get headers "content-type")))
-    (put headers "content-type" content-type))
-  (def cookies (or (req :cookies) (client :cookies)))
-  (when (and cookies (not (get headers "cookie")) (not (empty? cookies)))
-    (put headers "cookie" (wire/cookie-header cookies)))
+  The same var seam `tls-connect` above is: what the composition can
+  fill, nil when nobody has.``
+  nil)
+
+(defn- send-prepared!
+  ``The exchange: format the head with the headers as they now are,
+  write it, read the answer, and reopen-and-repeat once when the
+  keep-alive socket turns out to have been closed by the peer.``
+  [client method target headers body close?]
   (def bytes (format-request {:method method
                               :target target
                               :headers headers
@@ -565,7 +562,6 @@
                               :authority (client :authority)
                               :close close?}))
   (def started (os/clock :monotonic))
-  (count! :requests 1)
   (var attempt 0)
   (var out nil)
   (while (nil? out)
@@ -606,6 +602,44 @@
                            (res :message))
             res)))))
   out)
+
+(defn send!
+  ``Send one request on this client and return the response:
+
+      (client/send! c {:method :post :target "/v1/traces"
+                       :headers {"content-type" "application/json"}
+                       :body payload})
+
+  The response is `{:status :message :headers :body :http-version}`,
+  whatever the status: a 500 is an answer, not an error. Errors are
+  what happened *instead* of an answer — no connection, a timeout, a
+  body past `:max-body`, framing the peer got wrong.
+
+  A socket the peer closed while it was idle is the one failure this
+  retries by itself, once, because it is not a decision: the request
+  never reached anybody.``
+  [client req]
+  (def method (method-str (req :method)))
+  (def close? (or (req :close) (not (client :keep-alive))))
+  (def headers (merge (lower-keys (client :headers)) (lower-keys (req :headers))))
+  (def target (target-of req))
+  (def [body content-type] (body-of req))
+  # what the caller wrote wins over what the body implies: a form
+  # posted as text/plain is somebody testing a server, not a bug here
+  (when (and content-type (not (get headers "content-type")))
+    (put headers "content-type" content-type))
+  (def cookies (or (req :cookies) (client :cookies)))
+  (when (and cookies (not (get headers "cookie")) (not (empty? cookies)))
+    (put headers "cookie" (wire/cookie-header cookies)))
+  # the request is counted before anything is wrapped: a wrapper is
+  # observation, and what this process attempted does not depend on
+  # whether anybody was watching
+  (count! :requests 1)
+  (if around-request
+    (around-request client method target headers
+                    (fn send-wrapped []
+                      (send-prepared! client method target headers body close?)))
+    (send-prepared! client method target headers body close?)))
 
 # -- what a caller asks of a response ------------------------------------
 #

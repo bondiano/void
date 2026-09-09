@@ -253,6 +253,33 @@
   (assert (= :completed (r :state)) "the job finished, it was not left :running")
   (assert (= :eventually (r :result)) "with its result settled"))
 
+# -- the wrapper seam ----------------------------------------------------
+#
+# `around-run` is what void/obs fills to put a span around a job (and
+# with it, the trace ids on the worker's own log records). The worker
+# only has to call it, and to run the job itself when nobody has.
+
+(def wrapped @[])
+(job/defjob wrappable [] :done)
+
+(def wq (queue))
+(set worker/around-run
+     (fn [r run]
+       (array/push wrapped (r :job))
+       (run)))
+(with-queue wq
+  (state/enqueue :wrappable)
+  (assert (= 1 (worker/drain!)))
+  (assert (deep= @[:wrappable] wrapped) "the seam is handed the record it is about to run")
+  (assert (= 1 (get-in (state/counts) [:default :completed]))
+          "and the job settles inside it"))
+
+(set worker/around-run nil)
+(with-queue wq
+  (state/enqueue :wrappable)
+  (assert (= 1 (worker/drain!)))
+  (assert (= 1 (length wrapped)) "nil is the plain path"))
+
 # -- what a worker refuses to be built as --------------------------------
 
 (each [opts reason]

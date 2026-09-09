@@ -43,11 +43,24 @@
 ### **Durations are converted here.** The pools count microseconds
 ### internally; Prometheus base units are seconds, and the conversion
 ### belongs at the one seam where an external number becomes a metric.
+###
+### **Spans need a second seam, pointing the other way.** A stats
+### function is something obs *reads*; a span has to be *around* the
+### work, and no amount of reading gets there. So the packages that do
+### work worth a span expose one var each — `around-statement` in
+### void/db/state, `around-command` in void/redis/state,
+### `around-request` in void/http/client, `around-run` in
+### void/jobs/worker — which they call when it is set and know nothing
+### else about. obs fills it at install and puts back what it found at
+### teardown (`module-var!`), the same way `void/tls` fills
+### `tls-connect`. Neither package imports the other, which is the
+### same bargain as `stats` and for the same reason.
 
 (import void/core/log :as log)
 (import void/core/hooks :as hooks)
 (import void/core/system :as system)
 (import ./metrics :as metrics)
+(import ./trace :as trace)
 
 (def log-ns
   "Log namespace — spelled out, since the file-derived default would
@@ -104,6 +117,141 @@
   "Microseconds to seconds — the pools count the first, Prometheus
   wants the second."
   0.000001)
+
+(defn- module-var!
+  ``Set the var `name` of module `path` to `value`, and return the
+  thunk that puts back what was there. nil when that package is not on
+  this process's module path, or when the binding is not a var — the
+  same "then this instrumentation is simply not applied" `module-fn`
+  answers with.``
+  [path name value]
+  (def [ok env] (protect (require path)))
+  (when ok
+    (when-let [entry (get env name)
+               ref (get entry :ref)]
+      (def previous (in ref 0))
+      (put ref 0 value)
+      (fn restore [] (put ref 0 previous)))))
+
+(defn- teardowns
+  "One teardown thunk out of several, ignoring the nils an install
+  step returns when it had nothing to do."
+  [& thunks]
+  (def ts (filter function? thunks))
+  (unless (empty? ts)
+    (fn detach-all [] (each t ts (t)))))
+
+# -- the spans the seams install -----------------------------------------
+#
+# Each of these creates a span only when something will read it
+# (`trace/consuming?`): under a traced request the child belongs to
+# that request's trace, and in a process that exports nothing it would
+# be a table nobody reads — the bargain ./http already makes for the
+# root span, made again one level down, where it is taken far more
+# often than once per request.
+#
+# A span *name* is a metric label (`:void.obs/spans-total`), so none of
+# them is built out of something unbounded: the statement verb rather
+# than the SQL, the command word rather than the key, the method rather
+# than the URL. What is unbounded goes in an attribute, where a trace
+# backend is expecting it.
+
+(def- sql-operations
+  ``The statement verbs a span may be named after — anything else is
+  "db OTHER" rather than a new series per query shape.``
+  {"SELECT" true "INSERT" true "UPDATE" true "DELETE" true "REPLACE" true
+   "CREATE" true "ALTER" true "DROP" true "TRUNCATE" true
+   "BEGIN" true "START" true "COMMIT" true "ROLLBACK" true
+   "SAVEPOINT" true "RELEASE" true "WITH" true "PRAGMA" true
+   "SET" true "SHOW" true "EXPLAIN" true "ANALYZE" true "VACUUM" true})
+
+(defn- sql-operation
+  "The leading verb of a statement, or OTHER."
+  [sql]
+  (def s (string/trim (string sql)))
+  (def stop (min (or (string/find " " s) (length s)) 16))
+  (def word (string/ascii-upper (string/slice s 0 stop)))
+  (if (get sql-operations word) word "OTHER"))
+
+(defn traced-statement
+  ``The `void/db/state` seam: one span per statement. Public so a test
+  can drive it without a database behind it.``
+  [sql drv run]
+  (if (trace/consuming?)
+    (trace/with-span* (string "db " (sql-operation sql))
+      {:kind :client
+       # the statement, never the parameters: the SQL is the shape of
+       # the query and belongs in a trace, the values are the data and
+       # do not — void/db puts those on a :debug line, where a level
+       # can refuse them and a trace backend cannot
+       :attrs @{:db.system (get drv :dialect)
+                :db.statement sql}}
+      run)
+    (run)))
+
+(defn traced-command
+  ``The `void/redis/state` seam: one span per command attempt. The
+  label is the command word, which is bounded in practice by the
+  command set; the registry's own label cap is what holds if a caller
+  proves otherwise.``
+  [label run]
+  (def op (or label "?"))
+  (if (trace/consuming?)
+    (trace/with-span* (string "redis " op)
+      {:kind :client :attrs @{:db.system :redis :db.operation op}}
+      run)
+    (run)))
+
+(defn- path-of
+  "A request target without its query — a query string carries values,
+  and a span attribute is not the place for a token somebody put in a
+  URL."
+  [target]
+  (def s (string target))
+  (if-let [i (string/find "?" s)] (string/slice s 0 i) s))
+
+(defn traced-request
+  ``The `void/http/client` seam: one span per outbound request, and
+  the `traceparent` that goes out with it. This is the injection point
+  the client's own docstring has been waiting for — the header table
+  is still mutable here, and the span whose ids belong in it is the
+  one this function just started.``
+  [client method target headers run]
+  (if (trace/consuming?)
+    (trace/with-span* (string "http " method)
+      {:kind :client
+       :attrs @{:http.request.method method
+                :server.address (get client :host)
+                :server.port (get client :port)
+                :url.path (path-of target)}}
+      (fn traced-send []
+        (trace/inject! headers)
+        (def resp (run))
+        (when (dictionary? resp)
+          (def status (get resp :status))
+          (trace/attr! :http.response.status_code status)
+          # unlike the server span, where a 4xx is the caller's fault
+          # and only a 5xx is ours, an outbound 4xx is this call not
+          # getting what it asked for
+          (when (and (number? status) (>= status 400))
+            (put (trace/current) :status :error)))
+        resp))
+    (run)))
+
+(defn traced-job
+  ``The `void/jobs/worker` seam: one span around running a job, from
+  the claim to the settle. The worker's own log lines land inside it,
+  which is how a job's records come to carry trace ids.``
+  [r run]
+  (if (trace/consuming?)
+    (trace/with-span* (string "job " (get r :job "-"))
+      {:kind :consumer
+       :attrs @{:messaging.operation "process"
+                :messaging.destination.name (string (get r :queue "-"))
+                :messaging.message.id (get r :id)
+                :void.jobs/attempt (get r :attempt)}}
+      run)
+    (run)))
 
 # -- void/db -------------------------------------------------------------
 
@@ -266,22 +414,28 @@
   component": `void/http/client` is a module with
   process-wide counters and nothing in the system graph to name, so it
   needs nothing and installs wherever void/http is on the module path.
-  The outbound trace context stays the caller's — `trace/inject!`
-  writes `traceparent` into the headers of whatever makes the call.``
+  It is also where the outbound trace context finally goes out:
+  `traced-request` injects `traceparent` into the headers of every
+  request the client sends, which used to be left to a caller who had
+  to know obs existed.``
   [{:name :void.db/pool
-    :doc "Pool occupancy, checkout waits and statement timing from :db/pool"
+    :doc "Pool occupancy, checkout waits and statement timing from :db/pool, and a span per statement"
     :needs [:db/pool]
     :install (fn install-db [boot _]
-               (when-let [stats (module-fn "void/db/pool" 'stats)]
-                 (attach! db-metrics (reader boot :db/pool stats))))}
+               (teardowns
+                 (when-let [stats (module-fn "void/db/pool" 'stats)]
+                   (attach! db-metrics (reader boot :db/pool stats)))
+                 (module-var! "void/db/state" 'around-statement traced-statement)))}
 
    {:name :void.redis/pool
-    :doc "Pool occupancy, checkout waits and command timing from :redis/client"
+    :doc "Pool occupancy, checkout waits and command timing from :redis/client, and a span per command"
     :needs [:void/redis]
     :install (fn install-redis [boot _]
-               (when-let [stats (module-fn "void/redis/pool" 'stats)]
-                 (attach! redis-metrics
-                          (reader boot :void/redis stats |(get $ :pool)))))}
+               (teardowns
+                 (when-let [stats (module-fn "void/redis/pool" 'stats)]
+                   (attach! redis-metrics
+                            (reader boot :void/redis stats |(get $ :pool))))
+                 (module-var! "void/redis/state" 'around-command traced-command)))}
 
    {:name :void.cache/store
     :doc "Hit rate, writes and store failures from the :void/cache funnel"
@@ -296,22 +450,24 @@
                                     (with-dyns [cache-dyn cache] (stats)))))))}
 
    {:name :void.http/client
-    :doc "Outbound request rate, failures, reconnects and timing from void/http/client"
+    :doc "Outbound request rate, failures, reconnects and timing from void/http/client, a span per request and the traceparent that goes out with it"
     :needs []
     :install (fn install-client [boot]
-               (when-let [stats (module-fn "void/http/client" 'stats)]
-                 (attach! client-metrics
-                          # nothing until the process has actually made
-                          # a request: a worker that never calls out
-                          # should report no series rather than nine
-                          # zeros, which is the same bargain `from`
-                          # makes for an absent stats key
-                          (fn read-client []
-                            (let [s (stats)]
-                              (when (pos? (get s :requests 0)) s))))))}
+               (teardowns
+                 (when-let [stats (module-fn "void/http/client" 'stats)]
+                   (attach! client-metrics
+                            # nothing until the process has actually
+                            # made a request: a worker that never calls
+                            # out should report no series rather than
+                            # nine zeros, which is the same bargain
+                            # `from` makes for an absent stats key
+                            (fn read-client []
+                              (let [s (stats)]
+                                (when (pos? (get s :requests 0)) s)))))
+                 (module-var! "void/http/client" 'around-request traced-request)))}
 
    {:name :void.jobs/events
-    :doc "Job lifecycle events and execution time, off the :void.jobs/event hook"
+    :doc "Job lifecycle events and execution time off the :void.jobs/event hook, and a span around running one job"
     :needs [:void/jobs]
     :install (fn install-jobs [boot _]
                (hooks/add! (boot :hooks) :void.jobs/event
@@ -319,8 +475,10 @@
                            :name :obs/jobs
                            :plugin :void/obs
                            :doc "Count job lifecycle events into the obs registry")
-               (fn detach-jobs []
-                 (hooks/remove! (boot :hooks) :void.jobs/event :obs/jobs)))}])
+               (teardowns
+                 (fn detach-jobs []
+                   (hooks/remove! (boot :hooks) :void.jobs/event :obs/jobs))
+                 (module-var! "void/jobs/worker" 'around-run traced-job)))}])
 
 (defn install!
   ``Apply the instrumentations that can be applied. `contribs` are the
