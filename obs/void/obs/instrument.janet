@@ -105,169 +105,35 @@
         (when (and ok (dictionary? s)) s)))))
 
 (defn- from
-  "A collector reading `key` out of a stats reader; nil (an absent
-  key) becomes no series rather than a zero."
+  ``A collector reading `key` out of a stats reader; nil (an absent
+  key) becomes no series rather than a zero.
+
+  `scale` is a factor for a number, or a function turning whatever the
+  stats value is into one — the length of a list of channels, 1 or 0
+  for a connection flag. Either way, nil out means no series.``
   [read key &opt scale]
   (fn collect []
     (when-let [s (read)]
       (def v (get s key))
-      (when (number? v) (if scale (* scale v) v)))))
+      (cond
+        (function? scale) (scale v)
+        (number? v) (if scale (* scale v) v)))))
+
+(defn- how-many
+  "A list of names as its length — what a gauge wants out of
+  `{:channels [...]}`."
+  [v]
+  (when (indexed? v) (length v)))
+
+(defn- flag
+  "A yes/no as 1 or 0, and an absent one as no series."
+  [v]
+  (unless (nil? v) (if v 1 0)))
 
 (def- us->s
   "Microseconds to seconds — the pools count the first, Prometheus
   wants the second."
   0.000001)
-
-(defn- module-var!
-  ``Set the var `name` of module `path` to `value`, and return the
-  thunk that puts back what was there. nil when that package is not on
-  this process's module path, or when the binding is not a var — the
-  same "then this instrumentation is simply not applied" `module-fn`
-  answers with.``
-  [path name value]
-  (def [ok env] (protect (require path)))
-  (when ok
-    (when-let [entry (get env name)
-               ref (get entry :ref)]
-      (def previous (in ref 0))
-      (put ref 0 value)
-      (fn restore [] (put ref 0 previous)))))
-
-(defn- teardowns
-  "One teardown thunk out of several, ignoring the nils an install
-  step returns when it had nothing to do."
-  [& thunks]
-  (def ts (filter function? thunks))
-  (unless (empty? ts)
-    (fn detach-all [] (each t ts (t)))))
-
-# -- the spans the seams install -----------------------------------------
-#
-# Each of these creates a span only when something will read it
-# (`trace/consuming?`): under a traced request the child belongs to
-# that request's trace, and in a process that exports nothing it would
-# be a table nobody reads — the bargain ./http already makes for the
-# root span, made again one level down, where it is taken far more
-# often than once per request.
-#
-# A span *name* is a metric label (`:void.obs/spans-total`), so none of
-# them is built out of something unbounded: the statement verb rather
-# than the SQL, the command word rather than the key, the method rather
-# than the URL. What is unbounded goes in an attribute, where a trace
-# backend is expecting it.
-
-(def- sql-operations
-  ``The statement verbs a span may be named after — anything else is
-  "db OTHER" rather than a new series per query shape.``
-  {"SELECT" true "INSERT" true "UPDATE" true "DELETE" true "REPLACE" true
-   "CREATE" true "ALTER" true "DROP" true "TRUNCATE" true
-   "BEGIN" true "START" true "COMMIT" true "ROLLBACK" true
-   "SAVEPOINT" true "RELEASE" true "WITH" true "PRAGMA" true
-   "SET" true "SHOW" true "EXPLAIN" true "ANALYZE" true "VACUUM" true})
-
-(defn- sql-operation
-  "The leading verb of a statement, or OTHER."
-  [sql]
-  (def s (string/trim (string sql)))
-  (def stop (min (or (string/find " " s) (length s)) 16))
-  (def word (string/ascii-upper (string/slice s 0 stop)))
-  (if (get sql-operations word) word "OTHER"))
-
-(defn traced-statement
-  ``The `void/db/state` seam: one span per statement. Public so a test
-  can drive it without a database behind it.``
-  [sql drv run]
-  (if (trace/consuming?)
-    (trace/with-span* (string "db " (sql-operation sql))
-      {:kind :client
-       # the statement, never the parameters: the SQL is the shape of
-       # the query and belongs in a trace, the values are the data and
-       # do not — void/db puts those on a :debug line, where a level
-       # can refuse them and a trace backend cannot
-       :attrs @{:db.system (get drv :dialect)
-                :db.statement sql}}
-      run)
-    (run)))
-
-(defn traced-command
-  ``The `void/redis/state` seam: one span per command attempt. The
-  label is the command word, which is bounded in practice by the
-  command set; the registry's own label cap is what holds if a caller
-  proves otherwise.``
-  [label run]
-  (def op (or label "?"))
-  (if (trace/consuming?)
-    (trace/with-span* (string "redis " op)
-      {:kind :client :attrs @{:db.system :redis :db.operation op}}
-      run)
-    (run)))
-
-(defn- path-of
-  "A request target without its query — a query string carries values,
-  and a span attribute is not the place for a token somebody put in a
-  URL."
-  [target]
-  (def s (string target))
-  (if-let [i (string/find "?" s)] (string/slice s 0 i) s))
-
-(defn traced-request
-  ``The `void/http/client` seam: one span per outbound request, and
-  the `traceparent` that goes out with it. This is the injection point
-  the client's own docstring has been waiting for — the header table
-  is still mutable here, and the span whose ids belong in it is the
-  one this function just started.``
-  [client method target headers run]
-  (if (trace/consuming?)
-    (trace/with-span* (string "http " method)
-      {:kind :client
-       :attrs @{:http.request.method method
-                :server.address (get client :host)
-                :server.port (get client :port)
-                :url.path (path-of target)}}
-      (fn traced-send []
-        (trace/inject! headers)
-        (def resp (run))
-        (when (dictionary? resp)
-          (def status (get resp :status))
-          (trace/attr! :http.response.status_code status)
-          # unlike the server span, where a 4xx is the caller's fault
-          # and only a 5xx is ours, an outbound 4xx is this call not
-          # getting what it asked for
-          (when (and (number? status) (>= status 400))
-            (put (trace/current) :status :error)))
-        resp))
-    (run)))
-
-(defn queued-in
-  ``The `void/jobs/state` seam: the trace a job is being queued in, as
-  a `traceparent` for the record to carry. nil outside a span, which
-  is what a job queued by a cron tick or a CLI command gets.``
-  []
-  (when-let [span (trace/current)] (trace/traceparent span)))
-
-(defn traced-job
-  ``The `void/jobs/worker` seam: one span around running a job, from
-  the claim to the settle. The worker's own log lines land inside it,
-  which is how a job's records come to carry trace ids.
-
-  The parent is the request that queued the job — the `:traceparent`
-  `queued-in` wrote on the record, hours ago and in another process,
-  which is the whole reason the field exists. Without one the span
-  hangs off whatever this fiber is already in (a `drain!` inside a
-  test or a request) and is a root otherwise.``
-  [r run]
-  (if (trace/consuming?)
-    (let [remote (trace/parse-traceparent (get r :traceparent))]
-      (trace/with-span* (string "job " (get r :job "-"))
-        {:kind :consumer
-         :parent (when (nil? remote) (trace/current))
-         :remote remote
-         :attrs @{:messaging.operation "process"
-                  :messaging.destination.name (string (get r :queue "-"))
-                  :messaging.message.id (get r :id)
-                  :void.jobs/attempt (get r :attempt)}}
-        run))
-    (run)))
 
 # -- void/db -------------------------------------------------------------
 
@@ -280,15 +146,24 @@
 (def db-waits (metrics/counter :void.db/pool-waits-total {:doc "Checkouts that had to wait for a connection"}))
 (def db-wait-seconds (metrics/counter :void.db/pool-wait-seconds-total {:doc "Total time fibers spent waiting for a connection"}))
 (def db-timeouts (metrics/counter :void.db/pool-timeouts-total {:doc "Checkouts that gave up at :checkout-timeout"}))
-(def db-queries (metrics/counter :void.db/queries-total {:doc "Statements executed"}))
-(def db-query-seconds (metrics/counter :void.db/query-seconds-total {:doc "Total time spent executing statements"}))
+(def db-query-duration
+  ``How long statements take, by operation. A histogram and not the
+  two counters this used to be (`queries-total`,
+  `query-seconds-total`): those could only ever say what the *average*
+  statement cost since the process started, because the pool keeps a
+  total and a scrape reads it. The seam (./instrument's span section)
+  is called once per statement, so the observation is finally
+  available where it belongs — and `_count` and `_sum` are the two
+  counters back, exactly.``
+  (metrics/histogram :void.db/query-seconds
+    {:doc "Statement execution time in seconds"
+     :labels [:operation]}))
 
 (def- db-metrics
   [[db-pool-size :size] [db-pool-open :created] [db-pool-in-use :in-use]
    [db-pool-idle :idle] [db-pool-waiting :waiting]
    [db-checkouts :checkouts] [db-waits :waits]
-   [db-wait-seconds :wait-us us->s] [db-timeouts :timeouts]
-   [db-queries :queries] [db-query-seconds :query-us us->s]])
+   [db-wait-seconds :wait-us us->s] [db-timeouts :timeouts]])
 
 # -- void/redis ----------------------------------------------------------
 
@@ -301,8 +176,12 @@
 (def redis-waits (metrics/counter :void.redis/pool-waits-total {:doc "Checkouts that had to wait for a connection"}))
 (def redis-wait-seconds (metrics/counter :void.redis/pool-wait-seconds-total {:doc "Total time fibers spent waiting for a connection"}))
 (def redis-timeouts (metrics/counter :void.redis/pool-timeouts-total {:doc "Checkouts that gave up at :checkout-timeout"}))
-(def redis-commands (metrics/counter :void.redis/commands-total {:doc "Commands executed"}))
-(def redis-command-seconds (metrics/counter :void.redis/command-seconds-total {:doc "Total time spent executing commands"}))
+(def redis-command-duration
+  "How long commands take, by command word — see `db-query-duration`
+  for why this is a histogram and not two counters."
+  (metrics/histogram :void.redis/command-seconds
+    {:doc "Command execution time in seconds"
+     :labels [:command]}))
 (def redis-reconnects (metrics/counter :void.redis/reconnects-total {:doc "Connections reopened after a broken socket"}))
 
 (def- redis-metrics
@@ -310,7 +189,6 @@
    [redis-pool-idle :idle] [redis-pool-waiting :waiting]
    [redis-checkouts :checkouts] [redis-waits :waits]
    [redis-wait-seconds :wait-us us->s] [redis-timeouts :timeouts]
-   [redis-commands :commands] [redis-command-seconds :command-us us->s]
    [redis-reconnects :reconnects]])
 
 # -- void/cache ----------------------------------------------------------
@@ -398,7 +276,14 @@
 (def client-timeouts (metrics/counter :void.http/client-timeouts-total {:doc "Outbound requests that timed out"}))
 (def client-connects (metrics/counter :void.http/client-connects-total {:doc "Connections opened"}))
 (def client-reconnects (metrics/counter :void.http/client-reconnects-total {:doc "Sockets reopened after the peer closed an idle keep-alive connection"}))
-(def client-seconds (metrics/counter :void.http/client-request-seconds-total {:doc "Total time spent waiting for outbound responses"}))
+(def client-duration
+  "How long outbound requests take, by method — see
+  `db-query-duration` for why this is a histogram and not a counter.
+  The failure and timeout counters stay: they are what a duration
+  cannot say, because a request that got no answer has none."
+  (metrics/histogram :void.http/client-request-seconds
+    {:doc "Outbound request time in seconds"
+     :labels [:method]}))
 (def client-bytes-out (metrics/counter :void.http/client-sent-bytes-total {:doc "Bytes written to outbound connections"}))
 (def client-bytes-in (metrics/counter :void.http/client-received-bytes-total {:doc "Bytes read from outbound connections"}))
 
@@ -406,10 +291,273 @@
   [[client-requests :requests] [client-responses :responses]
    [client-failures :failures] [client-timeouts :timeouts]
    [client-connects :connects] [client-reconnects :reconnects]
-   [client-seconds :request-us us->s]
    [client-bytes-out :bytes-out] [client-bytes-in :bytes-in]])
 
+# -- void/bus ------------------------------------------------------------
+
+(def bus-published (metrics/counter :void.bus/published-total {:doc "Messages published"}))
+(def bus-delivered (metrics/counter :void.bus/delivered-total {:doc "Messages handed to a consumer"}))
+(def bus-outboxed (metrics/counter :void.bus/outboxed-total {:doc "Messages written to the transactional outbox instead of straight to the backend"}))
+
+(def- bus-metrics
+  [[bus-published :published] [bus-delivered :delivered]
+   [bus-outboxed :outboxed]])
+
+# -- void/ws -------------------------------------------------------------
+#
+# Two readers, because a websocket has two kinds of number: what this
+# process's sockets have *done* since it started (process-wide
+# counters in void/ws/conn, the shape void/http/client has) and how
+# many are open *now* (the registry component, which is the only thing
+# that knows).
+
+(def ws-opened (metrics/counter :void.ws/opened-total {:doc "Connections served"}))
+(def ws-closed (metrics/counter :void.ws/closed-total {:doc "Connections that ended"}))
+(def ws-messages-in (metrics/counter :void.ws/messages-received-total {:doc "Messages read from peers"}))
+(def ws-messages-out (metrics/counter :void.ws/messages-sent-total {:doc "Messages written to peers"}))
+(def ws-bytes-in (metrics/counter :void.ws/received-bytes-total {:doc "Payload bytes read"}))
+(def ws-bytes-out (metrics/counter :void.ws/sent-bytes-total {:doc "Payload bytes written"}))
+(def ws-dropped (metrics/counter :void.ws/dropped-total {:doc "Messages dropped because a peer's outbound queue was full"}))
+(def ws-overflows (metrics/counter :void.ws/overflows-total {:doc "Times an outbound queue filled up"}))
+(def ws-errors (metrics/counter :void.ws/errors-total {:doc "Handler and write failures"}))
+(def ws-connections (metrics/gauge :void.ws/connections {:doc "Connections open right now"}))
+
+(def- ws-metrics
+  [[ws-opened :opened] [ws-closed :closed]
+   [ws-messages-in :messages-in] [ws-messages-out :messages-out]
+   [ws-bytes-in :bytes-in] [ws-bytes-out :bytes-out]
+   [ws-dropped :dropped] [ws-overflows :overflows] [ws-errors :errors]])
+
+# -- void/kafka ----------------------------------------------------------
+
+(def kafka-produced (metrics/counter :void.kafka/produced-total {:doc "Messages handed to the producer"}))
+(def kafka-delivered (metrics/counter :void.kafka/delivered-total {:doc "Messages the broker acknowledged"}))
+(def kafka-failed (metrics/counter :void.kafka/failed-total {:doc "Messages the broker refused or never acknowledged"}))
+(def kafka-outq (metrics/gauge :void.kafka/producer-queue {:doc "Messages librdkafka still holds"}))
+(def kafka-waiting (metrics/gauge :void.kafka/producer-waiting {:doc "Fibers waiting for a delivery report"}))
+(def kafka-received (metrics/counter :void.kafka/received-total {:doc "Messages fetched by this process's consumers"}))
+(def kafka-consumed (metrics/counter :void.kafka/consumed-total {:doc "Messages a consumer handler returned from — the offset moved behind it"}))
+(def kafka-consumer-errors (metrics/counter :void.kafka/consumer-errors-total {:doc "Per-message errors the broker reported to a consumer"}))
+
+(def- kafka-producer-metrics
+  [[kafka-produced :produced] [kafka-delivered :delivered]
+   [kafka-failed :failed] [kafka-outq :outq] [kafka-waiting :waiting]])
+
+(def- kafka-consumer-metrics
+  [[kafka-received :received] [kafka-consumed :delivered]
+   [kafka-consumer-errors :errors]])
+
+# -- void/redis's subscriber ---------------------------------------------
+
+(def pubsub-messages (metrics/counter :void.redis/pubsub-messages-total {:doc "Messages received on subscribed channels"}))
+(def pubsub-delivered (metrics/counter :void.redis/pubsub-delivered-total {:doc "Messages handed to a handler"}))
+(def pubsub-errors (metrics/counter :void.redis/pubsub-errors-total {:doc "Handler failures"}))
+(def pubsub-reconnects (metrics/counter :void.redis/pubsub-reconnects-total {:doc "Times the subscriber's connection was reopened"}))
+(def pubsub-channels (metrics/gauge :void.redis/pubsub-channels {:doc "Channels subscribed right now"}))
+(def pubsub-patterns (metrics/gauge :void.redis/pubsub-patterns {:doc "Patterns subscribed right now"}))
+(def pubsub-connected (metrics/gauge :void.redis/pubsub-connected {:doc "1 while the subscriber's connection is open"}))
+
+(def- pubsub-metrics
+  [[pubsub-messages :messages] [pubsub-delivered :delivered]
+   [pubsub-errors :errors] [pubsub-reconnects :reconnects]
+   [pubsub-channels :channels how-many] [pubsub-patterns :patterns how-many]
+   [pubsub-connected :connected flag]])
+
+# -- void/db-postgres's listener -----------------------------------------
+
+(def listener-notifications (metrics/counter :void.db.postgres/listener-notifications-total {:doc "NOTIFYs received"}))
+(def listener-dispatched (metrics/counter :void.db.postgres/listener-dispatched-total {:doc "Notifications handed to a handler"}))
+(def listener-errors (metrics/counter :void.db.postgres/listener-errors-total {:doc "Handler failures"}))
+(def listener-connects (metrics/counter :void.db.postgres/listener-connects-total {:doc "Connections opened for listening"}))
+(def listener-reconnects (metrics/counter :void.db.postgres/listener-reconnects-total {:doc "Times the listening connection was reopened"}))
+(def listener-channels (metrics/gauge :void.db.postgres/listener-channels {:doc "Channels listened on right now"}))
+(def listener-connected (metrics/gauge :void.db.postgres/listener-connected {:doc "1 while the listening connection is open"}))
+
+(def- listener-metrics
+  [[listener-notifications :notifications] [listener-dispatched :dispatched]
+   [listener-errors :errors] [listener-connects :connects]
+   [listener-reconnects :reconnects]
+   [listener-channels :channels] [listener-connected :connected flag]])
+
+(defn- module-var!
+  ``Set the var `name` of module `path` to `value`, and return the
+  thunk that puts back what was there. nil when that package is not on
+  this process's module path, or when the binding is not a var — the
+  same "then this instrumentation is simply not applied" `module-fn`
+  answers with.``
+  [path name value]
+  (def [ok env] (protect (require path)))
+  (when ok
+    (when-let [entry (get env name)
+               ref (get entry :ref)]
+      (def previous (in ref 0))
+      (put ref 0 value)
+      (fn restore [] (put ref 0 previous)))))
+
+(defn- teardowns
+  "One teardown thunk out of several, ignoring the nils an install
+  step returns when it had nothing to do."
+  [& thunks]
+  (def ts (filter function? thunks))
+  (unless (empty? ts)
+    (fn detach-all [] (each t ts (t)))))
+
+# -- the spans the seams install -----------------------------------------
+#
+# Each of these creates a span only when something will read it
+# (`trace/consuming?`): under a traced request the child belongs to
+# that request's trace, and in a process that exports nothing it would
+# be a table nobody reads — the bargain ./http already makes for the
+# root span, made again one level down, where it is taken far more
+# often than once per request.
+#
+# A span *name* is a metric label (`:void.obs/spans-total`), so none of
+# them is built out of something unbounded: the statement verb rather
+# than the SQL, the command word rather than the key, the method rather
+# than the URL. What is unbounded goes in an attribute, where a trace
+# backend is expecting it.
+
+(def- sql-operations
+  ``The statement verbs a span may be named after — anything else is
+  "db OTHER" rather than a new series per query shape.``
+  {"SELECT" true "INSERT" true "UPDATE" true "DELETE" true "REPLACE" true
+   "CREATE" true "ALTER" true "DROP" true "TRUNCATE" true
+   "BEGIN" true "START" true "COMMIT" true "ROLLBACK" true
+   "SAVEPOINT" true "RELEASE" true "WITH" true "PRAGMA" true
+   "SET" true "SHOW" true "EXPLAIN" true "ANALYZE" true "VACUUM" true})
+
+(defn- sql-operation
+  "The leading verb of a statement, or OTHER."
+  [sql]
+  (def s (string/trim (string sql)))
+  (def stop (min (or (string/find " " s) (length s)) 16))
+  (def word (string/ascii-upper (string/slice s 0 stop)))
+  (if (get sql-operations word) word "OTHER"))
+
+(defn traced-statement
+  ``The `void/db/state` seam: the statement's duration, always, and a
+  span around it when there is something to read one. Public so a test
+  can drive it without a database behind it.
+
+  The timing is outside the `if` on purpose: a distribution of
+  statement times is worth having in a process that exports no traces
+  at all, and it is the seam — not the span — that made it possible.
+  A statement that threw still took time, so it is observed on the way
+  out either way.``
+  [sql drv run]
+  (def op (sql-operation sql))
+  (def t0 (os/clock :monotonic))
+  (defer (metrics/observe! db-query-duration [op] (- (os/clock :monotonic) t0))
+    (if (trace/consuming?)
+      (trace/with-span* (string "db " op)
+        {:kind :client
+         # the statement, never the parameters: the SQL is the shape of
+         # the query and belongs in a trace, the values are the data and
+         # do not — void/db puts those on a :debug line, where a level
+         # can refuse them and a trace backend cannot
+         :attrs @{:db.system (get drv :dialect)
+                  :db.statement sql}}
+        run)
+      (run))))
+
+(defn traced-command
+  ``The `void/redis/state` seam: one span per command attempt. The
+  label is the command word, which is bounded in practice by the
+  command set; the registry's own label cap is what holds if a caller
+  proves otherwise.``
+  [label run]
+  (def op (or label "?"))
+  (def t0 (os/clock :monotonic))
+  (defer (metrics/observe! redis-command-duration [op] (- (os/clock :monotonic) t0))
+    (if (trace/consuming?)
+      (trace/with-span* (string "redis " op)
+        {:kind :client :attrs @{:db.system :redis :db.operation op}}
+        run)
+      (run))))
+
+(defn- path-of
+  "A request target without its query — a query string carries values,
+  and a span attribute is not the place for a token somebody put in a
+  URL."
+  [target]
+  (def s (string target))
+  (if-let [i (string/find "?" s)] (string/slice s 0 i) s))
+
+(defn traced-request
+  ``The `void/http/client` seam: the request's duration, a span around
+  it, and the `traceparent` that goes out with it. This is the
+  injection point the client's own docstring has been waiting for —
+  the header table is still mutable here, and the span whose ids
+  belong in it is the one this function just started.``
+  [client method target headers run]
+  (def t0 (os/clock :monotonic))
+  (defer (metrics/observe! client-duration [method] (- (os/clock :monotonic) t0))
+    (if (trace/consuming?)
+      (trace/with-span* (string "http " method)
+        {:kind :client
+         :attrs @{:http.request.method method
+                  :server.address (get client :host)
+                  :server.port (get client :port)
+                  :url.path (path-of target)}}
+        (fn traced-send []
+          (trace/inject! headers)
+          (def resp (run))
+          (when (dictionary? resp)
+            (def status (get resp :status))
+            (trace/attr! :http.response.status_code status)
+            # unlike the server span, where a 4xx is the caller's fault
+            # and only a 5xx is ours, an outbound 4xx is this call not
+            # getting what it asked for
+            (when (and (number? status) (>= status 400))
+              (put (trace/current) :status :error)))
+          resp))
+      (run))))
+
+(defn queued-in
+  ``The `void/jobs/state` seam: the trace a job is being queued in, as
+  a `traceparent` for the record to carry. nil outside a span, which
+  is what a job queued by a cron tick or a CLI command gets.``
+  []
+  (when-let [span (trace/current)] (trace/traceparent span)))
+
+(defn traced-job
+  ``The `void/jobs/worker` seam: one span around running a job, from
+  the claim to the settle. The worker's own log lines land inside it,
+  which is how a job's records come to carry trace ids.
+
+  The parent is the request that queued the job — the `:traceparent`
+  `queued-in` wrote on the record, hours ago and in another process,
+  which is the whole reason the field exists. Without one the span
+  hangs off whatever this fiber is already in (a `drain!` inside a
+  test or a request) and is a root otherwise.``
+  [r run]
+  (if (trace/consuming?)
+    (let [remote (trace/parse-traceparent (get r :traceparent))]
+      (trace/with-span* (string "job " (get r :job "-"))
+        {:kind :consumer
+         :parent (when (nil? remote) (trace/current))
+         :remote remote
+         :attrs @{:messaging.operation "process"
+                  :messaging.destination.name (string (get r :queue "-"))
+                  :messaging.message.id (get r :id)
+                  :void.jobs/attempt (get r :attempt)}}
+        run))
+    (run)))
+
 # -- applying an instrumentation -----------------------------------------
+
+(defn- kafka-consumer-totals
+  ``The consumers of one client added up. A process runs as many as it
+  subscribed to groups, and a series per group would split three
+  numbers an operator reads as one — the group is what a log line and
+  a span carry.``
+  [stats consumers]
+  (def out @{:received 0 :delivered 0 :errors 0})
+  (each co (or consumers [])
+    (def [ok s] (protect (stats co)))
+    (when (and ok (dictionary? s))
+      (eachk k out (put out k (+ (in out k) (get s k 0))))))
+  out)
 
 (defn- attach!
   "Point a list of [metric stats-key scale?] triples at one reader.
@@ -481,6 +629,65 @@
                               (let [s (stats)]
                                 (when (pos? (get s :requests 0)) s)))))
                  (module-var! "void/http/client" 'around-request traced-request)))}
+
+   {:name :void.bus/broker
+    :doc "Published, delivered and outboxed totals from the running :void/bus"
+    :needs [:void/bus]
+    :install (fn install-bus [boot _]
+               (when-let [counters (module-fn "void/bus/state" 'counters)]
+                 (attach! bus-metrics (reader boot :void/bus counters))))}
+
+   {:name :void.ws/sockets
+    :doc "What this process's websockets have done, and how many are open right now"
+    :needs [:ws/registry]
+    :install (fn install-ws [boot _]
+               (def stats (module-fn "void/ws/conn" 'stats))
+               (def count-conns (module-fn "void/ws/rooms" 'count-conns))
+               (teardowns
+                 (when stats (attach! ws-metrics (fn read-ws [] (stats))))
+                 (when count-conns
+                   # not a stats key: how many sockets are open is the
+                   # registry's to answer, and it answers with a number
+                   (metrics/set-collector! ws-connections
+                     (fn collect-ws-connections []
+                       (when-let [reg (instance-of boot :ws/registry)]
+                         (def [ok n] (protect (count-conns reg)))
+                         (when (and ok (number? n)) n))))
+                   (fn detach-ws-connections []
+                     (metrics/set-collector! ws-connections nil)))))}
+
+   {:name :void.kafka/client
+    :doc "Producer queue and delivery outcome, and what this process's consumers have fetched"
+    :needs [:kafka/client]
+    :install (fn install-kafka [boot _]
+               (def producer-stats (module-fn "void/kafka/producer" 'stats))
+               (def consumer-stats (module-fn "void/kafka/consumer" 'stats))
+               (teardowns
+                 (when producer-stats
+                   (attach! kafka-producer-metrics
+                            (reader boot :kafka/client producer-stats
+                                    |(get $ :producer))))
+                 (when consumer-stats
+                   (attach! kafka-consumer-metrics
+                            (reader boot :kafka/client
+                                    (fn consumers-of [v]
+                                      (kafka-consumer-totals
+                                        consumer-stats (get v :consumers []))))))))}
+
+   {:name :void.redis/pubsub
+    :doc "Messages, handler failures, reconnects and what the subscriber is subscribed to"
+    :needs [:redis/pubsub]
+    :install (fn install-pubsub [boot _]
+               (when-let [stats (module-fn "void/redis/pubsub" 'stats)]
+                 (attach! pubsub-metrics (reader boot :redis/pubsub stats))))}
+
+   {:name :void.db.postgres/listener
+    :doc "NOTIFYs received and dispatched, reconnects, and what the listener is listening on"
+    :needs [:db.postgres/listener]
+    :install (fn install-listener [boot _]
+               (when-let [stats (module-fn "void/db-postgres/listener" 'stats)]
+                 (attach! listener-metrics
+                          (reader boot :db.postgres/listener stats))))}
 
    {:name :void.jobs/events
     :doc "Job lifecycle events and execution time off the :void.jobs/event hook, the traceparent a queued job carries, and a span around running one under it"
