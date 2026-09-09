@@ -191,10 +191,14 @@
    # void/db/pool only through a protected `require`, never an import.
    # void/jobs is the suite's too: the traceparent a queued job carries
    # is only worth asserting end to end — enqueued inside a span here,
-   # picked up by a worker there, one trace.
+   # picked up by a worker there, one trace. void/bus and void/ws are
+   # the two wave-3 instrumentations that need no server behind them
+   # (an in-memory broker, an empty registry); kafka, the redis
+   # subscriber and the Postgres listener are reached exactly the same
+   # way and are proved where their own suites have a server.
    {:dir "obs" :deps [:void/core :void/http :void/pressure :void/proto]
     :test-deps [:void/dev :void/cache :void/rest :void/db :void/db-sqlite
-                :void/jobs]
+                :void/jobs :void/bus :void/ws]
     :jpm [:spork]}
 
    :void/auth

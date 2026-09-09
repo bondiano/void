@@ -21,6 +21,9 @@
 (require "void/db/init")
 (require "void/db-sqlite/init")
 (require "void/jobs/init")
+(require "void/http/init")
+(require "void/bus/init")
+(require "void/ws/init")
 
 (log/set-level! "void.obs" :error)
 (log/set-level! "void.cache" :error)
@@ -190,6 +193,52 @@
                           [:series]))
           "a detached pool reports no series, not its last numbers"))
 
+# -- the wave-3 packages: stats that had no series ------------------------
+#
+# bus, ws, kafka, the redis subscriber and the Postgres listener all
+# kept counters and none of them reached a scraper. They are reached
+# the way void/http/client is — the package's own public stats
+# function, resolved with `require` — so the two that need no server
+# behind them are proved here and the other three are the same three
+# lines against a broker, a subscriber and a listener.
+
+(def bus (require "void/bus/init"))
+(def bus-publish (get-in bus ['publish :value]))
+
+((get-in (require "void/bus/router") ['define! :value])
+  :obs/heard {:topic :obs/thing} {:fn (fn heard [_] nil)})
+
+(test/with-system [boot {:plugins [:void/bus]
+                         :config {:cli {:log {:level :error} :bus {:group :obs}}}}]
+  (def on (instrument/install! boot (filter |(= :void.bus/broker ($ :name))
+                                            instrument/built-ins)))
+  (assert (= 1 (length on)) "the bus instrumentation installs when :void/bus is in the composition")
+
+  (bus-publish :obs/thing {:n 1})
+  (ev/sleep 0.05)
+  (defn- series [name]
+    (get-in (first (filter |(= name ($ :name)) (metrics/snapshot))) [:series 0 :value]))
+  (assert (= 1 (series :void.bus/published-total)) "what the broker published is a series now")
+  (assert (= 1 (series :void.bus/delivered-total)) "and what it delivered")
+
+  (instrument/remove! on)
+  (assert (empty? (get-in (first (filter |(= :void.bus/published-total ($ :name))
+                                         (metrics/snapshot)))
+                          [:series]))
+          "a detached broker reports no series"))
+
+(test/with-system [boot {:plugins [:void/http :void/ws]
+                         :config {:cli {:log {:level :error}
+                                        :http {:port 0}}}}]
+  (def on (instrument/install! boot (filter |(= :void.ws/sockets ($ :name))
+                                            instrument/built-ins)))
+  (assert (= 1 (length on)))
+  (assert (zero? (get-in (first (filter |(= :void.ws/connections ($ :name))
+                                        (metrics/snapshot)))
+                         [:series 0 :value]))
+          "how many sockets are open is the registry's to answer, and with none open it answers zero")
+  (instrument/remove! on))
+
 # -- the seams: a span around the work, and the traceparent out ----------
 #
 # The other half of an instrumentation. A stats function is read; a
@@ -238,6 +287,15 @@
           "the child hangs off the span it ran inside")
   (assert (= :client (q :kind)))
 
+  # the same call site is where the duration finally becomes a
+  # distribution: the pool keeps a running total, and a total can only
+  # ever say what the average statement cost since the process started
+  (def h (metrics/value instrument/db-query-duration ["SELECT"]))
+  (assert (= 1 (h :count)))
+  (assert (nil? (metrics/find-metric :void.db/queries-total))
+          "and the two counters the histogram replaces are gone — _count and _sum are exactly them")
+  (assert (nil? (metrics/find-metric :void.db/query-seconds-total)))
+
   (instrument/remove! on)
   (assert (nil? (var-of "void/db/state" 'around-statement))
           "and a teardown puts back what it found — an uninstrumented process runs the statement it always ran"))
@@ -257,6 +315,8 @@
           "the wrapper returns what the command returned"))
 (assert (span-named "redis PING"))
 (assert (= :redis (get-in (span-named "redis PING") [:attrs :db.system])))
+(assert (= 1 ((metrics/value instrument/redis-command-duration ["PING"]) :count))
+        "and its duration, by command word")
 
 # the http client: the span, and the header the client had nobody to write
 (array/clear spans)
@@ -279,6 +339,8 @@
 (assert (= "collector.test" (get-in out [:attrs :server.address])))
 (assert (= 200 (get-in out [:attrs :http.response.status_code])))
 (assert (= :ok (out :status)))
+(assert (= 1 ((metrics/value instrument/client-duration ["POST"]) :count))
+        "an outbound request's duration, by method")
 
 (array/clear spans)
 (trace/with-span "outer" {:sampled true}
@@ -347,5 +409,7 @@
 (assert (= :ok (instrument/traced-command "PING" (fn [] :ok))))
 (assert (empty? spans)
         "with tracing off the wrapper is the work itself — no span, no ids, no attribute table")
+(assert (= 2 ((metrics/value instrument/redis-command-duration ["PING"]) :count))
+        "the duration is observed either way: a distribution of command times is worth having in a process that exports no traces at all")
 
 (print "instrument-test ok")

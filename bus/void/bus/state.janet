@@ -349,6 +349,15 @@
   []
   (backend/capabilities (active-backend)))
 
+(defn counters
+  ``The three running totals a broker keeps — published, delivered,
+  outboxed. `stats` carries them under the shape of the whole
+  composition (backend capabilities, handler list, consumer names);
+  this is the same numbers on their own, for a caller that reads them
+  every scrape.``
+  [&opt br]
+  (table/to-struct ((or br (active)) :stats)))
+
 (defn stats
   "Everything `void bus stats` prints."
   []
