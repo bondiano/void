@@ -212,6 +212,25 @@
     (<= r 0) false
     (< (math/random) r)))
 
+(defn consuming?
+  ``Is there anything that would read a span started here?
+
+  The same question `void/obs-http` asks before building a request's
+  root span, asked by the instrumented paths *inside* a request: a
+  child span is worth its two ids and its attribute table when an
+  exporter will receive it, when `[:obs :trace :always]` asked for one
+  regardless, or when this fiber is already inside a span — a query
+  under a traced request belongs to that request's trace whatever the
+  process exports.
+
+  Cheap on purpose: two var derefs and a dyn lookup, on the path of
+  every statement and every outbound request.``
+  []
+  (and enabled
+       (or (not (nil? (current)))
+           always
+           (not (empty? exporters)))))
+
 (defn start
   ``Start a span and return it. Options:
 

@@ -334,4 +334,35 @@
 (assert (= "http://b.test/p" (client/resolve-url "http://a.test/one/two" "//b.test/p")))
 (assert (= "http://c.test/z" (client/resolve-url "http://a.test/one/two" "http://c.test/z")))
 
+# -- the wrapper seam ----------------------------------------------------
+#
+# `around-request` is what void/obs fills to put a span around an
+# outbound request — and, because it is handed the header table before
+# the head is formatted, to write the `traceparent` this module could
+# never write by itself.
+
+(def peek (server/start
+            {:handler (fn [req] (ring/text 200 (or (ring/request-header req "x-seam") "-")))
+             :port "0"}))
+(def peek-base (string "http://127.0.0.1:" (peek :port)))
+
+(var seen nil)
+(set client/around-request
+     (fn [c method target headers run]
+       (set seen [method target (c :host)])
+       (put headers "x-seam" "yes")
+       (put (run) :wrapped true)))
+
+(def wrapped (client/get (string peek-base "/hello")))
+(assert (= "yes" (wrapped :body))
+        "the seam gets the headers while they can still be changed — the head is formatted after it")
+(assert (wrapped :wrapped) "and what it returns is what the caller gets")
+(assert (= ["GET" "/hello" "127.0.0.1"] seen)
+        "with what the request is, without having to parse it back out")
+
+(set client/around-request nil)
+(assert (= "-" ((client/get (string peek-base "/hello")) :body))
+        "nil is the plain path — an uninstrumented process sends what it always sent")
+(server/stop peek)
+
 (server/stop inst)

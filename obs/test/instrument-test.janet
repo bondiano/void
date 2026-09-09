@@ -12,6 +12,8 @@
 (import void/obs/metrics :as metrics)
 (import void/obs/instrument :as instrument)
 (import void/obs/prometheus :as prom)
+(import void/obs/trace :as trace)
+(import void/db/state :as dbstate)
 (require "void/cache/init")
 (require "void/db/init")
 (require "void/db-sqlite/init")
@@ -183,5 +185,129 @@
   (assert (empty? (get-in (first (filter |(= :void.db/pool-size ($ :name)) (metrics/snapshot)))
                           [:series]))
           "a detached pool reports no series, not its last numbers"))
+
+# -- the seams: a span around the work, and the traceparent out ----------
+#
+# The other half of an instrumentation. A stats function is read; a
+# span has to be around the work, so the packages expose a var obs
+# fills (see the module docstring) — these check that obs fills it,
+# that the package calls it, and that a teardown puts back what it
+# found.
+
+(def spans @[])
+(trace/set-exporters! [{:name :test/collect :fn (fn [s] (array/push spans s))}])
+(set trace/enabled true)
+
+(defn- var-of
+  "The current value of a module's var — what `module-var!` writes."
+  [path name]
+  (in (get-in (require path) [name :ref] @[nil]) 0))
+
+(defn- span-named [name]
+  (first (filter |(= name ($ :name)) spans)))
+
+(assert (trace/consuming?)
+        "with an exporter installed, a span started inside a statement has a reader")
+
+# a statement, through the funnel void/db actually runs it in
+(test/with-system [boot {:plugins [:void/db :void/db-sqlite]
+                         :config {:cli {:log {:level :error}
+                                        :db {:pool {:size 1}}
+                                        :db-sqlite {:path ":memory:"}}}}]
+  (def on (instrument/install! boot (filter |(= :void.db/pool ($ :name)) instrument/built-ins)))
+  (assert (= instrument/traced-statement (var-of "void/db/state" 'around-statement))
+          "obs fills void/db/state's seam at install")
+
+  (array/clear spans)
+  (with-dyns [dbstate/pool-dyn (system/instance (boot :system) :db/pool)]
+    (trace/with-span "outer" {:sampled true}
+      (dbstate/execute-sql "SELECT 1" [])))
+
+  (def q (span-named "db SELECT"))
+  (assert q "a statement under a traced request is a span of that request")
+  (assert (= "SELECT 1" (get-in q [:attrs :db.statement]))
+          "with the statement on it — the shape of the query, which belongs in a trace")
+  (assert (nil? (get-in q [:attrs :db.params]))
+          "and never the parameters, which are the data and do not")
+  (assert (= :sqlite (get-in q [:attrs :db.system])))
+  (assert (= (q :parent-id) ((span-named "outer") :span-id))
+          "the child hangs off the span it ran inside")
+  (assert (= :client (q :kind)))
+
+  (instrument/remove! on)
+  (assert (nil? (var-of "void/db/state" 'around-statement))
+          "and a teardown puts back what it found — an uninstrumented process runs the statement it always ran"))
+
+# an unrecognised statement does not become a series of its own
+(array/clear spans)
+(trace/with-span "outer" {:sampled true}
+  (instrument/traced-statement "/* hello */ SELECT 1" {:dialect :postgres} (fn [] :ok))
+  (instrument/traced-statement "insert into t values (1)" {:dialect :postgres} (fn [] :ok)))
+(assert (span-named "db OTHER") "a span name is a metric label, so it is the verb or OTHER")
+(assert (span-named "db INSERT") "and the verb is read whatever case it was written in")
+
+# redis: one span per attempt, named by the command word
+(array/clear spans)
+(trace/with-span "outer" {:sampled true}
+  (assert (= :pong (instrument/traced-command "PING" (fn [] :pong)))
+          "the wrapper returns what the command returned"))
+(assert (span-named "redis PING"))
+(assert (= :redis (get-in (span-named "redis PING") [:attrs :db.system])))
+
+# the http client: the span, and the header the client had nobody to write
+(array/clear spans)
+(def headers @{"content-type" "application/json"})
+(def sent
+  (trace/with-span "outer" {:sampled true}
+    (instrument/traced-request @{:host "collector.test" :port "4318"}
+                               "POST" "/v1/traces?tenant=acme" headers
+                               (fn [] {:status 200}))))
+(assert (= 200 (sent :status)) "the wrapper returns the response")
+(def out (span-named "http POST"))
+(assert out)
+(def tp (trace/parse-traceparent (get headers "traceparent")))
+(assert tp "traceparent goes out on the request")
+(assert (= (out :span-id) (tp :parent-id))
+        "naming the span of this very call as the parent of whatever the peer starts")
+(assert (= (out :trace-id) (tp :trace-id)))
+(assert (= "/v1/traces" (get-in out [:attrs :url.path]))
+        "the path without its query — a query carries values, and a span attribute is not the place for a token somebody put in a URL")
+(assert (= "collector.test" (get-in out [:attrs :server.address])))
+(assert (= 200 (get-in out [:attrs :http.response.status_code])))
+(assert (= :ok (out :status)))
+
+(array/clear spans)
+(trace/with-span "outer" {:sampled true}
+  (instrument/traced-request @{:host "collector.test" :port "4318"}
+                             "POST" "/v1/traces" @{} (fn [] {:status 503})))
+(assert (= :error ((span-named "http POST") :status))
+        "an outbound 4xx or 5xx is this call not getting what it asked for")
+
+# jobs: the span around running one, and the seam the worker calls
+(array/clear spans)
+(trace/with-span "outer" {:sampled true}
+  (instrument/traced-job {:job :orders/settle :queue :default :id "j1" :attempt 2}
+                         (fn [] :done)))
+(def js (span-named "job orders/settle"))
+(assert js)
+(assert (= :consumer (js :kind)))
+(assert (= "default" (get-in js [:attrs :messaging.destination.name])))
+(assert (= "j1" (get-in js [:attrs :messaging.message.id])))
+
+# a failure is the span's failure, and the error still reaches the caller
+(array/clear spans)
+(assert (not (first (protect (trace/with-span "outer" {:sampled true}
+                              (instrument/traced-command "GET" (fn [] (error "boom")))))))
+        "a wrapper does not swallow what it wrapped")
+(assert (= :error ((span-named "redis GET") :status)))
+
+# nothing to read the span, nothing built
+(array/clear spans)
+(trace/set-exporters! [])
+(set trace/enabled false)
+(assert (not (trace/consuming?)))
+(assert (= :ok (instrument/traced-command "PING" (fn [] :ok))))
+(assert (empty? spans)
+        "with tracing off the wrapper is the work itself — no span, no ids, no attribute table")
 
 (print "instrument-test ok")

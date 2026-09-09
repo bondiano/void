@@ -142,10 +142,28 @@
 (defn- elapsed-us [t0]
   (math/round (* 1_000_000 (- (os/clock :monotonic) t0))))
 
+(var around-command
+  ``How one command on the wire is wrapped, or nil for "not at all" —
+  the seam `void/obs` installs a child span into:
+
+      (fn [label run] ... (run) ...)
+
+  `label` is the command word (GET, SET, EVALSHA); the thunk must be
+  called and its value returned. Around one *attempt*, not around the
+  retry: a reopened socket is a second span, which is what it looks
+  like from the outside too.
+
+  The same var seam `tls-connect` is in ./conn — the composition
+  fills it, and it is nil in a process that observes nothing.``
+  nil)
+
 (defn- run-on [client c f label]
   (def p (client :pool))
   (def t0 (os/clock :monotonic))
-  (def [ok res] (protect (f c)))
+  # the closure is built only when something is wrapping
+  (def [ok res] (protect (if around-command
+                           (around-command label (fn run-wrapped [] (f c)))
+                           (f c))))
   (def us (elapsed-us t0))
   (pool/note-command! p us)
   (unless ok

@@ -142,6 +142,24 @@
 
 # -- execution -----------------------------------------------------------
 
+(var around-statement
+  ``How a statement is wrapped, or nil for "not at all" — the seam
+  `void/obs` installs a child span into:
+
+      (fn [sql drv run] ... (run) ...)
+
+  It is handed the SQL, the driver whose dialect ran it, and a thunk
+  it must call and whose value it must return. The same shape
+  `tls-connect` has in void/http/client: a var the composition fills,
+  set by whoever is there to fill it, and nil in a process that is
+  not observing anything.
+
+  Why a var and not a hook: a hook is told a statement happened, and
+  a span has to be *around* it. Why here and not in the pool: this is
+  the one funnel every statement passes, raw SQL and builder map
+  alike.``
+  nil)
+
 (defn- prepared-for [drv entry sql]
   (or (get-in entry [:stmts sql])
       (let [stmt ((drv :prepare) (entry :conn) sql)]
@@ -169,7 +187,12 @@
       (def p (active-pool))
       (def drv (pool/driver-of p))
       (def t0 (os/clock :monotonic))
-      (def [ok res] (protect (run entry drv)))
+      # the closure is built only when something is wrapping: an
+      # uninstrumented process runs the statement it always ran
+      (def [ok res] (protect (if around-statement
+                               (around-statement sql drv
+                                                 (fn run-wrapped [] (run entry drv)))
+                               (run entry drv))))
       (def us (math/round (* 1_000_000 (- (os/clock :monotonic) t0))))
       (pool/note-query! p us)
       (unless ok
