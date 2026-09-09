@@ -551,26 +551,35 @@
        (do
          (def start (* duration (math/floor (/ now duration))))
          (def window {:queue (string queue) :window-start start})
-         (defn wait [] (max 0.001 (- (+ start duration) now)))
+         (defn take! []
+           (db/execute! {:update rates
+                         :set {:n [:sql "n + ?" [1]]}
+                         :where [:and window [:< :n limit]]}))
          (db/with-tx*
            {}
            (fn rate-tx []
-             (if (pos? (db/execute! {:update rates
-                                     :set {:n [:sql "n + ?" [1]]}
-                                     :where [:and window [:< :n limit]]}))
+             (if (pos? (take!))
                0
-               # no window row yet, or one that is full. The INSERT
-               # says what to do about the race in the statement — a
-               # dropped duplicate — so a lost race needs neither a
-               # savepoint (the losing INSERT would otherwise abort the
-               # transaction around it on Postgres) nor a second
-               # SELECT to tell "full" from "somebody else got there
-               # first": both answers are "count against it next pass"
-               (if (pos? (db/execute! {:insert rates
-                                       :values (merge window {:n 1})
-                                       :on-conflict {:on [:queue :window-start]}}))
-                 0
-                 (wait))))))))
+               # no window row yet, or one that is full. Open the
+               # window at zero and ask again: the INSERT says what to
+               # do about the race in the statement — a dropped
+               # duplicate — so a lost race needs no savepoint (the
+               # losing INSERT would otherwise abort the transaction
+               # around it on Postgres), and the second UPDATE is what
+               # tells "full" from "somebody else opened it first".
+               #
+               # The count the INSERT reports cannot decide that. On
+               # MySQL a dropped duplicate is one *matched* row under
+               # CLIENT_FOUND_ROWS, which void/db-mysql sets so that a
+               # lease renewal counts as its own — read as "inserted",
+               # a full window passes every caller through.
+               (do
+                 (db/execute! {:insert rates
+                               :values (merge window {:n 0})
+                               :on-conflict {:on [:queue :window-start]}})
+                 (if (pos? (take!))
+                   0
+                   (max 0.001 (- (+ start duration) now))))))))))
 
    :stats
    (fn db-stats []
