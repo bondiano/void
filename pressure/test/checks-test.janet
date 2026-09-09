@@ -24,7 +24,7 @@
         "the first exhausted reading is a burst until the grace period says otherwise — back-pressure is the pool doing its job")
 (assert (= 100 first-since) "but the clock starts")
 
-(def [held-r held-since] (checks/evaluate busy 1 2 100 103))
+(def [held-r held-since] (checks/evaluate busy 1 2 100 103 "db pool"))
 (assert (not (get held-r :ok))
         "exhaustion that holds past the grace period is pressure")
 (assert (= 100 held-since) "and the clock keeps its epoch")
@@ -45,7 +45,7 @@
 # -- the factory over a stubbed reader -----------------------------------
 
 (var stub calm)
-(def check (checks/make-db-pool-check (fn [] stub) {:max-waiting 1 :grace 0.05}))
+(def check (checks/make-pool-check (fn [] stub) {:max-waiting 1 :grace 0.05 :label "db pool"}))
 
 (assert (get (check) :ok) "calm is calm")
 (set stub busy)
@@ -76,7 +76,7 @@
 (assert (= 1 ((pool/stats p) :waiting)) "the fiber is parked")
 
 (def live-check
-  (checks/make-db-pool-check (fn [] (pool/stats p)) {:max-waiting 1 :grace 0}))
+  (checks/make-pool-check (fn [] (pool/stats p)) {:max-waiting 1 :grace 0 :label "db pool"}))
 (def verdict (live-check))
 (assert (not (get verdict :ok)) "an exhausted real pool trips the check")
 (assert (string/find "size 1, in use 1" (verdict :reason)))
@@ -105,5 +105,14 @@
         "the contribution watches the component the audit named")
 (assert (get ((checks/db-pool-contribution :fn)) :ok)
         "with no running boot there is no pool to watch — {:ok true}, never a throw")
+
+(assert (= :void.redis/pool (checks/redis-pool-contribution :name))
+        "and the second one watches the other pool a process can run out of")
+(assert (get ((checks/redis-pool-contribution :fn)) :ok)
+        "skipped the same way where there is no redis")
+(assert (string/find "redis pool" (checks/redis-pool-contribution :doc)))
+(assert (not (string/find "db pool exhausted"
+                          (get (first (checks/evaluate busy 1 2 100 103 "redis pool")) :reason)))
+        "the two say which pool they are about — one function, two labels")
 
 (print "checks-test ok")

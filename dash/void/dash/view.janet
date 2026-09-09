@@ -122,6 +122,8 @@ code, pre { font:12px/1.5 var(--mono); }
 .dash-health-item .dash-badge { margin-left:auto; }
 .dash-health-item.is-degraded { background:var(--warn-soft); border-color:var(--warn); }
 .dash-health-item.is-down { background:var(--danger-soft); border-color:var(--danger); }
+.dash-health-facts { flex-basis:100%; color:var(--muted); font-size:11px;
+                     word-break:break-word; }
 .dash-health-reason { flex-basis:100%; color:var(--muted); font-size:11px; }
 
 /* -- status badges ------------------------------------------------------ */

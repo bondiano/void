@@ -37,9 +37,26 @@
 ### Anything the sampler cannot measure — a database pool at its
 ### ceiling, a jobs queue growing faster than it drains — is a
 ### `:void.pressure/check` contribution: a thunk returning `{:ok
-### false :reason ...}` is one more reason to shed. The pool example
-### ships built-in (./checks): where this composition has a :db/pool,
-### its exhaustion is a check without anyone contributing it.
+### false :reason ...}` is one more reason to shed. Two ship built-in
+### (./checks): where this composition has a `:db/pool` or a redis
+### pool, its exhaustion is a check without anyone contributing it.
+###
+### **Why those two and not a queue backlog.** A pool is objectively
+### saturated at any size — every connection is checked out and fibers
+### are parked, and the next thing that happens is `:checkout-timeout`
+### firing on requests this process already accepted. A backlog is not:
+### ten thousand queued jobs is a catastrophe in one deployment and a
+### Tuesday in another, and the number that separates them is the
+### application's, not the framework's. Same for consumer lag and for
+### open sockets. So void ships the *seam* — `make-pool-check`,
+### `add-check!`, the contribution point — and not a guessed threshold:
+### a shedder that refuses traffic on somebody else's guess is worse
+### than no shedder.
+###
+### And shedding is the wrong answer in a *worker* anyway: a process
+### that stops taking jobs because its queue is long has stopped
+### draining the queue. What is overload there is loop lag and RSS,
+### which this sampler measures in every process, worker included.
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
@@ -63,6 +80,7 @@
   :key :name)
 
 (plugin/contribute! :void.pressure/check checks/db-pool-contribution)
+(plugin/contribute! :void.pressure/check checks/redis-pool-contribution)
 
 (plugin/contribute! :void.core/interface
   {:name :void/pressure
@@ -83,9 +101,11 @@
    :max-rss-bytes [:optional [:number {:min 0}]]
    :recovery-ratio [:optional [:number {:min 0 :max 1}]]
    :recovery-samples [:optional [:int {:min 1}]]
-   # the built-in :db/pool check (./checks)
+   # the built-in pool checks (./checks)
    :db-pool-max-waiting [:optional [:int {:min 0}]]
-   :db-pool-wait-grace [:optional [:number {:min 0}]]})
+   :db-pool-wait-grace [:optional [:number {:min 0}]]
+   :redis-pool-max-waiting [:optional [:int {:min 0}]]
+   :redis-pool-wait-grace [:optional [:number {:min 0}]]})
 
 (def defaults
   ``Defaults of the [:pressure] slice.
@@ -102,10 +122,10 @@
   number (the container limit, minus headroom), and a default that
   guesses it either never trips or sheds a healthy process.
 
-  The `:db-pool-*` pair belongs to the built-in `:db/pool` check
-  (./checks): shed once at least `:db-pool-max-waiting` fibers have
-  been parked on an exhausted pool for `:db-pool-wait-grace` seconds
-  without a break (0 waiting turns the check off). The defaults and
+  The `:db-pool-*` and `:redis-pool-*` pairs belong to the two built-in
+  pool checks (./checks): shed once at least `*-max-waiting` fibers
+  have been parked on an exhausted pool for `*-wait-grace` seconds
+  without a break (0 waiting turns that check off). The defaults and
   their argument live next to the check.``
   {:enabled true
    :sample-interval 1
@@ -114,7 +134,9 @@
    :recovery-ratio 0.8
    :recovery-samples 2
    :db-pool-max-waiting checks/default-max-waiting
-   :db-pool-wait-grace checks/default-wait-grace})
+   :db-pool-wait-grace checks/default-wait-grace
+   :redis-pool-max-waiting checks/default-max-waiting
+   :redis-pool-wait-grace checks/default-wait-grace})
 
 (defn- slice [cfg]
   (merge defaults (or cfg {})))
@@ -139,7 +161,7 @@
 
 (def add-check! "See state/add-check! — register a custom check at runtime." state/add-check!)
 (def remove-check! "See state/remove-check!." state/remove-check!)
-(def make-db-pool-check "See checks/make-db-pool-check — a pool-exhaustion check over any pool/stats-shaped reader." checks/make-db-pool-check)
+(def make-pool-check "See checks/make-pool-check — a pool-exhaustion check over any pool/stats-shaped reader." checks/make-pool-check)
 
 (def loop-lag "See sample/lag — one event-loop lag sample, in seconds." sample/lag)
 (def rss "See sample/rss — resident set size in bytes, or nil." sample/rss)

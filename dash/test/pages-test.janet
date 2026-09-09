@@ -122,6 +122,23 @@
   (assert (= 404 (live :status)))
   (assert (string/find ":void/datastar" (test/text live))))
 
+# -- a lamp carries the numbers its component answers with ---------------
+#
+# The whole of how void/db, void/jobs and void/bus reach this page:
+# they do not. `plugin/health` already carries what each component's
+# own :health answers, and the patch panel prints the scalars beside
+# the lamp — which is why a data plugin needs no tile, no contribution
+# and no knowledge that a dashboard exists.
+
+(def full (test/start! {:plugins plugins
+                        :profile :dev
+                        :config {:env @{} :cli {:http {:port 0} :dash {}}}}))
+(defer (test/stop! full)
+  (def page (test/text (test/inject (test/client full) {:uri "/dash"})))
+  (assert (string/find "dash-health-facts" page))
+  (assert (string/find "connections 0" page)
+          "the running server's own :health, printed where its lamp is"))
+
 # -- outside :dev the gate is shut ---------------------------------------
 
 (def shut (start :test))
