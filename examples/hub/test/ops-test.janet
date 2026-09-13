@@ -59,7 +59,7 @@
                                :watch {:enabled false}}}}}))
 
 (defn- csrf-of [resp]
-  (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`)))
+  (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`)))
                     (test/text resp))))
 
 (defn- raw-body-href

@@ -56,10 +56,10 @@
 
 (def email-html (render (form/input (by-name :email) "a@b.co")))
 (each part [`type="email"` `name="email"` `id="field-email"`
-            `required="true"` `value="a@b.co"`]
+            `required` `value="a@b.co"`]
   (assert (string/find part email-html) part))
 
-(assert (string/find `checked="true"` (render (form/input (by-name :subscribed) true))))
+(assert (string/find `checked` (render (form/input (by-name :subscribed) true))))
 (assert (nil? (string/find "checked" (render (form/input (by-name :subscribed) nil)))))
 
 (def role-html (render (form/input (by-name :role) "user")))

@@ -112,7 +112,7 @@
   (or (true? v) (= 1 v)))
 
 (defn- csrf-of [resp]
-  (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`))) (text resp))))
+  (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
 (defn- location [resp] (get-in resp [:headers "location"]))
 

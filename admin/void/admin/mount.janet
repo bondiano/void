@@ -25,6 +25,7 @@
 ### swallow it.
 
 (import void/core/log :as log)
+(import void/html/chrome :as chrome)
 (import void/http/router :as router)
 (import ./action :as act)
 (import ./context :as ctx)
@@ -147,33 +148,16 @@
 
 # -- the served assets ---------------------------------------------------
 
-(defn- asset-route
-  ``One half of the admin's asset bundle as a route. The URL carries a
-  crc32 of the body (./view), so the response is immutable — and
-  `private` rather than `public`, because it is behind the same gate as
-  every other admin route and a shared cache must not keep it.``
-  [half type]
-  (when-let [b (get (ctx/setting :assets {}) half)]
-    (def body (b :body))
-    (router/GET (string view/asset-prefix (b :file))
-                (fn admin-asset [_req]
-                  # a fresh mutable table per request, never a shared struct:
-                  # the edge middlewares (CSRF's cookie, the security headers)
-                  # add headers to whatever a handler returns, and a struct
-                  # here answered every composition with void/security a 500 —
-                  # an unstyled back office, because these routes are the sheet
-                  # and the widgets' script
-                  @{:status 200
-                    :headers @{"content-type" type
-                               "cache-control" "private, max-age=31536000, immutable"}
-                    :body body})
-                {:name (keyword "admin/asset-" (string half))
-                 :void.authz/policy [access-policy]})))
-
-(defn- asset-routes []
+(defn- asset-routes
+  "The two halves of the bundle as routes (void/html/chrome): the
+  URL carries a crc32 of the body, and the route sits behind the same
+  gate as every other admin route."
+  []
   (filter truthy?
-          [(asset-route :style "text/css; charset=utf-8")
-           (asset-route :script "text/javascript; charset=utf-8")]))
+          (seq [half :in [:style :script]]
+            (chrome/asset-route half (get (ctx/setting :assets {}) half)
+                                {:name (keyword "admin/asset-" (string half))
+                                 :meta {:void.authz/policy [access-policy]}}))))
 
 (defn- page-routes []
   (seq [p :in (ctx/setting :pages [])]

@@ -82,7 +82,7 @@
 (assert (= `<hx-partial hx-target="#cart-count">3</hx-partial>`
            (hiccup/render-string (hx/partial "#cart-count" 3)))
         "a string spec is the target selector")
-(assert (= `<hx-partial hx-target="#messages" hx-swap="beforeend"><li>new</li></hx-partial>`
+(assert (= `<hx-partial hx-swap="beforeend" hx-target="#messages"><li>new</li></hx-partial>`
            (hiccup/render-string
              (hx/partial {:target "#messages" :swap :before-end} [:li "new"])))
         "a dictionary spec carries the swap style")
@@ -96,7 +96,7 @@
               (hx/partial {:target "#flash" :swap :inner-html} [:p "added"])]))
 (each part ["<li>gadget</li>"
             `<hx-partial hx-target="#cart-count">3</hx-partial>`
-            `<hx-partial hx-target="#flash" hx-swap="innerHTML">`]
+            `<hx-partial hx-swap="innerHTML" hx-target="#flash">`]
   (assert (string/find part multi) part))
 
 # -- response header helpers ---------------------------------------------

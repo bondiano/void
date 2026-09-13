@@ -233,9 +233,8 @@
   (def snap (snapshot))
   (def rows (rows-of st))
   (def now (os/clock :realtime))
-  (if (act/partial? req)
-    (html/fragment (jview/body-fragment snap rows st now))
-    (act/page req (jview/index-page snap rows st now))))
+  (act/page req (jview/index-page snap rows st now) nil
+            {:partial (fn [] (jview/body-fragment snap rows st now))}))
 
 (defn record
   "One record, with everything the queue stores for it."

@@ -22,6 +22,7 @@
 (import void/core/plugin :as plugin)
 (import void/http/ring :as ring)
 (import void/http/wire :as wire)
+(import void/html/init :as html)
 (import spork/json)
 (import ./hx :as hx)
 
@@ -55,11 +56,11 @@
   [req]
   (ring/request-header req "hx-request-type"))
 
-(defn partial-request?
+(def partial-request?
   "Is this request for a fragment (HX-Request-Type: partial)? The
-  question the :void.htmx/partial middleware asks."
-  [req]
-  (= "partial" (request-type req)))
+  question the :void.htmx/partial middleware asks, and html/page's
+  :partial answers — one reader of the header, in void/html."
+  html/partial-request?)
 
 (defn full-request?
   "Is this htmx request for a whole page (HX-Request-Type: full) — a
@@ -189,6 +190,34 @@
   [&opt body]
   (def resp (ring/html 200 (or body "")))
   (reswap resp (if body :outer-html :delete)))
+
+# -- the script ----------------------------------------------------------
+
+(def script-src
+  ``The one script a framework page takes from a CDN, pinned to the
+  exact file — the bare `htmx.org@4.0.0` URL answers with a redirect
+  the integrity attribute would still cover, but a pin that names the
+  file is a pin a reader can verify.``
+  "https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js")
+
+(def script-integrity
+  "sha384 of that file, so a CDN that serves anything else serves
+  nothing. It pairs with `script-src` and only with it."
+  "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc")
+
+(defn script-tag
+  ``The <script> that loads htmx, as hiccup for a layout's <head>: the
+  pinned file with its integrity hash. Options: :src for a file served
+  elsewhere (a self-hosted copy), :integrity for its hash — a :src
+  that is not the pin gets no integrity unless one is given, since a
+  hash for the wrong file is a script that never loads.``
+  [&opt opts]
+  (default opts {})
+  (def src (get opts :src script-src))
+  (def integrity (or (get opts :integrity)
+                     (when (= src script-src) script-integrity)))
+  [:script (merge {:src src :defer true}
+                  (if integrity {:integrity integrity :crossorigin "anonymous"} {}))])
 
 # -- the partial middleware ----------------------------------------------
 

@@ -92,7 +92,7 @@
    {:dir "html" :deps [:void/core :void/http] :test-deps [:void/dev] :jpm [:spork]}
 
    :void/htmx
-   {:dir "htmx" :deps [:void/core :void/http] :test-deps [:void/html] :jpm [:spork]}
+   {:dir "htmx" :deps [:void/core :void/http :void/html] :jpm [:spork]}
 
    :void/rest
    {:dir "rest" :deps [:void/core :void/http] :jpm [:spork]}
@@ -359,8 +359,9 @@
    # belongs to one channel. void/mail is void/notify-mail's (the letter
    # is built by the mailer and goes back out through mail/send-delivery,
    # so [:mail :queue] keeps meaning what it means); void/db, void/http
-   # and void/html are void/notify-inapp's — the table the bell reads, the
-   # four routes that draw it and the fragments they answer with;
+   # void/html and void/htmx are void/notify-inapp's — the table the bell
+   # reads, the four routes that draw it, the fragments they answer with
+   # and the hx- builders the bell is written with;
    # void/http is also the webhook's transport (http/client — and void/tls
    # closes the https seam at runtime, never an edge), with void/crypto a
    # *module* edge for its signature, the void/storage/sign pose:
@@ -371,7 +372,7 @@
    # for test/start!, void/db-sqlite for a real table under the in-app
    # channel and void/auth to prove the dyn seam works from both ends.
    {:dir "notify" :deps [:void/core :void/crypto :void/http :void/html
-                         :void/db :void/jobs :void/mail]
+                         :void/htmx :void/db :void/jobs :void/mail]
     :test-deps [:void/dev :void/db-sqlite :void/auth] :jpm [:spork]}
 
    :void/ws

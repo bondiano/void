@@ -20,6 +20,7 @@
 (import ./context :as ctx)
 (import ./ring :as ring)
 (import ./view :as view)
+(import void/htmx/hx :as hx)
 
 (def default-capacity "Values held when [:dash :tap-buffer] says nothing." 100)
 
@@ -115,9 +116,7 @@
           "?path=" (wire/url-encode (string/format "%j" path))))
 
 (defn- node-link [id path v]
-  [:a {:href (node-url id path)
-       :hx-get (node-url id path)
-       :hx-swap "outerHTML"}
+  [:a (merge {:href (node-url id path)} (hx/get* (node-url id path) :swap :outer-html))
    (string "▸ " (kind-of v))])
 
 (defn- leaf [v]
@@ -160,14 +159,14 @@
   (page req
         [:div
          [:h1 "Tap"]
-         [:p {:class "dash-note"}
+         [:p {:class "vd-note"}
           (string "(dash/tap value) from code or the netrepl puts a value here — a ring of "
                   (entries* :capacity) ", newest first. "
                   (ring/size entries*) " held.")]
          (if (empty? held)
-           [:p {:class "dash-empty"}
+           [:p {:class "vd-empty"}
             "Nothing tapped yet. From the REPL: (import void/dash :as dash) (dash/tap {:hello :world})"]
-           [:table {:class "dash-table"}
+           [:table {:class "vd-table"}
             [:thead [:tr [:th "#"] [:th "when"] [:th "where"] [:th "shape"] [:th "value"]]]
             [:tbody
              (seq [e :in held]
@@ -181,7 +180,7 @@
 
 (defn- gone [req id]
   (def resp (page req [:div [:h1 "Tap"]
-                       [:p {:class "dash-warn"}
+                       [:p {:class "vd-warn"}
                         (string "tap #" id " is no longer held — the ring keeps the last "
                                 (entries* :capacity) " values, and this one was evicted.")]
                        [:p [:a {:href (ctx/at "/tap")} "Back to the list"]]]))
@@ -193,7 +192,7 @@
 
 (defn- table-of [v]
   (def cols (sorted-by view/value-str (distinct (mapcat keys v))))
-  [:table {:class "dash-table"}
+  [:table {:class "vd-table"}
    [:thead [:tr ;(seq [c :in cols] [:th [:code (view/value-str c 40)]])]]
    [:tbody
     (seq [row :in v]
@@ -208,7 +207,7 @@
     (page req
           [:div
            [:h1 (string "Tap #" id)]
-           [:p {:class "dash-note"}
+           [:p {:class "vd-note"}
             (string (view/stamp (e :at))
                     (if (e :where) (string " · " (e :where)) ""))
             " · "
@@ -218,7 +217,7 @@
            (when (table-view? (e :value))
              [:div [:h2 "As a table"] (table-of (e :value))])
            [:h2 "Tree"]
-           [:div {:class "dash-detail"} (node-view id [] (e :value))]])))
+           [:div {:class "vd-detail"} (node-view id [] (e :value))]])))
 
 (defn node [req]
   (def id (entry-id req))
@@ -227,21 +226,21 @@
   (def [parsed-ok path] (protect (parse raw)))
   (cond
     (nil? e)
-    (html/fragment [:span {:class "dash-warn"} "this tap value was evicted"])
+    (html/fragment [:span {:class "vd-warn"} "this tap value was evicted"])
 
     (not (and parsed-ok (indexed? path)))
-    (html/fragment [:span {:class "dash-warn"} "unreadable tree path"])
+    (html/fragment [:span {:class "vd-warn"} "unreadable tree path"])
 
     (let [[ok v] (resolve-path (e :value) path)
           content (if ok
                     (node-view id path v)
-                    [:span {:class "dash-warn"} "this branch is gone"])]
+                    [:span {:class "vd-warn"} "this branch is gone"])]
       (if (htmx/request? req)
         (html/fragment content)
         (page req [:div [:h1 (string "Tap #" id)]
-                   [:p {:class "dash-note"}
+                   [:p {:class "vd-note"}
                     [:a {:href (ctx/at (string "/tap/" id))} "whole value"]]
-                   [:div {:class "dash-detail"} content]])))))
+                   [:div {:class "vd-detail"} content]])))))
 
 (defn jdn [req]
   (def id (entry-id req))

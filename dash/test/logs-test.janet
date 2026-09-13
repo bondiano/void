@@ -16,18 +16,23 @@
 (import void/http/wire :as wire)
 (import void/dash/logs :as dlogs)
 
+(def open-gate
+  "A :void.dash/gate that lets everybody in — the test profile is not :dev."
+  (plugin/manifest 'test/open-gate
+    :version "0.1.0"
+    :requires {:void/dash ">=0.0.1"}
+    :contributes {:void.dash/gate [{:name :test/open :fn (fn [_] true)}]}))
+
 (log/set-level! nil :info)
 
 (defn- start [&opt dash-cfg]
   (plugin/start!
-    {:plugins ["void/http/init" "void/html/init" "void/htmx/init" "void/dash/init"]
+    {:plugins ["void/http/init" "void/html/init" "void/htmx/init" "void/dash/init" open-gate]
      :profile :test
      :config {:env @{}
               :cli {:log {:level :info}
                     :http {:port 0}
-                    :dash (merge {:access (fn [_] true)
-                                  :log-buffer 50}
-                                 (or dash-cfg {}))}}}))
+                    :dash (merge {:log-buffer 50} (or dash-cfg {}))}}}))
 
 (def boot (start {:allow-actions true}))
 

@@ -17,17 +17,23 @@
 (import void/dash/live :as live)
 (import void/datastar/init :as datastar)
 
+(def open-gate
+  "A :void.dash/gate that lets everybody in — the test profile is not :dev."
+  (plugin/manifest 'test/open-gate
+    :version "0.1.0"
+    :requires {:void/dash ">=0.0.1"}
+    :contributes {:void.dash/gate [{:name :test/open :fn (fn [_] true)}]}))
+
 (log/set-level! nil :error)
 
 (def boot
   (plugin/start!
     {:plugins ["void/http/init" "void/html/init" "void/htmx/init"
-               "void/datastar/init" "void/dash/init"]
+               "void/datastar/init" "void/dash/init" open-gate]
      :profile :test
      :config {:env @{}
               :cli {:log {:level :error}
-                    :http {:port 0}
-                    :dash {:access (fn [_] true)}}}}))
+                    :http {:port 0}}}}))
 
 (defer (plugin/shutdown! boot 3)
 

@@ -160,7 +160,7 @@
     # when void/security checks. The token is on the page because
     # form/form splices it — the application asked for nothing
     (def token
-      (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`)))
+      (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`)))
                         (text signed-in))))
     (assert token "the form carries a CSRF token")
     (defn- post [uri &opt spec]

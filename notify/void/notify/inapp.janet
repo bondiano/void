@@ -39,6 +39,7 @@
 (import void/core/log :as log)
 (import void/core/plugin :as plugin)
 (import void/html :as html)
+(import void/htmx/hx :as hx)
 (import void/http/errors :as errors)
 (import void/http/router :as router)
 (import ./channel :as channel)
@@ -120,23 +121,24 @@
 
 # -- the views -----------------------------------------------------------
 
+(defn- panel-swap
+  "The htmx half of anything that redraws the panel: `verb` the URL,
+  into #void-notify-panel."
+  [verb url]
+  (hx/attrs verb url :target "#void-notify-panel" :swap :inner-html))
+
 (var badge-view
   ``The bell itself, as hiccup: a link that opens the panel and the
   count beside it. A var, so an application replaces it without a new
   extension point.``
   (fn notify-badge [n]
-    [:a {:href (string (get settings :prefix "/notifications"))
-         :hx-get (string (get settings :prefix "/notifications"))
-         :hx-target "#void-notify-panel"
-         :hx-swap "innerHTML"
-         :class "void-notify-badge"
-         :aria-label (string n " unread notifications")}
+    [:a (merge {:href (string (get settings :prefix "/notifications"))
+                :class "void-notify-badge"
+                :aria-label (string n " unread notifications")}
+               (panel-swap :get (string (get settings :prefix "/notifications"))))
      "🔔"
      (when (pos? n)
-       [:span {:class "void-notify-count"
-               :style (string "margin-left: 4px; padding: 0 6px; border-radius: 9px; "
-                              "background: #d33; color: #fff; font-size: 12px")}
-        (string n)])]))
+       [:span {:class "void-notify-count"} (string n)])]))
 
 (var list-view
   "The panel: a recipient's notifications, newest first. A var, like
@@ -146,25 +148,17 @@
     [:div {:class "void-notify-list"}
      (if (empty? items)
        [:p {:class "void-notify-empty"} "Nothing new."]
-       [:ul {:style "list-style: none; margin: 0; padding: 0"}
+       [:ul
         ;(seq [n :in items]
-           [:li {:class (if (n :read?) "void-notify-read" "void-notify-unread")
-                 :style "padding: 8px 0; border-bottom: 1px solid #eee"}
+           [:li {:class (if (n :read?) "void-notify-read" "void-notify-unread")}
             (if-let [href (n :url)]
               [:a {:href href} (n :title)]
               [:strong (n :title)])
-            (when-let [b (n :body)] [:p {:style "margin: 4px 0 0"} b])
+            (when-let [b (n :body)] [:p b])
             (unless (n :read?)
-              [:button {:hx-post (string base "/" (n :id) "/read")
-                        :hx-target "#void-notify-panel"
-                        :hx-swap "innerHTML"
-                        :style "margin-top: 4px"}
-               "Mark read"])])])
+              [:button (panel-swap :post (string base "/" (n :id) "/read")) "Mark read"])])])
      (when (some |(not ($ :read?)) items)
-       [:button {:hx-post (string base "/read-all")
-                 :hx-target "#void-notify-panel"
-                 :hx-swap "innerHTML"}
-        "Mark all read"])]))
+       [:button (panel-swap :post (string base "/read-all")) "Mark all read"])]))
 
 (defn bell
   ``The one line a layout carries. Empty for an anonymous visitor —
@@ -173,10 +167,9 @@
   []
   (when (recipient)
     [:span {:class "void-notify"}
-     [:span {:id "void-notify-bell"
-             :hx-get (badge-path)
-             :hx-trigger (string "load, every " (get settings :poll 30) "s")
-             :hx-swap "innerHTML"}]
+     [:span (merge {:id "void-notify-bell"}
+                   (hx/get* (badge-path) :trigger (string "load, every " (get settings :poll 30) "s")
+                            :swap :inner-html))]
      [:span {:id "void-notify-panel"}]]))
 
 # -- the routes ----------------------------------------------------------
@@ -244,7 +237,8 @@
   :doc "The in-app channel of void/notify: one row per notification in a table void owns (its DDL is data — put (notify-store/tables) in a migration) and an htmx bell that polls its own count. Every route answers about the identity in the dyn, never about a recipient in the request."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/notify ">=0.0.1"
-             :void/db ">=0.0.1" :void/http ">=0.0.1" :void/html ">=0.0.1"}
+             :void/db ">=0.0.1" :void/http ">=0.0.1" :void/html ">=0.0.1"
+             :void/htmx ">=0.0.1"}
   :config-key :notify-inapp
   :config-schema Config
   :config-defaults defaults

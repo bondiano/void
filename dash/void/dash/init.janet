@@ -25,10 +25,10 @@
 ###
 ### **The gate is shut everywhere but :dev.** The netrepl logic: a dev
 ### process already hands a REPL to whoever can reach it. Every other
-### profile refuses every route until `[:dash :access]` names a
-### predicate, with the refusal naming the key (./mount). Pages are
-### read-only; the one action — runtime log levels — sits separately
-### behind `[:dash :allow-actions]` (true in :dev).
+### profile refuses every route until a `:void.dash/gate` contribution
+### names a predicate, with the refusal naming the point (./mount).
+### Pages are read-only; the one action — runtime log levels — sits
+### separately behind `[:dash :allow-actions]` (true in :dev).
 ###
 ### **Live is an experiment the fallback does not wait for.** With
 ### void/datastar in the composition the overview and the log page ride a
@@ -74,6 +74,12 @@
 
 # -- extension points ----------------------------------------------------
 
+(plugin/defextension-point :void.dash/gate
+  :doc "Who is an operator, outside :dev: {:name :app/operators :fn (fn [req] true | false | \"reason\")}. One contribution opens the dashboard; until one exists every route outside the :dev profile refuses and the refusal names this point. A contribution rather than a config value, because a predicate is a function and config explain cannot print one"
+  :cardinality :single
+  :schema {:name :keyword :fn :function :doc [:optional :string]}
+  :reduce first)
+
 (plugin/defextension-point :void.dash/tile
   :doc "Tiles on the dashboard overview: {:name :orders/backlog :label \"Backlog\"? :render (fn [] hiccup)}. A tile that throws renders its error instead of taking the page down"
   :schema {:name :keyword
@@ -88,7 +94,6 @@
   "Schema of the [:dash] config slice."
   {:prefix [:optional :string]
    :title [:optional :string]
-   :access [:optional :function]
    :allow-actions [:optional :boolean]
    :log-buffer [:optional [:int {:min 1}]]
    :tap-buffer [:optional [:int {:min 1}]]
@@ -101,11 +106,10 @@
 (def defaults
   ``Defaults of the [:dash] slice.
 
-  `:access` is deliberately absent — its absence is what keeps the
-  gate shut outside :dev, and a default here would be the
-  vulnerability the construction exists to avoid. `:allow-actions` is
-  absent too: unset, it follows the profile (true in :dev, false
-  everywhere else).``
+  `:allow-actions` is absent: unset, it follows the profile (true in
+  :dev, false everywhere else). Who may come in is not config at all
+  but a `:void.dash/gate` contribution, and its absence is what keeps
+  the gate shut outside :dev.``
   {:prefix "/dash"
    :title "Dash"
    :log-buffer 500
@@ -133,7 +137,7 @@
          :prefix (cfg :prefix)
          :title (cfg :title)
          :open? open?
-         :access (cfg :access)
+         :gate (get-in boot [:extensions :void.dash/gate :resolved])
          :allow-actions? (if (nil? (cfg :allow-actions)) open? (true? (cfg :allow-actions)))
          :started-at (os/clock :monotonic)
          :history hist
@@ -146,7 +150,7 @@
          :assets (view/asset-bundle)})
   (log/info "dash ready" :ns log-ns
             :prefix (cfg :prefix)
-            :open (or open? (truthy? (cfg :access)))
+            :open (or open? (truthy? (ctx/setting :gate)))
             :actions (ctx/setting :allow-actions?)
             :datastar (ctx/setting :datastar?))
   ctx/current)
@@ -166,9 +170,9 @@
    :fn (fn warn [_boot]
          (when (and ctx/current
                     (not (ctx/current :open?))
-                    (nil? (ctx/current :access)))
+                    (nil? (ctx/current :gate)))
            (log/warn (string "the dashboard is mounted and refuses every request: "
-                             "[:dash :access] names no predicate")
+                             "nothing contributed :void.dash/gate")
                      :ns log-ns :prefix (ctx/current :prefix))))})
 
 # -- the log ring --------------------------------------------------------
@@ -212,7 +216,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/dash
-  :doc "The dev dashboard as a fourth projection of what the process already answers a REPL with (Phoenix LiveDashboard + Portal, at void's scale): overview with health tiles and sparklines, the component graph with plugin/why, plugins and extension points with attribution, config with per-value provenance (secrets are boxes and print as their reference), the live route table with explain-route, the deploy survey, a log ring with filters, runtime per-namespace levels and an SSE live tail, and a tap inspector for values sent from code or the netrepl. Own routes under [:dash :prefix], open in :dev and shut elsewhere until [:dash :access] names a predicate; when void/datastar is composed the overview and logs ride a morph-stream, otherwise htmx polls."
+  :doc "The dev dashboard as a fourth projection of what the process already answers a REPL with (Phoenix LiveDashboard + Portal, at void's scale): overview with health tiles and sparklines, the component graph with plugin/why, plugins and extension points with attribution, config with per-value provenance (secrets are boxes and print as their reference), the live route table with explain-route, the deploy survey, a log ring with filters, runtime per-namespace levels and an SSE live tail, and a tap inspector for values sent from code or the netrepl. Own routes under [:dash :prefix], open in :dev and shut elsewhere until a :void.dash/gate contribution names a predicate; when void/datastar is composed the overview and logs ride a morph-stream, otherwise htmx polls."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/http ">=0.0.1"
              :void/html ">=0.0.1" :void/htmx ">=0.0.1"}

@@ -7,8 +7,8 @@
 ### config/explain (with a secret that stays a box), the route table
 ### with per-key provenance, and the deploy survey each render from the
 ### value the REPL already answers. Outside :dev every route refuses
-### with the phrase naming [:dash :access], a predicate opens it, and a
-### predicate's refusal is a refusal.
+### with the phrase naming :void.dash/gate, a contributed predicate
+### opens it, and a predicate's refusal is a refusal.
 
 (import ../test-support/paths)
 (import void/core/log :as log)
@@ -20,8 +20,16 @@
 (def plugins
   ["void/http/init" "void/html/init" "void/htmx/init" "void/dash/init"])
 
-(defn- start [profile &opt dash-cfg]
-  (test/start! {:plugins plugins
+(defn- gate
+  "A manifest contributing one :void.dash/gate predicate."
+  [pred]
+  (plugin/manifest 'test/gate
+    :version "0.1.0"
+    :requires {:void/dash ">=0.0.1"}
+    :contributes {:void.dash/gate [{:name :test/gate :fn pred}]}))
+
+(defn- start [profile &opt dash-cfg extra-plugins]
+  (test/start! {:plugins [;plugins ;(or extra-plugins [])]
                 :profile profile
                 :config {:env @{"APP_TOKEN" "s3cr3t-value"}
                          :cli {:http {:port 0}
@@ -115,7 +123,7 @@
       (string/slice page at (string/find `"` page at))))
   (def sheet (GET sheet-href))
   (assert (= 200 (sheet :status)))
-  (assert (string/find "dash-card" (test/text sheet)))
+  (assert (string/find "vd-card" (test/text sheet)))
 
   # no datastar in this composition: the live stream says which plugin
   (def live (GET "/dash/live"))
@@ -146,14 +154,14 @@
   (def c (test/client shut))
   (def resp (test/inject c {:uri "/dash"}))
   (assert (= 403 (resp :status)) "no predicate, no page")
-  (assert (string/find "[:dash :access]" (test/text resp))
-          "and the refusal names the key that opens it")
+  (assert (string/find ":void.dash/gate" (test/text resp))
+          "and the refusal names the point that opens it")
   (assert (= 403 ((test/inject c {:uri "/dash/config"}) :status))
           "every route carries the same gate"))
 
 # -- a predicate opens it, and its refusal is a refusal ------------------
 
-(def gated (start :test {:access (fn [req] (= "op" (get-in req [:headers "x-operator"])))}))
+(def gated (start :test {} [(gate (fn [req] (= "op" (get-in req [:headers "x-operator"]))))]))
 (defer (test/stop! gated)
   (def c (test/client gated))
   (assert (= 403 ((test/inject c {:uri "/dash"}) :status)))

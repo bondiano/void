@@ -133,6 +133,12 @@
   :schema {:name :keyword :fn :function :doc [:optional :string]}
   :reduce first)
 
+(plugin/defextension-point :void.admin/layout
+  :doc "The frame every admin page renders inside: {:name :fn (fn [content context] hiccup)}. One contribution replaces the built-in control-room frame whole — an application that already has a chrome should not live inside a second one. The context carries :request, :void.html/title, :void.html/head and :void.admin/widgets; a contribution rather than a config value, because a function is not something config explain can print or a file can carry"
+  :cardinality :single
+  :schema {:name :keyword :fn :function :doc [:optional :string]}
+  :reduce first)
+
 (plugin/defextension-point :void.admin/bulk-runner
   :doc "How a bulk too big to run inline is run: {:name :enqueue (fn [{:resource :action :selection :request}] job-id) :progress (fn [job-id action] {:state :percent? :label?})}. void/admin-jobs contributes one; without it, an action that declares :job — or a selection over [:admin :bulk :inline-limit] — is a start-time error naming the plugin rather than a surprise at the moment somebody presses the button"
   :cardinality :single
@@ -150,7 +156,6 @@
    :select-limit [:optional [:int {:min 0}]]
    :route-meta [:optional :dictionary]
    :stylesheet [:optional :string]
-   :layout [:optional :function]
    :htmx-src [:optional :string]
    :htmx-integrity [:optional :string]
    :bulk [:optional {:inline-limit [:optional [:int {:min 1}]]}]})
@@ -277,11 +282,11 @@
          :route-meta (get cfg :route-meta {})
          :inline-limit (get-in cfg [:bulk :inline-limit] 500)
          :stylesheet (cfg :stylesheet)
-         :layout (cfg :layout)
-         # the default src pairs with view/htmx-integrity; a custom src
-         # brings its own [:admin :htmx-integrity] or ships without one
-         :htmx-src (get cfg :htmx-src view/htmx-src)
-         :htmx-integrity (get cfg :htmx-integrity)
+         :layout (get (get-in boot [:extensions :void.admin/layout :resolved]) :fn)
+         # nil means htmx/script-tag's pin; a custom src brings its own
+         # [:admin :htmx-integrity] or ships without one
+         :htmx-src (cfg :htmx-src)
+         :htmx-integrity (cfg :htmx-integrity)
          :widgets widgets
          :pages (resolved :void.admin/page)
          :dashboard (resolved :void.admin/dashboard-widget)

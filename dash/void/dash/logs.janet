@@ -20,7 +20,7 @@
 (import void/core/log :as log)
 (import void/http/ring :as httpring)
 (import void/html/init :as html)
-(import void/htmx/init :as htmx)
+(import void/htmx/hx :as hx)
 (import ./context :as ctx)
 (import ./live :as live)
 (import ./ring :as ring)
@@ -122,12 +122,9 @@
           (ring/to-array records)))
 
 (defn- filter-panel [st]
-  [:form {:method "get" :action (ctx/at "/logs") :class "dash-toolbar"
-          :hx-get (ctx/at "/logs")
-          :hx-target "#dash-logs"
-          :hx-swap "outerHTML"
-          :hx-push-url "true"
-          :hx-trigger "change, submit"}
+  [:form (merge {:method "get" :action (ctx/at "/logs") :class "vd-toolbar"}
+                (hx/get* (ctx/at "/logs") :target "#dash-logs" :swap :outer-html :push-url true
+                         :trigger "change, submit"))
    [:div {:class "field"}
     [:label {:for "f-level"} "Level ≥"]
     [:select {:name "level" :id "f-level"}
@@ -148,7 +145,7 @@
   [:div
    [:h2 "Log levels"]
    (if allowed
-     [:form {:method "post" :action (ctx/at "/logs/level") :class "dash-toolbar"}
+     [:form {:method "post" :action (ctx/at "/logs/level") :class "vd-toolbar"}
       (csrf-slot)
       [:div {:class "field"}
        [:label {:for "a-ns"} "Namespace (empty = root)"]
@@ -159,7 +156,7 @@
         ;(seq [l :in [:trace :debug :info :warn :error :fatal]]
            [:option {:value (string l) :selected (when (= :info l) true)} (string l)])]]
       [:div {:class "field"} [:button {:type "submit"} "Set"]]]
-     [:p {:class "dash-absent"}
+     [:p {:class "vd-absent"}
       "Changing levels is off: [:dash :allow-actions] is not true in this profile — the pages stay read-only until the config says otherwise."])])
 
 (defn- params [st]
@@ -171,18 +168,16 @@
   [st]
   (def all (matching st))
   (def shown (if (> (length all) 200) (array/slice all -201) all))
-  [:div {:id "dash-logs"
-         :hx-get (ctx/at "/logs" (params st))
-         :hx-trigger "every 5s"
-         :hx-swap "outerHTML"}
-   [:p {:class "dash-note"}
+  [:div (merge {:id "dash-logs"}
+               (hx/get* (ctx/at "/logs" (params st)) :trigger "every 5s" :swap :outer-html))
+   [:p {:class "vd-note"}
     (string (length shown) " of " (ring/size records) " held record"
             (if (= 1 (ring/size records)) "" "s")
             " (ring of " (records :capacity) ") · live tail: ")
     [:a {:href (ctx/at "/logs/tail")} "SSE stream"]
     (string " · dropped by async sinks: " (log/dropped))]
    (if (empty? shown)
-     [:p {:class "dash-empty"} "No record matches."]
+     [:p {:class "vd-empty"} "No record matches."]
      [:pre {:class "dash-jdn dash-logs"}
       ;(seq [rec :in shown]
          [:span {:class (string "dash-log-" (string (get rec :level :info)))}
@@ -197,9 +192,8 @@
 
 (defn index [req]
   (def st (listing-state req))
-  (if (htmx/partial-request? req)
-    (html/fragment (logs-fragment st))
-    (html/page (logs-body st) {:layout view/layout :context {:request req}})))
+  (html/page (logs-body st) {:layout view/layout :context {:request req}
+                             :partial (fn [] (logs-fragment st))}))
 
 # -- the live tail -------------------------------------------------------
 

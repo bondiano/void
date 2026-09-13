@@ -1601,7 +1601,7 @@
 (defn- token-of
   "The CSRF token out of a rendered form — no page below asked for one."
   [resp]
-  (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`))) (text resp))))
+  (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
 (defn- message-of
   "The one line a page is allowed to say."

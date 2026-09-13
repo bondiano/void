@@ -47,11 +47,12 @@ every 5 seconds — the same data, a moment later.
 - `:dev` — open. The netrepl logic: a dev process already hands an
   unauthenticated REPL to whoever can reach it; a read-only page of the
   same values adds nothing.
-- any other profile — **shut**. Every route answers 403 until
-  `[:dash :access]` names a predicate:
+- any other profile — **shut**. Every route answers 403 until a
+  `:void.dash/gate` contribution names a predicate (a function is not a
+  config value — `config explain` could not print it):
 
   ```janet
-  {:dash {:access (fn [req] (operator? req))}}
+  :contributes {:void.dash/gate [{:name :app/operators :fn (fn [req] (operator? req))}]}
   ```
 
 - pages are read-only. The one action — runtime log levels — sits

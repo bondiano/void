@@ -16,7 +16,7 @@
 (log/set-level! nil :error)
 
 (def plugins
-  ["void/http/init" "void/html/init"
+  ["void/http/init" "void/html/init" "void/htmx/init"
    "void/db/init" "void/db-sqlite/init"
    "void/notify/init" "void/notify/inapp"])
 

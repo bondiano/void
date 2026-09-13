@@ -196,7 +196,27 @@
             "dev/test/test-test.janet"
             "bench/test/apps-test.janet"]
     :why "test/service in void/dev is the gate (65694c1); its own suite asserts the line it prints, and bench's b2/b3 smoke gates on either of two variables, which the one-variable gate cannot say."
-    :samples ["(printf \"%s: SKIPPED (set %s to a url)\" suite var)"]}])
+    :samples ["(printf \"%s: SKIPPED (set %s to a url)\" suite var)"]}
+
+   {:name "the control-room palette (the --bg token)"
+    :pattern ~(* "--bg:" (any :s) "#101418")
+    :allow ["html/void/html/chrome.janet"
+            "http/void/http/errors.janet"]
+    :why "chrome/tokens is the one palette (wave 8.8): admin and dash are chrome's base sheet plus their own blocks. The kernel's error page keeps a copy by hand, because void/http cannot import the view layer that depends on it and the page must render in a composition without void/html."
+    :samples ["--bg:#101418;" "--bg: #101418;"]
+    :not ["--bg:#ffffff"]}
+
+   {:name "an immutable, private asset response written by hand"
+    :pattern ~(* "max-age=31536000, immutable")
+    :allow ["html/void/html/chrome.janet"]
+    :why "chrome/asset-route serves a fingerprinted bundle behind a plugin's own gate; admin and dash used to build the same response table each (wave 8.8)."
+    :samples ["\"cache-control\" \"private, max-age=31536000, immutable\""]}
+
+   {:name "a URL under a prefix with a sorted query, written by hand"
+    :pattern ~(* "(sorted (seq [[k v] :pairs (or query {})")
+    :allow ["html/void/html/chrome.janet"]
+    :why "chrome/url-under is the one builder; admin/context and dash/context each carried it as `at` (wave 8.8)."
+    :samples ["(sorted (seq [[k v] :pairs (or query {})\n :when (and (not (nil? v)) (not (empty? (string v))))]"]}])
 
 # -- the walk ------------------------------------------------------------
 

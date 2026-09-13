@@ -68,7 +68,7 @@
 (defn- text [resp] (test/text resp))
 
 (defn- token-of [resp]
-  (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`))) (text resp))))
+  (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
 (defn run-suite [engine]
   (def label (engine :label))

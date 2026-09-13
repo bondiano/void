@@ -29,6 +29,7 @@
 (import void/db :as db)
 (import void/html/form :as form)
 (import void/html/hiccup :as hiccup)
+(import void/htmx/hx :as hx)
 (import void/http/router :as router)
 (import ./resource :as res)
 (import void/core/util :as util)
@@ -223,15 +224,15 @@
 
          (and target (not (empty? (target :search))))
          [:span
-          [:input {:type "text" :name (ctx :name) :id (ctx :id)
-                   :list (string "dl-" (field :name))
-                   :autocomplete "off"
-                   :readonly (when (ctx :readonly) true)
-                   :value (when (not (nil? (ctx :value))) (string (ctx :value)))
-                   :hx-get (string (ctx :widget-url) "/complete")
-                   :hx-trigger "input changed delay:300ms"
-                   :hx-target (string "#dl-" (field :name))
-                   :hx-swap "outerHTML"}]
+          [:input (merge {:type "text" :name (ctx :name) :id (ctx :id)
+                          :list (string "dl-" (field :name))
+                          :autocomplete "off"
+                          :readonly (when (ctx :readonly) true)
+                          :value (when (not (nil? (ctx :value))) (string (ctx :value)))}
+                         (hx/get* (string (ctx :widget-url) "/complete")
+                                  :trigger "input changed delay:300ms"
+                                  :target (string "#dl-" (field :name))
+                                  :swap :outer-html))]
           [:datalist {:id (string "dl-" (field :name))}]]
 
          ((form-widget :render) ctx)))}))

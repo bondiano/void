@@ -31,7 +31,9 @@
 # -- re-exported view vocabulary -----------------------------------------
 
 (def raw "See hiccup/raw." hiccup/raw)
+(def raw? "See hiccup/raw?." hiccup/raw?)
 (def escape "See hiccup/escape." hiccup/escape)
+(def json-script "See hiccup/json-script." hiccup/json-script)
 (def render "See hiccup/render." hiccup/render)
 (def render-string "See hiccup/render-string." hiccup/render-string)
 (def html5 "See hiccup/html5." hiccup/html5)
@@ -85,7 +87,17 @@
   opts: :layout (engine-specific layout value, nil for none), :status
   (200), :headers (merged over text/html), :context (extra engine
   context), :engine (override config [:html :engine] for this
-  response).``
+  response), :title and :head (the page's head slots — the context
+  keys :void.html/title and :void.html/head a layout reads), and
+  :partial — the subtree an htmx swap into an element gets instead of
+  the page (hiccup, or a thunk returning it), rendered with no layout:
+
+      (html/page (list-page rows) {:layout base :partial (rows-fragment rows)})
+
+  htmx 4 says which one it wants in HX-Request-Type ("partial" for a
+  swap into an element, "full" for the body, a boosted link, a
+  history restore), so one handler answers both without a route
+  flag; a response without :partial ignores the header.``
   [content &opt opts]
   (default opts {})
   (when (nil? content)
@@ -95,9 +107,13 @@
                               (get opts :headers {}))
               :void.html/content content
               :void.html/layout (get opts :layout)
-              :void.html/context (get opts :context)})
+              :void.html/context (merge (or (get opts :context) {})
+                                        (if-let [t (get opts :title)] {:void.html/title t} {})
+                                        (if-let [h (get opts :head)] {:void.html/head h} {}))})
   (when-let [e (get opts :engine)]
     (put resp :void.html/engine e))
+  (when-let [p (get opts :partial)]
+    (put resp :void.html/partial p))
   resp)
 
 (defn fragment
@@ -113,6 +129,14 @@
   (and (dictionary? resp)
        (not (nil? (get resp :void.html/content)))))
 
+(defn partial-request?
+  ``Is this request for a fragment — htmx 4's HX-Request-Type:
+  partial, a swap that lands in some element? One header read, here
+  rather than in void/htmx, because the render middleware is what
+  chooses between a page's content and its :partial.``
+  [req]
+  (= "partial" (get-in req [:headers "hx-request-type"])))
+
 (defn- finalize [resp req]
   (def ctx (context))
   (def ename (get resp :void.html/engine (ctx :engine-name)))
@@ -123,11 +147,19 @@
                 (string/join (map |(string/format "%q" $)
                                   (sorted (keys (ctx :engines))))
                              " "))))
+  # a partial answers a partial request in place of the page, with no
+  # layout — a thunk is called here so the page's tree is not built
+  # for a request that wanted a row
+  (def partial (get resp :void.html/partial))
+  (def [content layout]
+    (if (and partial (partial-request? req))
+      [(if (util/callable? partial) (partial) partial) nil]
+      [(resp :void.html/content) (get resp :void.html/layout)]))
   (def render-context
     (merge (or (get resp :void.html/context) {})
            {:request req}
-           (if-let [l (get resp :void.html/layout)] {:layout l} {})))
-  (put resp :body ((engine :render) (resp :void.html/content) render-context))
+           (if layout {:layout layout} {})))
+  (put resp :body ((engine :render) content render-context))
   resp)
 
 (plugin/contribute! :void.http/middleware

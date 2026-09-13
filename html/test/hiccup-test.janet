@@ -20,8 +20,33 @@
 # nil attributes are dropped, so conditional attributes read naturally
 (assert (= `<input type="text"/>`
            (hiccup/render-string [:input {:type "text" :disabled nil}])))
-(assert (= `<input disabled="true" type="text"/>`
-           (hiccup/render-string [:input {:type "text" :disabled true}])))
+(assert (= `<input disabled type="text"/>`
+           (hiccup/render-string [:input {:type "text" :disabled true}]))
+        "true is a bare attribute")
+(assert (= `<input type="text"/>`
+           (hiccup/render-string [:input {:type "text" :disabled false}]))
+        "false drops the attribute, as nil does")
+(assert (= `<p class="a b" style="color:red;margin:0"></p>`
+           (hiccup/render-string [:p {:class ["a" nil "b"] :style {:margin 0 :color "red"}}]))
+        ":class and :style take data")
+(assert (not (first (protect (hiccup/render-string [:p {"a b" 1}]))))
+        "an attribute name with a space is two attributes, so it is an error")
+
+# -- a function where a leaf should be -------------------------------------
+
+(defn who-bar [] [:nav "who"])
+(assert (= "<div><nav>who</nav></div>" (hiccup/render-string [:div [who-bar]])))
+(def [ok err] (protect (hiccup/render-string [:div who-bar])))
+(assert (and (not ok) (string/find "function leaf" err))
+        "a component named without its brackets is an error, not a call with the buffer")
+(assert (hiccup/raw? (hiccup/raw "<b>")))
+(assert (not (hiccup/raw? {:void.html/raw 1})))
+
+# -- json-script ---------------------------------------------------------
+
+(assert (= `<script id="cfg" type="application/json">{"s":"\u003c/script\u003e"}</script>`
+           (hiccup/render-string (hiccup/json-script "cfg" {:s "</script>"})))
+        "a data island cannot close its own tag")
 
 # -- components as functions ---------------------------------------------
 

@@ -19,16 +19,16 @@
 
 # -- the fragment, without a socket in sight -----------------------------
 
-(assert (= "<li id=\"m-1\" hx-swap-oob=\"true\">hi</li>"
+(assert (= "<li hx-swap-oob=\"true\" id=\"m-1\">hi</li>"
            (wshtmx/fragment [:li {:id "m-1"} "hi"]))
         "an element with an id is marked for an out-of-band swap and rendered")
 
-(assert (= "<div id=\"log\" hx-swap-oob=\"beforeend\"><p>line</p></div>"
+(assert (= "<div hx-swap-oob=\"beforeend\" id=\"log\"><p>line</p></div>"
            (wshtmx/fragment [:div {:id "log" :hx-swap-oob "beforeend"}
                              [:p "line"]]))
         "an element that already says how it wants to be swapped keeps it")
 
-(assert (= "<span id=\"a\" hx-swap-oob=\"innerHTML\">1</span>"
+(assert (= "<span hx-swap-oob=\"innerHTML\" id=\"a\">1</span>"
            (wshtmx/fragment [:span {:id "a"} 1] :inner-html))
         "and a swap style is spelled the way htmx spells it")
 
@@ -127,7 +127,7 @@
                                         "HX-Source" "form#say"}}))
 
   (each peer [a b]
-    (assert (= (string "<div id=\"messages\" hx-swap-oob=\"beforeend\">"
+    (assert (= (string "<div hx-swap-oob=\"beforeend\" id=\"messages\">"
                        "<p>good evening</p></div>")
                ((wsc/receive peer) :data))
             "every peer in the room got the same swappable fragment"))

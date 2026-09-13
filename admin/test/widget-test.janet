@@ -191,7 +191,7 @@
   (assert (not (string/find "<style" page))
           "nothing inline in the head — the sheet is served")
   (def href
-    (first (peg/match ~(* (thru `<link rel="stylesheet" href="`) (<- (to `"`))) page)))
+    (first (peg/match ~(* (thru `<link href="`) (<- (to `"`))) page)))
   (assert href "the frame links the served sheet")
   (assert (string/has-prefix? "/admin/-/assets/admin-" href)
           "...under the admin prefix, fingerprinted")

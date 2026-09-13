@@ -8,6 +8,8 @@
 ### the registry is derived from code, the widget resolution is derived
 ### from the registry, and the state of a list lives in the URL.
 
+(import void/html/chrome :as chrome)
+
 (var current
   ``The running admin context, set by ./init's :before-start hook:
   :prefix :title :per-page :select-limit :inline-limit :layout
@@ -38,22 +40,9 @@
 
 (defn at
   ``A URL under the admin prefix: (at "/jobs"), (at "/jobs" {"state"
-  :dead}). Query is a table of already-stringable values; nil and empty
-  values drop out, which is what makes "the same URL without the
-  filter" one expression rather than a branch.
-
-  It exists because `[:admin :prefix]` is config and a contribution is
-  a value frozen at load: a plugin that mounts a `:void.admin/page`
-  cannot write down where its own page will be, and asks here instead.``
+  :dead}) — chrome/url-under over [:admin :prefix].``
   [path &opt query]
-  (def full (string (prefix) path))
-  (def pairs*
-    (sorted (seq [[k v] :pairs (or query {})
-                  :when (and (not (nil? v)) (not (empty? (string v))))]
-              (string k "=" v))))
-  (if (empty? pairs*)
-    full
-    (string full "?" (string/join pairs* "&"))))
+  (chrome/url-under (prefix) path query))
 
 (defn url
   ``A URL inside a resource: (url desc "/7/edit"), (url desc) for the

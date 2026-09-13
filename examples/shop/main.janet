@@ -193,8 +193,8 @@
    # the dev dashboard: six pages projected off the same boot value the
    # REPL reads — composition, components, config with provenance, routes,
    # logs with a live tail, and dash/tap. Open in :dev; any other profile
-   # refuses until [:dash :access] names a predicate, the same
-   # construction as the admin's gate
+   # refuses until a :void.dash/gate contribution names a predicate,
+   # the same construction as the admin's gate
    :void/dash
    :shop/app])
 

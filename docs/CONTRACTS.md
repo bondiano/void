@@ -61,6 +61,16 @@ key plus a deprecation alias for the old name, never a mutation.
   {:doc [:optional :string] :fn :function :name :keyword}
   ```
 
+### `:void.admin/layout`
+
+- **owner:** `:void/admin` · **cardinality:** `:single`
+- The frame every admin page renders inside: {:name :fn (fn [content context] hiccup)}. One contribution replaces the built-in control-room frame whole — an application that already has a chrome should not live inside a second one. The context carries :request, :void.html/title, :void.html/head and :void.admin/widgets; a contribution rather than a config value, because a function is not something config explain can print or a file can carry
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
+  ```
+
 ### `:void.admin/menu`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
@@ -288,6 +298,16 @@ key plus a deprecation alias for the old name, never a mutation.
 
   ```janet
   {:ask :function :doc [:optional :string] :name :keyword :needs [:optional [:vector :keyword]] :what :string}
+  ```
+
+### `:void.dash/gate`
+
+- **owner:** `:void/dash` · **cardinality:** `:single`
+- Who is an operator, outside :dev: {:name :app/operators :fn (fn [req] true | false | "reason")}. One contribution opens the dashboard; until one exists every route outside the :dev profile refuses and the refusal names this point. A contribution rather than a config value, because a predicate is a function and config explain cannot print one
+- **contribution schema:**
+
+  ```janet
+  {:doc [:optional :string] :fn :function :name :keyword}
   ```
 
 ### `:void.dash/tile`

@@ -74,7 +74,7 @@
 (defn page
   ``A full admin page: the configured frame, and the widget resolution
   of this resource in the render context — which is what a replacement
-  `[:admin :layout]` reads to draw anything of its own. The widgets'
+  `:void.admin/layout` reads to draw anything of its own. The widgets'
   `:assets` are not in it: they are served as one file per kind, from
   the admin's own prefix (./view). A `:void.admin/page` answers through
   this too, so a contributed section is framed by the same layout as
@@ -84,14 +84,6 @@
              (merge {:layout (view/frame)
                      :context {:void.admin/widgets (if rname (ctx/widget-entries rname) {})}}
                     (or opts {}))))
-
-(defn partial?
-  ``Is this request asking for the fragment rather than the page? htmx
-  answers that itself in HX-Request-Type: a swap into an element is
-  "partial", a swap into the body — a boosted link, a history restore —
-  is "full".``
-  [req]
-  (htmx/partial-request? req))
 
 (defn- see-other [url]
   (ring/response 303 nil @{"location" url}))
@@ -191,10 +183,8 @@
     (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
     (def rows (q/rows desc req st))
     (def total (q/total desc req st))
-    (if (partial? req)
-      (html/fragment (view/rows-fragment desc rows st total))
-      (page req (view/list-page desc rows st total)
-            (desc :name)))))
+    (page req (view/list-page desc rows st total) (desc :name)
+          {:partial (fn [] (view/rows-fragment desc rows st total))})))
 
 # -- new / create --------------------------------------------------------
 
@@ -339,12 +329,12 @@
         (db/save! row)
         (announce! req desc :update (get row (get-in desc [:entity :pk]))
                    before (snapshot-of row))
-        (if (partial? req)
+        (if (htmx/partial-request? req)
           (html/fragment (view/cell desc row (list-column desc fname) true))
           (redirect-back req (ctx/base desc))))
       (do
         (def resp
-          (if (partial? req)
+          (if (htmx/partial-request? req)
             (html/fragment [:td {:class "field-invalid"}
                             (string/join (map schema/error-str (result :errors)) "; ")])
             (redirect-back req (ctx/base desc))))
@@ -383,7 +373,7 @@
 
 (defn- inline-response [desc req row inline child errors]
   (def rows (inline-rows desc req row inline child))
-  (if (partial? req)
+  (if (htmx/partial-request? req)
     (html/fragment (view/inline-block desc row inline child rows errors))
     (redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk])))))))
 

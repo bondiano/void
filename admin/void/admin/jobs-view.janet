@@ -26,6 +26,7 @@
 (import ./context :as ctx)
 (import ./view :as view)
 (import ./widget :as widget)
+(import void/htmx/hx :as hx)
 
 (def path
   ``Where the section is mounted, under `[:admin :prefix]`. Fixed, for
@@ -75,13 +76,14 @@
   retry changes both."
   "admin-jobs")
 
+(defn- wrapper-swap
+  "The htmx half of anything that refetches the wrapper: into it,
+  whole, and into the address bar."
+  [href]
+  (hx/get* href :target (string "#" wrapper-id) :swap :outer-html :push-url true))
+
 (defn- swap-link [href & body]
-  [:a {:href href
-       :hx-get href
-       :hx-target (string "#" wrapper-id)
-       :hx-swap "outerHTML"
-       :hx-push-url "true"}
-   ;body])
+  [:a (merge {:href href} (wrapper-swap href)) ;body])
 
 # -- the head of the page ------------------------------------------------
 
@@ -96,42 +98,42 @@
 (defn- cards [snap st]
   (def caps (snap :backend))
   (def dead (total-of (snap :counts) :dead))
-  [:div {:class "admin-cards"}
-   [:div {:class "admin-card"}
+  [:div {:class "vd-cards"}
+   [:div {:class "vd-card"}
     [:h2 "Backend"]
     [:p (string (caps :name))]
-    [:p {:class "admin-note"}
+    [:p {:class "vd-note"}
      (string (if (caps :shared) "shared" "this process only")
              " · flows " (if (caps :flows) "yes" "no")
              " · rate limit " (string (caps :rate-limit))
              " · locks " (string (caps :locks)))]]
-   [:div {:class "admin-card"}
+   [:div {:class "vd-card"}
     [:h2 "Backlog"]
     # what still owes work is the queue's own list, not a list of three
     # states spelled again here
-    [:p {:class "admin-count"}
+    [:p {:class "vd-count"}
      (string (sum (seq [s :in jobs/record-live-states] (total-of (snap :counts) s))))]
-    [:p {:class "admin-note"}
+    [:p {:class "vd-note"}
      (string/join (map string jobs/record-live-states) ", ")]]
-   [:div {:class "admin-card"}
+   [:div {:class "vd-card"}
     [:h2 "Dead"]
-    [:p {:class "admin-count"}
+    [:p {:class "vd-count"}
      (if (zero? dead)
        "0"
        (swap-link (url "" (with-params st "state" :dead "queue" nil)) (string dead)))]
-    [:p {:class "admin-note"} "out of attempts, or killed by hand"]]
-   [:div {:class "admin-card"}
+    [:p {:class "vd-note"} "out of attempts, or killed by hand"]]
+   [:div {:class "vd-card"}
     [:h2 "Enqueued"]
-    [:p {:class "admin-count"} (string (get snap :enqueued 0))]
+    [:p {:class "vd-count"} (string (get snap :enqueued 0))]
     # a counter in this process's heap, not in the backend: on a fleet
     # every replica has its own, and the card says so rather than
     # letting the number read as the queue's
-    [:p {:class "admin-note"}
+    [:p {:class "vd-note"}
      (string "by this process since it started · "
              (get snap :duplicates 0) " refused by a unique key")]]])
 
 (defn- depth-cell [st qname state n]
-  [:td {:class "admin-count"}
+  [:td {:class "vd-count"}
    (if (zero? n)
      "0"
      (swap-link (url "" (with-params st "queue" qname "state" state)) (string n)))])
@@ -139,12 +141,12 @@
 (defn- depth-table [snap st]
   (def counts (snap :counts))
   (def queues (sorted (keys counts)))
-  [:table {:class "admin-table"}
+  [:table {:class "vd-table"}
    [:thead
     [:tr [:th "queue"] ;(seq [s :in jobs/record-states] [:th (string s)])]]
    [:tbody
     (if (empty? queues)
-      [:tr [:td {:colspan (inc (length jobs/record-states)) :class "admin-empty"}
+      [:tr [:td {:colspan (inc (length jobs/record-states)) :class "vd-empty"}
             "The queue holds nothing."]]
       (seq [q :in queues]
         [:tr
@@ -155,7 +157,7 @@
      [:tfoot
       [:tr [:th "all"]
        ;(seq [s :in jobs/record-states]
-          [:td {:class "admin-count"} (string (total-of counts s))])]])])
+          [:td {:class "vd-count"} (string (total-of counts s))])]])])
 
 # -- the filter panel ----------------------------------------------------
 
@@ -173,15 +175,12 @@
     ;(seq [o :in options] (option o value (string o)))]])
 
 (defn- filter-panel [snap st]
-  [:form {:id "admin-jobs-filters"
-          :method "get"
-          :action (url)
-          :class "admin-toolbar"
-          :hx-get (url)
-          :hx-target (string "#" wrapper-id)
-          :hx-swap "outerHTML"
-          :hx-push-url "true"
-          :hx-trigger "change, submit"}
+  [:form (merge {:id "admin-jobs-filters"
+                 :method "get"
+                 :action (url)
+                 :class "vd-toolbar"}
+                (wrapper-swap (url))
+                (hx/attrs :trigger "change, submit"))
    (select-field "queue" "Queue" (snap :queues) (st :queue))
    (select-field "state" "State" jobs/record-states (st :state))
    (select-field "job" "Job" (snap :jobs) (st :job))
@@ -194,7 +193,7 @@
 # -- the listing ---------------------------------------------------------
 
 (defn- action-button [id action label danger?]
-  (view/post-form :post (url (string "/" id "/-/" action)) {:class "admin-act"}
+  (view/post-form :post (url (string "/" id "/-/" action)) {:class "vd-inline"}
     [:button {:type "submit" :class (when danger? "danger")} label]))
 
 (defn- row-actions [r]
@@ -230,20 +229,20 @@
   also offer to do something else to one of them.``
   [rows now &opt actions?]
   (default actions? true)
-  [:table {:class "admin-table"}
+  [:table {:class "vd-table"}
    [:thead
     [:tr [:th "id"] [:th "state"] [:th "queue"] [:th "job"]
      [:th "attempt"] [:th "age"] [:th "error"] (when actions? [:th ""])]]
    [:tbody
     (if (empty? rows)
-      [:tr [:td {:colspan (if actions? 8 7) :class "admin-empty"} "No record matches."]]
+      [:tr [:td {:colspan (if actions? 8 7) :class "vd-empty"} "No record matches."]]
       (seq [r :in rows]
         [:tr {:id (string "job-" (r :id))}
          [:td [:a {:href (url (string "/" (r :id)))} (string (r :id))]]
          [:td (string (get r :state))]
          [:td (string (get r :queue))]
          [:td (string (get r :job))]
-         [:td {:class "admin-count"}
+         [:td {:class "vd-count"}
           (string (get r :attempt 0) "/" (get r :max-attempts 0))]
          (age-cell r now)
          (error-cell r)
@@ -257,18 +256,18 @@
   [st shown]
   (when (and (st :state) (pos? shown))
     (def sel (with-params st "job" nil "limit" nil))
-    [:div {:class "admin-actions"}
+    [:div {:class "vd-actions"}
      [:span (string "With every " (string (st :state)) " record"
                     (if (st :queue) (string " in " (string (st :queue))) " in every queue")
                     ":")]
      (when (= :dead (st :state))
-       [:a {:class "admin-button" :href (url "/-/bulk/retry" sel)} "Retry all"])
-     [:a {:class "admin-button danger" :href (url "/-/bulk/discard" sel)} "Discard all"]]))
+       [:a {:class "vd-button" :href (url "/-/bulk/retry" sel)} "Retry all"])
+     [:a {:class "vd-button danger" :href (url "/-/bulk/discard" sel)} "Discard all"]]))
 
 (defn- dead-banner [snap st]
   (def n (total-of (snap :counts) :dead))
   (when (and (pos? n) (not= :dead (st :state)))
-    [:div {:class "admin-warn"}
+    [:div {:class "vd-warn"}
      (string n " job" (if (= 1 n) " is" "s are") " dead. ")
      (swap-link (url "" (with-params st "state" :dead "queue" nil))
                 "Open the dead letter queue")]))
@@ -280,10 +279,7 @@
   stays outside it, so a poll never takes the cursor out of a field.``
   [snap rows st now]
   (def here (url "" (params st)))
-  [:div {:id wrapper-id
-         :hx-get here
-         :hx-trigger "every 5s"
-         :hx-swap "outerHTML"}
+  [:div (merge {:id wrapper-id} (hx/get* here :trigger "every 5s" :swap :outer-html))
    (cards snap st)
    (dead-banner snap st)
    [:h2 "Queues"]
@@ -295,7 +291,7 @@
    # order, and the three backends do not agree on one — the db lists
    # newest first, the other two oldest first. Claiming an order the
    # contract does not promise is how a page starts lying
-   [:p {:class "admin-note"}
+   [:p {:class "vd-note"}
     (string (length rows) " record" (if (= 1 (length rows)) "" "s") " shown"
             (if (>= (length rows) (st :limit))
               (string " — the first " (st :limit) " the backend hands back for this "
@@ -319,7 +315,7 @@
   [message]
   [:div
    [:h1 title]
-   [:div {:class "admin-warn"} [:p message]]
+   [:div {:class "vd-warn"} [:p message]]
    [:p [:a {:href (url)} "Back to the queue"]]])
 
 # -- one record ----------------------------------------------------------
@@ -348,26 +344,26 @@
   [r now]
   [:div
    [:h1 (string "Job " (r :id))]
-   [:div {:class "admin-actions"}
+   [:div {:class "vd-actions"}
     (when (= :dead (get r :state)) (action-button (r :id) "retry" "Retry" false))
     (action-button (r :id) "discard" "Discard" true)
     # a plain link, not a swap: the element the listing's links target
     # is not on this page, and htmx with a target it cannot find does
     # nothing at all — including not following the href
     [:a {:href (url)} "Back to the queue"]]
-   [:table {:class "admin-table"}
+   [:table {:class "vd-table"}
     [:tbody
      (seq [k :in jobs/record-fields :when (not (nil? (get r k)))]
        [:tr [:th (string k)] [:td (field-value k (get r k) now)]])]]
    (unless (empty? (get r :failures []))
      [:div
       [:h2 "Failures"]
-      [:table {:class "admin-table"}
+      [:table {:class "vd-table"}
        [:thead [:tr [:th "attempt"] [:th "when"] [:th "error"]]]
        [:tbody
         (seq [f :in (get r :failures [])]
           [:tr
-           [:td {:class "admin-count"} (string (get f :attempt))]
+           [:td {:class "vd-count"} (string (get f :attempt))]
            [:td (stamp (get f :at 0) now)]
            [:td [:code (string (get f :error))]]])]]])])
 
@@ -381,7 +377,7 @@
   (def label (if (= :retry action) "Retry" "Discard"))
   [:div
    [:h1 (string label " — confirm")]
-   [:p [:span {:class "admin-count"} (string total)]
+   [:p [:span {:class "vd-count"} (string total)]
     (string " " (string (st :state)) " record" (if (= 1 total) "" "s")
             (if (st :queue) (string " in queue " (string (st :queue))) " in every queue")
             (if (= :retry action)
@@ -390,11 +386,11 @@
    (when (not (empty? sample))
      (rows-table sample now false))
    (if (zero? total)
-     [:p {:class "admin-empty"} "Nothing matches, so there is nothing to do."]
-     (view/post-form :post (url (string "/-/bulk/" action)) {:class "admin-form"}
+     [:p {:class "vd-empty"} "Nothing matches, so there is nothing to do."]
+     (view/post-form :post (url (string "/-/bulk/" action)) {:class "vd-form"}
        ;(seq [[k v] :pairs (params st) :when (not (nil? v))]
           [:input {:type "hidden" :name k :value (string v)}])
-       [:div {:class "admin-actions"}
+       [:div {:class "vd-actions"}
         [:button {:type "submit"
                   :class (if (= :retry action) "primary" "danger")}
          (string "Yes, " (string/ascii-lower label) " " total

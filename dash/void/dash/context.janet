@@ -9,9 +9,11 @@
 ### boot and of the process, and the three ring buffers it does keep
 ### are bounded caches of things the process would otherwise forget.
 
+(import void/html/chrome :as chrome)
+
 (var current
   ``The running dash context, set by ./init's :before-start hook:
-  :boot :config :prefix :title :open? :access :allow-actions?
+  :boot :config :prefix :title :open? :gate :allow-actions?
   :started-at :datastar? :tiles :route-meta :htmx-src :htmx-integrity
   :assets.``
   nil)
@@ -39,15 +41,6 @@
 
 (defn at
   ``A URL under the dash prefix: (at "/routes"), (at "/why" {"key"
-  "http/server"}). Query is a table of already-stringable values; nil
-  and empty values drop out — "the same URL without the filter" is one
-  expression rather than a branch.``
+  "http/server"}) — chrome/url-under over [:dash :prefix].``
   [path &opt query]
-  (def full (string (prefix) path))
-  (def pairs*
-    (sorted (seq [[k v] :pairs (or query {})
-                  :when (and (not (nil? v)) (not (empty? (string v))))]
-              (string k "=" v))))
-  (if (empty? pairs*)
-    full
-    (string full "?" (string/join pairs* "&"))))
+  (chrome/url-under (prefix) path query))

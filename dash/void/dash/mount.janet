@@ -11,12 +11,15 @@
 ### the :dev profile the dashboard is open — the netrepl logic: this
 ### process already answers an unauthenticated REPL to whoever can reach
 ### it, and a read-only page of the same values adds nothing. In every
-### other profile every route refuses until `[:dash :access]` names a
-### predicate, and the refusal says which key opens it — the same
-### construction as `[:admin :access]`, without the void/authz edge this
-### package does not have. Pages are read-only; the one action (log
+### other profile every route refuses until a `:void.dash/gate` contribution names a
+### predicate — a `:void.dash/gate` contribution, since a function is
+### not a config value (`config explain` cannot print one) — and the
+### refusal says which contribution opens it: the same construction as
+### `[:admin :access]`, without the void/authz edge this package does
+### not have. Pages are read-only; the one action (log
 ### levels) is separately behind `[:dash :allow-actions]`.
 
+(import void/html/chrome :as chrome)
 (import void/http/router :as router)
 (import ./context :as ctx)
 (import ./live :as live)
@@ -27,9 +30,9 @@
 
 (def shut-message
   "What a closed dashboard answers with — the phrase names the key."
-  (string "the dashboard is shut: [:dash :access] has not named a predicate. "
-          "Set it to the function that decides who is an operator — "
-          "{:dash {:access (fn [req] ...)}} — or run the :dev profile, "
+  (string "the dashboard is shut: nothing contributed :void.dash/gate. "
+          "Contribute the predicate that decides who is an operator — "
+          "{:name :app/operators :fn (fn [req] ...)} — or run the :dev profile, "
           "where the dashboard is open on the developer's own machine."))
 
 (defn- refuse
@@ -40,15 +43,15 @@
               :body shut-message})
   (cond
     (ctx/setting :open?) nil
-    (nil? (ctx/setting :access)) deny
-    (let [[ok verdict] (protect ((ctx/setting :access) req))]
+    (nil? (ctx/setting :gate)) deny
+    (let [[ok verdict] (protect ((get (ctx/setting :gate) :fn) req))]
       (if (and ok verdict)
         nil
         @{:status 403
           :headers @{"content-type" "text/plain; charset=utf-8"}
           :body (if (and ok (string? verdict))
                   verdict
-                  "the [:dash :access] predicate refused this request.")}))))
+                  "the :void.dash/gate predicate refused this request.")}))))
 
 (defn- guarded [handler]
   (fn dash-gate [req]
@@ -69,27 +72,12 @@
 
 # -- the served sheet ----------------------------------------------------
 
-(defn- asset-route [half type]
-  (when-let [b (get (ctx/setting :assets {}) half)]
-    (router/GET (string view/asset-prefix (b :file))
-                (guarded (fn dash-asset [_req]
-                           # a fresh mutable table per request, never a shared
-                           # struct: the edge middlewares (CSRF's cookie, the
-                           # security headers) *add* headers to whatever a
-                           # handler returns, and a struct here answered every
-                           # composition with void/security a 500 — which is
-                           # an unstyled dashboard, because this route is the
-                           # stylesheet
-                           @{:status 200
-                             :headers @{"content-type" type
-                                        "cache-control" "private, max-age=31536000, immutable"}
-                             :body (b :body)}))
-                {:name (keyword "dash/asset-" (string half))})))
-
 (defn- asset-routes []
   (filter truthy?
-          [(asset-route :style "text/css; charset=utf-8")
-           (asset-route :script "text/javascript; charset=utf-8")]))
+          (seq [half :in [:style :script]]
+            (chrome/asset-route half (get (ctx/setting :assets {}) half)
+                                {:name (keyword "dash/asset-" (string half))
+                                 :wrap guarded}))))
 
 # -- the whole thing -----------------------------------------------------
 

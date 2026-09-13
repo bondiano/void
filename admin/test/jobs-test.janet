@@ -98,7 +98,7 @@
   (seed!)
   (def c (test/client boot))
   (defn csrf [resp]
-    (first (peg/match ~(* (thru `name="_csrf" value="`) (<- (to `"`)))
+    (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`)))
                       (test/text resp))))
 
   # no void/security here, so the slot renders nothing and no token is
