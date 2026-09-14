@@ -235,6 +235,11 @@
     (def updated (post article-url {:form {:title "Fibers, revisited"
                                            :body (article :body)}}))
     (assert (= 302 (updated :status)) "a form post redirects to the article")
+    (def landed (test/inject c {:uri article-url}))
+    (assert (string/find `class="vd-flash is-ok"` (text landed))
+            "and the page it lands on says what the write did — html/flash!")
+    (assert (nil? (string/find "vd-flash" (text (test/inject c {:uri article-url}))))
+            "once: the page that showed it took it out of the session")
     (def again (db/find e/Article (article :id)))
     (assert (= "Fibers, revisited" (again :title)))
 
@@ -253,6 +258,13 @@
 
     (jobs/clear!)
     (cache/clear!)
+    (def refused
+      (post (string article-url "/comments")
+            {:headers {"hx-request" "true" "hx-request-type" "partial" "x-csrf-token" token}
+             :form {:author-name "" :body ""}}))
+    (assert (= 422 (refused :status))
+            (string "an invalid comment re-renders the article as a refusal: " (refused :status)))
+    (assert (string/find "field-errors" (text refused)))
     (def commented
       (post (string article-url "/comments")
             {:headers {"hx-request" "true" "hx-request-type" "partial" "x-csrf-token" token}
@@ -285,7 +297,10 @@
     # -- delete: the comments go with it ---------------------------------
 
     (def gone (post article-url {:method :delete}))
-    (assert (or (= 204 (gone :status)) (= 302 (gone :status))))
+    (assert (= 303 (gone :status))
+            "a browser delete is See Other — htmx/redirect-back")
+    (assert (string/find "Deleted" (text (test/inject c {:uri "/"})))
+            "and the index it lands on says which article went")
     (assert (nil? (db/find e/Article (article :id))) "the article is gone")
     (assert (= 0 (db/count e/Comment {:where [:= :article-id (article :id)]}))
             "and its comments went with it (ON DELETE CASCADE)")

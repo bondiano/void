@@ -2,6 +2,8 @@
 (import void/core/schema :as schema)
 (import void/html/form :as form)
 (import void/html/hiccup :as hiccup)
+(import void/html :as html)
+(import void/http/ring :as ring)
 (import void/test :as test)
 
 (schema/defschema SignUp
@@ -135,6 +137,102 @@
 
 (assert (nil? (string/find "enctype" (render (form/form SignUp {:action "/signup"}))))
         "a form with no file control is left alone")
+
+# -- password, hidden, help: what the schema annotates ------------------
+#
+# Three annotations validation never reads and the form does: the
+# :password format (the control is masked), :html/hidden (a value the
+# page carries and the visitor does not see), and :label / :doc (the
+# words, and the help text under the control).
+
+(def Secret {:token [:string {:format :password}]})
+(def token-spec (first (form/field-specs Secret)))
+(assert (= "password" (token-spec :type))
+        "format :password -> input type password")
+(assert (string/find `type="password"` (render (form/input token-spec "hunter2")))
+        "the control is masked — the page cannot read the value back")
+
+(def Annotated
+  {:csrf [:string {:html/hidden true}]
+   :name [:string {:label "Your name" :doc "As you want to be addressed"}]})
+(def aspecs (form/field-specs Annotated))
+
+(def csrf (find |(= :csrf ($ :name)) aspecs))
+(assert (= :hidden (csrf :control)) ":html/hidden projects to a hidden control")
+(def hidden-html (render (form/field csrf "tok")))
+(each part [`type="hidden"` `name="csrf"` `value="tok"`]
+  (assert (string/find part hidden-html) part))
+(assert (nil? (string/find "<label" hidden-html))
+        "a hidden field is the input alone — a label for what nobody sees is an empty label")
+(assert (nil? (string/find `class="field` hidden-html))
+        "and no field wrapper either")
+
+(def name-spec (find |(= :name ($ :name)) aspecs))
+(assert (= "Your name" (name-spec :label)) ":label overrides the humanized key")
+(assert (= "As you want to be addressed" (name-spec :help)) "and :doc becomes :help")
+(def labeled (render (form/field name-spec "ada")))
+(each part [`<label for="field-name">Your name</label>`
+            `<p class="field-help">As you want to be addressed</p>`]
+  (assert (string/find part labeled) part))
+(assert (nil? (string/find "field-help" (render (form/field (by-name :email) "a@b.co"))))
+        "a field without :doc has no help paragraph")
+
+# :render — the seam a widget goes through, so a widget field and a
+# plain field are one block with one class vocabulary
+(def wspecs
+  (form/field-specs SignUp
+    {:fields {:email {:render (fn [spec value]
+                                [:div {:class "vd-widget"}
+                                 [:input {:name (spec :name) :value value}]])}}}))
+(def emailed (render (form/field (find |(= :email ($ :name)) wspecs) "a@b.co")))
+(assert (string/find `class="vd-widget"` emailed)
+        "the spec's :render draws the control instead of input")
+(assert (string/find `value="a@b.co"` emailed) "with the value it was given")
+(assert (string/find `<label for="field-email">` emailed)
+        "inside the same labeled block a plain field gets")
+
+# -- submit: check, then one of two continuations ------------------------
+
+(var saved nil)
+(def ok-resp
+  (form/submit SignUp @{"email" "a@b.co" "age" "30" "role" "user"}
+    {:ok (fn [v] (set saved v) (ring/redirect "/"))
+     :invalid (fn [_ _] (error "must not run"))}))
+(assert (= 302 (ok-resp :status)) "the ok branch's response passes through untouched")
+(assert (= 30 (saved :age)) "and its continuation got the coerced value")
+
+(def bad @{"email" "nope" "age" "12" "role" "user"})
+(var got-values nil)
+(var got-errors nil)
+(def invalid-resp
+  (form/submit SignUp bad
+    {:ok (fn [v] (error "must not run"))
+     :invalid (fn [values errors]
+                (set got-values values)
+                (set got-errors errors)
+                (html/page [:h1 "again"] {}))}))
+(assert (deep= (freeze bad) (freeze got-values))
+        "the invalid continuation gets the submitted form, to refill the controls")
+(assert (= 2 (length got-errors)) "and the errors, to annotate them")
+(assert (= 422 (invalid-resp :status))
+        "a re-rendered form is a refusal: a page response becomes 422")
+
+(def with-status (form/submit SignUp bad
+                   {:ok (fn [v] (error "must not run"))
+                    :invalid (fn [_ _] (ring/redirect "/login"))}))
+(assert (= 302 (with-status :status))
+        "a response that already has a status keeps it")
+(def plain-200 (form/submit SignUp bad
+                 {:ok (fn [v] (error "must not run"))
+                  :invalid (fn [_ _] (ring/response 200 "raw body"))}))
+(assert (= 200 (plain-200 :status))
+        "a non-view 200 keeps its status — 422 is for re-rendered forms")
+
+(assert (not (first (protect (form/submit SignUp bad {}))))
+        "submit without :ok refuses to guess")
+(assert (not (first (protect
+                      (form/submit SignUp @{"email" "a@b.co" "age" "30" "role" "user"} {}))))
+        "and so does submit without :invalid")
 
 # -- snapshot ------------------------------------------------------------
 

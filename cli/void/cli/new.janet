@@ -105,7 +105,7 @@
 # -- schema: one source of truth for validation and form markup ----------
 
 (def Entry
-  "A guestbook entry — drives both form/check and form/form."
+  "A guestbook entry — drives both form/submit and form/form."
   {:name [:string {:min 1 :max 40}]
    :message [:string {:min 1 :max 400}]})
 
@@ -151,16 +151,17 @@
   (html/page (guestbook-view) {:layout layout}))
 
 (defn create-entry
-  "POST /entries — form/check validates and coerces against Entry;
-  invalid input re-renders the fragment with per-field errors."
+  ``POST /entries — form/submit checks Entry and picks one of two
+  continuations: a valid one appends and re-renders the fragment, an
+  invalid one re-renders it with the raw values and the per-field
+  errors — as a 422, which htmx swaps like any other status.``
   [req]
-  (def result (form/check Entry (req :form)))
-  (if (empty? (result :errors))
-    (do
-      (array/push entries (result :value))
-      (html/page (guestbook-view) {:layout layout}))
-    (html/page (guestbook-view (req :form) (result :errors))
-               {:layout layout})))
+  (form/submit Entry (req :form)
+    {:ok (fn [v]
+           (array/push entries v)
+           (html/page (guestbook-view) {:layout layout}))
+     :invalid (fn [values errors]
+                (html/page (guestbook-view values errors) {:layout layout}))}))
 
 # -- routes --------------------------------------------------------------
 

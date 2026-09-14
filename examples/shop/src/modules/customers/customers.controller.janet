@@ -32,20 +32,17 @@
 (defn register
   "POST /register — an account, and the cart that was already in hand."
   [req]
-  (def result (form/check dto/Registration (req :form)))
-  (def v (result :value))
-  (cond
-    (not (empty? (result :errors)))
-    (layout/page (view/sign-in-view {:register (req :form)
-                                     :register-errors (result :errors)}))
-
-    (service/taken? (v :email))
-    (layout/page (view/sign-in-view
-                   {:register (req :form)
-                    :tone "bad"
-                    :message "That email already has an account — sign in instead."}))
-
-    (start-session! req ((service/register! v) :identity))))
+  (form/submit dto/Registration (req :form)
+    {:ok (fn [v]
+           (if (service/taken? (v :email))
+             (layout/page (view/sign-in-view
+                            {:register (req :form)
+                             :tone "bad"
+                             :message "That email already has an account — sign in instead."}))
+             (start-session! req ((service/register! v) :identity))))
+     :invalid (fn [values errors]
+                (layout/page (view/sign-in-view {:register values
+                                                 :register-errors errors})))}))
 
 (defn sign-in
   ``POST /sign-in — the password path, and nothing else.
@@ -53,15 +50,17 @@
   Whatever went wrong, the page says the same thing (see
   ./customers.service).``
   [req]
-  (def result (form/check dto/Credentials (req :form)))
-  (def who (when (empty? (result :errors))
-              (service/authenticate (result :value))))
-  (if who
-    (start-session! req who)
+  (defn refused [values]
     (layout/page (view/sign-in-view
-                   {:sign-in (req :form)
+                   {:sign-in values
                     :tone "bad"
-                    :message "Those credentials do not match an account."}))))
+                    :message "Those credentials do not match an account."})))
+  (form/submit dto/Credentials (req :form)
+    {:ok (fn [v]
+           (if-let [who (service/authenticate v)]
+             (start-session! req who)
+             (refused (req :form))))
+     :invalid (fn [values _] (refused values))}))
 
 (defn request-link
   ``POST /sign-in/magic — mail a one-time sign-in link.
@@ -69,15 +68,16 @@
   The application issues the challenge and says nothing else about it,
   and the answer is the same whether or not the address has an account.``
   [req]
-  (def result (form/check dto/MagicLink (req :form)))
-  (when (empty? (result :errors))
-    (service/request-link! (get-in result [:value :email])))
-  (layout/page (view/sign-in-view
-                 (if (empty? (result :errors))
-                   {:message "If that address has an account, a sign-in link is on its way."}
-                   {:magic-link (req :form)
-                    :tone "bad"
-                    :message "That does not look like an email address."}))))
+  (form/submit dto/MagicLink (req :form)
+    {:ok (fn [v]
+           (service/request-link! (v :email))
+           (layout/page (view/sign-in-view
+                          {:message "If that address has an account, a sign-in link is on its way."})))
+     :invalid (fn [values _]
+                (layout/page (view/sign-in-view
+                               {:magic-link values
+                                :tone "bad"
+                                :message "That does not look like an email address."})))}))
 
 (defn magic-link
   "GET /auth/magic?h=&c= — the link from the letter."

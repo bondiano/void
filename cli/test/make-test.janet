@@ -8,6 +8,7 @@
 (import void/html)
 (import void/htmx)
 (import void/db)
+(import void/db/http)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 
@@ -222,7 +223,8 @@
 
   (cli/add-project-paths! (os/cwd))
   (def boot (cli/bootstrap-app {:plugins [:void/http :void/html :void/htmx
-                                          :void/db fake-driver :demo/articles]}
+                                          :void/db :void/db-http fake-driver
+                                          :demo/articles]}
                                :test))
   (def table ((get-in (require "void/http") ['routes-table :value])))
   (each name [:articles/index :articles/new :articles/create :articles/show

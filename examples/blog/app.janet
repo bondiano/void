@@ -34,13 +34,20 @@
 ### goes or knows that ./audit exists — that file subscribes to the bus
 ### and is deletable.
 ###
+### The page-wave took the three shapes every handler here was written
+### in and moved them into the framework: `:void.db/load` on the route
+### is the whole of read-the-row-or-404 (and `:void.authz/resource`
+### reads `(req :void.db/row)` instead of querying again), `form/submit`
+### is the whole of check-then-either, `htmx/redirect-back` is the
+### whole of after-a-write-which-client, and `html/flash!` is the
+### sentence the next page says about it.
+###
 ### Handlers are registered as symbols, so a redefinition in the repl — or
 ### a save with `void dev` running — is live.
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/http/router :as router)
 (import void/http/ring :as ring)
-(import void/http/errors :as errors)
 (import void/html :as html)
 (import void/html/form :as form)
 (import void/htmx :as htmx)
@@ -75,10 +82,12 @@
   ``What the policy on the edit routes decides about: the row itself.
   Route metadata carries a function rather than a symbol, because a
   route entry does not keep the environment of the module that
-  declared it.``
+  declared it — and the row is already on the request, because
+  `:void.db/load` on the route put it there before authz runs; the
+  second query this used to make is the load the route had already
+  done.``
   [req]
-  (when-let [id (scan-number (get-in req [:params :id] ""))]
-    (db/find e/Article id)))
+  (req :void.db/row))
 
 (authz/defpolicy :articles/own
   ``An author edits and deletes their own articles, and nobody else's.
@@ -111,14 +120,6 @@
                            :limit 50
                            :preload [:author]}))))
 
-(defn- load-article
-  "One article with its author and comments, or a 404."
-  [req]
-  (def id (scan-number (get-in req [:params :id] "")))
-  (unless id (errors/abort 404))
-  (or (db/find e/Article id {:preload [:author :comments]})
-      (errors/abort 404)))
-
 (defn- invalidate-index! []
   (cache/forget blog-jobs/index-cache-key))
 
@@ -140,22 +141,21 @@
   not something a form can claim to be. The transaction stays, because
   the article and the cache invalidation still belong together.``
   [req]
-  (def result (form/check e/NewArticle (req :form)))
-  (if (empty? (result :errors))
-    (do
-      (def v (result :value))
-      (def created
-        (db/insert! e/Article {:author-id (current-author-id)
-                               :title (v :title)
-                               :body (v :body)
-                               :comment-count 0
-                               :created-at (e/now)}))
-      (audit/record-tx! :article/published (subject-string)
-                        {:article (created :id) :title (v :title)})
-      (invalidate-index!)
-      (views/render-index (recent-articles) {}))
-    (views/render-index (recent-articles) {:values (req :form)
-                                           :errors (result :errors)})))
+  (form/submit e/NewArticle (req :form)
+    {:ok (fn [v]
+           (def created
+             (db/insert! e/Article {:author-id (current-author-id)
+                                    :title (v :title)
+                                    :body (v :body)
+                                    :comment-count 0
+                                    :created-at (e/now)}))
+           (audit/record-tx! :article/published (subject-string)
+                             {:article (created :id) :title (v :title)})
+           (invalidate-index!)
+           (views/render-index (recent-articles) {}))
+     :invalid (fn [values errors]
+                (views/render-index (recent-articles) {:values values
+                                                       :errors errors}))}))
 
 # -- signing in ----------------------------------------------------------
 
@@ -168,28 +168,23 @@
   follows goes through the ordinary password path rather than trusting
   what was just inserted.``
   [req]
-  (def result (form/check e/Registration (req :form)))
-  (def v (result :value))
-  (def taken (and (empty? (result :errors))
-                  (db/one e/Author {:where [:= :email (v :email)]})))
-  (cond
-    (not (empty? (result :errors)))
-    (views/render-index (recent-articles) {:register (req :form)
-                                           :register-errors (result :errors)})
-
-    taken
-    (views/render-index (recent-articles)
-                        {:register (req :form)
-                         :message "That email already has an account — sign in instead."})
-
-    (do
-      (db/insert! e/Author {:name (v :name)
-                            :email (v :email)
-                            :password-hash (auth/hash-password (v :password))})
-      (def check (auth/check-password (auth/user-store)
-                                      {:email (v :email) :password (v :password)}))
-      (auth-http/login! req (check :identity))
-      (ring/redirect "/"))))
+  (form/submit e/Registration (req :form)
+    {:ok (fn [v]
+           (if (db/one e/Author {:where [:= :email (v :email)]})
+             (views/render-index (recent-articles)
+                                 {:register (req :form)
+                                  :message "That email already has an account — sign in instead."})
+             (do
+               (db/insert! e/Author {:name (v :name)
+                                     :email (v :email)
+                                     :password-hash (auth/hash-password (v :password))})
+               (def check (auth/check-password (auth/user-store)
+                                               {:email (v :email) :password (v :password)}))
+               (auth-http/login! req (check :identity))
+               (ring/redirect "/"))))
+     :invalid (fn [values errors]
+                (views/render-index (recent-articles) {:register values
+                                                       :register-errors errors}))}))
 
 (defn sign-in
   ``POST /sign-in — the password path, and nothing else.
@@ -199,16 +194,18 @@
   the same time on both (it hashes even when there is no user), and
   telling the visitor which it was would hand that distinction back.``
   [req]
-  (def result (form/check e/Credentials (req :form)))
-  (def check (when (empty? (result :errors))
-               (auth/check-password (auth/user-store) (result :value))))
-  (if-let [id (get check :identity)]
-    (do
-      (auth-http/login! req id)
-      (ring/redirect "/"))
+  (defn refused [values]
     (views/render-index (recent-articles)
-                        {:sign-in (req :form)
-                         :message "Those credentials do not match an account."})))
+                        {:sign-in values
+                         :message "Those credentials do not match an account."}))
+  (form/submit e/Credentials (req :form)
+    {:ok (fn [v]
+           (if-let [id (get (auth/check-password (auth/user-store) v) :identity)]
+             (do
+               (auth-http/login! req id)
+               (ring/redirect "/"))
+             (refused (req :form))))
+     :invalid (fn [values _] (refused values))}))
 
 (defn request-link
   ``POST /sign-in/magic — mail a one-time sign-in link.
@@ -225,20 +222,20 @@
   reasoning that makes `check-password` spend its 25 ms on an unknown
   login.``
   [req]
-  (def result (form/check e/MagicLink (req :form)))
-  (def author (when (empty? (result :errors))
-                (db/one e/Author {:where [:= :email (get-in result [:value :email])]})))
-  (when author
-    (auth/challenge! (string "author:" (author :id))
-                     {:to (author :email)
-                      # the claim the page greets them with, so redeeming
-                      # the link needs no second query
-                      :claims {:name (author :name)}}))
-  (views/render-index (recent-articles)
-                      (if (empty? (result :errors))
-                        {:message "If that address has an account, a sign-in link is on its way."}
-                        {:magic-link (req :form)
-                         :message "That does not look like an email address."})))
+  (form/submit e/MagicLink (req :form)
+    {:ok (fn [v]
+           (when-let [author (db/one e/Author {:where [:= :email (v :email)]})]
+             (auth/challenge! (string "author:" (author :id))
+                              {:to (author :email)
+                               # the claim the page greets them with, so
+                               # redeeming the link needs no second query
+                               :claims {:name (author :name)}}))
+           (views/render-index (recent-articles)
+                               {:message "If that address has an account, a sign-in link is on its way."}))
+     :invalid (fn [values _]
+                (views/render-index (recent-articles)
+                                    {:magic-link values
+                                     :message "That does not look like an email address."}))}))
 
 (defn magic-link
   ``GET /auth/magic?h=&c= — the link from the letter.
@@ -263,85 +260,98 @@
   (ring/redirect "/"))
 
 (defn show-article
-  "GET /articles/:id — the article, its author and its comments."
+  ``GET /articles/:id — the article, its author and its comments. The
+  route's `:void.db/load` is the whole of read-the-row-or-404: the id
+  is coerced through the entity's key schema, a malformed one never
+  reaches the database, and the row arrives preloaded and before the
+  handler runs.``
   [req]
-  (html/page (views/article-view (load-article req)) {:layout views/layout}))
+  (html/page (views/article-view (req :void.db/row)) {:layout views/layout}))
 
 (defn edit-article
   "GET /articles/:id/edit — the form over the columns save! may touch."
   [req]
-  (html/page (views/edit-view (load-article req)) {:layout views/layout}))
+  (html/page (views/edit-view (req :void.db/row)) {:layout views/layout}))
 
 (defn update-article
   ``POST /articles/:id — dirty tracking: the instance is changed in
   place and `save!` writes a partial UPDATE of exactly the columns
   that differ from the snapshot it was loaded with, or no statement at
-  all when nothing did.``
+  all when nothing did. The article is the row `:void.db/load` put on
+  the request — the same row the policy decided about.``
   [req]
-  (def article (load-article req))
-  (def result (form/check e/EditArticle (req :form)))
-  (if (empty? (result :errors))
-    (do
-      (merge-into article (result :value))
-      (def changed (db/changes article))
-      (db/save! article)
-      (unless (empty? changed)
-        (log/info "article updated" :ns "blog.app"
-                  :article (article :id) :columns (sorted (keys changed)))
-        (audit/record-tx! :article/updated (subject-string)
-                          {:article (article :id)
-                           :columns (map string (sorted (keys changed)))})
-        (invalidate-index!))
-      (ring/redirect (string "/articles/" (article :id))))
-    (html/page (views/edit-view article (req :form) (result :errors))
-               {:layout views/layout})))
+  (def article (req :void.db/row))
+  (form/submit e/EditArticle (req :form)
+    {:ok (fn [v]
+           (merge-into article v)
+           (def changed (db/changes article))
+           (db/save! article)
+           (unless (empty? changed)
+             (log/info "article updated" :ns "blog.app"
+                       :article (article :id) :columns (sorted (keys changed)))
+             (audit/record-tx! :article/updated (subject-string)
+                               {:article (article :id)
+                                :columns (map string (sorted (keys changed)))})
+             (invalidate-index!))
+           (html/flash! req :ok "Saved.")
+           (ring/redirect (string "/articles/" (article :id))))
+     :invalid (fn [values errors]
+                (html/page (views/edit-view article values errors)
+                           {:layout views/layout}))}))
 
 (defn delete-article
   "DELETE /articles/:id — the comments go with it (ON DELETE CASCADE)."
   [req]
-  (def article (load-article req))
+  (def article (req :void.db/row))
   (db/delete! e/Article (article :id))
   (audit/record-tx! :article/deleted (subject-string)
                     {:article (article :id) :title (article :title)})
   (invalidate-index!)
-  (if (htmx/request? req)
-    (htmx/redirect (ring/response 204) "/")
-    (ring/redirect "/")))
+  (html/flash! req :ok (string "Deleted “" (article :title) "”."))
+  (htmx/redirect-back req "/"))
 
 (defn create-comment
   ``POST /articles/:id/comments — the write is synchronous, the
   bookkeeping is not: the counter on `articles` is recomputed by
   :recount-comments on the maintenance queue, which also drops the
   cached index. :unique :args means a burst of comments on one article
-  is one recount.``
+  is one recount. The page answers with the article re-read after the
+  insert — the row `:void.db/load` brought in was current before the
+  comment, and the page has to show it after.``
   [req]
-  (def article (load-article req))
-  (def result (form/check e/NewComment (req :form)))
-  (if (empty? (result :errors))
-    (do
-      (db/insert! e/Comment (merge (result :value)
-                                   {:article-id (article :id)
-                                    :created-at (e/now)}))
-      (jobs/enqueue :recount-comments (article :id))
-      # the fact, into the transaction that made it (:void.db/txn true
-      # on the route): the trail cannot say a comment was posted that
-      # was not, and cannot miss one that was
-      (audit/record-tx! :comment/posted nil
-                        {:article (article :id)
-                         :author (get-in result [:value :author-name])})
-      (html/page (views/article-view (load-article req)) {:layout views/layout}))
-    (html/page (views/article-view article (req :form) (result :errors))
-               {:layout views/layout})))
+  (def article (req :void.db/row))
+  (form/submit e/NewComment (req :form)
+    {:ok (fn [v]
+           (db/insert! e/Comment (merge v
+                                        {:article-id (article :id)
+                                         :created-at (e/now)}))
+           (jobs/enqueue :recount-comments (article :id))
+           # the fact, into the transaction that made it (:void.db/txn true
+           # on the route): the trail cannot say a comment was posted that
+           # was not, and cannot miss one that was
+           (audit/record-tx! :comment/posted nil
+                             {:article (article :id)
+                              :author (v :author-name)})
+           (html/page
+             (views/article-view
+               (db/find e/Article (article :id) {:preload [:author :comments]}))
+             {:layout views/layout}))
+     :invalid (fn [values errors]
+                (html/page (views/article-view article values errors)
+                           {:layout views/layout}))}))
 
 # -- routes --------------------------------------------------------------
 
 (def own-article
-  ``The three keys an owned route carries: somebody must be signed in,
-  the policy must allow, and this is the row it decides about. Written
-  once because it is one rule, not three.``
+  ``The keys an owned route carries: somebody must be signed in, the
+  policy must allow, this is the row it decides about, and — because
+  the loader runs before authz — the row is the one the middleware
+  loaded rather than a second query. Written once because it is one
+  rule, not four.``
   {:void.auth/access :required
    :void.authz/policy :articles/own
-   :void.authz/resource article-resource})
+   :void.authz/resource article-resource
+   :void.db/load {:entity e/Article}})
 
 (router/defroutes :blog/routes
   (GET "/" home {:void.authz/policy :public})
@@ -369,7 +379,11 @@
          # own name, and there is no row to decide about yet
          :void.auth/access :required
          :void.authz/policy :authenticated})
-  (GET "/articles/:id" show-article {:name :articles/show :void.authz/policy :public})
+  (GET "/articles/:id" show-article
+       {:name :articles/show :void.authz/policy :public
+        # the row, its author and its comments, before the handler —
+        # read-the-row-or-404 is the route's to say
+        :void.db/load {:entity e/Article :preload [:author :comments]}})
   (GET "/articles/:id/edit" edit-article (merge own-article {:name :articles/edit}))
   (POST "/articles/:id" update-article
         (merge own-article {:name :articles/update :void.db/txn true}))
@@ -380,7 +394,10 @@
   # :default :deny saying nothing is a boot error — which is the point
   (POST "/articles/:id/comments" create-comment
         {:name :comments/create :void.db/txn true :void.htmx/partial true
-         :void.authz/policy :public}))
+         :void.authz/policy :public
+         # preloaded because the invalid branch re-renders the article
+         # from this row, author and comments and all
+         :void.db/load {:entity e/Article :preload [:author :comments]}}))
 
 # -- manifest ------------------------------------------------------------
 

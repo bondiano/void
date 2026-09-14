@@ -13,6 +13,7 @@
 ### CSRF, caching and rate limiting is *there*, as metadata:
 ###
 ###   :void.db/txn true            the whole of transaction management
+###   :void.db/load {:entity …}    the whole of "that row, or a 404"
 ###   :void.auth/access :required  the whole of "you must be signed in"
 ###   :void.authz/policy …         the whole of "and it must be yours"
 ###   :void.security/rate …        the whole of "and not fifty times a minute"
@@ -20,15 +21,10 @@
 ### Handlers are registered as symbols, so a redefinition in the repl — or
 ### a save with `void dev` running — is live.
 (import void/http/router :as router)
-(import void/http/errors :as errors)
 (import ../../web/layout :as layout)
+(import ./catalog.model :as model)
 (import ./catalog.service :as service)
 (import ./catalog.view :as view)
-
-(defn- product-or-404 [req]
-  (def id (scan-number (get-in req [:params :id] "")))
-  (unless id (errors/abort 404))
-  (or (service/by-id id) (errors/abort 404)))
 
 (defn storefront
   "GET / — the catalog, out of the cache."
@@ -36,11 +32,14 @@
   (layout/page (view/catalog-view (service/listing))))
 
 (defn show-product
-  "GET /products/:id"
+  ``GET /products/:id — the product the route's `:void.db/load` put on
+  the request, whatever its status (an archived product still has a
+  page; it just cannot be bought).``
   [req]
-  (layout/page (view/product-view (product-or-404 req))))
+  (layout/page (view/product-view (req :void.db/row))))
 
 (router/defroutes :shop.catalog/routes
   (GET "/" storefront {:name :catalog/index :void.authz/policy :public})
   (GET "/products/:id" show-product
-       {:name :catalog/show :void.authz/policy :public}))
+       {:name :catalog/show :void.authz/policy :public
+        :void.db/load {:entity model/Product}}))

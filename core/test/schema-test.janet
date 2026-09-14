@@ -94,6 +94,14 @@
 (expect-error "unknown format" "unknown string format"
               |(schema/normalize [:string {:format :emial}]))
 
+# :password — the format that says nothing about the value and
+# everything about the control: html/form draws it masked. The only
+# thing validation asks is that it is not empty.
+(assert (schema/valid? [:string {:format :password}] "hunter2")
+        "built-in :password format takes any non-empty string")
+(assert (= :format (get (first (errors-of [:string {:format :password}] "")) :code))
+        "an empty password fails it — a control nobody typed in is not a password")
+
 # -- coercion ------------------------------------------------------------
 
 (def coerced

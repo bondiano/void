@@ -36,6 +36,32 @@
   [sch form &opt opts]
   (schema/check sch (params form) (merge {:coerce true} (or opts {}))))
 
+(defn submit
+  ``check, then one of two continuations — the shape of every handler
+  that takes a form:
+
+      (form/submit SignUp (req :form)
+        {:ok (fn [v] (create-user! v) (ring/redirect "/"))
+         :invalid (fn [values errors]
+                    (html/page (signup-view values errors) {:layout layout}))})
+
+  :ok gets the coerced value; :invalid gets the submitted form (to
+  refill the controls) and the errors (to annotate them). A response
+  :invalid returns is given status 422 unless it already has one —
+  a re-rendered form is a refusal, and htmx 4 swaps a 422 like any
+  other status.``
+  [sch form opts]
+  (def result (check sch form (get opts :check)))
+  (if (empty? (result :errors))
+    ((or (opts :ok) (error "form/submit needs :ok")) (result :value))
+    (let [resp ((or (opts :invalid) (error "form/submit needs :invalid"))
+                 (or form {}) (result :errors))]
+      (when (and (table? resp) (nil? (resp :status)))
+        (put resp :status 422))
+      (when (and (table? resp) (= 200 (resp :status)) (get resp :void.html/content))
+        (put resp :status 422))
+      resp)))
+
 (defn humanize
   "A field key as a label: :first-name -> \"First name\". The one
   reading of a key as words the framework has; void/admin uses it for
@@ -47,7 +73,7 @@
     (string (string/ascii-upper (string/slice s 0 1)) (string/slice s 1))))
 
 (def- format-input-types
-  {:email "email" :uri "url" :date "date"})
+  {:email "email" :uri "url" :date "date" :password "password"})
 
 (defn- control-spec
   "Control kind and html attributes for one unwrapped schema node."
@@ -92,10 +118,16 @@
   (def overrides (get opts :fields {}))
   (seq [[k child] :in (n :children)]
     (def [inner required?] (schema/unwrap child))
-    (def base (control-spec inner))
+    (def props (inner :props))
+    (def base (if (get props :html/hidden) {:control :hidden} (control-spec inner)))
     (def over (get overrides k {}))
+    # three annotations the schema may carry for the form and
+    # validation never reads: :label (the words), :doc (the help text
+    # under the control), :html/hidden (a value the page carries and
+    # the visitor does not see)
     (merge {:name k
-            :label (humanize k)
+            :label (get props :label (humanize k))
+            :help (get props :doc)
             :required required?}
            base
            over
@@ -138,6 +170,10 @@
                     :value (when (not (nil? value)) (string value))}
                    (get spec :attrs {}))]
 
+    :hidden
+    [:input {:type "hidden" :name name :id id
+             :value (when (not (nil? value)) (string value))}]
+
     # no :value on purpose: a file input's value is not scriptable, and
     # re-rendering an invalid submission cannot restore the choice —
     # the browser owns it
@@ -158,15 +194,25 @@
   out)
 
 (defn field
-  "Hiccup for one labeled field: label, control, error list."
+  ``Hiccup for one labeled field: label, control, help text, error
+  list. A :hidden control is the input alone — a label for what nobody
+  sees is an empty label. The control is `input` unless the spec
+  carries :render, `(fn [spec value] hiccup)` — the seam void/admin
+  puts its widgets through, so a widget field and a plain field are
+  one block with one class vocabulary.``
   [spec &opt value errs]
-  [:div {:class (string "field field-" (spec :name)
-                        (if (empty? (or errs [])) "" " field-invalid"))}
-   [:label {:for (field-id spec)} (spec :label)]
-   (input spec value)
-   (when (and errs (not (empty? errs)))
-     [:ul {:class "field-errors"}
-      (seq [e :in errs] [:li (schema/error-str e)])])])
+  (def control
+    (if-let [r (get spec :render)] (r spec value) (input spec value)))
+  (if (= :hidden (spec :control))
+    control
+    [:div {:class (string "field field-" (spec :name)
+                          (if (empty? (or errs [])) "" " field-invalid"))}
+     [:label {:for (field-id spec)} (spec :label)]
+     control
+     (when-let [h (get spec :help)] [:p {:class "field-help"} h])
+     (when (and errs (not (empty? errs)))
+       [:ul {:class "field-errors"}
+        (seq [e :in errs] [:li (schema/error-str e)])])]))
 
 (defn fields
   ``Labeled fields for every entry of a map schema.

@@ -2,7 +2,7 @@
 ###
 ### These are the inbound half of the DTO story: a schema the form is
 ### *projected from* (`form/form` in ./cart.view renders the fields off
-### it) and *validated against* (`form/check` in ./cart.controller
+### it) and *validated against* (`form/submit` in ./cart.controller
 ### coerces the strings a browser sends). One declaration, both ends.
 ###
 ### The price is deliberately absent from both. A form that carried one

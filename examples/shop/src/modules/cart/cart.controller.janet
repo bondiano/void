@@ -34,15 +34,15 @@
   the session, and the row is created here rather than on every page
   view.``
   [req]
-  (def result (form/check dto/AddToCart (req :form)))
-  # the form is a hidden id and a number, so a submission that fails
-  # the schema is a broken client rather than a customer making a
-  # mistake — there is no field to send back to
-  (unless (empty? (result :errors)) (errors/abort 400))
-  (def v (result :value))
-  (def product (or (catalog/on-sale (v :product-id)) (errors/abort 404)))
-  (service/add! (session/ensure! req) product (v :quantity))
-  (ring/redirect "/cart"))
+  (form/submit dto/AddToCart (req :form)
+    {:ok (fn [v]
+           (def product (or (catalog/on-sale (v :product-id)) (errors/abort 404)))
+           (service/add! (session/ensure! req) product (v :quantity))
+           (ring/redirect "/cart"))
+     # the form is a hidden id and a number, so a submission that fails
+     # the schema is a broken client rather than a customer making a
+     # mistake — there is no field to send back to
+     :invalid (fn [_ _] (errors/abort 400))}))
 
 (defn update-line
   ``POST /cart/items/:id — set a line's quantity (0 removes it).
@@ -52,10 +52,12 @@
   [req]
   (def product-id (scan-number (get-in req [:params :id] "")))
   (def cart (session/current req))
-  (def result (form/check dto/SetQuantity (req :form)))
-  (when (and cart product-id (empty? (result :errors)))
-    (service/set-quantity! cart product-id (get-in result [:value :quantity])))
-  (rendered req))
+  (form/submit dto/SetQuantity (req :form)
+    {:ok (fn [v]
+           (when (and cart product-id)
+             (service/set-quantity! cart product-id (v :quantity)))
+           (rendered req))
+     :invalid (fn [_ _] (rendered req))}))
 
 (defn checkout-refused
   ``The cart page, with the reason a checkout did not become an order.

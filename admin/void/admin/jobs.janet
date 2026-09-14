@@ -49,6 +49,7 @@
 (import void/authz/policy :as policy)
 (import void/db :as db)
 (import void/html :as html)
+(import void/htmx :as htmx)
 (import void/http/errors :as errors)
 (import void/jobs :as jobs)
 (import ./action :as act)
@@ -299,7 +300,7 @@
     (do
       (if (= :retry a) (jobs/retry! id) (jobs/remove-job! id))
       (announce! a :job (get r :job) :queue (get r :queue) :id id)
-      (act/redirect-back req (jview/url "" {"queue" (get r :queue)})))))
+      (htmx/redirect-back req (jview/url "" {"queue" (get r :queue)})))))
 
 (defn- selection
   ``What a bulk acts on: queue and state, the two `counts` and
@@ -358,7 +359,7 @@
                   moved)
                 (jobs/clear! {:queue (sel :queue) :state (sel :state)}))]
         (announce! (string a " bulk") :queue (sel :queue) :state (sel :state) :records n)
-        (act/redirect-back req (jview/url "" {"queue" (sel :queue)
+        (htmx/redirect-back req (jview/url "" {"queue" (sel :queue)
                                               "state" (when (= :retry a) (sel :state))})))))
 
 # -- the section, as contributions ---------------------------------------

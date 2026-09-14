@@ -198,4 +198,23 @@
                                                :headers))))
         "an honest redirect still renders")
 
+# -- redirect-back: one call for both clients -------------------------
+#
+# A handler that writes and then shows a page has to know which kind of
+# client asked, because htmx will not follow a redirect into a swap
+# target. redirect-back is that branch, written once: the browser gets
+# a 303 See Other, and an htmx request gets an empty 204 carrying
+# HX-Redirect.
+
+(def browser (htmx/redirect-back @{:headers @{}} "/orders"))
+(assert (= 303 (browser :status))
+        "a browser gets See Other — the write happened, now GET this")
+(assert (= "/orders" (get-in browser [:headers "location"])))
+
+(def hx-client (htmx/redirect-back hreq "/orders"))
+(assert (= 204 (hx-client :status)) "an htmx request gets the empty 204")
+(assert (= "/orders" (get-in hx-client [:headers "hx-redirect"]))
+        "with the client-side redirect on it")
+(assert (nil? (hx-client :body)) "and nothing to swap")
+
 (print "hx-test: ok")

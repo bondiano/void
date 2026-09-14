@@ -18,19 +18,6 @@
 (import ./auth.service :as accounts)
 (import ./auth.view :as view)
 
-(defn- next-path
-  ``Where a redirected visitor was going. void/auth-http sends an
-  unauthenticated request to `[:auth-http :login-path]` with `?next=`,
-  and this reads it back — as **a path of this application and nothing
-  else**. A `next` that starts a scheme or `//` is somebody else's
-  origin, and following it is an open redirect with a sign-in page
-  attached.``
-  [req]
-  (def raw (get (or (req :query) {}) "next"))
-  (if (and raw (string/has-prefix? "/" raw) (not (string/has-prefix? "//" raw)))
-    raw
-    "/"))
-
 (defn register-form
   "GET /register"
   [req]
@@ -39,18 +26,18 @@
 (defn register
   "POST /register — an account with a password."
   [req]
-  (def result (form/check dto/Registration (req :form)))
-  (if-not (empty? (result :errors))
-    (layout/page (view/register-view {:values (req :form) :errors (result :errors)}))
-    (let [v (result :value)
-          out (accounts/register! (v :email) (v :password))]
-      (if (= :taken (out :status))
-        (layout/page (view/register-view
-                       {:values (req :form)
-                        :message "That address already has an account — sign in instead."}))
-        (do
-          (auth-http/login! req (out :identity))
-          (ring/redirect "/"))))))
+  (form/submit dto/Registration (req :form)
+    {:ok (fn [v]
+           (def out (accounts/register! (v :email) (v :password)))
+           (if (= :taken (out :status))
+             (layout/page (view/register-view
+                            {:values (req :form)
+                             :message "That address already has an account — sign in instead."}))
+             (do
+               (auth-http/login! req (out :identity))
+               (ring/redirect "/"))))
+     :invalid (fn [values errors]
+                (layout/page (view/register-view {:values values :errors errors})))}))
 
 (defn login-form
   "GET /login — where [:auth-http :login-path] points."
@@ -65,16 +52,24 @@
   telling the visitor which it was would hand that distinction straight
   back.``
   [req]
-  (def result (form/check dto/Credentials (req :form)))
-  (def identity (when (empty? (result :errors))
-                  (accounts/authenticate (result :value))))
-  (if identity
-    (do
-      (auth-http/login! req identity)
-      (ring/redirect (next-path req)))
-    (layout/page (view/login-view {:values (req :form)
+  (defn refused [values]
+    (layout/page (view/login-view {:values values
                                    :next (get (or (req :query) {}) "next")
-                                   :message "Those credentials do not match an account."}))))
+                                   :message "Those credentials do not match an account."})))
+  (form/submit dto/Credentials (req :form)
+    {:ok (fn [v]
+           (if-let [identity (accounts/authenticate v)]
+             (do
+               (auth-http/login! req identity)
+               # where the visitor was going, as a path of this
+               # application and nothing else — a `next` that is
+               # somebody else's origin is an open redirect with a
+               # sign-in page attached, and the hand-rolled reader that
+               # used to live here did not even refuse /\evil.example
+               # (a browser normalizes it to the same URL)
+               (ring/redirect (auth-http/safe-next req)))
+             (refused (req :form))))
+     :invalid (fn [values _] (refused values))}))
 
 (defn logout
   "POST /logout — drop the identity and rotate the session id."
@@ -96,15 +91,17 @@
   application who its users are, one address at a time — the same
   reasoning that makes an unknown login cost what a real one does.``
   [req]
-  (def result (form/check dto/EmailOnly (req :form)))
-  (when (empty? (result :errors))
-    (when-let [record (accounts/record-for-email (get-in result [:value :email]))]
-      (accounts/send-reset! record)))
-  (layout/page (view/reset-view
-                 {:values (req :form)
-                  :message (if (empty? (result :errors))
-                             "If that address has an account, a link is on its way."
-                             "That does not look like an email address.")})))
+  (form/submit dto/EmailOnly (req :form)
+    {:ok (fn [v]
+           (when-let [record (accounts/record-for-email (v :email))]
+             (accounts/send-reset! record))
+           (layout/page (view/reset-view
+                          {:values (req :form)
+                           :message "If that address has an account, a link is on its way."})))
+     :invalid (fn [values _]
+                (layout/page (view/reset-view
+                               {:values values
+                                :message "That does not look like an email address."})))}))
 
 (defn link
   "GET /auth/link?h=&c= — the one path a letter points at
@@ -131,13 +128,16 @@
   "POST /password — the route is :required, so there is somebody to
   change the password of."
   [req]
-  (def result (form/check dto/NewPassword (req :form)))
   (def record (accounts/current-record))
-  (if (or (not (empty? (result :errors))) (nil? record))
-    (layout/page (view/password-view {:values (req :form) :errors (result :errors)}))
-    (do
-      (accounts/change-password! record (get-in result [:value :password]))
-      (layout/page (view/notice-view "Your password has been changed.")))))
+  (form/submit dto/NewPassword (req :form)
+    {:ok (fn [v]
+           (if record
+             (do
+               (accounts/change-password! record (v :password))
+               (layout/page (view/notice-view "Your password has been changed.")))
+             (layout/page (view/password-view {:values (req :form)}))))
+     :invalid (fn [values errors]
+                (layout/page (view/password-view {:values values :errors errors})))}))
 
 (defn verify-form
   "GET /verify"

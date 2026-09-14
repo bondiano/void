@@ -35,6 +35,7 @@
 ### builder call is an error where a typo in a string is a page that
 ### does not swap.
 
+(import void/html :as html)
 (import void/html/chrome :as chrome)
 (import void/html/hiccup :as hiccup)
 (import void/html/form :as form)
@@ -251,18 +252,12 @@
       [:a {:href (ctx/url desc "/-/bulk/destroy" {"ids" id})} "Delete"])]])
 
 (defn- pager [desc st total]
-  (def pages (max 1 (math/ceil (/ total (st :per-page)))))
-  (defn href [p]
-    (def params (list-params desc st))
-    (put params "page" (when (> p 1) p))
-    (ctx/url desc "" params))
-  [:div {:class "vd-pager"}
-   [:span {:class "vd-count"} (string total " row" (if (= 1 total) "" "s"))]
-   (when (> (st :page) 1)
-     [:a (merge {:href (href (dec (st :page)))} (rows-swap (href (dec (st :page))))) "← previous"])
-   [:span (string "page " (st :page) " of " pages)]
-   (when (< (st :page) pages)
-     [:a (merge {:href (href (inc (st :page)))} (rows-swap (href (inc (st :page))))) "next →"])])
+  (html/pager {:page (st :page) :per-page (st :per-page) :total total
+               :attrs rows-swap
+               :href (fn [p]
+                       (def params (list-params desc st))
+                       (put params "page" (when (> p 1) p))
+                       (ctx/url desc "" params))}))
 
 (defn rows-fragment
   ``The part of a list that filtering, searching, sorting and paging
@@ -358,25 +353,28 @@
 # -- forms ---------------------------------------------------------------
 
 (defn- field-block [desc fd values errors row]
+  ``One labeled field, drawn through html/form's `field` with the
+  control delegated to the widget — `:render` is the seam, so a widget
+  field and a plain field are one block with one class vocabulary
+  (and one place that learns what an invalid field looks like).``
   (def entry (ctx/widget-entry (desc :name) (fd :name)))
   (def errs (get (form/errors-by-field errors) (fd :name)))
   (def readonly (truthy? (index-of (fd :name) (desc :readonly))))
   (def raw (get values (fd :name) (get values (string (fd :name)))))
-  [:div {:class (hiccup/classes "field" (string "field-" (fd :name))
-                                (when (not (empty? (or errs []))) "field-invalid"))}
-   [:label {:for (string "field-" (fd :name))} (fd :label)]
-   (widget/render entry {:mode :form
-                         :value raw
-                         :row row
-                         :readonly readonly
-                         :resource desc
-                         :errors errs
-                         :name (string (fd :name))
-                         :id (string "field-" (fd :name))
-                         :widget-url (ctx/url desc (string "/-/w/" (fd :name)))})
-   (when (and errs (not (empty? errs)))
-     [:ul {:class "field-errors"}
-      (seq [e :in errs] [:li (schema/error-str e)])])])
+  (form/field
+    {:name (fd :name) :label (fd :label)
+     :render (fn [_spec value]
+               (widget/render entry {:mode :form
+                                     :value value
+                                     :row row
+                                     :readonly readonly
+                                     :resource desc
+                                     :errors errs
+                                     :name (string (fd :name))
+                                     :id (string "field-" (fd :name))
+                                     :widget-url (ctx/url desc (string "/-/w/" (fd :name)))}))}
+    raw
+    errs))
 
 (defn- form-attrs
   ``The <form> attributes of a form drawing `fields` of `desc`: the

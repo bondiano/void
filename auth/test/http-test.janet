@@ -236,4 +236,32 @@
 (assert (not (auth-http/local-path? nil)))
 (assert (not (auth-http/local-path? :next)) "only bytes are a path")
 
+# -- the one reader a login handler should use -----------------------
+#
+# `next` round-trips through the visitor's browser — the same page that
+# wanted a redirect. safe-next is the reader that treats it accordingly:
+# what local-path? passes is where the visitor goes, everything else is
+# the default.
+
+(defn- with-next [raw]
+  @{:query (if (nil? raw) @{} @{"next" raw})})
+
+(assert (= "/dash" (auth-http/safe-next (with-next "/dash")))
+        "a local path is followed")
+(assert (= "/" (auth-http/safe-next (with-next "//evil.example/phish")))
+        "a scheme-relative next falls to the default")
+(assert (= "/" (auth-http/safe-next (with-next "/\\evil.example")))
+        "and so does /\\ — the copy a hand-rolled reader always forgets")
+(assert (= "/" (auth-http/safe-next (with-next "/\t/evil.example")))
+        "a tab the browser strips out of the URL does not smuggle // past the check")
+(assert (not (auth-http/local-path? "/a b")) "nor does any control byte or space")
+(assert (= "/" (auth-http/safe-next (with-next "http://evil.example")))
+        "an absolute URL next is not followed either")
+(assert (= "/" (auth-http/safe-next (with-next nil)))
+        "a request without the parameter too")
+(assert (= "/after" (auth-http/safe-next (with-next "https://x") "/after"))
+        "the default is named by the caller")
+(assert (= "/" (auth-http/safe-next @{}))
+        "and a request without a query at all")
+
 (print "http-test ok")

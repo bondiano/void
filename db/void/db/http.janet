@@ -55,7 +55,10 @@
 
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
+(import void/core/schema :as schema)
+(import void/http/errors :as errors)
 (import void/http/middleware :as middleware)
+(import ./entity :as entity)
 (import ./builder :as builder)
 (import ./state :as state)
 
@@ -201,8 +204,50 @@
              (state/with-tx* (tx-opts (get-in req [:void/route :meta] {}))
                              (fn txn-handler [] (handler req)))))})
 
+# -- declarative row loading ---------------------------------------------
+#
+# `load-or-404` was written in every example three times over: read a
+# path parameter, coerce it, find the row, abort 404 twice. The route
+# says it instead, and the row is on the request before authz runs, so
+# `:void.authz/resource` can be `(fn [req] (req :void.db/row))` rather
+# than a second query. Phase 4600, not 4500: CSRF sits alone at 4500,
+# and a loader that shared the phase would sort before void/security —
+# a forged POST would query, and its 404-or-not would say which ids
+# exist.
+
+(plugin/contribute! :void.http/route-meta-key
+  {:key :void.db/load
+   :schema {:entity :any
+            :param [:optional :keyword]
+            :preload [:optional [:vector :keyword]]}
+   :doc "Load one row before the handler: {:entity User :param :id :preload [...]}. The path parameter (:id by default) is coerced through the entity's primary-key schema and looked up with db/find; a missing or malformed id is a 404 through the error renderers, and the row is at (req :void.db/row). Runs at phase 4600 — after auth and CSRF, before authz — so a forged request never reaches the database and a :void.authz/resource may read the row instead of loading again"
+   :merge :replace})
+
+(defn- load-row [spec req]
+  (def desc (entity/resolve (spec :entity)))
+  (def pk (desc :pk))
+  # the router keys path captures as keywords — the same read every
+  # hand-written load-or-404 was doing as (get-in req [:params :id])
+  (def raw (get-in req [:params (keyword (get spec :param :id))]))
+  (def checked (schema/check (schema/select (desc :schema) [pk]) {pk raw} {:coerce true}))
+  (when (or (nil? raw) (not (empty? (checked :errors))))
+    (errors/abort 404))
+  (or (entity/find desc (get-in checked [:value pk])
+                   (if-let [p (get spec :preload)] {:preload p} {}))
+      (errors/abort 404)))
+
+(plugin/contribute! :void.http/middleware
+  {:name :void.db/load
+   :phase 4600
+   :doc "Load the row a route's :void.db/load names onto (req :void.db/row), or answer 404"
+   :when (fn [rmeta] (truthy? (get rmeta :void.db/load)))
+   :wrap (fn [handler]
+           (fn db-load [req]
+             (put req :void.db/row (load-row (get-in req [:void/route :meta :void.db/load]) req))
+             (handler req)))})
+
 (plugin/defplugin void/db-http
-  :doc "The two pieces of void/db that need void/http: the :void.db/txn route metadata key, which runs a handler inside db/with-tx, and the :db session store — a shared session store for an application that has a database and would rather not also have a redis."
+  :doc "The pieces of void/db that need void/http: the :void.db/txn route metadata key, which runs a handler inside db/with-tx; :void.db/load, which puts the row a path parameter names on the request or answers 404; and the :db session store — a shared session store for an application that has a database and would rather not also have a redis."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/db ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :db-http

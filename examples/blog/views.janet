@@ -54,6 +54,8 @@
                :crossorigin "anonymous"}]]
     [:body (if req (security/htmx-attrs req) {})
      [:header [:a {:href "/"} [:h1 "void blog"]] (who-bar)]
+     # what the last write said about itself, shown once
+     (when req (html/flash-view req))
      [:main content]]))
 
 # -- the index -----------------------------------------------------------

@@ -146,7 +146,10 @@
    [:date ~(* (repeat 4 (range "09")) "-"
               (repeat 2 (range "09")) "-"
               (repeat 2 (range "09")))]
-   [:uri ~(* (some (range "az" "AZ")) ":" (some 1))]]
+   [:uri ~(* (some (range "az" "AZ")) ":" (some 1))]
+   # any non-empty string: the format says nothing about the value and
+   # everything about the control — html/form draws it masked
+   [:password ~(some 1)]]
   (register-format! name pattern))
 
 # -- normalization -------------------------------------------------------

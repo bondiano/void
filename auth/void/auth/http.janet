@@ -338,7 +338,10 @@
   `?next=` redirect may follow? `//evil.example` is a scheme-relative
   URL, and `/\evil.example` is the *same* URL to a browser, which
   normalizes the backslash in a Location header — so any second
-  character from the `/ \` set is refused with it.
+  character from the `/ \` set is refused with it. So is any control
+  byte or space anywhere: a browser strips tab and newline out of a
+  URL, so `/<TAB>/evil.example` is `//evil.example` by the time it is
+  followed.
 
   This is the validator for both halves of the flow: `unauthorized`
   below mints `?next=` from the request URI, and whoever consumes the
@@ -348,10 +351,23 @@
   [s]
   (and (bytes? s)
        (string/has-prefix? "/" s)
+       (not (some |(or (<= $ 32) (= $ 127)) s))
        (or (= 1 (length s))
            (let [second (in s 1)]
              (and (not= second (chr "/"))
                   (not= second (chr "\\")))))))
+
+(defn safe-next
+  ``Where a redirected visitor was going — the `?next=` `unauthorized`
+  minted, read back as a path of this application and nothing else
+  (`local-path?`), or `dflt` ("/"). The one reader every login handler
+  should use: the value round-tripped through the visitor's browser,
+  and a `next` that is somebody else's origin is an open redirect with
+  a sign-in page attached.``
+  [req &opt dflt]
+  (default dflt "/")
+  (def raw (get (or (req :query) {}) "next"))
+  (if (local-path? raw) raw dflt))
 
 (errors/define! :void.auth/unauthenticated
   {:status 401 :doc "the route needs somebody and the request carried nobody"})

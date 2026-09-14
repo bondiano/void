@@ -173,6 +173,84 @@
                (finalize resp req)
                resp)))})
 
+# -- flash ---------------------------------------------------------------
+#
+# A message that survives one redirect: put in the session by the
+# handler that did the work, taken out by the page that renders next.
+# The session is void/http's ((req :session), a table the middleware
+# saves after the handler), so there is no middleware here — the key
+# is data in the session like any other, and the page that reads it
+# removes it.
+
+(def flash-key
+  "Where flashes wait in the session."
+  :void.html/flash)
+
+(defn- session-of [req]
+  (or (get req :session)
+      (error "html/flash! needs a session — enable [:http :session] (void/http's session middleware puts one on the request)")))
+
+(defn flash!
+  ``Queue a message for the next page: `tone` is :ok, :warn, :danger
+  or :note, `text` the sentence.
+
+      (html/flash! req :ok "Saved.")
+      (ring/redirect "/orders")``
+  [req tone text]
+  (def s (session-of req))
+  (put s flash-key [;(get s flash-key []) {:tone tone :text (string text)}])
+  nil)
+
+(defn flashes
+  ``The waiting messages — `[{:tone :text} ...]` — taken out of the
+  session, so they show once. An empty tuple without a session.``
+  [req]
+  (if-let [s (get req :session)]
+    (let [out (get s flash-key [])]
+      (put s flash-key nil)
+      out)
+    []))
+
+(defn flash-view
+  ``The waiting messages as hiccup, one `.vd-flash.is-<tone>` block
+  each — for a layout's slot above the content. nil when there are
+  none.``
+  [req]
+  (def all (flashes req))
+  (unless (empty? all)
+    [:div {:class "vd-flashes"}
+     (seq [f :in all]
+       [:p {:class (string "vd-flash is-" (f :tone))} (f :text)])]))
+
+# -- pager ---------------------------------------------------------------
+
+(defn pager
+  ``Pagination as hiccup — the count, previous, "page N of M", next:
+
+      (html/pager {:page 2 :per-page 25 :total 130
+                   :href (fn [p] (string "/orders?page=" p))})
+
+  :href builds a page's URL; :attrs, when given, is `(fn [url] attrs)`
+  and its result is merged onto each link (an hx/get* for a swap).
+  :noun is the counted thing ("row" by default; the plural adds an
+  s). Numbers stay numbers: a page count under one is one page.``
+  [opts]
+  (def page* (max 1 (get opts :page 1)))
+  (def per (max 1 (get opts :per-page 25)))
+  (def total (get opts :total 0))
+  (def pages (max 1 (math/ceil (/ total per))))
+  (def href (or (opts :href) (error "html/pager needs :href")))
+  (def extra (get opts :attrs (fn [_] {})))
+  (def noun (get opts :noun "row"))
+  (defn link [p text]
+    (def url (href p))
+    [:a (merge {:href url} (extra url)) text])
+  [:div {:class "vd-pager"}
+   [:span {:class "vd-count"} (string total " " noun (if (= 1 total) "" "s"))]
+   (when (> page* 1) (link (dec page*) "← previous"))
+   [:span (string "page " page* " of " pages)]
+   (when (< page* pages) (link (inc page*) "next →"))])
+
 # -- assets --------------------------------------------------------------
 
 (defn- normalize-prefix [p]

@@ -24,7 +24,6 @@
 (import void/html :as html)
 (import void/html/form :as form)
 (import void/htmx :as htmx)
-(import void/http/ring :as ring)
 (import void/http/errors :as errors)
 (import ./context :as ctx)
 (import ./query :as q)
@@ -85,15 +84,6 @@
                      :context {:void.admin/widgets (if rname (ctx/widget-entries rname) {})}}
                     (or opts {}))))
 
-(defn- see-other [url]
-  (ring/response 303 nil @{"location" url}))
-
-(defn redirect-back [req url]
-  ``After a write: htmx gets an HX-Redirect (it will not follow a 303
-  into a swap target), a browser gets the 303 it expects.``
-  (if (htmx/request? req)
-    (htmx/redirect (ring/response 204 nil @{}) url)
-    (see-other url)))
 
 # -- loading -------------------------------------------------------------
 
@@ -204,7 +194,7 @@
       (let [row (db/insert! (desc :entity) (with-defaults desc req (result :value)))
             id (get row (get-in desc [:entity :pk]))]
         (announce! req desc :create id nil (snapshot-of row))
-        (redirect-back req (ctx/url desc (string "/" id))))
+        (htmx/redirect-back req (ctx/url desc (string "/" id))))
       (let [resp (page req (view/form-page desc {:values (get req :form {})
                                                 :errors (result :errors)})
                        (desc :name))]
@@ -277,7 +267,7 @@
         (cond
           ok (do (announce! req desc :update (get row (get-in desc [:entity :pk]))
                             before (snapshot-of row))
-                 (redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk]))))))
+                 (htmx/redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk]))))))
           (version-conflict? err)
           (invalid []
                    {:row (db/find (desc :entity) (get before (get-in desc [:entity :pk])))
@@ -292,7 +282,7 @@
     (def before (snapshot-of row))
     (db/delete! (desc :entity) id)
     (announce! req desc :destroy id before nil)
-    (redirect-back req (ctx/base desc))))
+    (htmx/redirect-back req (ctx/base desc))))
 
 # -- one cell ------------------------------------------------------------
 
@@ -331,13 +321,13 @@
                    before (snapshot-of row))
         (if (htmx/partial-request? req)
           (html/fragment (view/cell desc row (list-column desc fname) true))
-          (redirect-back req (ctx/base desc))))
+          (htmx/redirect-back req (ctx/base desc))))
       (do
         (def resp
           (if (htmx/partial-request? req)
             (html/fragment [:td {:class "field-invalid"}
                             (string/join (map schema/error-str (result :errors)) "; ")])
-            (redirect-back req (ctx/base desc))))
+            (htmx/redirect-back req (ctx/base desc))))
         (if (dictionary? resp) (do (put resp :status 422) resp) resp)))))
 
 # -- inlines -------------------------------------------------------------
@@ -375,7 +365,7 @@
   (def rows (inline-rows desc req row inline child))
   (if (htmx/partial-request? req)
     (html/fragment (view/inline-block desc row inline child rows errors))
-    (redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk])))))))
+    (htmx/redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk])))))))
 
 (defn inline-create [desc]
   (fn admin-inline-create [req]
@@ -558,7 +548,7 @@
           (each r batch
             (apply-one! req desc action r)
             (set after (get r (get-in desc [:entity :pk]))))) 
-        (redirect-back req (ctx/base desc))))))
+        (htmx/redirect-back req (ctx/base desc))))))
 
 (defn progress [desc]
   (fn admin-progress [req]

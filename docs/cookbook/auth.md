@@ -27,13 +27,13 @@ From [examples/blog/app.janet](../../examples/blog/app.janet) — the
 whole sign-in handler:
 
 ```janet
-(def result (form/check e/Credentials (req :form)))
-(def check (when (empty? (result :errors))
-             (auth/check-password (auth/user-store) (result :value))))
-(if-let [id (get check :identity)]
-  (do (auth-http/login! req id)
-      (ring/redirect "/"))
-  (render-form-again-with-one-vague-message))
+(form/submit e/Credentials (req :form)
+  {:ok (fn [v]
+         (if-let [id (get (auth/check-password (auth/user-store) v) :identity)]
+           (do (auth-http/login! req id)
+               (ring/redirect "/"))
+           (render-form-again-with-one-vague-message)))
+   :invalid (fn [values _] (render-form-again-with-one-vague-message))})
 ```
 
 Details the framework already decided for you: hashes are portable PHC

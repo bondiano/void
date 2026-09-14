@@ -13,7 +13,7 @@ with entities and a database is
 
 ```janet
 (def Entry
-  "A guestbook entry — drives both form/check and form/form."
+  "A guestbook entry — drives both form/submit and form/form."
   {:name [:string {:min 1 :max 40}]
    :message [:string {:min 1 :max 400}]})
 ```
@@ -38,21 +38,24 @@ from `hx/post`, so the submit swaps a fragment instead of reloading:
    ...])
 ```
 
-## The handler validates against the same value
+## The handler picks one of two continuations
 
-`form/check` coerces and validates the submitted map against `Entry`.
-Invalid input re-renders the same view with the raw values and the
-errors passed back in — the annotated-form loop is two lines:
+`form/submit` coerces and validates the submitted map against `Entry`
+and calls whichever half the answer is: `:ok` gets the coerced value,
+`:invalid` gets the raw values and the errors, to re-render the same
+markup annotated — and its response goes out as a **422**, because
+a re-rendered form is a refusal and htmx swaps a 422 like any other
+status:
 
 ```janet
 (defn create-entry
   [req]
-  (def result (form/check Entry (req :form)))
-  (if (empty? (result :errors))
-    (do (array/push entries (result :value))
-        (html/page (guestbook-view) {:layout layout}))
-    (html/page (guestbook-view (req :form) (result :errors))
-               {:layout layout})))
+  (form/submit Entry (req :form)
+    {:ok (fn [v] (array/push entries v)
+                 (html/page (guestbook-view) {:layout layout}))
+     :invalid (fn [values errors]
+                (html/page (guestbook-view values errors)
+                           {:layout layout}))}))
 ```
 
 ## The route answers both kinds of request

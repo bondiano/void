@@ -377,7 +377,7 @@
 ### of the one declaration at the top: `db/defentity` is the schema
 ### *and* the db-mapping, `schema/select` projects the form
 ### DTO off it instead of repeating it, `form/form` renders that
-### projection and `form/check` validates against it. Rename a field in
+### projection and `form/submit` validates against it. Rename a field in
 ### the entity and the form, the validation and the suite follow. The
 ### migration beside this file is the one thing that does not follow,
 ### which is why the generated suite compares the two.
@@ -389,7 +389,6 @@
 (import void/db :as db)
 (import void/http/router :as router)
 (import void/http/ring :as ring)
-(import void/http/errors :as errors)
 (import void/html :as html)
 (import void/html/form :as form)
 (import void/htmx/hx :as hx)
@@ -465,14 +464,6 @@
   []
   (db/query {{entity}} {:order-by [[:id :desc]] :limit 100}))
 
-(defn- load-record
-  "The record the path names, or a 404 — never a nil that reaches a
-  template."
-  [req]
-  (def id (scan-number (get-in req [:params :id] "")))
-  (unless id (errors/abort 404))
-  (or (db/find {{entity}} id) (errors/abort 404)))
-
 (defn index
   "GET /{{plural}} — the list and the create form."
   [req]
@@ -486,40 +477,45 @@
 (defn create
   "POST /{{plural}} — validate against the projection, then write."
   [req]
-  (def result (form/check {{entity}}Form (req :form)))
-  (if (empty? (result :errors))
-    (do
-      (db/insert! {{entity}} (result :value))
-      (html/page ({{plural}}-view (recent)) {:layout layout}))
-    (html/page ({{plural}}-view (recent) (req :form) (result :errors))
-               {:layout layout})))
+  (form/submit {{entity}}Form (req :form)
+    {:ok (fn [v]
+           (db/insert! {{entity}} v)
+           (html/page ({{plural}}-view (recent)) {:layout layout}))
+     :invalid (fn [values errors]
+                (html/page ({{plural}}-view (recent) values errors)
+                           {:layout layout}))}))
+
+# The record a path names is the route's to say (`:void.db/load` below):
+# the id is coerced through the entity's key, and a malformed or
+# missing one is a 404 before the handler runs — never a nil that
+# reaches a template.
 
 (defn show
   "GET /{{plural}}/:id"
   [req]
-  (html/page ({{name}}-view (load-record req)) {:layout layout}))
+  (html/page ({{name}}-view (req :void.db/row)) {:layout layout}))
 
 (defn edit
   "GET /{{plural}}/:id/edit"
   [req]
-  (html/page ({{name}}-form (load-record req)) {:layout layout}))
+  (html/page ({{name}}-form (req :void.db/row)) {:layout layout}))
 
 (defn update-record
   "POST /{{plural}}/:id — the same validation as create."
   [req]
-  (def record (load-record req))
-  (def result (form/check {{entity}}Form (req :form)))
-  (if (empty? (result :errors))
-    (do
-      (db/update! {{entity}} (record :id) (result :value))
-      (ring/redirect (string "/{{plural}}/" (record :id))))
-    (html/page ({{name}}-form record (req :form) (result :errors))
-               {:layout layout})))
+  (def record (req :void.db/row))
+  (form/submit {{entity}}Form (req :form)
+    {:ok (fn [v]
+           (db/update! {{entity}} (record :id) v)
+           (ring/redirect (string "/{{plural}}/" (record :id))))
+     :invalid (fn [values errors]
+                (html/page ({{name}}-form record values errors)
+                           {:layout layout}))}))
 
 (defn destroy
   "POST /{{plural}}/:id/delete"
   [req]
-  (db/delete! {{entity}} ((load-record req) :id))
+  (db/delete! {{entity}} ((req :void.db/row) :id))
   (ring/redirect "/{{plural}}"))
 
 # -- routes --------------------------------------------------------------
@@ -534,16 +530,21 @@
   (GET "/{{plural}}/new" new-record {:name :{{plural}}/new})
   (POST "/{{plural}}" create {:name :{{plural}}/create
                              :void.htmx/partial true})
-  (GET "/{{plural}}/:id" show {:name :{{plural}}/show})
-  (GET "/{{plural}}/:id/edit" edit {:name :{{plural}}/edit})
-  (POST "/{{plural}}/:id" update-record {:name :{{plural}}/update})
-  (POST "/{{plural}}/:id/delete" destroy {:name :{{plural}}/destroy}))
+  (GET "/{{plural}}/:id" show {:name :{{plural}}/show
+                               :void.db/load {:entity {{entity}}}})
+  (GET "/{{plural}}/:id/edit" edit {:name :{{plural}}/edit
+                                    :void.db/load {:entity {{entity}}}})
+  (POST "/{{plural}}/:id" update-record {:name :{{plural}}/update
+                                         :void.db/load {:entity {{entity}}}})
+  (POST "/{{plural}}/:id/delete" destroy {:name :{{plural}}/destroy
+                                          :void.db/load {:entity {{entity}}}}))
 
 (plugin/defplugin {{plugin}}
   :doc "{{title}} resource: entity, form, CRUD routes."
   :version "0.1.0"
   :requires {:void/http ">=0.0.1" :void/html ">=0.0.1"
-             :void/htmx ">=0.0.1" :void/db ">=0.0.1"})
+             :void/htmx ">=0.0.1" :void/db ">=0.0.1"
+             :void/db-http ">=0.0.1"})
 ```)
 
 (def migration-template
@@ -910,6 +911,9 @@
   (printf "    :%s%s the routes, the entity and the views"
           (spec :plugin) (string/repeat " " (max 1 (- 24 (length (spec :plugin))))))
   (print "    :void/db :void/db-sqlite  the entity layer and a driver, if not there yet")
+  (print "    :void/db-http             the row loader the routes' :void.db/load needs")
+  (print "                              (its module is void/db/http — import it in main.janet,")
+  (print "                              which is what registers the keyword)")
   (print)
   (print "  then:")
   (print)
@@ -1133,19 +1137,6 @@
     (unless (record :verified-at)
       (db/update! {{entity}} (record :id) {:verified-at (now)}))))
 
-(defn- next-path
-  ``Where a redirected visitor was going. void/auth-http sends an
-  unauthenticated request to `[:auth-http :login-path]` with `?next=`,
-  and this reads it back — as **a path of this application and nothing
-  else**. A `next` that starts a scheme or `//` is somebody else's
-  origin, and following it is an open redirect with a sign-in page
-  attached.``
-  [req]
-  (def raw (get (or (req :query) {}) "next"))
-  (if (and raw (string/has-prefix? "/" raw) (not (string/has-prefix? "//" raw)))
-    raw
-    "/"))
-
 # -- views ---------------------------------------------------------------
 #
 # Plain functions returning hiccup. `layout` is this module's own so
@@ -1279,28 +1270,24 @@
   rather than trusting the row that was just written: one code path
   signs anybody in, so there is one place where that can be wrong.``
   [req]
-  (def result (form/check Registration (req :form)))
-  (def v (result :value))
-  (def taken (and (empty? (result :errors)) (find-by-email (v :email))))
-  (cond
-    (not (empty? (result :errors)))
-    (page (register-view {:values (req :form) :errors (result :errors)}))
-
-    taken
-    (page (register-view {:values (req :form)
-                          :message "That address already has an account — sign in instead."}))
-
-    (do
-      (def created
-        (db/insert! {{entity}}
-                    {:email (v :email){{inserts}}
-                     :password-hash (auth/hash-password (v :password))
-                     :created-at (now)}))
-      (def check (auth/check-password (auth/user-store)
-                                      {:email (v :email) :password (v :password)}))
-      (auth-http/login! req (check :identity))
-      (send-verification! created)
-      (ring/redirect "/"))))
+  (form/submit Registration (req :form)
+    {:ok (fn [v]
+           (if (find-by-email (v :email))
+             (page (register-view {:values (req :form)
+                                   :message "That address already has an account — sign in instead."}))
+             (do
+               (def created
+                 (db/insert! {{entity}}
+                             {:email (v :email){{inserts}}
+                              :password-hash (auth/hash-password (v :password))
+                              :created-at (now)}))
+               (def check (auth/check-password (auth/user-store)
+                                               {:email (v :email) :password (v :password)}))
+               (auth-http/login! req (check :identity))
+               (send-verification! created)
+               (ring/redirect "/"))))
+     :invalid (fn [values errors]
+                (page (register-view {:values values :errors errors})))}))
 
 (defn login-form
   "GET /login — where [:auth-http :login-path] points."
@@ -1316,16 +1303,22 @@
   there is no account), and telling the visitor which it was would
   hand that distinction straight back.``
   [req]
-  (def result (form/check Credentials (req :form)))
-  (def check (when (empty? (result :errors))
-               (auth/check-password (auth/user-store) (result :value))))
-  (if-let [id (get check :identity)]
-    (do
-      (auth-http/login! req id)
-      (ring/redirect (next-path req)))
-    (page (login-view {:values (req :form)
+  (defn refused [values]
+    (page (login-view {:values values
                        :next (get (or (req :query) {}) "next")
-                       :message "Those credentials do not match an account."}))))
+                       :message "Those credentials do not match an account."})))
+  (form/submit Credentials (req :form)
+    {:ok (fn [v]
+           (if-let [id (get (auth/check-password (auth/user-store) v) :identity)]
+             (do
+               (auth-http/login! req id)
+               # where the visitor was going, as a path of this
+               # application and nothing else: a `next` that is somebody
+               # else's origin is an open redirect with a sign-in page
+               # attached
+               (ring/redirect (auth-http/safe-next req)))
+             (refused (req :form))))
+     :invalid (fn [values _] (refused values))}))
 
 (defn logout
   "POST /logout — drop the identity and rotate the session id."
@@ -1348,18 +1341,19 @@
   same reasoning that makes `check-password` spend its time on an
   unknown login.``
   [req]
-  (def result (form/check EmailOnly (req :form)))
-  (def record (when (empty? (result :errors))
-                (find-by-email (get-in result [:value :email]))))
-  (when record
-    (auth/challenge! (subject-string record)
-                     {:to (record :email)
-                      :claims {:purpose "reset"}}))
-  (page (reset-view
-          {:values (req :form)
-           :message (if (empty? (result :errors))
-                      "If that address has an account, a link is on its way."
-                      "That does not look like an email address.")})))
+  (form/submit EmailOnly (req :form)
+    {:ok (fn [v]
+           (when-let [record (find-by-email (v :email))]
+             (auth/challenge! (subject-string record)
+                              {:to (record :email)
+                               :claims {:purpose "reset"}}))
+           (page (reset-view
+                   {:values (req :form)
+                    :message "If that address has an account, a link is on its way."})))
+     :invalid (fn [values _]
+                (page (reset-view
+                        {:values values
+                         :message "That does not look like an email address."})))}))
 
 (defn link
   ``GET {{link-path}}?h=&c= — the one path a letter points at
@@ -1392,14 +1386,17 @@
   "POST /password — the route is :required, so there is somebody to
   change the password of."
   [req]
-  (def result (form/check NewPassword (req :form)))
   (def record (current-record))
-  (if (or (not (empty? (result :errors))) (nil? record))
-    (page (password-view {:values (req :form) :errors (result :errors)}))
-    (do
-      (db/update! {{entity}} (record :id)
-                  {:password-hash (auth/hash-password (get-in result [:value :password]))})
-      (page (notice-view "Your password has been changed.")))))
+  (form/submit NewPassword (req :form)
+    {:ok (fn [v]
+           (if record
+             (do
+               (db/update! {{entity}} (record :id)
+                           {:password-hash (auth/hash-password (v :password))})
+               (page (notice-view "Your password has been changed.")))
+             (page (password-view {:values (req :form)}))))
+     :invalid (fn [values errors]
+                (page (password-view {:values values :errors errors})))}))
 
 (defn verify-form
   "GET /verify"

@@ -138,6 +138,17 @@
   [resp url]
   (ring/header resp "hx-redirect" url))
 
+(defn redirect-back
+  ``After a write, send the client to `url`: htmx gets an HX-Redirect
+  on an empty 204 (it will not follow a redirect into a swap target),
+  a browser gets a 303 — See Other, the status that says "the write
+  happened, now GET this" and that no client replays as a POST. The
+  shape of every handler that writes and then shows a page.``
+  [req url]
+  (if (request? req)
+    (redirect (ring/response 204 nil @{}) url)
+    (ring/redirect url 303)))
+
 (defn location
   "Client-side navigation (HX-Location): a URL string or a dictionary
   with :path plus swap options — JSON-encoded."
