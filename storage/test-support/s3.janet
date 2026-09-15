@@ -8,7 +8,7 @@
 # suite asks for a server by name, the way void/cache asks for a redis:
 #
 #     docker run -d -p 9000:9000 -e MINIO_ROOT_USER=void \
-#       -e MINIO_ROOT_PASSWORD=void-void-void minio/minio server /data
+#       -e MINIO_ROOT_PASSWORD=void-void-void quay.io/minio/minio server /data
 #     VOID_TEST_S3="http://127.0.0.1:9000" \
 #     VOID_TEST_S3_KEY=void VOID_TEST_S3_SECRET=void-void-void jpm test
 #
