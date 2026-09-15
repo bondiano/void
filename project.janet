@@ -28,8 +28,10 @@
 
 # Every package's `void/` tree, in topological order. `cp -rf` merges
 # them, and no two packages own the same name under void/.
+# janet-zed.exports tells the janet-zed editor how void's `def`-like
+# macros bind names; it installs next to <modpath>/void/.
 (declare-source
-  :source (packages/source-trees))
+  :source [;(packages/source-trees) "janet-zed.exports"])
 
 # void/fdwait — ~60 lines of C. An HTMX application pays no extra price
 # for it: void/core depends on spork, and spork builds nine native modules

@@ -1,0 +1,8 @@
+# How janet-zed reads void's definition macros: each binds the symbol
+# after it, as `def` does. Installed with the bundle, so an application
+# gets hover and go-to-definition on `model/User` without a config of its
+# own.
+{:lint-as {void/db/defentity def
+           void/db/entity/defentity def
+           void/admin/defresource-admin def
+           void/admin/resource/defresource-admin def}}
