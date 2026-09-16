@@ -59,19 +59,42 @@
 
 # -- the frame -----------------------------------------------------------
 
-(defn- nav-links [request]
+(def- ungrouped
+  "The bucket of everything that named no group — a key, because a
+  table cannot be keyed by nil."
+  :void.admin/ungrouped)
+
+(defn- nav-links
+  ``The navigation: the mounted resources and the contributed menu
+  items, each under the group it named. Ungrouped links come first and
+  keep their order, then the groups by name — a back office grows one
+  resource at a time, and a nav whose order depends on load order is a
+  nav that moves under the operator's cursor.``
+  [request]
   (def here (get request :path ""))
   (def items @[])
   (each rname (res/mounted)
     (def d (res/lookup rname))
-    (array/push items {:label (d :title) :href (ctx/base d)}))
+    (array/push items {:group (d :group) :label (d :title) :href (ctx/base d)}))
   (each m (ctx/setting :menu [])
-    (array/push items {:label (m :label)
+    (array/push items {:group (get m :group)
+                       :label (m :label)
                        :href (or (get m :href) (ctx/at (m :path)))}))
-  (seq [i :in items]
+  (def by-group @{})
+  (each i items
+    (def g (or (get i :group) ungrouped))
+    (unless (get by-group g) (put by-group g @[]))
+    (array/push (get by-group g) i))
+  (defn link [i]
     [:a {:href (i :href)
          :class (when (string/has-prefix? (i :href) here) "active")}
-     (i :label)]))
+     (i :label)])
+  (def out @[])
+  (each i (get by-group ungrouped []) (array/push out (link i)))
+  (each g (sorted (filter |(not= ungrouped $) (keys by-group)))
+    (array/push out [:span {:class "vd-nav-group"} g])
+    (each i (get by-group g) (array/push out (link i))))
+  out)
 
 # -- the two files the frame links ---------------------------------------
 #
@@ -145,6 +168,26 @@
     (f row)
     (get row (col :name))))
 
+(defn- column-cell
+  ``One column of one row, drawn through the widget resolved for its
+  field — or, for a computed column, through the plain text
+  projection, since a `:value` answers with a value and no widget was
+  resolved for a column that is not a field.``
+  [desc row col mode]
+  (def entry (when (col :field) (ctx/widget-entry (desc :name) (col :name))))
+  (def value (cell-value desc row col))
+  (if entry
+    (widget/display entry {:mode mode :value value :row row :resource desc})
+    (widget/text-of value)))
+
+(defn slot
+  ``One of a resource's own `:before`/`:after` slots, or nil. The
+  context carries what the page has — the resource, the request and,
+  where there is one, the row.``
+  [desc page place context]
+  (when-let [f (get-in desc [:slots page place])]
+    (f (merge {:resource desc} (or context {})))))
+
 (defn- csrf-slot []
   (when-let [f (dyn :void.html/csrf)] (f)))
 
@@ -214,10 +257,7 @@
   [desc row col editable?]
   (def entry (ctx/widget-entry (desc :name) (col :name)))
   (def value (cell-value desc row col))
-  (def shown
-    (if entry
-      (widget/display entry {:mode :list :value value :row row :resource desc})
-      (widget/text-of value)))
+  (def shown (column-cell desc row col :list))
   (if editable?
     [:td {:id (string "cell-" (desc :name) "-" (id-of desc row) "-" (col :name))}
      (post-form :patch (ctx/url desc (string "/" (id-of desc row) "/-/cell/" (col :name)))
@@ -337,9 +377,11 @@
 
 (defn list-page
   "The list: toolbar, selection form, rows, pager."
-  [desc rows st total]
+  [desc rows st total &opt request]
+  (def slot-ctx {:request request :rows rows :state st :total total})
   [:div
    [:h1 (desc :title)]
+   (slot desc :list :before slot-ctx)
    (filter-panel desc st)
    (when (in (desc :action-set) :new)
      [:p [:a {:class "vd-button" :href (ctx/url desc "/new")}
@@ -348,7 +390,8 @@
    # page has a URL
    [:form {:method "get" :action (ctx/url desc "/-/bulk/destroy")}
     (rows-fragment desc rows st total)
-    (bulk-bar desc)]])
+    (bulk-bar desc)]
+   (slot desc :list :after slot-ctx)])
 
 # -- forms ---------------------------------------------------------------
 
@@ -387,10 +430,11 @@
          (or extra {})))
 
 (defn form-page
-  ``The create/edit form. The version column, when the entity declares
-  one, rides along as a hidden field: `save!` compares it and a lost
-  race becomes a conflict the operator can read instead of a silently
-  overwritten edit.``
+  ``The create/edit form — `opts` is `{:row :values :errors :conflict
+  :request}`. The version column, when the entity declares one, rides
+  along as a hidden field: `save!` compares it and a lost race becomes
+  a conflict the operator can read instead of a silently overwritten
+  edit.``
   [desc opts]
   (def row (get opts :row))
   (def values (or (get opts :values) (or row {})))
@@ -398,10 +442,12 @@
   (def new? (nil? row))
   (def action (if new? (ctx/base desc) (ctx/url desc (string "/" (id-of desc row)))))
   (def vfield (get-in desc [:entity :version]))
+  (def slot-ctx {:request (get opts :request) :row row :values values})
   [:div
    [:h1 (if new?
           (string "New " (desc :singular))
           (string "Edit " (desc :singular) " " (id-of desc row)))]
+   (slot desc :form :before slot-ctx)
    (when-let [c (get opts :conflict)]
      [:p {:class "vd-warn"} c])
    (post-form :post action (form-attrs desc (desc :form-fields))
@@ -412,16 +458,19 @@
      ;(seq [fd :in (desc :form-fields)] (field-block desc fd values errors row))
      [:div {:class "vd-actions"}
       [:button {:type "submit" :class "primary"} "Save"]
-      [:a {:href (ctx/base desc)} "Cancel"]])])
+      [:a {:href (ctx/base desc)} "Cancel"]])
+   (slot desc :form :after slot-ctx)])
 
 # -- detail --------------------------------------------------------------
 
 (defn detail-page
   "One row, its fields, its inlines and its history."
-  [desc row inlines history]
+  [desc row inlines history &opt request]
   (def id (id-of desc row))
+  (def slot-ctx {:request request :row row})
   [:div
    [:h1 (string (desc :singular) " " id)]
+   (slot desc :detail :before slot-ctx)
    [:div {:class "vd-actions"}
     (when (in (desc :action-set) :edit)
       [:a {:class "vd-button" :href (ctx/url desc (string "/" id "/edit"))} "Edit"])
@@ -430,14 +479,10 @@
     [:a {:href (ctx/base desc)} "Back to list"]]
    [:table {:class "vd-table"}
     [:tbody
-     (seq [fname :in (desc :detail)]
-       (def entry (ctx/widget-entry (desc :name) fname))
+     (seq [col :in (desc :detail)]
        [:tr
-        [:th (string fname)]
-        [:td (if entry
-               (widget/display entry {:mode :detail :value (get row fname)
-                                      :row row :resource desc})
-               (widget/text-of (get row fname)))]])]]
+        [:th (col :label)]
+        [:td (column-cell desc row col :detail)]])]]
    ;(or inlines [])
    (when (and history (not (empty? history)))
      [:div
@@ -446,7 +491,8 @@
        [:tbody
         (seq [h :in history]
           [:tr [:td (string (get h :at ""))] [:td (string (get h :actor ""))]
-           [:td (string (get h :detail (get h :action "")))]])]]])])
+           [:td (string (get h :detail (get h :action "")))]])]]])
+   (slot desc :detail :after slot-ctx)])
 
 # -- confirmation --------------------------------------------------------
 

@@ -124,7 +124,7 @@
 (def update! "See entity/update! — patch by primary key." entity/update!)
 (def delete! "See entity/delete! — by primary key." entity/delete!)
 (def delete-where! "See entity/delete-where!." entity/delete-where!)
-(def save! "See entity/save! — partial UPDATE of what changed." entity/save!)
+(def save! "See entity/save! — partial UPDATE of what changed; `opts` :version guards by the version the caller read." entity/save!)
 (def reload "See entity/reload." entity/reload)
 (def rel "See entity/rel — navigate a relation (N+1-guarded)." entity/rel)
 (def preload! "See entity/preload! — batched relation load onto instances." entity/preload!)

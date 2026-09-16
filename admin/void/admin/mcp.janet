@@ -92,22 +92,19 @@
   decision)
 
 (defn- row->data
-  "One row as plain data — the declared detail fields, and nothing the
-  declaration did not name."
-  [desc row]
-  (tabseq [f :in (desc :detail)] f (get row f)))
+  ``One row as `cols` projects it — the columns that name a real
+  field, and nothing else.
 
-(defn- row->list-data
-  ``One row as the *list* projects it — the `:list` columns that name a
-  real field, and nothing else. The list page and the list tool must
-  show the same columns: `:detail` is the show page's declaration, and
-  a list tool that read it would hand an agent, two hundred rows at a
-  time, the fields the declaration only meant for one row — or, when
-  `:detail` was never declared, every column of the entity. A computed
-  column (`:value` without a field) renders hiccup for a page and is
-  skipped here.``
-  [desc row]
-  (tabseq [c :in (desc :list) :when (c :field)]
+  Which projection is passed matters: the list tool is handed
+  `(desc :list)` and every single-row tool `(desc :detail)`. They are
+  two declarations for two page sizes, and a list tool reading the
+  detail one would hand an agent, two hundred rows at a time, the
+  fields the declaration only meant for one row — or, when `:detail`
+  was never declared, every column of the entity. A computed column
+  (`:value` without a field) renders hiccup for a page and is skipped
+  here.``
+  [cols row]
+  (tabseq [c :in cols :when (c :field)]
     (c :name) (get row (c :name))))
 
 (defn- ok
@@ -141,7 +138,7 @@
              (put (req :query) (string k) (string v))))
          (ensure! desc :index)
          (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
-         (ok {:rows (map |(row->list-data desc $) (q/rows desc req st))
+         (ok {:rows (map |(row->data (desc :list) $) (q/rows desc req st))
               :total (q/total desc req st)
               :page (st :page)
               :per-page (st :per-page)}))})
@@ -158,7 +155,7 @@
          (def row (q/find-scoped desc req (string (get arguments :id))))
          (unless row (errorf "%q %q not found" (desc :name) (get arguments :id)))
          (ensure! desc :show row)
-         (ok (row->data desc row)))})
+         (ok (row->data (desc :detail) row)))})
 
 (defn- create-tool [desc]
   {:name (tool-key (desc :name) "create")
@@ -173,31 +170,57 @@
    :fn (fn admin-create [_pool arguments]
          (def req (agent-request {}))
          (ensure! desc :create)
-         (def row (db/insert! (desc :entity) (act/with-defaults desc req arguments)))
+         (def row (db/insert! (desc :entity)
+                              (act/with-defaults desc req (act/writable desc arguments))))
          (act/announce! req desc :create (get row (get-in desc [:entity :pk]))
                         nil (act/snapshot-of row))
-         (ok (row->data desc row)))})
+         (ok (row->data (desc :detail) row)))})
+
+(defn- update-schema
+  ``The patch an agent sends: the form schema with every field
+  optional, the primary key, and — when the entity declares one — the
+  version column, also optional. The version is in the schema because
+  that is the only way an agent can say which row it read: without it
+  every call is a blind overwrite, and optimistic locking would be a
+  thing only the HTML form could do.``
+  [desc]
+  (def vfield (get-in desc [:entity :version]))
+  (schema/merge
+    {:id :any}
+    (if vfield
+      (schema/merge (all-optional (desc :form-schema))
+                    (all-optional (schema/select (get-in desc [:entity :schema]) [vfield])))
+      (all-optional (desc :form-schema)))))
 
 (defn- update-tool [desc]
+  (def vfield (get-in desc [:entity :version]))
   {:name (tool-key (desc :name) "update")
    :title (string "Update a " (desc :singular))
    :doc (string "Patch one row of " (desc :title)
-                " by primary key. Only the fields the form declares may be written.")
+                " by primary key. Only the fields the form declares may be written"
+                (if vfield
+                  (string "; pass the " vfield " you read from get, and the write is "
+                          "refused if somebody changed the row in between")
+                  "")
+                ".")
    :read-only? false
    :needs [:db/pool]
-   :schema (schema/merge {:id :any} (all-optional (desc :form-schema)))
+   :schema (update-schema desc)
    :fn (fn admin-update [_pool arguments]
          (def req (agent-request {}))
          (def row (q/find-scoped desc req (string (get arguments :id))))
          (unless row (errorf "%q %q not found" (desc :name) (get arguments :id)))
          (ensure! desc :update row)
-         (def before (act/snapshot-of row))
-         (each fd (desc :form-fields)
-           (when (in arguments (fd :name))
-             (put row (fd :name) (get arguments (fd :name)))))
-         (db/save! row)
-         (act/announce! req desc :update (get arguments :id) before (act/snapshot-of row))
-         (ok (row->data desc row)))})
+         # the same write the form goes through: read-only fields
+         # filtered, the version column diffed, one transaction, one
+         # announcement
+         (def [outcome _] (act/update-row! desc req row arguments
+                                           (when vfield (get arguments vfield))))
+         (when (= :conflict outcome)
+           (errorf (string "%q %q was changed by somebody else after you read it — "
+                           "read it again and re-apply the change")
+                   (desc :name) (get arguments :id)))
+         (ok (row->data (desc :detail) row)))})
 
 (defn- delete-tool [desc]
   {:name (tool-key (desc :name) "delete")
@@ -267,7 +290,7 @@
    :url (when (desc :mount) (ctx/base desc))
    :actions [;(desc :actions) ;(sorted (keys (desc :custom-actions)))]
    :list (map |($ :name) (desc :list))
-   :detail (desc :detail)
+   :detail (map |($ :name) (desc :detail))
    :form (desc :form)
    :readonly (desc :readonly)
    :search (desc :search)

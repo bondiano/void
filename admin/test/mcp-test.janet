@@ -50,6 +50,20 @@
   :form [:title]
   :scope (fn [_req] (dyn :test/identity)))
 
+# a resource with both halves the write path has to honour: a field the
+# declaration froze, and a version column
+(db/defentity Doc
+  {:id [:int {:db/pk true :db/type "integer"}]
+   :title [:string {:min 1 :max 60 :db/type "text"}]
+   :hits [:optional [:int {:db/type "integer"}]]
+   :lock [:optional [:int {:db/version true :db/type "integer"}]]}
+  :db/table "docs")
+
+(admin/defresource-admin docs Doc
+  :mount false
+  :form [:title :hits]
+  :readonly [:hits])
+
 (authz/defpolicy :staff "Everybody, in this test." [_] true)
 
 (def db-path
@@ -81,7 +95,14 @@
     [] {:kind :write :prepared false})
   (each [owner title] [["ada" "first"] ["ada" "second"] ["grace" "hers"]]
     (db/execute-sql "INSERT INTO notes (owner, title, done) VALUES (?, ?, 0)"
-                    [owner title] {:kind :write})))
+                    [owner title] {:kind :write}))
+  (db/execute-sql "DROP TABLE IF EXISTS docs" [] {:kind :write :prepared false})
+  (db/execute-sql
+    (string "CREATE TABLE docs (id integer primary key autoincrement, "
+            "title text not null, hits integer default 0, "
+            "lock integer not null default 0)")
+    [] {:kind :write :prepared false})
+  (db/execute-sql "INSERT INTO docs (title, hits) VALUES ('draft', 7)" [] {:kind :write}))
 
 # -- the gate, unchanged --------------------------------------------------
 
@@ -203,6 +224,47 @@
   (assert (not (string/find "tenant mismatch" (get out :text)))
           "the *reason* is for the decision log, never for the caller"))
 (authz/register-policy! {:name :admin.notes/show :fn (fn [_] true)})
+
+# -- update is the write the HTML form goes through ----------------------
+#
+# One `update-row!`, two callers. What the browser gets — read-only
+# fields filtered out, the version column guarding the write, a
+# transaction around it — an agent gets for the same reason, because it
+# is the same function and not a second one that will drift.
+
+(def b4 (boot {:tools [(admin-mcp/tool-key :docs "update")]}))
+(defer (test/stop! b4)
+  (seed!)
+  (def server (mcp/server-value))
+  (def upd (first (filter |(= "admin-docs-update" ($ :name)) (server :tools))))
+  (def props (get-in (upd :input-schema) ["properties"]))
+  (assert (get props "title"))
+  (assert (nil? (get props "hits"))
+          "a field the declaration froze is not in the tool's schema either")
+  (assert (get props "lock")
+          (string "the version column is: it is the only way an agent can say "
+                  "which row it read, and without it optimistic locking would be "
+                  "something only the HTML form can do"))
+
+  (def out (json/decode (((upd :call) @{:id 1 :title "renamed" :hits 99}) :text) true))
+  (assert (= "renamed" (out :title)))
+  (assert (= 7 ((db/find Doc 1) :hits))
+          "a read-only field an agent named anyway never reaches save!")
+
+  # the version column, with somebody else writing in between
+  (def at (get (db/find Doc 1) :lock))
+  (db/execute-sql "UPDATE docs SET title = 'theirs', lock = lock + 1 WHERE id = 1"
+                  [] {:kind :write})
+  (def raced ((upd :call) @{:id 1 :title "mine" :lock at}))
+  (assert (raced :error?) "a stale version is a refusal, not an overwrite")
+  (assert (string/find "changed by somebody else" (raced :text))
+          "...and the model is told what to do about it")
+  (assert (= "theirs" ((db/find Doc 1) :title)) "the other write is still there")
+
+  # with the version it just read, the same call goes through
+  (def now-at (get (db/find Doc 1) :lock))
+  (assert (not (((upd :call) @{:id 1 :title "mine" :lock now-at}) :error?)))
+  (assert (= "mine" ((db/find Doc 1) :title))))
 
 # -- the start-time warning about a derived projection -------------------
 #

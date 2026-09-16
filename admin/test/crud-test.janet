@@ -24,7 +24,8 @@
    :title [:string {:min 1 :max 60 :db/type "text"}]
    :body [:optional [:string {:db/type "text"}]]
    :done [:boolean {:db/type "integer"}]
-   :hits [:optional [:int {:db/type "integer"}]]}
+   :hits [:optional [:int {:db/type "integer"}]]
+   :lock [:optional [:int {:db/version true :db/type "integer"}]]}
   :db/table "notes"
   :db/rels {:tags [:has-many :Tag :note-id]})
 
@@ -43,7 +44,18 @@
 
 (admin/defresource-admin notes Note
   :title "Notes"
+  :group "Content"
   :list [:id :title :done :hits]
+  # a detail row in the same shape as a list column: a field keyword, or
+  # a table that computes its own value
+  :detail [:id :title :done
+           {:name :shout :label "Shout"
+            :value (fn [row] (string/ascii-upper (or (row :title) "")))}]
+  :slots {:list {:before (fn [ctx] [:p {:id "list-slot"}
+                                    (string "rows: " (length (ctx :rows)))])}
+          :detail {:after (fn [ctx] [:p {:id "detail-slot"}
+                                     (string "note " (get-in ctx [:row :id]))])}
+          :form {:before (fn [ctx] [:p {:id "form-slot"} "careful"])}}
   :search [:title]
   :filters [:done]
   :sortable [:id :title]
@@ -87,7 +99,8 @@
   (db/execute-sql
     (string "CREATE TABLE notes (id integer primary key autoincrement, "
             "owner text not null default '', title text not null, body text, "
-            "done integer not null default 0, hits integer default 0)")
+            "done integer not null default 0, hits integer default 0, "
+            "lock integer not null default 0)")
     [] {:kind :write :prepared false})
   (db/execute-sql
     (string "CREATE TABLE tags (id integer primary key autoincrement, "
@@ -205,6 +218,29 @@
             "another owner's row is not found — the same answer as one that does not exist")
     (note "detail scoped, inline rendered")
 
+    # -- what the resource put around its own pages ----------------------
+    #
+    # A slot is per resource, so it is a declaration and not a layout
+    # with a condition in it; the nav group is the same declaration read
+    # by the frame.
+    (def full-list (text (get* "/admin/notes" {:headers {}})))
+    (assert (string/find `<p id="list-slot">` full-list)
+            "the :list :before slot is drawn above the toolbar")
+    (assert (string/find "vd-nav-group" full-list)
+            "a resource that named a :group gets a heading in the navigation")
+    (assert (string/find ">Content<" full-list))
+
+    (def detail (text (get* "/admin/notes/1")))
+    (assert (string/find ">FIRST<" detail)
+            "a computed :detail row is drawn from its :value, like a list column")
+    (assert (string/find ">Shout<" detail) "...under the label it declared")
+    (assert (string/find `<p id="detail-slot">` detail)
+            "and the :detail :after slot closes the page")
+
+    (assert (string/find `<p id="form-slot">` (text (get* "/admin/notes/1/edit" {:headers {}})))
+            "the :form :before slot is on the edit page")
+    (note "slots, a computed detail row and the nav group")
+
     # -- update ----------------------------------------------------------
     (def edit (get* "/admin/notes/1/edit" {:headers {}}))
     (def etoken (csrf-of edit))
@@ -230,6 +266,38 @@
             "...and the row that satisfies it still saves")
     # put the allowing one back — the rest of the suite is not about this
     (authz/register-policy! {:name :admin.notes/update :fn (fn [_] true)})
+    # -- the version column, across the request boundary -----------------
+    #
+    # The row this handler loads in order to save is loaded *now*, so
+    # its own version is fresh by construction: guarding by it guards by
+    # nothing. What the form carries is the version it was drawn with,
+    # and that is the one `save!` is given.
+    (def open-form (get* "/admin/notes/2/edit" {:headers {}}))
+    (def vtoken (csrf-of open-form))
+    (def drawn-with
+      (first (peg/match ~(* (thru `name="lock"`) (thru `value="`) (<- (to `"`)))
+                        (text open-form))))
+    (assert drawn-with "the form carries the version it was drawn with")
+
+    # somebody else saves the same row while that form sits open
+    (db/execute-sql "UPDATE notes SET title = 'theirs', lock = lock + 1 WHERE id = 2"
+                    [] {:kind :write})
+    (def raced (post "/admin/notes/2" vtoken
+                     {:form {:title "mine" :done "false" :lock drawn-with}}))
+    (assert (= 422 (raced :status)) "a lost race is a conflict, not an overwrite")
+    (assert (string/find "Somebody else saved this row" (text raced))
+            "...and the operator is told so in a sentence they can act on")
+    (assert (= "theirs" ((db/find Note 2) :title)) "the other edit is still there")
+
+    # re-applied against the version that is now current, it saves
+    (def fresh (get* "/admin/notes/2/edit" {:headers {}}))
+    (def now-at
+      (first (peg/match ~(* (thru `name="lock"`) (thru `value="`) (<- (to `"`)))
+                        (text fresh))))
+    (assert (< ((post "/admin/notes/2" (csrf-of fresh)
+                      {:form {:title "mine" :done "false" :lock now-at}}) :status)
+               400))
+    (assert (= "mine" ((db/find Note 2) :title)))
     (note "update writes, inside the scope and past the row's own policy")
 
     # -- a cell ----------------------------------------------------------

@@ -57,12 +57,13 @@
 # -- option checking -----------------------------------------------------
 
 (def- allowed-opts
-  {:title true :singular true :path true :mount true
+  {:title true :singular true :path true :mount true :group true
    :only true :except true :actions true
    :list true :form true :readonly true :detail true
    :filters true :search true :sortable true :editable true
    :order-by true :per-page true :preload true
-   :scope true :widgets true :inlines true :doc true :defaults true})
+   :scope true :widgets true :inlines true :doc true :defaults true
+   :slots true})
 
 (defn- check-opts [rname opts]
   (eachk k opts
@@ -138,31 +139,36 @@
      :version (= fname (ent :version))
      :rel (fk-relation ent fname)}))
 
-# -- list columns --------------------------------------------------------
+# -- columns -------------------------------------------------------------
+#
+# One shape for the two projections a row is read through. `:list` and
+# `:detail` answer the same question about different numbers of rows,
+# and a `:value` that only one of them accepted would mean "a computed
+# column is a list feature" — which is not a property of a column.
 
-(defn- list-column [rname ent spec]
+(defn- column-spec [rname ent where spec]
   (cond
     (keyword? spec)
     (freeze {:name spec :label (humanize spec)
-             :field (field-descriptor ent (check-field rname ent ":list" spec))})
+             :field (field-descriptor ent (check-field rname ent where spec))})
 
     (dictionary? spec)
     (do
       (def name (or (get spec :name)
-                    (errorf "admin resource %q: a :list column table needs a :name" rname)))
+                    (errorf "admin resource %q: a %s column table needs a :name" rname where)))
       (def value (get spec :value))
       (unless (or value (get-in ent [:fields name]))
-        (errorf (string "admin resource %q: :list column %q is not a field of %q and "
+        (errorf (string "admin resource %q: %s column %q is not a field of %q and "
                         "carries no :value function (fields: %s)")
-                rname name (ent :name) (known-fields ent)))
+                rname where name (ent :name) (known-fields ent)))
       (freeze (merge {:label (humanize name)}
                      spec
                      {:name name
                       :field (when (get-in ent [:fields name])
                                (field-descriptor ent name))})))
 
-    (errorf "admin resource %q: a :list column is a field keyword or a table, got %q"
-            rname spec)))
+    (errorf "admin resource %q: a %s column is a field keyword or a table, got %q"
+            rname where spec)))
 
 # -- filters -------------------------------------------------------------
 
@@ -223,6 +229,38 @@
                   :resource iname
                   :rel rel}
                  spec)))
+
+# -- slots ---------------------------------------------------------------
+
+(def- slot-pages {:list true :detail true :form true})
+(def- slot-places {:before true :after true})
+
+(defn- slots-spec
+  ``What a resource puts above or below one of its three pages:
+  `{:detail {:before (fn [ctx] hiccup)}}`. A slot is per *resource*,
+  which is why it is a declaration and not an extension point: a note
+  on the orders page is not a note on every page, and the contribution
+  that had to ask "which resource am I on?" would be a layout with a
+  condition in it.``
+  [rname spec]
+  (unless (dictionary? spec)
+    (errorf "admin resource %q: :slots must be a table, got %q" rname spec))
+  (eachk page spec
+    (unless (in slot-pages page)
+      (errorf "admin resource %q: :slots names page %q (pages: %s)"
+              rname page (util/names-str (keys slot-pages))))
+    (def places (get spec page))
+    (unless (dictionary? places)
+      (errorf "admin resource %q: :slots %q must be a table, got %q" rname page places))
+    (eachk place places
+      (unless (in slot-places place)
+        (errorf "admin resource %q: :slots %q names %q (places: %s)"
+                rname page place (util/names-str (keys slot-places))))
+      (unless (function? (get places place))
+        (errorf "admin resource %q: :slots %q %q must be (fn [ctx] hiccup), got %q"
+                rname page place (get places place)))))
+  (freeze (tabseq [[page places] :pairs spec]
+            page (freeze (tabseq [[place f] :pairs places] place f)))))
 
 # -- custom actions ------------------------------------------------------
 
@@ -294,6 +332,7 @@
   :mount            false leaves the declaration without top-level
                     routes — the shape an inline target or an
                     agent-only resource has
+  :group            the navigation group this resource sits under
   :only :except     which of the seven conventional actions exist
   :actions          extra actions, each a confirmation page
   :list             list columns: field keywords, or tables with a
@@ -301,7 +340,11 @@
   :form             the fields of the create/edit form — the form
                     schema is (schema/select entity these)
   :readonly         fields shown but never written
-  :detail           the fields of the detail page (default: all)
+  :detail           the rows of the detail page, in the same shape as
+                    :list — a field keyword or a table with a :value
+                    (fn [row]) (default: every column)
+  :slots            {:list|:detail|:form {:before|:after (fn [ctx])}}
+                    — hiccup above or below one of the three pages
   :filters :search :sortable :editable   the list's four affordances
   :order-by :per-page :preload           the list query
   :scope            (fn [request] where) narrowing every read *and*
@@ -348,11 +391,12 @@
      :singular (get opts :singular (titleize (e :name)))
      :path (get opts :path (string "/" rname))
      :mount (not= false (get opts :mount true))
+     :group (get opts :group)
      :actions actions
      :action-set (freeze (tabseq [a :in actions] a true))
      :custom-actions custom
-     :list (tuple ;(map |(list-column rname e $) (get opts :list (e :field-order))))
-     :detail (tuple ;(map |(check-field rname e ":detail" $) (get opts :detail (e :field-order))))
+     :list (tuple ;(map |(column-spec rname e ":list" $) (get opts :list (e :field-order))))
+     :detail (tuple ;(map |(column-spec rname e ":detail" $) (get opts :detail (e :field-order))))
      # whether the projection above was declared or fell back to every
      # column of the entity — a derived projection is the one that can
      # pick up a column nobody meant to show (a password hash added to
@@ -376,6 +420,7 @@
      :preload (get opts :preload nil)
      :scope (get opts :scope nil)
      :defaults defaults
+     :slots (slots-spec rname (get opts :slots {}))
      :widgets (freeze (get opts :widgets {}))
      :inlines (freeze (tabseq [[k v] :pairs (get opts :inlines {})]
                         k (inline-spec rname e k v)))}))

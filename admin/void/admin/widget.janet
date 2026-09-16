@@ -203,6 +203,25 @@
          (nil? (ctx :value)) (text-of nil)
          (and linked target) (label-of target linked)
          (text-of (ctx :value))))
+     # The filter-panel control of a foreign key: the same select the
+     # form draws, with "any" in front of it. Without one the panel asks
+     # the operator to type an identifier — the very thing the link
+     # widget exists so that nobody has to do. Too many target rows for
+     # a select answers nil, and the panel falls back to the plain input
+     # rather than to a select with a page in it.
+     :filter
+     (fn link-filter [ctx]
+       (def target (target-resource (get-in ctx [:field :rel])))
+       (def limit (or (dyn link-limit-dyn) 100))
+       (def rows (when target (link-options target limit)))
+       (when (and rows (<= (length rows) limit))
+         [:select {:name (ctx :name) :id (ctx :id)}
+          [:option {:value ""} "any"]
+          (seq [r :in rows
+                :let [id (string (get r (get-in target [:entity :pk])))]]
+            [:option {:value id
+                      :selected (when (= id (string (or (ctx :value) ""))) true)}
+             (label-of target r)])]))
      :render
      (fn link-render [ctx]
        (def field (ctx :field))

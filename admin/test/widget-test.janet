@@ -156,7 +156,8 @@
 
 (admin/defresource-admin notes Note :form [:title] :list [:title])
 (admin/defresource-admin brands Brand :list [:id :name])
-(admin/defresource-admin items Item :form [:name :brand-id] :list [:id :name])
+(admin/defresource-admin items Item :form [:name :brand-id] :list [:id :name]
+  :filters [:brand-id])
 (authz/defpolicy :staff "Everybody, in this test." [_] true)
 
 (def boot
@@ -221,6 +222,20 @@
   (def form (test/text (test/inject c {:uri "/admin/items/new"})))
   (assert (string/find "<select" form) "few rows in the target means a select")
   (assert (string/find "Acme" form) "and the options are labelled, not numbered")
-  (assert (string/find "Globex" form)))
+  (assert (string/find "Globex" form))
+
+  # The same shape in the filter panel. Without it the panel asks the
+  # operator to type a foreign key by hand — the very thing the link
+  # widget exists so that nobody has to do.
+  (def list-page (test/text (test/inject c {:uri "/admin/items"})))
+  (assert (string/find "<select" list-page) "a foreign key filters through a select")
+  (assert (string/find ">any</option>" list-page)
+          "...with a member for \"do not filter by this at all\"")
+  (assert (string/find "Acme" list-page) "...over the target's own rows")
+
+  # and the value it carries is the one the list narrows by
+  (def filtered (test/text (test/inject c {:uri "/admin/items?brand-id=2"})))
+  (assert (string/find "selected" filtered)
+          "the select comes back showing what the URL asked for"))
 
 (print "admin widget-test ok")

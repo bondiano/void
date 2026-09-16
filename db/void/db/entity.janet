@@ -855,8 +855,17 @@
   A partial UPDATE of the diffed columns only; an unchanged instance
   writes nothing. With a :db/version field the UPDATE is guarded by
   the loaded version and a lost race throws instead of overwriting.
-  Returns the instance with a refreshed snapshot.``
-  [inst]
+  Returns the instance with a refreshed snapshot.
+
+  `opts` takes `:version` — the version the caller read, when that is
+  not the one this instance was loaded with. A form is the case that
+  needs it: it was drawn from a row read minutes ago and posts back
+  much later, so the row the handler loads in order to save is already
+  somebody else's, and guarding by *its* version guards by a value that
+  is fresh by construction. Passing the version the form carried is
+  what turns a lost race into a conflict instead of a silent
+  overwrite.``
+  [inst &opt opts]
   (def desc (descriptor-of inst))
   (def diff (changes inst))
   (when (empty? diff) (break inst))
@@ -864,16 +873,19 @@
   (when (nil? id)
     (errorf "%q has no primary key value — insert! it first" (desc :name)))
   (def vfield (desc :version))
+  (def expected
+    (when vfield
+      (let [given (get (or opts {}) :version)]
+        (if (nil? given) (get (snapshot inst) vfield) given))))
   (def where
     (if vfield
       [:and
        [:= [:col (desc :pk-column)] id]
-       [:= [:col (get-in desc [:fields vfield :column])]
-        (get (snapshot inst) vfield)]]
+       [:= [:col (get-in desc [:fields vfield :column])] expected]]
       [:= [:col (desc :pk-column)] id]))
   (def to-write
     (if vfield
-      (merge diff {vfield (inc (or (get (snapshot inst) vfield) 0))})
+      (merge diff {vfield (inc (or expected 0))})
       diff))
   (def n (state/execute! {:update (desc :table)
                           :set (to-row desc to-write)
@@ -881,7 +893,7 @@
   (when (zero? n)
     (if vfield
       (errorf "%q %q was modified concurrently (version %q) — reload and retry"
-              (desc :name) id (get (snapshot inst) vfield))
+              (desc :name) id expected)
       (errorf "%q %q no longer exists — nothing was updated" (desc :name) id)))
   (when vfield (put inst vfield (get to-write vfield)))
   (refresh-snapshot! inst))

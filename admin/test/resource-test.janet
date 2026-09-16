@@ -105,6 +105,27 @@
 (assert (= :has-many (get-in e [:inlines :parts :rel :kind])))
 (assert (= :parts (get-in e [:inlines :parts :resource])))
 
+# -- :detail is a projection in the same shape as :list -------------------
+
+(def f (res/resource :widgets Widget
+                     :group "Catalog"
+                     :detail [:id :name {:name :summary :label "Summary"
+                                         :value (fn [row] "x")}]
+                     :slots {:detail {:before (fn [ctx] [:p "note"])}
+                             :list {:after (fn [ctx] [:p "footer"])}}))
+
+(assert (= "Catalog" (f :group)))
+(assert (= 3 (length (f :detail))))
+(assert (= "Name" (get-in f [:detail 1 :label])) "a detail row is labelled like a list column")
+(assert (nil? (get-in f [:detail 2 :field])) "a computed detail row has no entity field")
+(assert ((get-in f [:detail 2 :value]) {}) "and it keeps the function that computes it")
+(assert (not (f :detail-derived?)) "a declared :detail is trusted as written")
+(assert ((res/resource :widgets Widget) :detail-derived?)
+        "a :detail nobody declared is derived, and that is what ./init warns about")
+
+(assert (function? (get-in f [:slots :detail :before])))
+(assert (nil? (get-in f [:slots :detail :after])) "a slot nobody declared is simply absent")
+
 # -- refusals ------------------------------------------------------------
 
 (defn- fails [f msg]
@@ -130,6 +151,22 @@
 (assert (string/find "belongs-to"
                      (fails |(res/resource :widgets Widget :inlines {:brand {}})
                             "an inline over a belongs-to")))
+
+(assert (string/find "has no field"
+                     (fails |(res/resource :widgets Widget :detail [:nope])
+                            "a detail row that is not a field")))
+
+(assert (string/find "carries no :value"
+                     (fails |(res/resource :widgets Widget :detail [{:name :nope}])
+                            "a detail row that is neither a field nor computed")))
+
+(assert (string/find "names page"
+                     (fails |(res/resource :widgets Widget :slots {:index {:before (fn [c] nil)}})
+                            "a slot on a page that has none")))
+
+(assert (string/find "must be (fn [ctx] hiccup)"
+                     (fails |(res/resource :widgets Widget :slots {:list {:before [:p "x"]}})
+                            "a slot that is hiccup rather than a function of one")))
 
 (assert (string/find "conventional actions"
                      (fails |(res/resource :widgets Widget :actions {:destroy {:apply (fn [r q] nil)}})

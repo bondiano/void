@@ -126,6 +126,26 @@
 (assert (not ok) "a stale save! fails")
 (assert (string/find "modified concurrently" err) "and says why")
 
+# The version a *form* carries is not the version the instance was
+# loaded with: the row was read minutes ago, and the one the handler
+# loads in order to save it is fresh by construction. `:version` says
+# which one to guard by, and without it optimistic locking over a
+# request boundary guards by nothing at all.
+(fake/clear! st)
+(set responder (fn [sql _] (when (string/has-prefix? "UPDATE" sql) @{:rows [] :count 1})))
+(put u :email "fourth@b.c")
+(entity/save! u {:version 1})
+(def guarded (first (fake/matching st "UPDATE")))
+(assert (deep= ["fourth@b.c" 2 1 1] (guarded :params))
+        "the guard and the bump are both the caller's version, not the loaded one")
+
+(fake/clear! st)
+(set responder (fn [_ _] @{:rows [] :count 0}))
+(put u :email "fifth@b.c")
+(def [ok2 err2] (protect (entity/save! u {:version 1})))
+(assert (not ok2) "and a stale one loses the race it was meant to lose")
+(assert (string/find "(version 1)" (string err2)) "the refusal names the version it guarded by")
+
 # -- preload: one batched IN per relation, never one query per row -------
 
 (fake/clear! st)

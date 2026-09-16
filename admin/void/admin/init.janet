@@ -112,10 +112,11 @@
   :key :name :what "dashboard widget")
 
 (plugin/defextension-point :void.admin/menu
-  :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}. A link to a page inside the admin says :path instead — {:name :jobs :label \"Jobs\" :path \"/jobs\"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two"
+  :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}. A link to a page inside the admin says :path instead — {:name :jobs :label \"Jobs\" :path \"/jobs\"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two. :group puts the item under a heading in the navigation, the same one a resource names with :group — ungrouped links come first, then the groups by name"
   :schema {:name :keyword :label :string
            :href [:optional :string]
-           :path [:optional :string]}
+           :path [:optional :string]
+           :group [:optional :string]}
   :key :name :what "admin menu item"
   :validate (fn [contribs]
               (each c contribs
@@ -241,7 +242,7 @@
     (def desc (lookup rname))
     (each [projection derived? fields]
         [[:list (desc :list-derived?) (map |($ :name) (desc :list))]
-         [:detail (desc :detail-derived?) (desc :detail)]]
+         [:detail (desc :detail-derived?) (map |($ :name) (desc :detail))]]
       (def hit (filter secretish? fields))
       (when (and derived? (not (empty? hit)))
         (array/push out {:resource rname :projection projection :fields (tuple ;hit)}))))

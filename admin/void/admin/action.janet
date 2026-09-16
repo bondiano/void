@@ -153,6 +153,20 @@
 (defn- checked [desc values]
   (schema/check (desc :form-schema) values {:coerce true}))
 
+(defn writable
+  ``The values a caller may actually write: the fields the form
+  declares, minus the ones it froze as read-only. The guard is here and
+  not in each caller because both callers are writers — the form
+  filters read-only fields before it parses them, and the agent's
+  `update` tool, whose arguments are not a form, had no filter at
+  all.``
+  [desc values]
+  (def readonly (tabseq [k :in (desc :readonly)] k true))
+  (def fields (tabseq [fd :in (desc :form-fields)] (fd :name) true))
+  (tabseq [[k v] :pairs values
+           :when (and (in fields k) (not (in readonly k)))]
+    k v))
+
 (defn with-defaults
   ``The attributes of a create, plus the columns the declaration says
   the server fills: a created-at, an owner, a tenant. They are not form
@@ -173,14 +187,14 @@
     (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
     (def rows (q/rows desc req st))
     (def total (q/total desc req st))
-    (page req (view/list-page desc rows st total) (desc :name)
+    (page req (view/list-page desc rows st total req) (desc :name)
           {:partial (fn [] (view/rows-fragment desc rows st total))})))
 
 # -- new / create --------------------------------------------------------
 
 (defn new [desc]
   (fn admin-new [req]
-    (page req (view/form-page desc {:values {}}) (desc :name))))
+    (page req (view/form-page desc {:values {} :request req}) (desc :name))))
 
 (defn create [desc]
   (fn admin-create [req]
@@ -196,7 +210,8 @@
         (announce! req desc :create id nil (snapshot-of row))
         (htmx/redirect-back req (ctx/url desc (string "/" id))))
       (let [resp (page req (view/form-page desc {:values (get req :form {})
-                                                :errors (result :errors)})
+                                                :errors (result :errors)
+                                                :request req})
                        (desc :name))]
         (put resp :status 422)
         resp))))
@@ -225,17 +240,51 @@
         ((h :fn) {:resource (desc :name)
                   :id (get row (get-in desc [:entity :pk]))
                   :request req})))
-    (page req (view/detail-page desc row (inline-blocks desc req row) history)
+    (page req (view/detail-page desc row (inline-blocks desc req row) history req)
           (desc :name))))
 
 (defn edit [desc]
   (fn admin-edit [req]
     (def row (row! desc req))
-    (page req (view/form-page desc {:row row :values row})
+    (page req (view/form-page desc {:row row :values row :request req})
           (desc :name))))
 
 (defn- version-conflict? [err]
   (and (string? (string err)) (string/find "modified concurrently" (string err))))
+
+(defn update-row!
+  ``Write `values` onto `row`, save it and announce it — the one write
+  the form and the agent's `update` tool both go through, so the
+  read-only fields, the version column, the transaction and the
+  announcement are decided once and not twice.
+
+  `version` is the value the caller read *before* it edited, and it is
+  what `save!` guards by. It has to be passed rather than taken off the
+  row: the row this handler loads is loaded *now*, so its own version is
+  fresh by construction and guarding by it would guard by nothing. The
+  form carries the version it was drawn with in a hidden field, an agent
+  passes the one it read from `get`, and only then is a lost race a
+  conflict somebody can read instead of a silently overwritten edit.
+
+  A caller that has no transaction of its own gets one — the HTML route
+  declares `:void.db/txn` and this is already inside it, an agent's call
+  is not a route and has nothing.
+
+  Returns `[:ok row]` or `[:conflict err]`. Anything else is a bug and
+  is raised.``
+  [desc req row values &opt version]
+  (def pk (get-in desc [:entity :pk]))
+  (def before (snapshot-of row))
+  (eachp [k v] (writable desc values) (put row k v))
+  (defn write []
+    (db/save! row {:version version})
+    (announce! req desc :update (get row pk) before (snapshot-of row)))
+  (def [ok err]
+    (protect (if (db/in-transaction?) (write) (db/with-tx (write)))))
+  (cond
+    ok [:ok row]
+    (version-conflict? err) [:conflict err]
+    (error err)))
 
 (defn update [desc]
   (fn admin-update [req]
@@ -248,7 +297,8 @@
     (defn invalid [errors extra]
       (def resp (page req (view/form-page desc (merge {:row row
                                                        :values (get req :form {})
-                                                       :errors errors}
+                                                       :errors errors
+                                                       :request req}
                                                       extra))
                       (desc :name)))
       (put resp :status 422)
@@ -258,22 +308,18 @@
       (do
         (def vfield (get-in desc [:entity :version]))
         # the version the form carried is what `save!` must diff against
-        (when vfield
-          (when-let [sent (get-in req [:form (string vfield)])]
-            (def coerced (q/coerce (res/field-descriptor (desc :entity) vfield) sent))
-            (unless (nil? coerced) (put row vfield coerced))))
-        (eachp [k v] (result :value) (put row k v))
-        (def [ok err] (protect (db/save! row)))
-        (cond
-          ok (do (announce! req desc :update (get row (get-in desc [:entity :pk]))
-                            before (snapshot-of row))
-                 (htmx/redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk]))))))
-          (version-conflict? err)
+        (def sent
+          (when vfield
+            (when-let [raw (get-in req [:form (string vfield)])]
+              (q/coerce (res/field-descriptor (desc :entity) vfield) raw))))
+        (def [outcome _] (update-row! desc req row (result :value) sent))
+        (if (= :conflict outcome)
           (invalid []
                    {:row (db/find (desc :entity) (get before (get-in desc [:entity :pk])))
                     :conflict (string "Somebody else saved this row while you were editing it. "
                                       "The fields below are theirs — re-apply your change and save again.")})
-          (error err))))))
+          (htmx/redirect-back
+            req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk]))))))))))
 
 (defn destroy [desc]
   (fn admin-destroy [req]
@@ -316,6 +362,9 @@
     (if (empty? (result :errors))
       (do
         (put row fname (get-in result [:value fname]))
+        # no :version here: a cell is read and written in the same
+        # gesture, and the list page carries no version per row to send
+        # back — the guard would be the one `save!` derives anyway
         (db/save! row)
         (announce! req desc :update (get row (get-in desc [:entity :pk]))
                    before (snapshot-of row))
