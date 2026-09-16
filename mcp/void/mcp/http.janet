@@ -62,6 +62,7 @@
 ### deserves, `:void.auth/scopes` included.
 
 (import void/core/plugin :as plugin)
+(import void/core/keys :as keys)
 (import void/http/ring :as ring)
 (import void/http/router :as router)
 (import ./jsonrpc :as rpc)
@@ -97,13 +98,13 @@
 (var settings "The [:mcp-http] slice, read at :before-start." defaults)
 
 (def identity-dyn
-  ``Where the current identity lives — `void/auth`'s dyn key, read by
-  name rather than by importing the package. That indirection is
-  void/auth's and void/authz's, and it is what lets this plugin accept an
-  OAuth access token (void/auth-oauth), a session cookie or an
-  application's own authentication without knowing which is in the
-  composition, or whether any of them is.``
-  :void.auth/identity)
+  ``Where the current identity lives — the key void/auth binds
+  (void/core/keys), read by name rather than by importing the package.
+  That indirection is what lets this plugin accept an OAuth access
+  token (void/auth-oauth), a session cookie or an application's own
+  authentication without knowing which is in the composition, or
+  whether any of them is.``
+  keys/identity)
 
 (defn auth-mode
   ``What this endpoint demands of a request:

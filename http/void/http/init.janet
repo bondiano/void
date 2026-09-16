@@ -20,6 +20,7 @@
 ### table after code changes.
 
 (import spork/json)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/meta :as meta)
@@ -203,7 +204,7 @@
                                   :on-error
                                   (fn route-on-error [r]
                                     (tuple ;(get ctx :on-error-global [])
-                                           ;(get-in r [:void/route :hooks :on-error] [])))})
+                                           ;(get-in r [keys/route :hooks :on-error] [])))})
               req)))})
 
 # per-process random prefix + counter (fastify's genReqId model: a bare
@@ -229,7 +230,7 @@
            (fn request-id-mw [req]
              (def id (or (when hdr (ring/request-header req hdr))
                          (string request-id-prefix "-" (++ request-id-counter))))
-             (put req :request-id id)
+             (put req keys/request-id id)
              (log/with-context {:request-id id}
                (handler req))))})
 
@@ -362,7 +363,7 @@
   (log/info "request" :ns "void.http.access"
             :method (req :method) :path (req :path)
             :status (resp :status) :us us
-            :request-id (req :request-id)))
+            :request-id (req keys/request-id)))
 
 (defn- resolve-global-hooks
   "The :void.http/hook contributions -> stage -> tuple of resolved
@@ -500,14 +501,14 @@
   (put ctx :notify-response
        (fn notify-response [req resp]
          (each h (ctx :on-response-global) (protect (h req resp)))
-         (each h (get-in req [:void/route :hooks :on-response] [])
+         (each h (get-in req [keys/route :hooks :on-response] [])
            (protect (h req resp)))
          (when (ctx :access-log)
            (protect (access-log! req resp)))))
   (put ctx :notify-timeout
        (fn notify-timeout [req]
          (each h (ctx :on-timeout-global) (protect (h req)))
-         (each h (get-in req [:void/route :hooks :on-timeout] [])
+         (each h (get-in req [keys/route :hooks :on-timeout] [])
            (protect (h req)))))
   ctx)
 

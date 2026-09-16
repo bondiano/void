@@ -36,6 +36,7 @@
 ### does not swap.
 
 (import void/html :as html)
+(import void/core/keys :as keys)
 (import void/html/chrome :as chrome)
 (import void/html/hiccup :as hiccup)
 (import void/html/form :as form)
@@ -221,7 +222,7 @@
     (f (merge {:resource desc} (or context {})))))
 
 (defn- csrf-slot []
-  (when-let [f (dyn :void.html/csrf)] (f)))
+  (when-let [f (dyn keys/csrf-field)] (f)))
 
 (defn post-form
   ``A form that posts. `verb` is the verb the route actually declares:

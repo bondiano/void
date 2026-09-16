@@ -11,6 +11,7 @@
 ### — void/security binds it in wave 3, nothing renders until then.
 
 (import void/core/schema :as schema)
+(import void/core/keys :as keys)
 (import void/core/text :as text)
 
 (defn params
@@ -245,7 +246,7 @@
   :submit (button label, "Save"), :attrs (extra <form> attributes),
   plus everything `fields` accepts. Form-level errors (empty path)
   render before the fields; the CSRF slot renders on non-GET forms
-  when (dyn :void.html/csrf) is bound.``
+  when (dyn keys/csrf-field) is bound.``
   [sch opts]
   (def method (get opts :method :post))
   (unless (in {:get true :post true} method)
@@ -260,7 +261,7 @@
                  :method (string method)
                  :enctype (when multipart? "multipart/form-data")}
                 (get opts :attrs {}))
-   (when-let [csrf (and (= :post method) (dyn :void.html/csrf))]
+   (when-let [csrf (and (= :post method) (dyn keys/csrf-field))]
      (csrf))
    (when form-errors
      [:ul {:class "form-errors"}

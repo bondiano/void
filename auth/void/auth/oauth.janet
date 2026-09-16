@@ -51,6 +51,7 @@
 ### `[:auth-oauth :endpoints] false` when it publishes its own.
 
 (import void/http :as http)
+(import void/core/keys :as keys)
 (import void/core/errors :as errors)
 (import spork/json)
 (import void/core/plugin :as plugin)
@@ -577,7 +578,7 @@
                          (not (empty? (get rmeta :void.auth/scopes [])))))
    :wrap (fn [handler]
            (fn scopes-mw [req]
-             (def rmeta (get-in req [:void/route :meta] {}))
+             (def rmeta (keys/route-meta req))
              (def wanted (required-scopes rmeta))
              (def id (identity/current))
              (cond

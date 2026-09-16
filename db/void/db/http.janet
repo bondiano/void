@@ -54,6 +54,7 @@
 ### transaction.
 
 (import void/core/plugin :as plugin)
+(import void/core/keys :as keys)
 (import void/core/log :as log)
 (import void/core/schema :as schema)
 (import void/http/errors :as errors)
@@ -200,7 +201,7 @@
            # :when already decided this route wants a transaction; the
            # isolation is read once, at table-build time
            (fn db-txn [req]
-             (state/with-tx* (tx-opts (get-in req [:void/route :meta] {}))
+             (state/with-tx* (tx-opts (keys/route-meta req))
                              (fn txn-handler [] (handler req)))))})
 
 # -- declarative row loading ---------------------------------------------
@@ -242,7 +243,7 @@
    :when (fn [rmeta] (truthy? (get rmeta :void.db/load)))
    :wrap (fn [handler]
            (fn db-load [req]
-             (put req :void.db/row (load-row (get-in req [:void/route :meta :void.db/load]) req))
+             (put req keys/row (load-row (get (keys/route-meta req) :void.db/load) req))
              (handler req)))})
 
 (plugin/defplugin void/db-http

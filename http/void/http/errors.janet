@@ -22,6 +22,7 @@
 ### on a path that does not exist, and not somebody's text/plain.
 
 (import void/core/errors :as errors)
+(import void/core/keys :as keys)
 (import void/core/text :as text)
 (import ./ring :as ring)
 (import ./wire :as wire)
@@ -147,7 +148,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
       (if (empty? trace) "" (string "<pre>" (html-escape trace) "</pre>"))
       "<dl><dt>method</dt><dd>" (html-escape (string (req :method))) "</dd>"
       "<dt>path</dt><dd>" (html-escape (string (req :path))) "</dd>"
-      "<dt>route</dt><dd>" (html-escape (string (get-in req [:void/route :name]))) "</dd></dl>")))
+      "<dt>route</dt><dd>" (html-escape (string (get-in req [keys/route :name]))) "</dd></dl>")))
 
 (defn wants-html?
   "Is this a browser? The Accept header says text/html; an API client,

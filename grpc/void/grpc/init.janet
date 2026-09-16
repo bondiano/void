@@ -52,6 +52,7 @@
 ### neither.
 
 (import spork/base64)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/http/router :as router)
 (import void/proto :as proto)
@@ -220,7 +221,7 @@
    # else, and an RFC 7807 body would reach it as an unparseable 403
    :priority 800
    :fn (fn render-connect [err req _ctx]
-         (when (get-in req [:void/route :meta :void.grpc/method])
+         (when (get (keys/route-meta req) :void.grpc/method)
            (mount/error-response err)))})
 
 # -- config --------------------------------------------------------------

@@ -37,6 +37,7 @@
 ### must not mean public.
 
 (import void/core/log :as log)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/html :as html)
 (import void/htmx/hx :as hx)
@@ -52,8 +53,8 @@
 
 (def identity-dyn
   ``The dyn key `void/auth` publishes the current identity under, read
-  by name rather than by importing the package.``
-  :void.auth/identity)
+  by name (void/core/keys) rather than by importing the package.``
+  keys/identity)
 
 (def Config
   "Schema of the [:notify-inapp] config slice."

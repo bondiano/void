@@ -19,6 +19,7 @@
 ### the list-endpoint conventions.
 
 (import void/core/plugin :as plugin)
+(import void/core/keys :as keys)
 (import void/core/schema :as schema)
 (import void/http/ring :as ring)
 (import void/core/errors :as errors)
@@ -237,7 +238,7 @@
 # -- problem+json error rendering ----------------------------------------
 
 (defn- problem-request? [req]
-  (def rmeta (get-in req [:void/route :meta]))
+  (def rmeta (keys/route-meta req))
   (def flag (get (or rmeta {}) :void.rest/problems))
   (cond
     (not (nil? flag)) flag

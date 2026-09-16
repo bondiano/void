@@ -30,11 +30,14 @@
 ### lets an application keep its own authentication and still use
 ### void's authorization.
 
+(import void/core/keys :as keys)
+
 (def dyn-key
   ``The dyn the current identity lives in. Named rather than passed:
   `void/authz` reads this key without importing void/auth, and so may
-  anything else.``
-  :void.auth/identity)
+  anything else — the name is void/core/keys' `identity`, so the
+  readers spell it the same way this writer does.``
+  keys/identity)
 
 (defn make
   ``Build an identity. `subject` is required and is a string —

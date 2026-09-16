@@ -90,6 +90,7 @@
 ### moment it was trying to stay useful.
 
 (import spork/json)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/http/ring :as ring)
 (import void/http/router :as router)
@@ -222,7 +223,7 @@
   "The label, head sampling rate and memoized label tuples of the
   request's route."
   [req]
-  (if-let [e (req :void/route)]
+  (if-let [e (req keys/route)]
     (or (get route-info-cache (e :name))
         (let [info (new-info e)]
           (put route-info-cache (e :name) info)
@@ -358,7 +359,7 @@
      :attrs @{:http.request.method (req :method)
               :url.path (req :path)
               :http.route (info :label)
-              :request-id (req :request-id)}}
+              :request-id (req keys/request-id)}}
     (fn obs-traced []
       (def span (trace/current))
       (put req :trace-id (span :trace-id))

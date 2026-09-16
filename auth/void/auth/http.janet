@@ -35,6 +35,7 @@
 ### claims then come from what the login put there.
 
 (import void/core/errors :as errors)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/core/config :as config)
@@ -408,7 +409,7 @@
    :wrap
    (fn [handler]
      (fn auth-identity [req]
-       (def rmeta (get-in req [:void/route :meta] {}))
+       (def rmeta (keys/route-meta req))
        (def names (get rmeta :void.auth/strategies))
        (def id (strategy/authenticate req names))
        (put req :void.auth/identity id)

@@ -58,6 +58,7 @@
 ### claim that stops being true silently.
 
 (import void/core/plugin :as plugin)
+(import void/core/keys :as keys)
 (import void/core/log :as log)
 (import void/http/middleware :as middleware)
 (import void/http/ring :as ring)
@@ -138,7 +139,7 @@
   because a misconfiguration that logs per request is a second
   incident on top of the first.``
   [req reason]
-  (def route (or (get-in req [:void/route :name]) (get req :path "?")))
+  (def route (or (get-in req [keys/route :name]) (get req :path "?")))
   (def seen [route reason])
   (unless (get warned seen)
     (put warned seen true)

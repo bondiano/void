@@ -38,16 +38,17 @@
 ### length of one decision.
 
 (import void/core/log :as log)
+(import void/core/keys :as keys)
 (import void/core/util :as util)
 
 (def log-ns "void.authz.context")
 
 (def identity-dyn
-  ``The dyn key `void/auth` publishes the current identity under. Read
-  by name rather than by importing the package: an application with
-  its own authentication binds the same key and gets the same
-  authorization (the trick `void/pressure-http` uses for `:void.obs/endpoint`).``
-  :void.auth/identity)
+  ``The dyn key `void/auth` publishes the current identity under — read
+  by name (void/core/keys) rather than by importing the package, so an
+  application with its own authentication binds the same key and gets
+  the same authorization.``
+  keys/identity)
 
 (def providers
   "Registered attribute providers, in resolution order."

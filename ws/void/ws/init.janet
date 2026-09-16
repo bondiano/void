@@ -39,6 +39,7 @@
 ### `wss:, ` terminates too).
 
 (import spork/json)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
@@ -173,11 +174,11 @@
     (unless (in spec-keys k)
       (errorf "ws/accept: unknown key %q (known: %s)"
               k (util/names-str (keys spec-keys)))))
-  (unless (get-in req [:void/route :meta :void.ws/socket])
+  (unless (get (keys/route-meta req) :void.ws/socket)
     (errorf (string "route %q answers a websocket handshake but is not marked "
                     ":void.ws/socket true — the mark is what keeps a handler "
                     "deadline off a route that holds a connection open")
-            (get-in req [:void/route :name] (req :path))))
+            (get-in req [keys/route :name] (req :path))))
   (def reg (registry))
   (def origins (get spec :origins (settings :origins)))
   (cond

@@ -43,6 +43,7 @@
 ### where catching it costs nothing is where the table is assembled.
 
 (import void/core/plugin :as plugin)
+(import void/core/keys :as keys)
 (import void/core/log :as log)
 (import void/http :as http)
 (import ./decide :as decide)
@@ -159,7 +160,7 @@
    :wrap
    (fn [handler]
      (fn authz-enforce [req]
-       (def rmeta (get-in req [:void/route :meta] {}))
+       (def rmeta (keys/route-meta req))
        (def names (policies-of rmeta))
        (def resource-fn (get rmeta :void.authz/resource))
        (def decision

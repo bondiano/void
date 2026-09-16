@@ -43,6 +43,7 @@
 ### group's protection from inside it.
 
 (import void/core/errors :as errors)
+(import void/core/keys :as keys)
 (import void/core/plugin :as plugin)
 (import void/core/log :as log)
 (import void/core/system :as system)
@@ -389,7 +390,7 @@
          # the slot void/html has been waiting with since wave 1:
          # every non-GET form renders the hidden field, and nothing
          # renders when this plugin is absent
-         (let [resp (with-dyns [:void.html/csrf (fn [] (csrf/field-markup req cfg))]
+         (let [resp (with-dyns [keys/csrf-field (fn [] (csrf/field-markup req cfg))]
                       (handler req))]
            (csrf-cookie! req resp cfg)))))})
 
@@ -406,7 +407,7 @@
   (def key (get spec :key :ip))
   (cond
     (function? key) (key req)
-    (= :subject key) (or (get-in req [:void.auth/identity :subject])
+    (= :subject key) (or (get-in req [keys/identity :subject])
                          # an anonymous request under a subject limit
                          # falls back to the address, or one visitor
                          # would spend everybody's budget

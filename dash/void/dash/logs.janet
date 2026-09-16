@@ -18,6 +18,7 @@
 ### find in the tail.
 
 (import void/core/log :as log)
+(import void/core/keys :as keys)
 (import void/http/ring :as httpring)
 (import void/html/init :as html)
 (import void/htmx/hx :as hx)
@@ -139,7 +140,7 @@
    [:div {:class "field"} [:button {:type "submit"} (text/t :void.dash/filter)]]])
 
 (defn- csrf-slot []
-  (when-let [f (dyn :void.html/csrf)] (f)))
+  (when-let [f (dyn keys/csrf-field)] (f)))
 
 (defn- level-form []
   (def allowed (ctx/setting :allow-actions?))

@@ -16,6 +16,7 @@
 ### half-rebuilt routing.
 
 (import void/core/plugin :as plugin)
+(import void/core/keys :as keys)
 (import void/core/meta :as meta)
 (import void/core/bind :as bind)
 (import void/core/errors :as errors)
@@ -471,7 +472,7 @@
   Returns the response, or nil when no route matches.``
   [table req]
   (when-let [[entry params] (match table (req :method) (req :path))]
-    (put req :void/route entry)
+    (put req keys/route entry)
     (put req :params params)
     ((entry :chain) req)))
 

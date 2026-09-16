@@ -41,7 +41,7 @@
 ### anything older than `:max-age`.
 ###
 ### **Where it arrives from.** A hidden form field (`_csrf`, spliced
-### into every non-GET form through the `(dyn :void.html/csrf)` slot
+### into every non-GET form through the `(dyn keys/csrf-field)` slot
 ### void/html has been waiting with since wave 1), or the
 ### `x-csrf-token` header (what `(security/htmx-meta)` arranges for
 ### htmx and what a fetch() sets), and nothing else: a token in a query
@@ -62,6 +62,7 @@
 ### line.
 
 (import void/crypto :as crypto)
+(import void/core/keys :as keys)
 (import void/http/ring :as ring)
 (import ./secret :as secret)
 
@@ -136,7 +137,7 @@
   built — the strategy is the only thing that knows), or when the
   request carries a session cookie at all.``
   [req cfg]
-  (def id (get req :void.auth/identity))
+  (def id (get req keys/identity))
   (or (truthy? (and id (get id :cookie)))
       (truthy? (get (ring/cookies req)
                     (get cfg :session-cookie (defaults :session-cookie))))))
@@ -170,7 +171,7 @@
         token)))
 
 (defn field-markup
-  ``The hidden input, as hiccup. This is what the `(dyn :void.html/csrf)`
+  ``The hidden input, as hiccup. This is what the `(dyn keys/csrf-field)`
   slot splices into every non-GET form (void/html has had the slot
   since wave 1 and rendered nothing until now).``
   [req cfg]
