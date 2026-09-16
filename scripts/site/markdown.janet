@@ -8,7 +8,10 @@
 ### blockquotes, horizontal rules, and the inline four (code, strong,
 ### emphasis, links). Anything else in a future document will render
 ### as visible text rather than silently vanish, which is the failure
-### direction a generator wants.
+### direction a generator wants. The one exception is a block that opens
+### with a tag: README.md centres its logo and its badges the only way
+### Markdown has, so such a block is passed through as `hiccup/raw`
+### rather than escaped into visible angle brackets.
 ###
 ### The output is hiccup for void/html — the site is rendered by the
 ### same engine an application's pages are, which is the dogfooding
@@ -19,6 +22,8 @@
 ### `parse` takes an optional link-rewriter, because the corpus links
 ### documents to each other by their .md names and the site knows
 ### where each of those lives as a page.
+
+(import void/html/hiccup :as h)
 
 # -- inline spans --------------------------------------------------------
 
@@ -384,6 +389,18 @@
   [[:pre [:code (string (string/join kept "\n") "\n")]]
    (inc last)])
 
+(def- html-block-peg
+  "An opening or closing tag at the head of a line."
+  (peg/compile ~(* "<" (? "/") :a)))
+
+(defn- parse-html-block
+  "An HTML block — every line up to the next blank one, verbatim."
+  [lines i]
+  (var j i)
+  (while (and (< j (length lines)) (not (empty? (string/trim (lines j)))))
+    (++ j))
+  [(h/raw (string/join (array/slice lines i j) "\n")) j])
+
 (varfn blocks
   "Lines to an array of block-level hiccup."
   [lines rewrite]
@@ -435,6 +452,13 @@
       (let [[node next] (parse-list lines i rewrite)]
         (array/push out node) (set i next))
 
+      # a block that opens with a tag: the author is writing HTML the
+      # parser has no dialect for (the centred logo, the badge row), so
+      # it travels to the renderer untouched
+      (peg/match html-block-peg trimmed)
+      (let [[node next] (parse-html-block lines i)]
+        (array/push out node) (set i next))
+
       # a paragraph: everything until a blank line or another block
       (do
         (def para @[])
@@ -444,6 +468,7 @@
                            (not (peg/match fence-peg t))
                            (not (peg/match header-peg l))
                            (not (string/has-prefix? ">" l))
+                           (not (peg/match html-block-peg t))
                            (not (peg/match item-peg l)))))
           (array/push para (string/trim (lines i)))
           (++ i))

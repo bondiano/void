@@ -83,9 +83,10 @@ Read honestly: at the same offered rate void's latency is within
 + validate + serialize on every request), and its p99 tail is GC-bound
 — the document names mark-and-sweep on the JSON path as the enemy and
 records the budget it set because of it. Max throughput is a different
-story: one void worker tops out far below a multi-core Go service, which
-is why **>10k RPS per process is an explicit anti-case** — the answer is
-prefork workers, and past that, another language.
+story: 29k plaintext and 9k on a validating JSON path is more than the
+applications in void's niche ask for, and prefork multiplies it across
+cores — but one worker still tops out far below a multi-core Go service,
+so **peak throughput as the product is an explicit anti-case**.
 
 Methodology caveats are recorded in the document itself and they cut
 both ways: absolute throughput numbers vary up to ±30% between
@@ -111,8 +112,10 @@ this document.
 Verbatim from the README, because they were written first:
 
 - **Teams of 5+ developers** — you will not hire for it.
-- **>10k RPS per process** — prefork buys some, then it is another
-  language.
+- **Peak throughput as the product** — prefork buys the cores, then a
+  spec written as an RPS-per-core number belongs in a compiled language.
+- **A hard p99 SLO** — the tail on allocation-heavy JSON paths is
+  GC-bound, about 2.8× Go's.
 - **CPU-heavy workloads** — an interpreter is the wrong tool.
 - **Domains that require thick vendor SDKs** — you would be
   reimplementing them.
@@ -122,7 +125,8 @@ Verbatim from the README, because they were written first:
 The combination is the niche, not any single row above: a single
 binary under 5 MB, a live REPL into the production process, and
 batteries included — db, jobs, auth, observability, admin, MCP — from
-one vendor with two frozen contracts. Server-rendered HTMX
+one vendor with two frozen contracts. This is the one-person framework
+the README leads with. Server-rendered HTMX
 applications of small-to-medium complexity where the cost of
 deployment and ownership matters more than peak throughput: internal
 tools, solo/indie SaaS on a VPS, webhook and bot hubs, embedded web
