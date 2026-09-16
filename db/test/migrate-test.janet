@@ -147,12 +147,12 @@
   (def drifted (find |(= "20259999" ($ :version)) (migrate/status dir)))
   (assert (drifted :missing) "status flags a recorded migration with no file")
 
-  # -- scaffolding -------------------------------------------------------
-  (def path (migrate/create! "add orders" dir))
-  (assert (os/stat path :mode) "create! writes the file")
-  (def parsed (migrate/parse-name (last (string/split "/" path))))
-  (assert (= "add_orders" (parsed :name)) "spaces become underscores")
-  (assert (= 14 (length (parsed :version))) "the version is a UTC timestamp"))
+  # -- a file written by `void make migration` is read back --------------
+  (spit (string dir "/20260102000000_add_orders.janet")
+        "(defn up [] nil)\n(defn down [] nil)\n")
+  (def parsed (migrate/parse-name "20260102000000_add_orders.janet"))
+  (assert (= "add_orders" (parsed :name)) "the name is what follows the version")
+  (assert (= 14 (length (parsed :version))) "and the version is a UTC timestamp"))
 
 # -- the lock a fleet's boot needs ---------------------------------------
 #

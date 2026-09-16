@@ -291,49 +291,4 @@
     (array/push reverted m))
   reverted)
 
-# -- scaffolding ---------------------------------------------------------
 
-(def- template
-  ``### %s
-###
-### A step returns what it wants run: a statement map (SQL as data —
-### void/db/builder compiles the DDL for whichever engine is running),
-### a raw SQL string for what the builder has no spelling for, or a
-### tuple of either. `db` is imported for the steps that compute.
-(import void/db :as db)
-
-(defn up []
-  # {:create-table "things"
-  #  :columns [[:id :serial {:primary-key true}]
-  #            [:name :text {:null false}]]}
-  )
-
-(defn down []
-  # {:drop-table "things"}
-  )
-``)
-
-(defn timestamp
-  "Version stamp for a new migration: UTC YYYYMMDDHHMMSS."
-  [&opt at]
-  (def d (os/date (or at (os/time)) true))
-  (string/format "%04d%02d%02d%02d%02d%02d"
-                 (d :year) (inc (d :month)) (inc (d :month-day))
-                 (d :hours) (d :minutes) (d :seconds)))
-
-(defn- mkdirs! [dir]
-  (var acc (if (string/has-prefix? "/" dir) "" "."))
-  (each part (string/split "/" dir)
-    (unless (empty? part)
-      (set acc (string acc "/" part))
-      (os/mkdir acc))))
-
-(defn create!
-  "Write an empty migration file and return its path."
-  [name &opt dir at]
-  (default dir default-dir)
-  (mkdirs! dir)
-  (def slug (string/replace-all " " "_" name))
-  (def path (string dir "/" (timestamp at) "_" slug ".janet"))
-  (spit path (string/format template slug))
-  path)

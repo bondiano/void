@@ -139,8 +139,8 @@
 
 (defn ensure-directory!
   ``Create the parent directory of a database file, so a configured
-  path does not have to be preceded by an mkdir (void/db's
-  `migrate/create!` does the same for the migrations directory).``
+  path does not have to be preceded by an mkdir (`void make migration`
+  does the same for the migrations directory).``
   [path]
   (def parts (string/split "/" (string path)))
   (when (> (length parts) 1)

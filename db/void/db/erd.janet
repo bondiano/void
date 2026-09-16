@@ -9,6 +9,20 @@
 ### admin without a toolchain.
 
 (import ./entity :as entity)
+(import ./builder :as builder)
+
+(defn- column-type
+  ``The SQL a field's `:db/type` names. An entity written by `void make`
+  declares the builder's portable keyword — the same one its migration
+  wrote — so the diagram says `text` where the migration said `:text`,
+  and a hand-written entity that spelled the engine's own type keeps
+  it. A field with no `:db/type` at all shows as a value.``
+  [f]
+  (def t (get f :db/type))
+  (cond
+    (nil? t) "value"
+    (keyword? t) (get builder/ansi-types t (string t))
+    (string t)))
 
 (defn- field-line [desc fname]
   (def f (get-in desc [:fields fname]))
@@ -19,7 +33,7 @@
                (if (get f :db/fk) "FK" "")
                (if (get f :db/unique) "UK" "")])
       ","))
-  (string "    " (or (get f :db/type) "value") " " (f :column)
+  (string "    " (column-type f) " " (f :column)
           (if (empty? marks) "" (string " " marks))))
 
 (defn- rel-lines [desc]

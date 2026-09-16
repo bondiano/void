@@ -1,5 +1,8 @@
 (import ../test-support/paths)
 (import void/cli/make :as make)
+(import void/cli/make/spec :as mspec)
+(import void/cli/make/scaffold :as scaffold)
+(import void/cli/make/resource :as resource)
 (import void/cli/prompt :as prompt)
 (import void/cli :as cli)
 # the composition the generated resource joins: importing a plugin's
@@ -49,57 +52,57 @@
 
 # -- naming --------------------------------------------------------------
 
-(assert (= "posts" (make/plural "post")) "the plain rule")
-(assert (= "boxes" (make/plural "box")) "sibilants take -es")
-(assert (= "categories" (make/plural "category")) "consonant + y takes -ies")
-(assert (= "days" (make/plural "day")) "vowel + y does not")
+(assert (= "posts" (mspec/plural "post")) "the plain rule")
+(assert (= "boxes" (mspec/plural "box")) "sibilants take -es")
+(assert (= "categories" (mspec/plural "category")) "consonant + y takes -ies")
+(assert (= "days" (mspec/plural "day")) "vowel + y does not")
 
-(assert (= "blog-post" (make/kebab "BlogPost")) "pascal in")
-(assert (= "blog-post" (make/kebab "blog_post")) "snake in")
-(assert (= "BlogPost" (make/pascal "blog-post")) "and back out")
-(assert (= "BlogPost" (make/pascal (make/kebab "BlogPost"))) "round-trip")
-(assert (= "blog_post" (make/snake "BlogPost")) "column spelling")
+(assert (= "blog-post" (mspec/kebab "BlogPost")) "pascal in")
+(assert (= "blog-post" (mspec/kebab "blog_post")) "snake in")
+(assert (= "BlogPost" (mspec/pascal "blog-post")) "and back out")
+(assert (= "BlogPost" (mspec/pascal (mspec/kebab "BlogPost"))) "round-trip")
+(assert (= "blog_post" (mspec/snake "BlogPost")) "column spelling")
 
 # -- fields --------------------------------------------------------------
 
 (assert (deep= {:name :title :type :string :optional? false}
-                (make/parse-field "title"))
+                (mspec/parse-field "title"))
         "a bare name is a string")
-(assert (= :text ((make/parse-field "body:text") :type)) "a named type")
-(assert ((make/parse-field "votes:int?") :optional?) "a trailing ? is optional")
-(assert (= :votes ((make/parse-field "votes:int?") :name))
+(assert (= :text ((mspec/parse-field "body:text") :type)) "a named type")
+(assert ((mspec/parse-field "votes:int?") :optional?) "a trailing ? is optional")
+(assert (= :votes ((mspec/parse-field "votes:int?") :name))
         "and is not part of the name")
 
-(def ref-field (make/parse-field "author:ref:Author"))
+(def ref-field (mspec/parse-field "author:ref:Author"))
 (assert (= :author-id (ref-field :name)) "a ref names the column, not the relation")
 (assert (= :author (ref-field :rel)) "and the relation, not the column")
 (assert (= :Author (ref-field :entity)) "the entity it belongs to")
 (assert (= "authors" (ref-field :table)) "the table it points at")
-(assert (= :author-id ((make/parse-field "author-id:ref:Author") :name))
+(assert (= :author-id ((mspec/parse-field "author-id:ref:Author") :name))
         "a name that already ends in -id is left alone")
 
-(assert (not (first (protect (make/parse-field "x:nosuchtype"))))
+(assert (not (first (protect (mspec/parse-field "x:nosuchtype"))))
         "an unknown type names the ones that exist")
-(assert (not (first (protect (make/parse-field "author:ref"))))
+(assert (not (first (protect (mspec/parse-field "author:ref"))))
         "a ref without an entity is refused")
-(assert ((make/parse-field "author:ref:Author?") :optional?)
+(assert ((mspec/parse-field "author:ref:Author?") :optional?)
         "a ? means the same thing wherever it is written")
-(assert (= :Author ((make/parse-field "author:ref:Author?") :entity))
+(assert (= :Author ((mspec/parse-field "author:ref:Author?") :entity))
         "and is not part of the entity it names")
 
-(assert (not (first (protect (make/resource-spec "Bad_Name!" []))))
+(assert (not (first (protect (resource/resource-spec "Bad_Name!" []))))
         "a name that cannot be a plugin keyword is refused once, by name")
 
 # -- the spec ------------------------------------------------------------
 
-(def spec (make/resource-spec "BlogPost" [(make/parse-field "title")]
+(def spec (resource/resource-spec "BlogPost" [(mspec/parse-field "title")]
                               {:project "demo" :version "20260101000000"}))
 (assert (= "BlogPost" (spec :entity)) "the entity binding")
 (assert (= "blog-posts" (spec :plural)) "the plural")
 (assert (= "blog_posts" (spec :table)) "the table")
 (assert (= "demo/blog-posts" (spec :plugin)) "the plugin name")
 
-(def renamed (make/resource-spec "BlogPost" [(make/parse-field "title")]
+(def renamed (resource/resource-spec "BlogPost" [(mspec/parse-field "title")]
                                  {:project "demo" :table "articles"
                                   :plural "articles"}))
 (assert (= "articles" (renamed :table)) "--table wins over the pluralizer")
@@ -108,14 +111,14 @@
 (defer (do (os/cd root) (rimraf sandbox))
   (os/cd sandbox)
   (spit "project.janet" "(declare-project\n  :name \"demo\"\n  :version \"0.1.0\")\n")
-  (assert (= "demo" (make/project-name))
+  (assert (= "demo" (mspec/project-name))
           "the plugin namespace is read from project.janet")
 
   # -- the files -----------------------------------------------------------
 
   (def written
     (with-dyns [prompt/interactive-dyn false]
-      (make/resource "Article" "title:string" "body:text" "votes:int?"
+      (make/create "resource" "Article" "title:string" "body:text" "votes:int?"
                      "email:email" "--version" "20260101000000")))
   (assert (deep= ["resources/articles.janet"
                   "db/migrations/20260101000000_create_articles.janet"
@@ -143,11 +146,11 @@
 
   (assert (not (first (protect
                         (with-dyns [prompt/interactive-dyn false]
-                          (make/resource "Article" "title:string")))))
+                          (make/create "resource" "Article" "title:string")))))
           "an existing file is not overwritten")
 
   (with-dyns [prompt/interactive-dyn false]
-    (make/resource "Article" "title:string" "--force" "--version" "20260101000000"))
+    (make/create "resource" "Article" "title:string" "--force" "--version" "20260101000000"))
   (assert (not (string/find "{:control :textarea}" (slurp "resources/articles.janet")))
           "--force insists, and rewrites from the new spec (no text field, no textarea)")
 
@@ -155,7 +158,7 @@
   # timestamp: one CREATE TABLE, not an orphaned pair `void db migrate`
   # trips over
   (with-dyns [prompt/interactive-dyn false]
-    (make/resource "Article" "title:string" "--force"))
+    (make/create "resource" "Article" "title:string" "--force"))
   (def article-migrations
     (filter |(string/has-suffix? "_create_articles.janet" $)
             (os/dir "db/migrations")))
@@ -169,14 +172,14 @@
                       ["--test-dir" "/escaped"]]
     (assert (not (first (protect
                           (with-dyns [prompt/interactive-dyn false]
-                            (make/resource "Leak" "title:string" flag value)))))
+                            (make/create "resource" "Leak" "title:string" flag value)))))
             (string flag " " value " is refused — a generator must not write outside the project"))
     (assert (not (os/stat "../escaped")) "and nothing landed outside"))
-  (assert (not (first (protect (make/resource-spec "post" [] {:plural "../pwn"}))))
+  (assert (not (first (protect (resource/resource-spec "post" [] {:plural "../pwn"}))))
           "--plural must be a word, not a path")
-  (assert (not (first (protect (make/resource-spec "post" [] {:table "../pwn"}))))
+  (assert (not (first (protect (resource/resource-spec "post" [] {:table "../pwn"}))))
           "--table too")
-  (assert (not (first (protect (make/resource-spec "post" [] {:version "../v"}))))
+  (assert (not (first (protect (resource/resource-spec "post" [] {:version "../v"}))))
           "--version must be a migration timestamp")
 
   # -- --dry-run writes nothing --------------------------------------------
@@ -184,7 +187,7 @@
   (def out @"")
   (def planned
     (with-dyns [:out out prompt/interactive-dyn false]
-      (make/resource "Tag" "label:string" "--dry-run")))
+      (make/create "resource" "Tag" "label:string" "--dry-run")))
   (assert (not (os/stat "resources/tags.janet")) "--dry-run writes no file")
   (assert (string/find "(db/defentity Tag" (string out))
           "and prints what it would have written")
@@ -197,7 +200,7 @@
   (spit "templates/resource/migration.janet"
         "(defn render [spec] (string \"# \" (spec :table) \" by hand\\n\"))\n")
   (with-dyns [prompt/interactive-dyn false]
-    (make/resource "Tag" "label:string" "--version" "20260101000100"))
+    (make/create "resource" "Tag" "label:string" "--version" "20260101000100"))
   (assert (= "# tags by hand\n"
              (string (slurp "db/migrations/20260101000100_create_tags.janet")))
           "a project override replaces the built-in template")
@@ -205,7 +208,7 @@
           "and only the entry it overrides")
 
   (spit "templates/resource/migration.janet" "(def render 42)\n")
-  (assert (not (first (protect (make/templates))))
+  (assert (not (first (protect (scaffold/templates resource/template resource/override-dir))))
           "an override that is not a render function says so")
   (os/rm "templates/resource/migration.janet")
 

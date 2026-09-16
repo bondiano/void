@@ -258,15 +258,6 @@
          (print-status (migrate/status (opts :dir) (opts :table))))})
 
 (plugin/contribute! :void.core/cli
-  {:name :db/new
-   :read-only? false
-   :doc "Scaffold a migration file"
-   :args ["NAME"]
-   :fn (fn cli-new [name]
-         (def opts (migration-opts (config-slice)))
-         (print (migrate/create! name (opts :dir))))})
-
-(plugin/contribute! :void.core/cli
   {:name :db/erd
    :read-only? true
    :doc "Print a Mermaid ER diagram of the registered entities"

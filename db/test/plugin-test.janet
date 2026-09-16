@@ -159,7 +159,7 @@
   # -- the CLI commands are contributed ---------------------------------
   (def commands (plugin/extension boot :void.core/cli))
   (def names (map |($ :name) commands))
-  (each n [:db/migrate :db/rollback :db/status :db/erd :db/new]
+  (each n [:db/migrate :db/rollback :db/status :db/erd]
     (assert (index-of n names) (string "command " n " is contributed")))
   (def erd-cmd (find |(= :db/erd ($ :name)) commands))
   (def diagram (with-dyns [:out @""] ((erd-cmd :fn)) (string (dyn :out))))

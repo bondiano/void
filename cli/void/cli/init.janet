@@ -302,7 +302,11 @@
 
    {:name :make
     :doc "scaffold into an existing project: resource, auth, job, plugin, migration"
-    :args ["KIND" "[ARG...]"]
+    :args ["[KIND]" "[ARG...]"]
+    # the one built-in that dispatches again: `void make job --help` is
+    # a question about the job generator, so the `--help` interception
+    # below has to let it through rather than answer it here
+    :own-help? true
     :run (fn [_ _ pos] (make/create ;pos))}
 
    {:name :dev
@@ -417,7 +421,7 @@
   (if (empty? words)
     (print-help builtins (app-commands ctx))
     (if-let [[command args] (find-command builtins words)]
-      (if (cmd/help-wanted? command args)
+      (if (and (cmd/help-wanted? command args) (not (get command :own-help?)))
         (each l (cmd/help command) (print l))
         (run-builtin ctx command args))
       # a contributed command: its declaration is readable without a

@@ -11,6 +11,9 @@
 
 (import ../test-support/paths)
 (import void/cli/make :as make)
+(import void/cli/make/spec :as mspec)
+(import void/cli/make/scaffold :as scaffold)
+(import void/cli/make/auth :as mauth)
 (import void/cli/prompt :as prompt)
 
 # work in a throwaway directory; jpm test runs with cwd = cli/
@@ -33,7 +36,7 @@
 
 # -- the spec ------------------------------------------------------------
 
-(def spec (make/auth-spec nil [] {:project "demo" :version "20260101000000"}))
+(def spec (mauth/auth-spec nil [] {:project "demo" :version "20260101000000"}))
 (assert (= "user" (spec :name)) "an account is a user unless it is called something else")
 (assert (= "User" (spec :entity)) "the entity binding")
 (assert (= "users" (spec :table)) "the table void/auth-db is pointed at")
@@ -42,14 +45,14 @@
 (assert (= "auth" (spec :module-path))
         "the module lands beside app.janet, which is where void new put that one")
 
-(def named (make/auth-spec "TeamMember" [] {:project "demo"}))
+(def named (mauth/auth-spec "TeamMember" [] {:project "demo"}))
 (assert (= "team-member" (named :name)) "the subject kind, kebab-spelled")
 (assert (= "TeamMember" (named :entity)))
 (assert (= "team_members" (named :table)))
 
-(assert (not (first (protect (make/auth-spec "Bad_Name!" []))))
+(assert (not (first (protect (mauth/auth-spec "Bad_Name!" []))))
         "a name that cannot be a table is refused once, by name")
-(assert (not (first (protect (make/auth-spec "user" [(make/parse-field "email")]))))
+(assert (not (first (protect (mauth/auth-spec "user" [(mspec/parse-field "email")]))))
         "and so is a field the scaffold already declares")
 
 (defer (do (os/cd root) (rimraf sandbox))
@@ -61,7 +64,7 @@
   (def said @"")
   (def written
     (with-dyns [:out said prompt/interactive-dyn false]
-      (make/auth "user" "name:string" "--version" "20260101000000")))
+      (make/create "auth" "user" "name:string" "--version" "20260101000000")))
   (assert (deep= ["auth.janet"
                   "db/migrations/20260101000000_create_users.janet"
                   "test/auth-test.janet"]
@@ -97,8 +100,8 @@
   # printed text nobody parses is text that drifts into being wrong. The
   # config block is meant to be pasted into a Janet file, so it is
   # parsed here, from the report, exactly as printed
-  (def report (string/join (make/auth-report
-                             (make/auth-spec "user" [] {:project "demo"}))
+  (def report (string/join (mauth/auth-report
+                             (mauth/auth-spec "user" [] {:project "demo"}))
                            "\n"))
   (def block-start (string/find "{:http {:session" report))
   (def config-block
@@ -144,7 +147,7 @@
 
   (assert (not (first (protect
                         (with-dyns [prompt/interactive-dyn false]
-                          (make/auth "user")))))
+                          (make/create "auth" "user")))))
           "an existing file is not overwritten")
 
   # -- --dry-run writes nothing ------------------------------------------
@@ -152,7 +155,7 @@
   (def out @"")
   (def planned
     (with-dyns [:out out prompt/interactive-dyn false]
-      (make/auth "operator" "--dir" "accounts" "--test-dir" "test/ops" "--dry-run")))
+      (make/create "auth" "operator" "--dir" "accounts" "--test-dir" "test/ops" "--dry-run")))
   (assert (not (os/stat "accounts/auth.janet")) "--dry-run writes no file")
   (assert (string/find "(db/defentity Operator" (string out))
           "and prints what it would have written")
@@ -169,7 +172,7 @@
   (spit "templates/auth/migration.janet"
         "(defn render [spec] (string \"# \" (spec :table) \" by hand\\n\"))\n")
   (with-dyns [:out @"" prompt/interactive-dyn false]
-    (make/auth "operator" "--dir" "accounts" "--test-dir" "test/ops"
+    (make/create "auth" "operator" "--dir" "accounts" "--test-dir" "test/ops"
                "--version" "20260101000100"))
   (assert (= "# operators by hand\n"
              (string (slurp "db/migrations/20260101000100_create_operators.janet")))
@@ -178,7 +181,7 @@
           "and only the entry it overrides")
 
   (spit "templates/auth/migration.janet" "(def render 42)\n")
-  (assert (not (first (protect (make/auth-templates))))
+  (assert (not (first (protect (scaffold/templates mauth/auth-template-entries mauth/override-dir))))
           "an override that is not a render function says so")
 
   # that experiment leaves the tree with a second scaffold in it; the
