@@ -86,3 +86,16 @@ spliced into every non-GET form through a slot `form/form` has carried
 since wave 1; and translated error messages — `void/i18n` swaps the
 schema-error texts per request locale with zero changes in the form
 code.
+
+Labels travel the same road. A schema annotates its own words:
+
+```janet
+{:email [:string {:format :email :label "E-mail"}]
+ :title [:string {:label :shop.product/title}]}
+```
+
+A string is the words. A **keyword is a translation key**: with a
+catalog bound it is looked up per request, and without one the field's
+own name is humanized — so a form is readable before anybody writes a
+dictionary, and translated after, with nothing changed in the form.
+`:doc` (the help text under a control) takes a keyword the same way.

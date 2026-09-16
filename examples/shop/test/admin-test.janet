@@ -317,7 +317,7 @@
     (def confirm (test/inject desk {:uri (string "/admin/orders/-/bulk/ship?ids="
                                                  (placed :id) "&ids=" (paid :id))}))
     (assert (= 200 (confirm :status)))
-    (assert (string/find ">2</span>" (text confirm))
+    (assert (string/find "2 rows of Orders will be affected." (text confirm))
             "the confirmation counts the selection on the server, before anything is touched")
 
     (def applied

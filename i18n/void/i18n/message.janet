@@ -1,32 +1,19 @@
 ### void/i18n/message — message rendering: named {param} interpolation and
 ### plural-form selection. Positions were rejected in the ADR — a
 ### translation reorders words, and with them printf's argument order.
-### "{{" escapes a literal brace; an absent parameter stays "{name}"
-### verbatim — visible on the page, never a crash: an error message
-### renders from an attacker-controlled value and has no right to reach a
-### 500.
+###
+### The interpolation itself is `void/core/text`'s: the framework's own
+### packages render their own tables without this plugin composed, and
+### two readers of one syntax may not be two implementations of it.
+### What lives here is the half that needs a catalog — CLDR plural
+### categories.
 
-(def- interp-peg
-  (peg/compile
-    ~{:main (any (+ :esc :ph :text :brace))
-      :esc (+ (/ '"{{" "{") (/ '"}}" "}"))
-      :ph (group (* "{" '(some (if-not (set "{}") 1)) "}"))
-      :text '(some (if-not (set "{}") 1))
-      :brace '(set "{}")}))
+(import void/core/text :as text)
 
-(defn interpolate
-  "Render {name} placeholders of a template from params (keyword keys);
-  a missing parameter stays {name} verbatim, {{ and }} are literal
-  braces."
-  [tmpl params]
-  (def out @"")
-  (each part (peg/match interp-peg tmpl)
-    (if (bytes? part)
-      (buffer/push out part)
-      (let [name (first part)
-            v (get (or params {}) (keyword name))]
-        (buffer/push out (if (nil? v) (string "{" name "}") (string v))))))
-  (string out))
+(def interpolate
+  "See text/interpolate — {name} placeholders, {{ and }} literal, a
+  missing parameter visible rather than fatal."
+  text/interpolate)
 
 (defn render
   ``One message to a string. A plural table ({:one .. :few .. :other ..})

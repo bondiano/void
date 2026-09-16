@@ -78,6 +78,27 @@
   (log/set-level! nil :error)
   (resume lframes)                       # title again
   (assert (string/find "a line for the live page" (resume lframes))
-          "the sink poked the room; the page re-rendered with the record"))
+          "the sink poked the room; the page re-rendered with the record")
+
+  # -- the page's state rides on the stream URL ---------------------------
+  #
+  # "The page is the state" holds only while the stream sees that state.
+  # A filtered log page opened its stream on a bare path once, and every
+  # poke morphed the *unfiltered* page over what the operator was reading
+  # (ADR-0043 §5): the URL carries the query now, and the stream reads
+  # its filters off its own request exactly as the handler does.
+  (def filtered (string ((http/with-request {:uri "/dash/logs?ns=my-app.live"}) :body)))
+  (assert (string/find "/dash/logs/live?ns=my-app.live" filtered)
+          "the page opens its stream on its own state")
+
+  (def fresp (http/with-request {:uri "/dash/logs/live?ns=no-such-namespace"
+                                 :headers {"datastar-request" "true"}}))
+  (def fframes (fresp :body))
+  (resume fframes)                       # title
+  (def body (string (resume fframes)))
+  (assert (string/find "no-such-namespace" body)
+          "the stream re-renders the filter panel the page was rendered with")
+  (assert (not (string/find "a line for the live page" body))
+          "...and the records it filters to, not every record the ring holds"))
 
 (print "live-test: ok")

@@ -5,6 +5,7 @@
 (import void/http/ring :as ring)
 (import void/html/init :as html)
 (import void/html/hiccup :as hiccup)
+(import void/html/form :as form)
 (import void/html/temple :as temple)
 (import spork/sh)
 
@@ -35,6 +36,25 @@
               :layout tmpl-layout
               :context {:title "from temple"}}))
 
+# temple renders views and gets no second set of helpers (ADR-0050 §8):
+# a template that wants one renders the hiccup it answers with and
+# splices it, which is one call and keeps the escaping where it is
+# built rather than where it is pasted
+(def tmpl-form
+  (temple/create
+    (string "{$ (import void/html/init :as html) $}"
+            "<section>{- (html/render-string (args :field)) -}</section>")
+    "form-view"))
+
+(defn tmpl-with-helper [req]
+  (html/page tmpl-form
+             {:engine :temple
+              :layout nil
+              :context {:field (form/field
+                                 (first (form/field-specs {:email [:string {:label "E-mail"}]}))
+                                 "<script>"
+                                 [{:path [:email] :code :missing}])}}))
+
 (defn asset-url [req]
   (ring/text 200 (html/asset "css/app.css")))
 
@@ -43,6 +63,7 @@
     (router/GET "/" 'home {:name :home})
     (router/GET "/frag" 'frag {:name :frag})
     (router/GET "/tmpl" 'tmpl {:name :tmpl})
+    (router/GET "/tmpl-helper" 'tmpl-with-helper {:name :tmpl-helper})
     (router/GET "/asset" 'asset-url {:name :asset})))
 
 (def app-manifest
@@ -100,6 +121,13 @@
   (assert (= "<!DOCTYPE html><title>from temple</title><h1>from temple</h1>"
              (string (r3 :body)))
           "per-response :engine override renders through temple")
+
+  (def helper (string ((http/with-request {:uri "/tmpl-helper"}) :body)))
+  (assert (string/find "<section>" helper) "the template is what renders the page")
+  (assert (string/find `<label for="field-email">E-mail</label>` helper)
+          "and a framework helper reaches it as rendered hiccup, not as a second helper")
+  (assert (string/find "&lt;script&gt;" helper)
+          "escaped where the markup was built — the whole reason there is no string half")
 
   (def r4 (http/with-request {:uri "/asset"}))
   (assert (= "/assets/css/app.css" (string (r4 :body)))

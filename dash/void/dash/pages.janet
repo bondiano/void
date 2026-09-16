@@ -23,7 +23,9 @@
 (import void/http/init :as http)
 (import void/html/init :as html)
 (import void/htmx/hx :as hx)
+(import void/core/text :as core-text)
 (import ./context :as ctx)
+(import ./text :as text)
 (import ./history :as history)
 (import ./view :as view)
 
@@ -74,51 +76,54 @@
   [:div {:class "dash-vital"} [:h2 title] ;body])
 
 (defn- process-vital [boot]
-  (vital "Process"
+  (vital (text/t :void.dash/vital-process)
          [:p {:class "dash-big"}
           (view/duration-str (- (os/clock :monotonic) (ctx/setting :started-at 0)))]
          [:p {:class "vd-note"}
-          (string "up · profile " (string (boot :profile))
-                  " · shape " (string (get-in boot [:deploy :shape] :single)))]))
+          (text/t :void.dash/process-note
+                  {:profile (string (boot :profile))
+                   :shape (string (get-in boot [:deploy :shape] :single))})]))
 
 (defn- runtime-vital [boot]
   (if-let [h (component-health boot :obs/registry)]
-    (vital "Runtime"
+    (vital (text/t :void.dash/vital-runtime)
            [:p {:class "dash-big"} (view/bytes-str (h :rss))]
            [:p {:class "vd-note"}
-            (string "rss · loop lag p99 " (view/ms (h :loop-lag-p99))
-                    " (max " (view/ms (h :loop-lag-max)) ")"
-                    (if (h :sampling) "" " · sampler off"))]
+            (text/t :void.dash/runtime-note
+                    {:p99 (view/ms (h :loop-lag-p99))
+                     :max (view/ms (h :loop-lag-max))
+                     :sampling (if (h :sampling) "" (text/t :void.dash/sampler-off))})]
            (view/sparkline (history/series :lag-ms))
-           [:p {:class "vd-note"} "loop lag, dash's own samples"])
-    (vital "Runtime"
-           (view/absent "the RSS and loop-lag meter" ":void/obs")
+           [:p {:class "vd-note"} (text/t :void.dash/lag-caption)])
+    (vital (text/t :void.dash/vital-runtime)
+           (view/absent :void.dash/absent-obs ":void/obs")
            (view/sparkline (history/series :lag-ms))
-           [:p {:class "vd-note"} "loop lag, dash's own samples"])))
+           [:p {:class "vd-note"} (text/t :void.dash/lag-caption)])))
 
 (defn- http-vital [boot]
   (if-let [h (component-health boot :http/server)]
-    (vital "HTTP"
+    (vital (text/t :void.dash/vital-http)
            [:p {:class "dash-big"} (string (get h :connections 0))]
            [:p {:class "vd-note"}
-            (string "open connections · port " (string (get h :port "?"))
-                    " · " (string (get h :status :up)))]
+            (text/t :void.dash/http-note {:port (string (get h :port "?"))
+                                          :status (string (get h :status :up))})]
            (view/sparkline (history/series :connections)))
-    (vital "HTTP"
-           [:p {:class "vd-absent"}
-            "the :http/server component is not running — a kernel-only boot (test/with-http) has no listener."])))
+    (vital (text/t :void.dash/vital-http)
+           [:p {:class "vd-absent"} (text/t :void.dash/http-absent)])))
 
 (defn- pressure-vital [boot]
   (if-let [h (component-health boot :pressure/sampler)]
-    (vital "Pressure"
+    (vital (text/t :void.dash/vital-pressure)
            [:p {:class "dash-big"}
-            (if (h :under-pressure) [:span {:class "vd-down"} "shedding"]
-              [:span {:class "vd-up"} "ok"])]
+            (if (h :under-pressure)
+              [:span {:class "vd-down"} (text/t :void.dash/pressure-shedding)]
+              [:span {:class "vd-up"} (text/t :void.dash/pressure-ok)])]
            [:p {:class "vd-note"}
-            (string "mode " (string (get h :mode "-"))
-                    " · episodes " (string (get h :episodes 0))
-                    " · shed " (string (get h :shed 0)))])
-    (vital "Pressure" (view/absent "load shedding" ":void/pressure"))))
+            (text/t :void.dash/pressure-note {:mode (string (get h :mode "-"))
+                                              :episodes (string (get h :episodes 0))
+                                              :shed (string (get h :shed 0))})])
+    (vital (text/t :void.dash/vital-pressure)
+           (view/absent :void.dash/absent-pressure ":void/pressure"))))
 
 (def- health-facts-shown
   ``How many numbers one lamp shows. A patch panel that grew a table
@@ -157,9 +162,9 @@
 (defn- health-tiles [boot]
   (def h (plugin/health boot))
   [:div
-   [:h2 "Health"]
+   [:h2 (text/t :void.dash/health)]
    [:p (view/status-word (h :status))
-    [:span {:class "vd-note"} " — plugin/health, the same fold GET /health and void/mcp answer with"]]
+    [:span {:class "vd-note"} (text/t :void.dash/health-note)]]
    # a patch panel, not a wall of cards: one lamp per component, and
    # only the components with something to say take more than one line
    [:div {:class "dash-health"}
@@ -181,11 +186,11 @@
   (def tiles (ctx/setting :tiles []))
   (unless (empty? tiles)
     [:div
-     [:h2 "At a glance"]
+     [:h2 (text/t :void.dash/at-a-glance)]
      [:div {:class "vd-cards"}
       ;(seq [t :in tiles]
          [:div {:class "vd-card"}
-          [:h2 (get t :label (string (t :name)))]
+          [:h2 (core-text/label-of (get t :label) (t :name))]
           (let [[ok v] (protect ((t :render)))]
             (if ok v [:p {:class "vd-warn"} (view/value-str v 120)]))])]]))
 
@@ -203,14 +208,14 @@
 
 (defn overview-body
   "The overview, inside the frame."
-  [boot]
-  [:div (view/live-attrs "/live")
-   [:h1 "Overview"]
+  [boot req]
+  [:div (view/live-attrs req "/live")
+   [:h1 (text/t :void.dash/overview)]
    (overview-fragment boot)])
 
 (defn overview [req]
   (def boot (ctx/boot))
-  (page req (overview-body boot) {:partial (fn [] (overview-fragment boot))}))
+  (page req (overview-body boot req) {:partial (fn [] (overview-fragment boot))}))
 
 # -- the table filter ----------------------------------------------------
 
@@ -221,12 +226,13 @@
   [table-id what n]
   [:div {:class "vd-toolbar"}
    [:div {:class "field"}
-    [:label {:for (string table-id "-filter")} (string "Filter " what)]
+    [:label {:for (string table-id "-filter")}
+     (text/t :void.dash/filter-label {:what (text/t what)})]
     [:input {:type "search" :id (string table-id "-filter")
-             :class "dash-filter" :placeholder "type to narrow…"
+             :class "dash-filter" :placeholder (text/t :void.dash/filter-placeholder)
              :data-dash-filter (string "#" table-id)}]]
    [:div {:class "field"}
-    [:label "Rows"]
+    [:label (text/t :void.dash/rows)]
     [:span {:id (string table-id "-count") :class "vd-count"} (string n)]]])
 
 # -- components ----------------------------------------------------------
@@ -234,15 +240,16 @@
 (def why-target "dash-why")
 
 (defn- why-link [key]
-  (view/detail-link (ctx/at "/why" {"key" (string key)}) why-target "why?"))
+  (view/detail-link (ctx/at "/why" {"key" (string key)}) why-target
+                    (text/t :void.dash/why)))
 
 (defn components-body [boot]
   (def sys (boot :system))
   [:div
-   [:h1 "Components"]
-   [:p {:class "vd-note"}
-    "boot :system — the graph in topological order: every component after the ones it depends on."]
-   (filter-bar "dash-components-table" "components" (length (get sys :order [])))
+   [:h1 (text/t :void.dash/components)]
+   [:p {:class "vd-note"} (text/t :void.dash/components-note)]
+   (filter-bar "dash-components-table" :void.dash/what-components
+               (length (get sys :order [])))
    [:table {:class "vd-table" :id "dash-components-table"}
     [:thead [:tr [:th "component"] [:th "plugin"] [:th "state"]
              [:th "deps"] [:th "provides"] [:th ""]]]
@@ -267,7 +274,7 @@
         [:td (string/join (map string (get c :provides [])) ", ")]
         [:td (why-link k)]])]]
    [:div {:id why-target :class "vd-detail"}
-    [:p {:class "vd-note"} "Pick a component — plugin/why answers: who brought it, and who depends on it."]]])
+    [:p {:class "vd-note"} (text/t :void.dash/pick-component)]]])
 
 (defn components [req]
   (page req (components-body (ctx/boot))))
@@ -283,28 +290,32 @@
       [:p {:class "vd-warn"} (view/value-str w 300)]
       (if (get w :interface)
         [:div
-         [:h2 (string "interface " (w :interface))]
-         [:p (string "providers: "
-                     (string/join (map string (w :providers)) ", "))]
-         [:p (string "selected: " (string (or (w :selected) "the only one")))]]
+         [:h2 (text/t :void.dash/why-interface {:name (w :interface)})]
+         [:p (text/t :void.dash/why-providers
+                     {:providers (string/join (map string (w :providers)) ", ")})]
+         [:p (text/t :void.dash/why-selected
+                     {:selected (string (or (w :selected)
+                                            (text/t :void.dash/why-only-one)))})]]
         [:div
          [:h2 (string (w :key))]
-         [:p (string "brought by plugin " (string (w :plugin))
-                     " · state " (string (w :state)))]
-         [:p (string "provides: "
-                     (if (empty? (get w :provides [])) "nothing"
-                       (string/join (map string (w :provides)) ", ")))]
-         [:p (string "depends on: "
-                     (let [d (get w :deps {})]
-                       (if (empty? d) "nothing"
-                         (string/join (seq [[ref rk] :pairs d]
-                                        (string ref " → " rk)) ", "))))]
+         [:p (text/t :void.dash/why-brought-by {:plugin (string (w :plugin))
+                                                :state (string (w :state))})]
+         [:p (text/t :void.dash/why-provides
+                     {:provides (if (empty? (get w :provides []))
+                                  (text/t :void.dash/why-nothing)
+                                  (string/join (map string (w :provides)) ", "))})]
+         [:p (text/t :void.dash/why-depends-on
+                     {:deps (let [d (get w :deps {})]
+                              (if (empty? d)
+                                (text/t :void.dash/why-nothing)
+                                (string/join (seq [[ref rk] :pairs d]
+                                               (string ref " → " rk)) ", ")))})]
          (if (empty? (get w :dependents []))
-           [:p "nothing depends on it"]
-           [:div [:p "depended on by:"]
+           [:p (text/t :void.dash/why-no-dependents)]
+           [:div [:p (text/t :void.dash/why-dependents)]
             [:ul (seq [d :in (w :dependents)]
                    [:li [:code (string (d :component))]
-                    (string " via " (string (d :via)))])]])]))))
+                    (text/t :void.dash/why-via {:via (string (d :via))})])]])]))))
 
 # -- plugins and extension points ----------------------------------------
 
@@ -313,8 +324,8 @@
 (defn plugins-body [boot]
   (def rows (plugin/inspect boot))
   [:div
-   [:h1 "Plugins"]
-   (filter-bar "dash-plugins-table" "plugins" (length rows))
+   [:h1 (text/t :void.dash/plugins)]
+   (filter-bar "dash-plugins-table" :void.dash/what-plugins (length rows))
    [:table {:class "vd-table" :id "dash-plugins-table"}
     [:thead [:tr [:th "plugin"] [:th "version"] [:th "active"]
              [:th "components"] [:th "own points"] [:th "contributes"]]]
@@ -323,13 +334,14 @@
        [:tr
         [:td [:code (string (r :plugin))]]
         [:td (string (r :version))]
-        [:td (if (r :active) [:span {:class "vd-up"} "yes"]
-               [:span {:class "vd-note"} "no"])]
+        [:td (if (r :active)
+               [:span {:class "vd-up"} (text/t :void.dash/yes)]
+               [:span {:class "vd-note"} (text/t :void.dash/no)])]
         [:td (string/join (map string (r :components)) ", ")]
         [:td (string/join (map string (r :extension-points)) ", ")]
         [:td (string/join (seq [[p n] :pairs (r :contributes)]
                             (string p " ×" n)) ", ")]])]]
-   [:h2 "Extension points"]
+   [:h2 (text/t :void.dash/extension-points)]
    [:table {:class "vd-table"}
     [:thead [:tr [:th "point"] [:th "owner"] [:th "cardinality"]
              [:th "contributions"] [:th ""]]]
@@ -341,10 +353,10 @@
         [:td (string (e :owner))]
         [:td (string (get-in e [:point :cardinality] :many))]
         [:td {:class "vd-count"} (string (length (get e :contributions [])))]
-        [:td (view/detail-link (ctx/at "/point" {"name" (string name)}) point-target "open")]])]]
+        [:td (view/detail-link (ctx/at "/point" {"name" (string name)}) point-target
+                               (text/t :void.dash/open))]])]]
    [:div {:id point-target :class "vd-detail"}
-    [:p {:class "vd-note"}
-     "Pick a point — its contributions with the plugin each came from, and the folded value the owner reads."]]])
+    [:p {:class "vd-note"} (text/t :void.dash/pick-point)]]])
 
 (defn plugins [req]
   (page req (plugins-body (ctx/boot))))
@@ -359,13 +371,13 @@
   (html/fragment
     (if (nil? e)
       [:p {:class "vd-warn"}
-       (string "unknown extension point " (string name))]
+       (text/t :void.dash/unknown-point {:name (string name)})]
       [:div
        [:h2 [:code (string/format "%j" name)]]
        (when-let [doc (get-in e [:point :doc])]
          [:p {:class "vd-note"} doc])
        (if (empty? (get e :contributions []))
-         [:p {:class "vd-empty"} "No contributions."]
+         [:p {:class "vd-empty"} (text/t :void.dash/no-contributions)]
          [:table {:class "vd-table"}
           [:thead [:tr [:th "plugin"] [:th "value"]]]
           [:tbody
@@ -373,7 +385,7 @@
              [:tr
               [:td [:code (string (c :plugin))]]
               [:td [:code (view/value-str (c :value) 300)]]])]])
-       [:p [:span {:class "vd-note"} "resolved: "]
+       [:p [:span {:class "vd-note"} (text/t :void.dash/resolved)]
         [:code (view/value-str (e :resolved) 300)]]])))
 
 # -- config --------------------------------------------------------------
@@ -382,14 +394,12 @@
   (def cfg (boot :config))
   (def paths (sorted (keys (cfg :provenance))))
   [:div
-   [:h1 "Config"]
+   [:h1 (text/t :void.dash/config)]
    [:p {:class "vd-note"}
-    (string "profile " (string (cfg :profile))
-            " · layers: "
-            (string/join (map |(string ($ :layer)) (get cfg :layers [])) " ← ")
-            " (later wins) · every value with the layer that set it — config/explain. "
-            "Secrets are boxes and print as their reference: safe by construction.")]
-   (filter-bar "dash-config-table" "paths" (length paths))
+    (text/t :void.dash/config-note
+            {:profile (string (cfg :profile))
+             :layers (string/join (map |(string ($ :layer)) (get cfg :layers [])) " ← ")})]
+   (filter-bar "dash-config-table" :void.dash/what-paths (length paths))
    [:table {:class "vd-table" :id "dash-config-table"}
     [:thead [:tr [:th "path"] [:th "value"] [:th "from"]]]
     [:tbody
@@ -402,9 +412,8 @@
          (let [shadowed (reverse (array/slice (e :history) 0 -2))]
            (unless (empty? shadowed)
              [:span {:class "vd-note"}
-              (string " (overrides: "
-                      (string/join (map config/describe-source shadowed) ", ")
-                      ")")]))]])]]])
+              (text/t :void.dash/overrides
+                      {:shadowed (string/join (map config/describe-source shadowed) ", ")})]))]])]]])
 
 (defn config-page [req]
   (page req (config-body (ctx/boot))))
@@ -417,10 +426,9 @@
   (def table (http/routes-table))
   (def entries (sorted-by |[($ :pattern) (string ($ :method))] (table :routes)))
   [:div
-   [:h1 "Routes"]
-   [:p {:class "vd-note"}
-    "The live route table — what `void routes` prints; opening a line is explain-route: every metadata key with the layer that set it."]
-   (filter-bar "dash-routes-table" "routes" (length entries))
+   [:h1 (text/t :void.dash/routes)]
+   [:p {:class "vd-note"} (text/t :void.dash/routes-note)]
+   (filter-bar "dash-routes-table" :void.dash/what-routes (length entries))
    [:table {:class "vd-table" :id "dash-routes-table"}
     [:thead [:tr [:th "method"] [:th "pattern"] [:th "name"]
              [:th "source"] [:th "handler"]]]
@@ -434,7 +442,7 @@
         [:td (string (e :source))]
         [:td [:code (bind/describe (e :handler))]]])]]
    [:div {:id route-target :class "vd-detail"}
-    [:p {:class "vd-note"} "Pick a route."]]])
+    [:p {:class "vd-note"} (text/t :void.dash/pick-route)]]])
 
 (defn routes [req]
   (page req (routes-body)))
@@ -448,15 +456,16 @@
   (def e (get-in table [:by-name name]))
   (html/fragment
     (if (nil? e)
-      [:p {:class "vd-warn"} (string "no route named " (string name))]
+      [:p {:class "vd-warn"} (text/t :void.dash/no-route-named {:name (string name)})]
       (let [merged {:value (e :meta) :provenance (e :provenance)}]
         [:div
          [:h2 [:code (string (string/ascii-upper (string (e :method))) " " (e :pattern))]]
          [:p {:class "vd-note"}
-          (string "source " (string (e :source))
-                  " · middleware: "
-                  (if (empty? (e :middleware)) "none"
-                    (string/join (map string (e :middleware)) " → ")))]
+          (text/t :void.dash/route-note
+                  {:source (string (e :source))
+                   :middleware (if (empty? (e :middleware))
+                                 (text/t :void.dash/route-no-middleware)
+                                 (string/join (map string (e :middleware)) " → "))})]
          [:ul
           (seq [k :in (sorted (keys (e :meta)))]
             [:li [:code (meta/explain-str merged k)]])]]))))
@@ -465,10 +474,10 @@
 
 (defn- store-verdict [e]
   (case (get e :shared?)
-    true [:span {:class "vd-up"} "shared"]
-    :by-design [:span {:class "vd-note"} "by design"]
-    :unknown [:span {:class "vd-warn"} "no answer"]
-    [:span {:class "vd-down"} "per-process"]))
+    true [:span {:class "vd-up"} (text/t :void.dash/store-shared)]
+    :by-design [:span {:class "vd-note"} (text/t :void.dash/store-by-design)]
+    :unknown [:span {:class "vd-warn"} (text/t :void.dash/store-unknown)]
+    [:span {:class "vd-down"} (text/t :void.dash/store-per-process)]))
 
 (defn- store-note [e]
   (case (get e :shared?)
@@ -482,14 +491,12 @@
   (def entries (or (get boot :stores)
                    (let [[ok v] (protect (deploy/survey boot))] (if ok v []))))
   [:div
-   [:h1 "Deploy"]
+   [:h1 (text/t :void.dash/deploy)]
    [:p {:class "vd-note"}
-    (string "shape " (string (get dep :shape :single))
-            " (" (string (get dep :reason "resolved")) ") — deploy/survey: every store this "
-            "composition keeps, and whether a second replica would see it.")]
+    (text/t :void.dash/deploy-note {:shape (string (get dep :shape :single))
+                                    :reason (string (get dep :reason "resolved"))})]
    (if (empty? entries)
-     [:p {:class "vd-empty"}
-      "Stores: none — nothing this composition keeps outlives a request."]
+     [:p {:class "vd-empty"} (text/t :void.dash/no-stores)]
      [:table {:class "vd-table"}
       [:thead [:tr [:th "store"] [:th "what"] [:th "kind"] [:th "verdict"] [:th "note"]]]
       [:tbody

@@ -162,7 +162,7 @@
 
   (def confirm (GET "/admin/jobs/-/bulk/retry?queue=mail&state=dead"))
   (assert (= 200 (confirm :status)))
-  (assert (string/find ">1</span>" (test/text confirm))
+  (assert (string/find "1 dead record in queue mail will go back" (test/text confirm))
           "the confirmation counts on the server, as every admin bulk does")
 
   (assert (= 303 ((POST "/admin/jobs/-/bulk/retry" {:queue "mail" :state "dead"}) :status)))

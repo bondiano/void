@@ -330,7 +330,7 @@
     # -- bulk ------------------------------------------------------------
     (def confirm (get* "/admin/notes/-/bulk/destroy?ids=2,3" {:headers {}}))
     (assert (= 200 (confirm :status)))
-    (assert (string/find ">2</span>" (text confirm))
+    (assert (string/find "2 rows of Notes will be affected." (text confirm))
             "the confirmation names the number of rows, counted on the server")
     (def btoken (csrf-of confirm))
 
@@ -338,7 +338,7 @@
     (def all (get* "/admin/notes/-/bulk/destroy?all=1&done=true" {:headers {}}))
     (def expected (db/count Note {:where [:and [:= :owner "ada"] [:= :done true]]}))
     (assert (pos? expected))
-    (assert (string/find (string ">" expected "</span>") (text all))
+    (assert (string/find (string expected " row") (text all))
             "\"every row the filter matches\" is the filter and the scope, re-run here")
 
     (def applied (post "/admin/notes/-/bulk/finish" btoken {:form {:ids "2,3"}}))

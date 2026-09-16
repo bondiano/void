@@ -57,6 +57,7 @@
 (import ./jobs-view :as jview)
 (import ./query :as q)
 (import ./resource :as res)
+(import ./text :as text)
 
 (def log-ns "void.admin.jobs")
 
@@ -79,7 +80,8 @@
   (def desc (res/resource! (keyword (payload :resource))))
   (def aname (keyword (payload :action)))
   (def action (or (get-in desc [:custom-actions aname])
-                  (when (= :destroy aname) {:name :destroy :label "Delete"})
+                  (when (= :destroy aname)
+                    {:name :destroy :label (text/t :void.admin/delete)})
                   (errorf "admin bulk: %q has no action %q" (desc :name) aname)))
   (def sel {:where (payload :where)})
   (with-dyns [authz/identity-dyn (payload :subject)]
@@ -123,7 +125,7 @@
   (def base (if rec
               {:state (get rec :state)}
               {:state :gone
-               :label "the queue no longer holds this job — it finished, or it was never queued"}))
+               :label (text/t :void.admin/jobs-gone)}))
   (if-let [f (and action (get action :progress))]
     (merge base (or (f job-id) {}))
     base))
@@ -365,7 +367,7 @@
 # -- the section, as contributions ---------------------------------------
 
 (plugin/contribute! :void.admin/page
-  {:name :jobs :label jview/title :path jview/path :method :get
+  {:name :jobs :label :void.admin/jobs :path jview/path :method :get
    :handler index :policies [(policy-of :index)]})
 
 (plugin/contribute! :void.admin/page
@@ -385,11 +387,11 @@
    :handler record-action})
 
 (plugin/contribute! :void.admin/menu
-  {:name :jobs :label jview/title :path jview/path})
+  {:name :jobs :label :void.admin/jobs :path jview/path})
 
 (plugin/contribute! :void.admin/dashboard-widget
   {:name :jobs/queues
-   :label jview/title
+   :label :void.admin/jobs
    :render (fn tile [_req]
              (def counts (jobs/counts))
              [:p

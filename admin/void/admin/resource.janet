@@ -110,9 +110,16 @@
   out)
 
 (defn field-descriptor
-  ``What a widget is handed as `:field`: the name, the label, whether
-  the schema made it required, the unwrapped schema node, the :db/*
-  annotations and the relation this column is the foreign key of.``
+  ``What a widget is handed as `:field`: the name, the label **as
+  declared**, whether the schema made it required, the unwrapped schema
+  node, the :db/* annotations and the relation this column is the
+  foreign key of.
+
+  The label is the schema's `:label` annotation exactly as written —
+  a string, a keyword (a translation key) or nothing — and not the
+  words: a descriptor is frozen once, at declaration, and a locale is
+  not known until a request. `view/label-of` turns it into words where
+  it draws them.``
   [ent fname]
   (def f (or (get-in ent [:fields fname])
              (errorf "%q has no field %q (fields: %s)" (ent :name) fname (known-fields ent))))
@@ -123,7 +130,7 @@
   (def [inner required?] (schema/unwrap node))
   (freeze
     {:name fname
-     :label (humanize fname)
+     :label (get-in inner [:props :label])
      :required required?
      :node inner
      # the child as the schema declared it, :optional wrapper and all —
@@ -149,7 +156,10 @@
 (defn- column-spec [rname ent where spec]
   (cond
     (keyword? spec)
-    (freeze {:name spec :label (humanize spec)
+    (freeze {:name spec
+             # nothing declared: `view/label-of` humanizes the name where
+             # it draws it, and a schema :label on the field wins there
+             :label nil
              :field (field-descriptor ent (check-field rname ent where spec))})
 
     (dictionary? spec)
@@ -161,7 +171,7 @@
         (errorf (string "admin resource %q: %s column %q is not a field of %q and "
                         "carries no :value function (fields: %s)")
                 rname where name (ent :name) (known-fields ent)))
-      (freeze (merge {:label (humanize name)}
+      (freeze (merge {:label nil}
                      spec
                      {:name name
                       :field (when (get-in ent [:fields name])

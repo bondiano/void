@@ -18,6 +18,7 @@
 (import void/htmx/init :as htmx)
 (import void/http/wire :as wire)
 (import ./context :as ctx)
+(import ./text :as text)
 (import ./ring :as ring)
 (import ./view :as view)
 (import void/htmx/hx :as hx)
@@ -158,14 +159,12 @@
   (def held (entries))
   (page req
         [:div
-         [:h1 "Tap"]
+         [:h1 (text/t :void.dash/tap)]
          [:p {:class "vd-note"}
-          (string "(dash/tap value) from code or the netrepl puts a value here — a ring of "
-                  (entries* :capacity) ", newest first. "
-                  (ring/size entries*) " held.")]
+          (text/t :void.dash/tap-note {:capacity (entries* :capacity)
+                                       :held (ring/size entries*)})]
          (if (empty? held)
-           [:p {:class "vd-empty"}
-            "Nothing tapped yet. From the REPL: (import void/dash :as dash) (dash/tap {:hello :world})"]
+           [:p {:class "vd-empty"} (text/t :void.dash/tap-empty)]
            [:table {:class "vd-table"}
             [:thead [:tr [:th "#"] [:th "when"] [:th "where"] [:th "shape"] [:th "value"]]]
             [:tbody
@@ -179,11 +178,12 @@
                 [:td [:code (view/value-str (e :value) 80)]]])]])]))
 
 (defn- gone [req id]
-  (def resp (page req [:div [:h1 "Tap"]
+  (def resp (page req [:div [:h1 (text/t :void.dash/tap)]
                        [:p {:class "vd-warn"}
-                        (string "tap #" id " is no longer held — the ring keeps the last "
-                                (entries* :capacity) " values, and this one was evicted.")]
-                       [:p [:a {:href (ctx/at "/tap")} "Back to the list"]]]))
+                        (text/t :void.dash/tap-gone {:id id
+                                                     :capacity (entries* :capacity)})]
+                       [:p [:a {:href (ctx/at "/tap")}
+                            (text/t :void.dash/tap-back-to-list)]]]))
   (put resp :status 404)
   resp)
 
@@ -206,17 +206,17 @@
     (gone req (or id "?"))
     (page req
           [:div
-           [:h1 (string "Tap #" id)]
+           [:h1 (text/t :void.dash/tap-one {:id id})]
            [:p {:class "vd-note"}
             (string (view/stamp (e :at))
                     (if (e :where) (string " · " (e :where)) ""))
             " · "
-            [:a {:href (ctx/at (string "/tap/" id "/jdn"))} "copy as JDN"]
+            [:a {:href (ctx/at (string "/tap/" id "/jdn"))} (text/t :void.dash/tap-copy-jdn)]
             " · "
-            [:a {:href (ctx/at "/tap")} "back"]]
+            [:a {:href (ctx/at "/tap")} (text/t :void.dash/tap-back)]]
            (when (table-view? (e :value))
-             [:div [:h2 "As a table"] (table-of (e :value))])
-           [:h2 "Tree"]
+             [:div [:h2 (text/t :void.dash/tap-as-table)] (table-of (e :value))])
+           [:h2 (text/t :void.dash/tap-tree)]
            [:div {:class "vd-detail"} (node-view id [] (e :value))]])))
 
 (defn node [req]
@@ -226,20 +226,21 @@
   (def [parsed-ok path] (protect (parse raw)))
   (cond
     (nil? e)
-    (html/fragment [:span {:class "vd-warn"} "this tap value was evicted"])
+    (html/fragment [:span {:class "vd-warn"} (text/t :void.dash/tap-evicted)])
 
     (not (and parsed-ok (indexed? path)))
-    (html/fragment [:span {:class "vd-warn"} "unreadable tree path"])
+    (html/fragment [:span {:class "vd-warn"} (text/t :void.dash/tap-bad-path)])
 
     (let [[ok v] (resolve-path (e :value) path)
           content (if ok
                     (node-view id path v)
-                    [:span {:class "vd-warn"} "this branch is gone"])]
+                    [:span {:class "vd-warn"} (text/t :void.dash/tap-branch-gone)])]
       (if (htmx/request? req)
         (html/fragment content)
-        (page req [:div [:h1 (string "Tap #" id)]
+        (page req [:div [:h1 (text/t :void.dash/tap-one {:id id})]
                    [:p {:class "vd-note"}
-                    [:a {:href (ctx/at (string "/tap/" id))} "whole value"]]
+                    [:a {:href (ctx/at (string "/tap/" id))}
+                     (text/t :void.dash/tap-whole)]]
                    [:div {:class "vd-detail"} content]])))))
 
 (defn jdn [req]

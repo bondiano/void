@@ -28,6 +28,7 @@
 (import ./context :as ctx)
 (import ./query :as q)
 (import ./resource :as res)
+(import ./text :as text)
 (import ./view :as view)
 (import ./widget :as widget)
 
@@ -316,8 +317,7 @@
         (if (= :conflict outcome)
           (invalid []
                    {:row (db/find (desc :entity) (get before (get-in desc [:entity :pk])))
-                    :conflict (string "Somebody else saved this row while you were editing it. "
-                                      "The fields below are theirs — re-apply your change and save again.")})
+                    :conflict (text/t :void.admin/conflict)})
           (htmx/redirect-back
             req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk]))))))))))
 
@@ -611,7 +611,9 @@
 (defn dashboard [req]
   (def widgets
     (seq [w :in (ctx/setting :dashboard [])]
-      {:label (get w :label (string (w :name))) :render (fn [] ((w :render) req))}))
+      # the label goes through as declared — a keyword is a translation
+      # key and ./view resolves it where it draws it
+      {:label (get w :label) :name (w :name) :render (fn [] ((w :render) req))}))
   (html/page (view/dashboard widgets)
              {:layout (view/frame)
               :context {:void.admin/widgets {}}}))

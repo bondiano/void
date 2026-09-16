@@ -42,8 +42,10 @@
 (import void/htmx/init :as htmx)
 (import void/htmx/hx :as hx)
 (import void/core/schema :as schema)
+(import void/core/text :as core-text)
 (import ./context :as ctx)
 (import ./resource :as res)
+(import ./text :as text)
 (import ./widget :as widget)
 
 # -- the sheet -----------------------------------------------------------
@@ -56,6 +58,33 @@
 .admin-inline { border:1px solid var(--line); border-radius:10px; background:var(--panel);
                 padding:.75rem .9rem; margin-bottom:1rem; }
 `))
+
+# -- labels ---------------------------------------------------------------
+
+(defn label-of
+  ``The words of anything the declaration labelled — a column, a field,
+  a filter, a resource. `:label` is kept as it was written, because a
+  declaration is frozen once and a locale is known per request: a
+  keyword is a translation key, a string is the words, nothing at all
+  humanizes the name.``
+  [spec &opt key]
+  (core-text/label-of (get spec :label) (or key (get spec :name))))
+
+(defn- action-label
+  "What a bulk action is called: the label it declared, else its name."
+  [action]
+  (label-of action))
+
+(defn- title-of
+  "What a resource is called in the plural — its `:title`, which may be
+  a translation key."
+  [desc]
+  (core-text/label-of (desc :title) (desc :name)))
+
+(defn- singular-of
+  "What one row of a resource is called — its `:singular`."
+  [desc]
+  (core-text/label-of (desc :singular) (get-in desc [:entity :name])))
 
 # -- the frame -----------------------------------------------------------
 
@@ -75,10 +104,13 @@
   (def items @[])
   (each rname (res/mounted)
     (def d (res/lookup rname))
-    (array/push items {:group (d :group) :label (d :title) :href (ctx/base d)}))
+    (array/push items {:group (d :group) :label (title-of d) :href (ctx/base d)}))
   (each m (ctx/setting :menu [])
     (array/push items {:group (get m :group)
-                       :label (m :label)
+                       # a contribution is frozen at load and a locale is
+                       # not: a keyword label is looked up here, as the
+                       # page renders
+                       :label (core-text/label-of (m :label) (m :name))
                        :href (or (get m :href) (ctx/at (m :path)))}))
   (def by-group @{})
   (each i items
@@ -136,7 +168,7 @@
   spliced into <head>.``
   [content context]
   (def request (get context :request))
-  (hiccup/html5 {:lang "en"}
+  (hiccup/html5 {:lang (string (or (core-text/locale) :en))}
     [:head
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
@@ -244,10 +276,10 @@
   [:th
    (if sortable
      [:a (merge {:href (sort-link desc st col)} (rows-swap (sort-link desc st col)))
-      (col :label)
+      (label-of col)
       (when (= (st :sort) (col :name))
         (if (= :asc (st :dir)) " ▲" " ▼"))]
-     (col :label))])
+     (label-of col))])
 
 (defn cell
   ``One list cell. An `:editable` column renders as a tiny form that
@@ -270,7 +302,7 @@
                                         :resource desc
                                         :name (string (col :name))
                                         :id (string "e-" (id-of desc row) "-" (col :name))}))
-                [:button {:type "submit"} "Save"])]
+                [:button {:type "submit"} (text/t :void.admin/save)])]
     [:td shown]))
 
 (defn row
@@ -283,13 +315,14 @@
       (cell desc r col (truthy? (index-of (col :name) (desc :editable)))))
    [:td
     (when (in (desc :action-set) :show)
-      [:a {:href (ctx/url desc (string "/" id))} "View"])
+      [:a {:href (ctx/url desc (string "/" id))} (text/t :void.admin/view)])
     " "
     (when (in (desc :action-set) :edit)
-      [:a {:href (ctx/url desc (string "/" id "/edit"))} "Edit"])
+      [:a {:href (ctx/url desc (string "/" id "/edit"))} (text/t :void.admin/edit)])
     " "
     (when (in (desc :action-set) :destroy)
-      [:a {:href (ctx/url desc "/-/bulk/destroy" {"ids" id})} "Delete"])]])
+      [:a {:href (ctx/url desc "/-/bulk/destroy" {"ids" id})}
+       (text/t :void.admin/delete)])]])
 
 (defn- pager [desc st total]
   (html/pager {:page (st :page) :per-page (st :per-page) :total total
@@ -314,7 +347,7 @@
       [:th ""]]]
     [:tbody
      (if (empty? rows)
-       [:tr [:td {:colspan (+ 2 (length (desc :list))) :class "vd-empty"} "Nothing here."]]
+       [:tr [:td {:colspan (+ 2 (length (desc :list))) :class "vd-empty"} (text/t :void.admin/nothing-here)]]
        (seq [r :in rows] (row desc r st)))]]
    (pager desc st total)])
 
@@ -328,7 +361,7 @@
                   (hx/attrs :trigger "input changed delay:300ms from:find input, change from:find select, submit"))
      (when (not (empty? (desc :search)))
        [:div {:class "field"}
-        [:label {:for "admin-q"} "Search"]
+        [:label {:for "admin-q"} (text/t :void.admin/search)]
         [:input {:type "search" :name "q" :id "admin-q" :value (st :q)
                  :placeholder (string/join (map string (desc :search)) ", ")}]])
      ;(seq [f :in (desc :filters)]
@@ -340,52 +373,54 @@
                                                     :id (string "f-" (f :param))
                                                     :resource desc})))
         [:div {:class "field"}
-         [:label {:for (string "f-" (f :param))} (f :label)]
+         [:label {:for (string "f-" (f :param))} (label-of f)]
          (or custom
              (let [fd (f :field)]
                (case (fd :type)
                  :boolean [:select {:name (f :param) :id (string "f-" (f :param))}
-                           [:option {:value ""} "any"]
-                           [:option {:value "true" :selected (when (= true value) true)} "yes"]
-                           [:option {:value "false" :selected (when (= false value) true)} "no"]]
+                           [:option {:value ""} (text/t :void.admin/any)]
+                           [:option {:value "true" :selected (when (= true value) true)}
+                            (text/t :void.admin/yes)]
+                           [:option {:value "false" :selected (when (= false value) true)}
+                            (text/t :void.admin/no)]]
                  :enum [:select {:name (f :param) :id (string "f-" (f :param))}
-                        [:option {:value ""} "any"]
+                        [:option {:value ""} (text/t :void.admin/any)]
                         (seq [o :in (get-in fd [:node :props :values] [])]
                           [:option {:value (string o) :selected (when (= o value) true)}
                            (string o)])]
                  [:input {:type "text" :name (f :param) :id (string "f-" (f :param))
                           :value (when (not (nil? value)) (string value))}])))])
-     [:div {:class "field"} [:button {:type "submit"} "Filter"]]]))
+     [:div {:class "field"} [:button {:type "submit"} (text/t :void.admin/filter)]]]))
 
 (defn- bulk-bar [desc]
   (def actions
     (array/concat
       (if (in (desc :action-set) :destroy)
-        @[{:name :destroy :label "Delete" :danger true}]
+        @[{:name :destroy :label (text/t :void.admin/delete) :danger true}]
         @[])
       (seq [k :in (sorted (keys (desc :custom-actions)))] (get-in desc [:custom-actions k]))))
   (unless (empty? actions)
     [:div {:class "vd-actions"}
-     [:span "With selected:"]
+     [:span (text/t :void.admin/with-selected)]
      ;(seq [a :in actions]
         [:button {:type "submit"
                   :formaction (ctx/url desc (string "/-/bulk/" (a :name)))
                   :class (when (a :danger) "danger")}
          (a :label)])
      [:label [:input {:type "checkbox" :name "all" :value "1"}]
-      " every row the filter matches"]]))
+      " " (text/t :void.admin/every-matching-row)]]))
 
 (defn list-page
   "The list: toolbar, selection form, rows, pager."
   [desc rows st total &opt request]
   (def slot-ctx {:request request :rows rows :state st :total total})
   [:div
-   [:h1 (desc :title)]
+   [:h1 (title-of desc)]
    (slot desc :list :before slot-ctx)
    (filter-panel desc st)
    (when (in (desc :action-set) :new)
      [:p [:a {:class "vd-button" :href (ctx/url desc "/new")}
-          (string "New " (desc :singular))]])
+          (text/t :void.admin/new-one {:singular (singular-of desc)})]])
    # the selection form is a GET: a bulk action first shows a page, and a
    # page has a URL
    [:form {:method "get" :action (ctx/url desc "/-/bulk/destroy")}
@@ -405,7 +440,7 @@
   (def readonly (truthy? (index-of (fd :name) (desc :readonly))))
   (def raw (get values (fd :name) (get values (string (fd :name)))))
   (form/field
-    {:name (fd :name) :label (fd :label)
+    {:name (fd :name) :label (label-of fd)
      :render (fn [_spec value]
                (widget/render entry {:mode :form
                                      :value value
@@ -445,8 +480,9 @@
   (def slot-ctx {:request (get opts :request) :row row :values values})
   [:div
    [:h1 (if new?
-          (string "New " (desc :singular))
-          (string "Edit " (desc :singular) " " (id-of desc row)))]
+          (text/t :void.admin/new-one {:singular (singular-of desc)})
+          (text/t :void.admin/edit-titled {:singular (singular-of desc)
+                                           :id (id-of desc row)}))]
    (slot desc :form :before slot-ctx)
    (when-let [c (get opts :conflict)]
      [:p {:class "vd-warn"} c])
@@ -457,8 +493,8 @@
        [:input {:type "hidden" :name (string vfield) :value (string (get row vfield))}])
      ;(seq [fd :in (desc :form-fields)] (field-block desc fd values errors row))
      [:div {:class "vd-actions"}
-      [:button {:type "submit" :class "primary"} "Save"]
-      [:a {:href (ctx/base desc)} "Cancel"]])
+      [:button {:type "submit" :class "primary"} (text/t :void.admin/save)]
+      [:a {:href (ctx/base desc)} (text/t :void.admin/cancel)]])
    (slot desc :form :after slot-ctx)])
 
 # -- detail --------------------------------------------------------------
@@ -469,24 +505,26 @@
   (def id (id-of desc row))
   (def slot-ctx {:request request :row row})
   [:div
-   [:h1 (string (desc :singular) " " id)]
+   [:h1 (text/t :void.admin/one-titled {:singular (singular-of desc) :id id})]
    (slot desc :detail :before slot-ctx)
    [:div {:class "vd-actions"}
     (when (in (desc :action-set) :edit)
-      [:a {:class "vd-button" :href (ctx/url desc (string "/" id "/edit"))} "Edit"])
+      [:a {:class "vd-button" :href (ctx/url desc (string "/" id "/edit"))}
+       (text/t :void.admin/edit)])
     (when (in (desc :action-set) :destroy)
-      [:a {:class "vd-button" :href (ctx/url desc "/-/bulk/destroy" {"ids" id})} "Delete"])
-    [:a {:href (ctx/base desc)} "Back to list"]]
+      [:a {:class "vd-button" :href (ctx/url desc "/-/bulk/destroy" {"ids" id})}
+       (text/t :void.admin/delete)])
+    [:a {:href (ctx/base desc)} (text/t :void.admin/back-to-list)]]
    [:table {:class "vd-table"}
     [:tbody
      (seq [col :in (desc :detail)]
        [:tr
-        [:th (col :label)]
+        [:th (label-of col)]
         [:td (column-cell desc row col :detail)]])]]
    ;(or inlines [])
    (when (and history (not (empty? history)))
      [:div
-      [:h2 "History"]
+      [:h2 (text/t :void.admin/history)]
       [:table {:class "vd-table"}
        [:tbody
         (seq [h :in history]
@@ -505,26 +543,32 @@
   (def total (get opts :total 0))
   (def sample (get opts :sample []))
   [:div
-   [:h1 (string (get action :label (string (action :name))) " — confirm")]
-   [:p [:span {:class "vd-count"} (string total)]
-    (string " row" (if (= 1 total) "" "s") " of " (desc :title) " will be affected.")]
+   [:h1 (text/t :void.admin/confirm-title {:action (action-label action)})]
+   # the count is inside the sentence rather than in a span of its own:
+   # a translation reorders words, and a number pinned to the front of
+   # one is a number some language has to read around
+   [:p {:class "vd-count"}
+    (text/t :void.admin/confirm-count {:count total :resource (title-of desc)})]
    (when-let [cascade (get opts :cascade)]
      (unless (empty? cascade)
        [:div {:class "vd-warn"}
-        [:p "These will go with them:"]
+        [:p (text/t :void.admin/cascade-intro)]
         [:ul (seq [[label n capped] :in cascade]
-               [:li (string (if capped "at least " "") n " " label)])]]))
+               [:li (text/t (if capped
+                              :void.admin/cascade-at-least
+                              :void.admin/cascade-exactly)
+                            {:count n :label label})])]]))
    (when-let [note (get action :confirm)]
      [:p note])
    (when (not (empty? sample))
      [:table {:class "vd-table"}
-      [:thead [:tr ;(seq [col :in (desc :list)] [:th (col :label)])]]
+      [:thead [:tr ;(seq [col :in (desc :list)] [:th (label-of col)])]]
       [:tbody
        (seq [r :in sample]
          [:tr ;(seq [col :in (desc :list)]
                  [:td (widget/text-of (cell-value desc r col))])])]])
    (if (zero? total)
-     [:p {:class "vd-empty"} "Nothing is selected, so there is nothing to do."]
+     [:p {:class "vd-empty"} (text/t :void.admin/nothing-selected)]
      (post-form :post (ctx/url desc (string "/-/bulk/" (action :name)))
                 {:class "vd-form"}
        (when (get opts :all)
@@ -535,8 +579,9 @@
           [:input {:type "hidden" :name (string k) :value (string v)}])
        [:div {:class "vd-actions"}
         [:button {:type "submit" :class (hiccup/classes "primary" (when (get action :danger) "danger"))}
-         (string "Yes, " (string/ascii-lower (get action :label (string (action :name)))))]
-        [:a {:href (ctx/base desc)} "Cancel"]]))])
+         (text/t :void.admin/confirm-yes
+                 {:action (string/ascii-lower (action-label action))})]
+        [:a {:href (ctx/base desc)} (text/t :void.admin/cancel)]]))])
 
 (defn progress-fragment
   ``What a running bulk shows and re-shows: the state of the job
@@ -553,17 +598,18 @@
                (hx/get* (ctx/url desc (string "/-/progress/" job-id))
                         :trigger (when (not done) "load delay:1s")
                         :swap :outer-html))
-   [:p (string "job " job-id ": " (string (get state :state "pending")))]
+   [:p (text/t :void.admin/job-state {:id job-id
+                                      :state (string (get state :state "pending"))})]
    (when-let [p (get state :percent)]
      [:progress {:value (string p) :max "100"}])
    (when-let [l (get state :label)] [:p l])
-   (when done [:p [:a {:href (ctx/base desc)} "Back to list"]])])
+   (when done [:p [:a {:href (ctx/base desc)} (text/t :void.admin/back-to-list)]])])
 
 (defn progress-page
   "The page a bulk that went to the queue becomes."
   [desc action job-id state]
   [:div
-   [:h1 (string (get action :label (string (action :name))) " — running")]
+   [:h1 (text/t :void.admin/running-title {:action (action-label action)})]
    (progress-fragment desc job-id state)])
 
 # -- inlines -------------------------------------------------------------
@@ -580,7 +626,7 @@
     (or (get inline :fields)
         (map |($ :name) (child :form-fields))))
   [:div {:class "admin-inline" :id (string "inline-" (inline :name))}
-   [:h2 (inline :label)]
+   [:h2 (label-of inline)]
    [:table {:class "vd-table"}
     [:thead [:tr ;(seq [f :in fields] [:th (string f)]) [:th ""]]]
     [:tbody
@@ -598,13 +644,13 @@
               (widget/render (ctx/widget-entry (child :name) f)
                              {:mode :inline :value (get c f) :row c :resource child
                               :name (string f) :id (string "i-" cid "-" f)})
-              [:button {:type "submit"} "Save"])])
+              [:button {:type "submit"} (text/t :void.admin/save)])])
         [:td
          (when (inline :can-delete)
            (post-form :delete (string base "/" cid)
                       (hx/delete (string base "/" cid) :target (string "#inline-" (inline :name))
                                  :swap :outer-html)
-             [:button {:type "submit" :class "danger"} "Delete"]))]])]]
+             [:button {:type "submit" :class "danger"} (text/t :void.admin/delete)]))]])]]
    (when (inline :can-add)
      (post-form :post base
                 (form-attrs child
@@ -616,7 +662,8 @@
        ;(seq [f :in fields]
           (field-block child (first (filter |(= f ($ :name)) (child :form-fields)))
                        {} errors nil))
-       [:button {:type "submit"} (string "Add " (child :singular))]))])
+       [:button {:type "submit"}
+        (text/t :void.admin/add-one {:singular (singular-of child)})]))])
 
 # -- dashboard -----------------------------------------------------------
 
@@ -630,13 +677,13 @@
     ;(seq [rname :in (res/mounted)
            :let [d (res/lookup rname)]]
        [:div {:class "vd-card"}
-        [:h2 [:a {:href (ctx/base d)} (d :title)]]
+        [:h2 [:a {:href (ctx/base d)} (title-of d)]]
         (when (d :doc) [:p (d :doc)])])]
    (unless (empty? widgets)
      [:div
-      [:h2 "At a glance"]
+      [:h2 (text/t :void.admin/at-a-glance)]
       [:div {:class "vd-cards"}
        ;(seq [w :in widgets]
           [:div {:class "vd-card"}
-           [:h2 (w :label)]
+           [:h2 (core-text/label-of (w :label) (w :name))]
            ((w :render))])]])])

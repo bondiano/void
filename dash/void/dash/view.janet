@@ -17,7 +17,9 @@
 (import void/core/util :as util)
 (import void/datastar/ds :as ds)
 (import void/datastar/init :as datastar)
+(import void/core/text :as core-text)
 (import ./context :as ctx)
+(import ./text :as text)
 
 # -- the sheet -----------------------------------------------------------
 
@@ -118,15 +120,17 @@ document.addEventListener("input", function (e) {
 # -- the frame -----------------------------------------------------------
 
 (def sections
-  "The navigation, in reading order: label and path under the prefix."
-  [["Overview" ""]
-   ["Components" "/components"]
-   ["Plugins" "/plugins"]
-   ["Config" "/config"]
-   ["Routes" "/routes"]
-   ["Deploy" "/deploy"]
-   ["Logs" "/logs"]
-   ["Tap" "/tap"]])
+  ``The navigation, in reading order: the key its label is under and
+  the path under the prefix. A key rather than the words, because a
+  locale is known per request and this value is not.``
+  [[:void.dash/overview ""]
+   [:void.dash/components "/components"]
+   [:void.dash/plugins "/plugins"]
+   [:void.dash/config "/config"]
+   [:void.dash/routes "/routes"]
+   [:void.dash/deploy "/deploy"]
+   [:void.dash/logs "/logs"]
+   [:void.dash/tap "/tap"]])
 
 (defn- nav-links [request]
   (def here (get request :path ""))
@@ -137,14 +141,14 @@ document.addEventListener("input", function (e) {
                         (= here (ctx/prefix))
                         (string/has-prefix? href here))
                   "active")}
-     label]))
+     (text/t label)]))
 
 (defn layout
   "The frame every dash page renders inside."
   [content context]
   (def request (get context :request))
   (def boot (ctx/boot))
-  (hiccup/html5 {:lang "en"}
+  (hiccup/html5 {:lang (string (or (core-text/locale) :en))}
     [:head
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
@@ -201,7 +205,7 @@ document.addEventListener("input", function (e) {
   plugin whose composition would fill it, not an empty box.``
   [what plugin-name]
   [:p {:class "vd-absent"}
-   (string what " is not in this composition — composing " plugin-name " adds it.")])
+   (text/t :void.dash/absent {:what (text/t what) :plugin plugin-name})])
 
 (defn poll-wrap
   ``The moving half of a page: it re-fetches itself every 5 seconds
@@ -252,10 +256,13 @@ document.addEventListener("input", function (e) {
   ``The data-* attributes that put a page on its morph stream when
   void/datastar is in the composition — and nothing at all when it is
   not, which leaves the htmx poll in charge. `path` is the stream's
-  path under the prefix.``
-  [path]
+  path under the prefix, and the page's own query rides on it
+  (`datastar/stream-url`): a stream opened on a bare path would morph
+  the unfiltered page over the filtered one an operator is reading.``
+  [req path]
   (if (ctx/setting :datastar?)
-    (ds/load (ds/action :get (ctx/at path) {:open-when-hidden false}))
+    (ds/load (ds/action :get (string (ctx/prefix) (datastar/stream-url req path))
+                        {:open-when-hidden false}))
     {}))
 
 (defn ms

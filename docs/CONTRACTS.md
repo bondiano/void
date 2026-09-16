@@ -43,12 +43,12 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/dashboard-widget`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Tiles on the admin index: {:name :orders/today :label "Orders today" :render (fn [request] hiccup)}
+- Tiles on the admin index: {:name :orders/today :label "Orders today" :render (fn [request] hiccup)}. A :label that is a keyword is a translation key, resolved when the tile renders
 - **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate dashboard widget <name>`
 - **contribution schema:**
 
   ```janet
-  {:label [:optional :string] :name :keyword :render :function}
+  {:label [:optional [:or :string :keyword]] :name :keyword :render :function}
   ```
 
 ### `:void.admin/history`
@@ -74,23 +74,23 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.admin/menu`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Extra items in the admin navigation: {:name :docs :label "Docs" :href "/admin/reports"}. A link to a page inside the admin says :path instead — {:name :jobs :label "Jobs" :path "/jobs"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two. :group puts the item under a heading in the navigation, the same one a resource names with :group — ungrouped links come first, then the groups by name
+- Extra items in the admin navigation: {:name :docs :label "Docs" :href "/admin/reports"}. A link to a page inside the admin says :path instead — {:name :jobs :label "Jobs" :path "/jobs"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two. :group puts the item under a heading in the navigation, the same one a resource names with :group — ungrouped links come first, then the groups by name. A :label that is a keyword is a translation key (void/core/text), resolved when the navigation renders — a contribution is frozen at load, and a locale is not
 - **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate admin menu item <name>`
 - **contribution schema:**
 
   ```janet
-  {:group [:optional :string] :href [:optional :string] :label :string :name :keyword :path [:optional :string]}
+  {:group [:optional :string] :href [:optional :string] :label [:or :string :keyword] :name :keyword :path [:optional :string]}
   ```
 
 ### `:void.admin/page`
 
 - **owner:** `:void/admin` · **cardinality:** `:many`
-- Arbitrary admin pages: {:name :reports :label "Reports" :path "/reports" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry
+- Arbitrary admin pages: {:name :reports :label "Reports" :path "/reports" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry. A :label that is a keyword is a translation key, resolved when the page renders rather than when the contribution froze
 - **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate admin page <name>`
 - **contribution schema:**
 
   ```janet
-  {:handler :function :label [:optional :string] :meta [:optional :dictionary] :method [:optional :keyword] :name :keyword :path :string :policies [:optional [:vector :keyword]]}
+  {:handler :function :label [:optional [:or :string :keyword]] :meta [:optional :dictionary] :method [:optional :keyword] :name :keyword :path :string :policies [:optional [:vector :keyword]]}
   ```
 
 ### `:void.admin/widget`

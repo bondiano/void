@@ -14,6 +14,7 @@
 (import void/core/log :as log)
 (import void/core/plugin :as plugin)
 (import void/test :as test)
+(import void/dash/text :as dash-text)
 
 (log/set-level! nil :error)
 
@@ -112,6 +113,17 @@
           "explain lists every metadata key with its origin")
 
   # deploy: shape and survey
+  # the words are a table, and a key with no entry renders as its own
+  # name — checked by key, because the plugins page legitimately prints
+  # `:void.dash/tile` and friends as the identifiers they are
+  (each uri ["/dash" "/dash/components" "/dash/plugins" "/dash/config"
+             "/dash/routes" "/dash/deploy"
+             "/dash/why?key=http/kernel" "/dash/point?name=:void.core/log-sink"]
+    (def body (test/text (GET uri)))
+    (each k (keys dash-text/en)
+      (assert (not (string/find (string k) body))
+              (string "the word " (string k) " has no entry and reached " uri))))
+
   (def dep (GET "/dash/deploy"))
   (assert (= 200 (dep :status)))
   (assert (string/find "shape" (test/text dep)))

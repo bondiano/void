@@ -22,6 +22,7 @@
 ### on a path that does not exist, and not somebody's text/plain.
 
 (import void/core/errors :as errors)
+(import void/core/text :as text)
 (import ./ring :as ring)
 (import ./wire :as wire)
 
@@ -60,6 +61,32 @@
     (errors/message env)
     (get wire/status-messages (errors/status env) "error")))
 
+(def en
+  ``The error pages' own words. One sentence under the code —
+  recovery, not internals — per status a visitor can do something
+  about. The table is the only place they are spelled: `text/t` asks
+  the bound catalog first, so an application translates a hint by
+  contributing `:void.http/hint-404` and this package learns nothing
+  about locales.``
+  {:void.http/hint-404 "There is nothing at this address. Check the URL, or start from the front page."
+   :void.http/hint-403 "You are signed in as somebody this page is not for."
+   :void.http/hint-401 "Signing in is what this page is waiting for."
+   :void.http/hint-405 "This address exists, but not for the method the request used."
+   :void.http/hint-408 "The request took too long to arrive. Try again."
+   :void.http/hint-429 "Too many requests in a row — give it a moment, then retry."
+   :void.http/hint-503 "The server is catching its breath. It answers again in a few seconds."})
+
+(def- t (text/translator en))
+
+(defn- status-title
+  ``The phrase next to the code. The reason phrases are the protocol's
+  own English and this package ships no translation of them — but a
+  catalog that carries `:void.http/status-404` is a catalog that means
+  to translate the page, and it wins.``
+  [status]
+  (or (text/t? (keyword "void.http/status-" status))
+      (get wire/status-messages status "Error")))
+
 (def- page-css
   ``The error pages' one style block — the control-room language of
   void/dash, self-contained because the kernel serves no assets: dark
@@ -97,9 +124,10 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   (def resp
     (ring/html status
       (string
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<!doctype html><html lang=\"" (html-escape (or (text/locale) :en)) "\">"
+        "<head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        "<title>" status " " (html-escape (get wire/status-messages status "Error")) "</title>"
+        "<title>" status " " (html-escape (status-title status)) "</title>"
         "<style>" page-css "</style></head><body><main>"
         inner
         "</main></body></html>")))
@@ -130,15 +158,9 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   (def accept (get-in req [:headers "accept"]))
   (and (string? accept) (truthy? (string/find "text/html" accept))))
 
-(def- status-hints
-  "One human sentence under the code — recovery, not internals."
-  {404 "There is nothing at this address. Check the URL, or start from the front page."
-   403 "You are signed in as somebody this page is not for."
-   401 "Signing in is what this page is waiting for."
-   405 "This address exists, but not for the method the request used."
-   408 "The request took too long to arrive. Try again."
-   429 "Too many requests in a row — give it a moment, then retry."
-   503 "The server is catching its breath. It answers again in a few seconds."})
+(defn- hint [status]
+  (def key (keyword "void.http/hint-" status))
+  (when (get en key) (t key)))
 
 (defn prod-page
   ``The error page a browser gets outside dev: the status, the
@@ -148,9 +170,9 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   (html-error-page status
     (string
       "<p class=\"status\">" status "</p>"
-      "<h1>" (html-escape (get wire/status-messages status "Error")) "</h1>"
-      (if-let [hint (get status-hints status)]
-        (string "<p class=\"hint\">" hint "</p>")
+      "<h1>" (html-escape (status-title status)) "</h1>"
+      (if-let [h (hint status)]
+        (string "<p class=\"hint\">" (html-escape h) "</p>")
         ""))))
 
 (defn default-renderer
@@ -165,19 +187,31 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                        (get wire/status-messages (ctx :status) "Error")))))
 
 (defn render
-  "Run the renderers (sorted contributions of :void.http/error-renderer)
-  over an error; the first response wins, default-renderer is the
-  guaranteed fallback."
+  ``Run the renderers (sorted contributions of
+  :void.http/error-renderer) over an error; the first response wins,
+  default-renderer is the guaranteed fallback.
+
+  Inside the request's own locale scope, when it carries one. This
+  guard is phase 0 and `render-error` is called from outside any route
+  at all, so by the time a refusal becomes a page the dyns a locale
+  middleware bound are gone with the stack — or were never bound,
+  because no route matched and no middleware ran. The request survives
+  both, and `void/core/text` is what a renderer reads the locale
+  through. It goes here and not in `wrap-panic` because this is the
+  one place every refusal renders: the thrown ones and the ones
+  `render-error` asks for without a throw.``
   [renderers err req ctx]
-  (or (some (fn [r]
-              (def [ok resp] (protect ((r :fn) err req ctx)))
-              (if ok
-                resp
-                (do (eprintf "error renderer %q failed: %s"
-                             (r :name) (if (string? resp) resp (describe resp)))
-                    nil)))
-            (or renderers []))
-      (default-renderer err req ctx)))
+  (text/in-scope req
+    (fn render-in-locale []
+      (or (some (fn [r]
+                  (def [ok resp] (protect ((r :fn) err req ctx)))
+                  (if ok
+                    resp
+                    (do (eprintf "error renderer %q failed: %s"
+                                 (r :name) (if (string? resp) resp (describe resp)))
+                        nil)))
+                (or renderers []))
+          (default-renderer err req ctx)))))
 
 (defn wrap-panic
   ``The phase-0 panic guard. Options:
@@ -218,6 +252,9 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
             (def [ok r] (protect (h req err)))
             (when (and ok (dictionary? r) (r :status))
               (set hooked r))))
+        # `render` puts the request's locale scope back around the
+        # renderers; the log above stays outside it on purpose — a log
+        # in the visitor's language is a log nobody can grep
         (or hooked
             (render (opts :renderers) err req
                     {:status status

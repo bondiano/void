@@ -17,6 +17,7 @@
 ### page-visible artifact into a CI failure.
 
 (import void/core/log :as log)
+(import void/core/text :as text)
 (import ./locale :as locale)
 (import ./plural :as plural)
 (import ./message :as message)
@@ -24,11 +25,13 @@
 (def- log-ns "void.i18n")
 
 (def locale-dyn
-  ``The dyn the request's locale lives in. Named rather than passed:
-  the render middleware, mail/send and anything the handler spawns
-  read it without importing void/i18n — the :void.auth/identity
-  convention.``
-  :void.i18n/locale)
+  ``The dyn the request's locale lives in — `void/core/text`'s, so that
+  a package which only *reads* a locale (an error page choosing its
+  `<html lang>`) reads it from the core seam and not from this plugin.
+  Named rather than passed: the render middleware, mail/send and
+  anything the handler spawns see it without importing void/i18n — the
+  :void.auth/identity convention.``
+  text/locale-dyn)
 
 # -- installed state -----------------------------------------------------
 
@@ -116,13 +119,6 @@
   (when-let [msg (lookup key loc)]
     (message/render msg params (category-of loc))))
 
-(defn with-locale*
-  "Run thunk with the locale bound — CLI, jobs and tests; the request
-  path is the middleware's."
-  [loc thunk]
-  (with-dyns [locale-dyn (locale/normalize loc)]
-    (thunk)))
-
 # -- the schema-error bridge ---------------------------------------------
 
 (def- schema-codes
@@ -199,6 +195,32 @@
   errors/message always worked."
   [loc]
   (get (or error-tables {}) loc {}))
+
+# -- the locale scope ----------------------------------------------------
+
+(defn scope
+  ``Run `thunk` in the scope of one locale: the locale itself, the
+  translator the framework's own packages read through
+  `void/core/text`, and the two prebuilt message tables
+  (`void/core/schema`'s since wave 0, `void/core/errors`' since 8.1).
+
+  One function, three callers — the middleware, `with-locale*` and the
+  scope a request carries so that its own refusal renders translated —
+  because a locale that means four bindings in one place and two in
+  another is a locale that translates a page and not the refusal of
+  it.``
+  [loc thunk]
+  (with-dyns [locale-dyn loc
+              text/t-dyn t?
+              :void.schema/messages (schema-messages loc)
+              :void.errors/messages (error-messages loc)]
+    (thunk)))
+
+(defn with-locale*
+  "Run thunk with the locale bound — CLI, jobs and tests; the request
+  path is the middleware's."
+  [loc thunk]
+  (scope (locale/normalize loc) thunk))
 
 # -- install -------------------------------------------------------------
 

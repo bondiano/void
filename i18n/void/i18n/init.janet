@@ -12,16 +12,28 @@
 ###
 ### The request's locale is resolved once per request (application hook ->
 ### cookie -> Accept-Language -> default) by a middleware at phase 4100 —
-### after auth (4000), so the hook sees the identity, and before every
-### middleware that can refuse with a rendered message, so the refusal
-### is translated — and bound as (dyn :void.i18n/locale) together with
-### (dyn :void.schema/messages), the seam
-### void/core/schema has carried since wave 0. Everything deeper in the
-### chain sees both: the validation middleware, the handler, the template
-### rendering at phase 9000, the fibers the handler spawns, and mail/send,
-### which renders before queueing exactly so that this capture works.
-### Forms, admin and problem+json localize with zero changes in their
-### packages.
+### after auth (4000), so the hook sees the identity — and the scope it
+### binds is `void/core/text`'s: the locale, the translator every
+### framework package reads its own words through, and the two message
+### tables (`:void.schema/messages`, the seam void/core/schema has
+### carried since wave 0, and `:void.errors/messages`, the envelope's
+### since 8.1). Everything deeper in the chain sees all four: the
+### validation middleware, the handler, the admin's and the dashboard's
+### own pages, the template rendering at phase 9000, the fibers the
+### handler spawns, and mail/send, which renders before queueing exactly
+### so that this capture works.
+###
+### **A refusal is rendered outside that chain**, and saying it was
+### translated did not make it so. The panic guard is phase 0 and
+### `render-error` is called from outside any route, so by the time a
+### 403 becomes a page the dyns bound above are gone with the stack that
+### threw — or were never bound, because no route matched. So the scope
+### also goes *onto the request* (`:void.i18n/scope`, a function): the
+### edge at phase 50 attaches a lazy one for a request that never
+### reaches a route, the middleware replaces it with the full
+### resolution, and `errors/render` puts it back around the renderers.
+### Forms, admin, dash and problem+json localize with zero changes in
+### their packages.
 ###
 ### `(i18n/t :shop.cart/items {:count n})` — named {param}
 ### interpolation (a translation reorders words, so printf positions
@@ -31,6 +43,7 @@
 ### check` turns that page-visible artifact into a CI failure.
 
 (import void/core/plugin :as plugin)
+(import void/core/text :as text)
 (import void/http/ring :as ring)
 (import ./locale :as locale)
 (import ./plural :as plural)
@@ -159,6 +172,32 @@
                         (get (or catalog/settings {}) :locales []))
       (get (or catalog/settings {}) :default :en)))
 
+(defn unrouted-locale
+  ``The locale of a request that never reached a route: cookie ->
+  Accept-Language -> default. The application's
+  `:void.i18n/locale-source` hook is **not** asked here — it is
+  promised the identity, and outside the chain there is none to give
+  it.``
+  [req]
+  (or (cookie-locale req)
+      (locale/negotiate (get-in req [:headers "accept-language"])
+                        (get (or catalog/settings {}) :locales []))
+      (get (or catalog/settings {}) :default :en)))
+
+(plugin/contribute! :void.http/edge
+  {:name :void.i18n/scope
+   # 50: outermost of the edges, so everything an edge can answer —
+   # a CORS preflight, a security header, the page the panic guard
+   # renders — is inside a locale
+   :phase 50
+   :doc "Attach the request's locale scope before routing, so a refusal that never reached a route — the 404 of an unrouted path, a shed request — is still rendered in the visitor's language. The scope is resolved lazily (nothing costs anything until something renders) and without the :void.i18n/locale-source hook, which is promised an identity there is no auth middleware to have bound. A matched route replaces it at phase 4100 with the full resolution"
+   :wrap
+   (fn [handler]
+     (fn i18n-scope [req]
+       (put req text/scope-key
+            (fn unrouted-scope [thunk] (catalog/scope (unrouted-locale req) thunk)))
+       (handler req)))})
+
 (plugin/contribute! :void.http/middleware
   {:name :void.i18n/locale
    # 4100: after auth (4000), because the :void.i18n/locale-source hook
@@ -169,15 +208,16 @@
    # :void.auth/identity`: auth is not a requirement of this plugin,
    # and a name may only point at middleware that is there
    :phase 4100
-   :doc "Resolve the request's locale (hook -> cookie -> Accept-Language -> default) and bind it, with the matching :void.schema/messages and :void.errors/messages tables, for everything deeper in the chain — validation, the handler, the error renderers, the template render at phase 9000 and every fiber they spawn"
+   :doc "Resolve the request's locale (hook -> cookie -> Accept-Language -> default) and bind it, with the translator and the :void.schema/messages and :void.errors/messages tables, for everything deeper in the chain — validation, the handler, the framework's own pages, the template render at phase 9000 and every fiber they spawn. The same scope goes onto the request as (req :void.i18n/scope), because a refusal is rendered by the phase-0 panic guard, after the stack that bound all of this has unwound"
    :wrap
    (fn [handler]
      (fn i18n-locale [req]
        (def loc (resolve-locale req))
-       (with-dyns [catalog/locale-dyn loc
-                   :void.schema/messages (catalog/schema-messages loc)
-                   :void.errors/messages (catalog/error-messages loc)]
-         (handler req))))})
+       # the scope, as a function the request carries: the error
+       # renderers run above every middleware and would otherwise
+       # translate a 403 in the default locale — see core/text/in-scope
+       (put req text/scope-key (fn in-locale [thunk] (catalog/scope loc thunk)))
+       (catalog/scope loc (fn [] (handler req)))))})
 
 # -- the CLI -------------------------------------------------------------
 

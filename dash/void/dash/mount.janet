@@ -26,7 +26,6 @@
 (import ./logs :as logs)
 (import ./pages :as pages)
 (import ./tap :as tap)
-(import ./view :as view)
 
 (def shut-message
   "What a closed dashboard answers with — the phrase names the key."
@@ -59,16 +58,19 @@
 
 # -- the live streams ----------------------------------------------------
 
+# The view a stream re-renders is **the handler itself**: `morph-stream`
+# takes the lazy `html/page` response and renders it (html/render-now),
+# so the live half and the ordinary response are one render path and not
+# two that drift. And the stream's own request carries the page's query
+# (the page opened it with `datastar/stream-url`), so a filtered log page
+# stays filtered when it is morphed. Both were what the idiom got wrong
+# here first — ADR-0043 §5, folded back into ADR-0037.
+
 (defn- overview-live [req]
-  (live/stream req
-               (fn [] (view/layout (pages/overview-body (ctx/boot))
-                                   {:request req}))
-               [live/overview-room]))
+  (live/stream req (fn [] (pages/overview req)) [live/overview-room]))
 
 (defn- logs-live [req]
-  (live/stream req
-               (fn [] (view/layout (logs/logs-body {}) {:request req}))
-               [live/logs-room]))
+  (live/stream req (fn [] (logs/index req)) [live/logs-room]))
 
 # -- the served sheet ----------------------------------------------------
 

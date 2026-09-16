@@ -28,6 +28,8 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/http/ring :as ring)
+(import void/http/wire :as wire)
+(import void/html/init :as html)
 (import void/html/hiccup :as hiccup)
 (import ./proto :as proto)
 
@@ -86,14 +88,27 @@
 
 # -- rendering and events ------------------------------------------------
 
-(defn- render-content [content]
-  (if (bytes? content)
-    (string content)
+(defn- render-content
+  ``Markup from whatever a view answered: ready bytes pass through, a
+  lazy `html/page` response is rendered *here* (`html/render-now`), and
+  anything else goes through the hiccup pipeline.
+
+  The lazy branch is what keeps a page's live half and its ordinary
+  response one render rather than two: the handler returns
+  `(html/page ... {:layout base})`, and so does the view a stream
+  re-renders on every poke — see ADR-0043 §5, where writing the second
+  path by hand is the first thing the idiom got wrong on a real
+  consumer.``
+  [content &opt req]
+  (cond
+    (bytes? content) (string content)
+    (html/view-response? content) (string (get (html/render-now content req) :body ""))
     (hiccup/render-string content)))
 
 (defn patch-elements
   "proto/patch-elements over hiccup: content renders through the
-  hiccup pipeline, a string or buffer passes through untouched."
+  hiccup pipeline, a lazy html/page response renders now, a string or
+  buffer passes through untouched."
   [content &opt opts]
   (proto/patch-elements
     (if (nil? content) nil (render-content content))
@@ -205,19 +220,51 @@
       (when (< (ev/count ch) (ev/capacity ch))
         (ev/give ch :poke)))))
 
+(defn stream-url
+  ``Where a page opens its morph stream: `path`, carrying the query the
+  page itself was rendered with.
+
+      (ds/load (ds/action :get (datastar/stream-url req "/logs/live")))
+
+  "The page is the state" holds only while the stream can see that
+  state, and a page's state lives in its URL — a filter, a sort, a page
+  number. A stream opened on a bare path re-renders the page nobody is
+  looking at: void/dash opened its log stream on `/logs/live` and every
+  poke morphed the *unfiltered* log page over the filtered one the
+  operator was reading (ADR-0043 §5).
+
+  `extra` adds parameters or, with a nil value, drops one — "the same
+  stream without this filter" stays one expression. Values are
+  percent-encoded, and keys render sorted, so the same state is the
+  same URL.``
+  [req path &opt extra]
+  (def params (merge (table) (or (get req :query) {}) (or extra {})))
+  (def kept (tabseq [[k v] :pairs params
+                     :when (and (not (nil? v)) (not (empty? (string v))))]
+              k v))
+  (if (empty? kept)
+    path
+    (string path "?" (wire/encode-query kept))))
+
 (defn morph-stream
   ``The long-lived side of the idiom — a route the page opens with
-  (ds/load (ds/action :get "/live")):
+  (ds/load (ds/action :get (datastar/stream-url req "/live"))):
 
       (defn live [req]
         (datastar/morph-stream req (fn [] (orders-page req))
                                {:rooms [:orders]}))
 
-  `view` re-renders the full page (hiccup or ready markup) each time
-  poke! names one of the stream's :rooms; the connection pushes the
-  morph events page-events cuts from it. :initial true (the default)
-  pushes one morph on connect — the reconnect after a dropped SSE
-  connection resynchronizes a page that went stale while offline.``
+  `view` re-renders the full page each time poke! names one of the
+  stream's :rooms — hiccup, ready markup, or the very `html/page`
+  response the ordinary handler returns, which is the shape that keeps
+  a page from having two render paths. The connection pushes the morph
+  events page-events cuts from it. :initial true (the default) pushes
+  one morph on connect — the reconnect after a dropped SSE connection
+  resynchronizes a page that went stale while offline.
+
+  The stream's own request carries the page's state when the page
+  opened it with `stream-url`, so `view` reads its filters off `req`
+  exactly as the handler does.``
   [req view &opt opts]
   (default opts {})
   (def reg (registry))
@@ -228,11 +275,11 @@
       (join! reg rooms conn)
       (defer (leave! reg rooms conn)
         (when (get opts :initial true)
-          (each e (page-events (render-content (view))) (yield e)))
+          (each e (page-events (render-content (view) req)) (yield e)))
         (forever
           (match (ev/take (conn :chan))
             nil (break)                      # the registry stopped
-            (each e (page-events (render-content (view))) (yield e))))))))
+            (each e (page-events (render-content (view) req)) (yield e))))))))
 
 # -- the component -------------------------------------------------------
 

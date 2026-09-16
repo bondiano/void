@@ -7,6 +7,26 @@
 ### is another template receiving the rendered view as (args :content)
 ### — splice it with {- (args :content) -} (already-escaped HTML must
 ### not be escaped twice).
+###
+### **Views only, and that is the decision** (wave 8, ADR-0050 §8).
+### The framework's helpers — `form/field`, `form/form`, `html/pager`,
+### `html/flash-view`, every `hx/` builder, the CSRF slot — answer with
+### *hiccup*, and they are not reimplemented here. A template that wants
+### one renders it and splices the result — `{$ ... $}` is temple's
+### compile-time chunk, which is where a template does its imports:
+###
+###     {$ (import void/html/init :as html) $}
+###     {- (html/render-string (form/field spec value errors)) -}
+###
+### (or the handler renders it and the template splices `(args :field)`,
+### which is the same bridge one step earlier).
+###
+### A second, string-building set of the same helpers would be a copy of
+### the first (the thing this wave exists to remove), and a worse copy:
+### hiccup escapes by construction, a helper that pasted strings would
+### have to escape by discipline, which is how an injection gets written.
+### The bridge is one call, it is in the view layer where it belongs, and
+### it costs the engine nothing.
 
 (import spork/temple)
 

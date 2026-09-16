@@ -24,6 +24,7 @@
 
 (import void/jobs :as jobs)
 (import ./context :as ctx)
+(import ./text :as text)
 (import ./view :as view)
 (import ./widget :as widget)
 (import void/htmx/hx :as hx)
@@ -37,7 +38,10 @@
   mounted before resources, so this one would win.``
   "/jobs")
 
-(def title "What the navigation and the page heading call it." "Jobs")
+(defn title
+  "What the navigation and the page heading call it."
+  []
+  (text/t :void.admin/jobs))
 
 (defn url
   "A URL in this section: (url), (url \"/-/bulk/retry\" params)."
@@ -100,15 +104,18 @@
   (def dead (total-of (snap :counts) :dead))
   [:div {:class "vd-cards"}
    [:div {:class "vd-card"}
-    [:h2 "Backend"]
+    [:h2 (text/t :void.admin/jobs-backend)]
     [:p (string (caps :name))]
     [:p {:class "vd-note"}
-     (string (if (caps :shared) "shared" "this process only")
-             " · flows " (if (caps :flows) "yes" "no")
-             " · rate limit " (string (caps :rate-limit))
-             " · locks " (string (caps :locks)))]]
+     (text/t :void.admin/jobs-backend-note
+             {:sharing (text/t (if (caps :shared)
+                                 :void.admin/jobs-shared
+                                 :void.admin/jobs-this-process))
+              :flows (widget/text-of (truthy? (caps :flows)))
+              :rate (string (caps :rate-limit))
+              :locks (string (caps :locks))})]]
    [:div {:class "vd-card"}
-    [:h2 "Backlog"]
+    [:h2 (text/t :void.admin/jobs-backlog)]
     # what still owes work is the queue's own list, not a list of three
     # states spelled again here
     [:p {:class "vd-count"}
@@ -116,21 +123,20 @@
     [:p {:class "vd-note"}
      (string/join (map string jobs/record-live-states) ", ")]]
    [:div {:class "vd-card"}
-    [:h2 "Dead"]
+    [:h2 (text/t :void.admin/jobs-dead)]
     [:p {:class "vd-count"}
      (if (zero? dead)
        "0"
        (swap-link (url "" (with-params st "state" :dead "queue" nil)) (string dead)))]
-    [:p {:class "vd-note"} "out of attempts, or killed by hand"]]
+    [:p {:class "vd-note"} (text/t :void.admin/jobs-dead-note)]]
    [:div {:class "vd-card"}
-    [:h2 "Enqueued"]
+    [:h2 (text/t :void.admin/jobs-enqueued)]
     [:p {:class "vd-count"} (string (get snap :enqueued 0))]
     # a counter in this process's heap, not in the backend: on a fleet
     # every replica has its own, and the card says so rather than
     # letting the number read as the queue's
     [:p {:class "vd-note"}
-     (string "by this process since it started · "
-             (get snap :duplicates 0) " refused by a unique key")]]])
+     (text/t :void.admin/jobs-enqueued-note {:duplicates (get snap :duplicates 0)})]]])
 
 (defn- depth-cell [st qname state n]
   [:td {:class "vd-count"}
@@ -147,7 +153,7 @@
    [:tbody
     (if (empty? queues)
       [:tr [:td {:colspan (inc (length jobs/record-states)) :class "vd-empty"}
-            "The queue holds nothing."]]
+            (text/t :void.admin/jobs-empty)]]
       (seq [q :in queues]
         [:tr
          [:th (swap-link (url "" (with-params st "queue" q "state" nil)) (string q))]
@@ -155,7 +161,7 @@
             (depth-cell st q s (get-in counts [q s] 0)))]))]
    (when (> (length queues) 1)
      [:tfoot
-      [:tr [:th "all"]
+      [:tr [:th (text/t :void.admin/jobs-all)]
        ;(seq [s :in jobs/record-states]
           [:td {:class "vd-count"} (string (total-of counts s))])]])])
 
@@ -171,7 +177,7 @@
   [:div {:class "field"}
    [:label {:for id} label]
    [:select {:name name :id id}
-    (option "" value "any")
+    (option "" value (text/t :void.admin/any))
     ;(seq [o :in options] (option o value (string o)))]])
 
 (defn- filter-panel [snap st]
@@ -181,14 +187,14 @@
                  :class "vd-toolbar"}
                 (wrapper-swap (url))
                 (hx/attrs :trigger "change, submit"))
-   (select-field "queue" "Queue" (snap :queues) (st :queue))
-   (select-field "state" "State" jobs/record-states (st :state))
-   (select-field "job" "Job" (snap :jobs) (st :job))
+   (select-field "queue" (text/t :void.admin/jobs-queue) (snap :queues) (st :queue))
+   (select-field "state" (text/t :void.admin/jobs-state) jobs/record-states (st :state))
+   (select-field "job" (text/t :void.admin/jobs-job) (snap :jobs) (st :job))
    [:div {:class "field"}
-    [:label {:for "f-jobs-limit"} "Rows"]
+    [:label {:for "f-jobs-limit"} (text/t :void.admin/jobs-rows)]
     [:input {:type "number" :name "limit" :id "f-jobs-limit" :min "1"
              :value (string (st :limit))}]]
-   [:div {:class "field"} [:button {:type "submit"} "Filter"]]])
+   [:div {:class "field"} [:button {:type "submit"} (text/t :void.admin/filter)]]])
 
 # -- the listing ---------------------------------------------------------
 
@@ -198,9 +204,10 @@
 
 (defn- row-actions [r]
   [:td
-   (when (= :dead (get r :state)) (action-button (r :id) "retry" "Retry" false))
+   (when (= :dead (get r :state))
+     (action-button (r :id) "retry" (text/t :void.admin/jobs-retry) false))
    " "
-   (action-button (r :id) "discard" "Discard" true)])
+   (action-button (r :id) "discard" (text/t :void.admin/jobs-discard) true)])
 
 (defn- age-cell
   ``How long ago something happened to this record — except for a
@@ -235,7 +242,8 @@
      [:th "attempt"] [:th "age"] [:th "error"] (when actions? [:th ""])]]
    [:tbody
     (if (empty? rows)
-      [:tr [:td {:colspan (if actions? 8 7) :class "vd-empty"} "No record matches."]]
+      [:tr [:td {:colspan (if actions? 8 7) :class "vd-empty"}
+            (text/t :void.admin/jobs-no-record)]]
       (seq [r :in rows]
         [:tr {:id (string "job-" (r :id))}
          [:td [:a {:href (url (string "/" (r :id)))} (string (r :id))]]
@@ -257,20 +265,23 @@
   (when (and (st :state) (pos? shown))
     (def sel (with-params st "job" nil "limit" nil))
     [:div {:class "vd-actions"}
-     [:span (string "With every " (string (st :state)) " record"
-                    (if (st :queue) (string " in " (string (st :queue))) " in every queue")
-                    ":")]
+     [:span (if (st :queue)
+              (text/t :void.admin/jobs-with-every-in-queue
+                      {:state (string (st :state)) :queue (string (st :queue))})
+              (text/t :void.admin/jobs-with-every {:state (string (st :state))}))]
      (when (= :dead (st :state))
-       [:a {:class "vd-button" :href (url "/-/bulk/retry" sel)} "Retry all"])
-     [:a {:class "vd-button danger" :href (url "/-/bulk/discard" sel)} "Discard all"]]))
+       [:a {:class "vd-button" :href (url "/-/bulk/retry" sel)}
+        (text/t :void.admin/jobs-retry-all)])
+     [:a {:class "vd-button danger" :href (url "/-/bulk/discard" sel)}
+      (text/t :void.admin/jobs-discard-all)]]))
 
 (defn- dead-banner [snap st]
   (def n (total-of (snap :counts) :dead))
   (when (and (pos? n) (not= :dead (st :state)))
     [:div {:class "vd-warn"}
-     (string n " job" (if (= 1 n) " is" "s are") " dead. ")
+     (text/t :void.admin/jobs-dead-banner {:count n})
      (swap-link (url "" (with-params st "state" :dead "queue" nil))
-                "Open the dead letter queue")]))
+                (text/t :void.admin/jobs-open-dead))]))
 
 (defn body-fragment
   ``Everything a change moves: the cards, the depth table and the
@@ -282,9 +293,9 @@
   [:div (merge {:id wrapper-id} (hx/get* here :trigger "every 5s" :swap :outer-html))
    (cards snap st)
    (dead-banner snap st)
-   [:h2 "Queues"]
+   [:h2 (text/t :void.admin/jobs-queues)]
    (depth-table snap st)
-   [:h2 "Records"]
+   [:h2 (text/t :void.admin/jobs-records)]
    (bulk-bar st (length rows))
    (rows-table rows now)
    # not "the newest N": `list` takes a limit and says nothing about
@@ -292,18 +303,16 @@
    # newest first, the other two oldest first. Claiming an order the
    # contract does not promise is how a page starts lying
    [:p {:class "vd-note"}
-    (string (length rows) " record" (if (= 1 (length rows)) "" "s") " shown"
+    (string (text/t :void.admin/jobs-shown {:count (length rows)})
             (if (>= (length rows) (st :limit))
-              (string " — the first " (st :limit) " the backend hands back for this "
-                      "filter. `list` takes a limit and no offset, so there is no page "
-                      "two: ask for more rows above, or narrow the filter")
+              (text/t :void.admin/jobs-limited {:limit (st :limit)})
               ""))]])
 
 (defn index-page
   "The section: the filter panel, and everything it filters."
   [snap rows st now]
   [:div
-   [:h1 title]
+   [:h1 (title)]
    (filter-panel snap st)
    (body-fragment snap rows st now)])
 
@@ -314,9 +323,9 @@
   the reason is the whole of the answer.``
   [message]
   [:div
-   [:h1 title]
+   [:h1 (title)]
    [:div {:class "vd-warn"} [:p message]]
-   [:p [:a {:href (url)} "Back to the queue"]]])
+   [:p [:a {:href (url)} (text/t :void.admin/jobs-back)]]])
 
 # -- one record ----------------------------------------------------------
 
@@ -343,21 +352,22 @@
   the two things an operator can do about it."
   [r now]
   [:div
-   [:h1 (string "Job " (r :id))]
+   [:h1 (text/t :void.admin/jobs-one {:id (r :id)})]
    [:div {:class "vd-actions"}
-    (when (= :dead (get r :state)) (action-button (r :id) "retry" "Retry" false))
-    (action-button (r :id) "discard" "Discard" true)
+    (when (= :dead (get r :state))
+      (action-button (r :id) "retry" (text/t :void.admin/jobs-retry) false))
+    (action-button (r :id) "discard" (text/t :void.admin/jobs-discard) true)
     # a plain link, not a swap: the element the listing's links target
     # is not on this page, and htmx with a target it cannot find does
     # nothing at all — including not following the href
-    [:a {:href (url)} "Back to the queue"]]
+    [:a {:href (url)} (text/t :void.admin/jobs-back)]]
    [:table {:class "vd-table"}
     [:tbody
      (seq [k :in jobs/record-fields :when (not (nil? (get r k)))]
        [:tr [:th (string k)] [:td (field-value k (get r k) now)]])]]
    (unless (empty? (get r :failures []))
      [:div
-      [:h2 "Failures"]
+      [:h2 (text/t :void.admin/jobs-failures)]
       [:table {:class "vd-table"}
        [:thead [:tr [:th "attempt"] [:th "when"] [:th "error"]]]
        [:tbody
@@ -374,25 +384,32 @@
   through one: the number is counted on the server, and it is the same
   road whether it is one record or forty thousand.``
   [action st total sample now]
-  (def label (if (= :retry action) "Retry" "Discard"))
+  (def label (text/t (if (= :retry action)
+                       :void.admin/jobs-retry
+                       :void.admin/jobs-discard)))
+  (def where
+    (if (st :queue)
+      (text/t :void.admin/jobs-queue-suffix {:queue (string (st :queue))})
+      (text/t :void.admin/jobs-every-queue-suffix)))
   [:div
-   [:h1 (string label " — confirm")]
-   [:p [:span {:class "vd-count"} (string total)]
-    (string " " (string (st :state)) " record" (if (= 1 total) "" "s")
-            (if (st :queue) (string " in queue " (string (st :queue))) " in every queue")
-            (if (= :retry action)
-              " will go back to the front of the queue with their attempts reset."
-              " will be dropped. A dropped record is gone: nothing keeps it elsewhere."))]
+   [:h1 (text/t :void.admin/jobs-confirm-title {:action label})]
+   # one sentence, count inside: a number pinned to the front of a
+   # translated clause is a number some language has to read around
+   [:p {:class "vd-count"}
+    (text/t (if (= :retry action)
+              :void.admin/jobs-retry-count
+              :void.admin/jobs-discard-count)
+            {:count total :state (string (st :state)) :queue where})]
    (when (not (empty? sample))
      (rows-table sample now false))
    (if (zero? total)
-     [:p {:class "vd-empty"} "Nothing matches, so there is nothing to do."]
+     [:p {:class "vd-empty"} (text/t :void.admin/jobs-nothing-matches)]
      (view/post-form :post (url (string "/-/bulk/" action)) {:class "vd-form"}
        ;(seq [[k v] :pairs (params st) :when (not (nil? v))]
           [:input {:type "hidden" :name k :value (string v)}])
        [:div {:class "vd-actions"}
         [:button {:type "submit"
                   :class (if (= :retry action) "primary" "danger")}
-         (string "Yes, " (string/ascii-lower label) " " total
-                 " record" (if (= 1 total) "" "s"))]
-        [:a {:href (url "" (params st))} "Cancel"]]))])
+         (text/t :void.admin/jobs-confirm-yes
+                 {:action (string/ascii-lower label) :count total})]
+        [:a {:href (url "" (params st))} (text/t :void.admin/cancel)]]))])

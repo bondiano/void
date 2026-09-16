@@ -90,11 +90,11 @@
    :merge :replace})
 
 (plugin/defextension-point :void.admin/page
-  :doc "Arbitrary admin pages: {:name :reports :label \"Reports\" :path \"/reports\" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry"
+  :doc "Arbitrary admin pages: {:name :reports :label \"Reports\" :path \"/reports\" :method :get? :handler (fn [req] response) :policies [...]? :meta {}?}. The page is mounted as an ordinary route under the admin prefix with the same gate — Django's admin_view, with a route table entry. A :label that is a keyword is a translation key, resolved when the page renders rather than when the contribution froze"
   :schema {:name :keyword
            :path :string
            :handler :function
-           :label [:optional :string]
+           :label [:optional [:or :string :keyword]]
            :method [:optional :keyword]
            :policies [:optional [:vector :keyword]]
            :meta [:optional :dictionary]}
@@ -105,15 +105,15 @@
                   (errorf "admin page %q: :path must start with /" (c :name))))))
 
 (plugin/defextension-point :void.admin/dashboard-widget
-  :doc "Tiles on the admin index: {:name :orders/today :label \"Orders today\" :render (fn [request] hiccup)}"
+  :doc "Tiles on the admin index: {:name :orders/today :label \"Orders today\" :render (fn [request] hiccup)}. A :label that is a keyword is a translation key, resolved when the tile renders"
   :schema {:name :keyword
            :render :function
-           :label [:optional :string]}
+           :label [:optional [:or :string :keyword]]}
   :key :name :what "dashboard widget")
 
 (plugin/defextension-point :void.admin/menu
-  :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}. A link to a page inside the admin says :path instead — {:name :jobs :label \"Jobs\" :path \"/jobs\"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two. :group puts the item under a heading in the navigation, the same one a resource names with :group — ungrouped links come first, then the groups by name"
-  :schema {:name :keyword :label :string
+  :doc "Extra items in the admin navigation: {:name :docs :label \"Docs\" :href \"/admin/reports\"}. A link to a page inside the admin says :path instead — {:name :jobs :label \"Jobs\" :path \"/jobs\"} — and it is resolved against [:admin :prefix] when the navigation renders: a contribution is a value frozen at load, so a plugin that mounts a :void.admin/page cannot write down where its own page will be. Exactly one of the two. :group puts the item under a heading in the navigation, the same one a resource names with :group — ungrouped links come first, then the groups by name. A :label that is a keyword is a translation key (void/core/text), resolved when the navigation renders — a contribution is frozen at load, and a locale is not"
+  :schema {:name :keyword :label [:or :string :keyword]
            :href [:optional :string]
            :path [:optional :string]
            :group [:optional :string]}

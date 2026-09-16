@@ -162,6 +162,29 @@
   (put resp :body ((engine :render) content render-context))
   resp)
 
+(defn render-now
+  ``Render a lazy view response here and now instead of leaving it to
+  the render middleware on the way out: the same response, with `:body`
+  the rendered page. Anything that is not a view response passes
+  through untouched, so a caller that may be handed a redirect does not
+  branch.
+
+  What a caller needs when it *holds* the page rather than returns it.
+  `void/datastar`'s `morph-stream` re-renders on every poke and never
+  passes through a middleware chain, so without this the live half of
+  a page and its ordinary response are two render paths — which is
+  exactly what void/dash hit (ADR-0043 §5): a handler answering
+  `html/page` and a stream calling the layout by hand, one of which
+  will drift.
+
+  `req` is the request the page is for; it reaches the layout as
+  `:request` in the render context, and its absence is only the
+  absence of that.``
+  [resp &opt req]
+  (if (view-response? resp)
+    (finalize resp (or req {}))
+    resp))
+
 (plugin/contribute! :void.http/middleware
   {:name :void.html/render
    :phase middleware/phase/response

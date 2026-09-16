@@ -22,6 +22,7 @@
 (import void/html/init :as html)
 (import void/htmx/hx :as hx)
 (import ./context :as ctx)
+(import ./text :as text)
 (import ./live :as live)
 (import ./ring :as ring)
 (import ./view :as view)
@@ -126,16 +127,16 @@
                 (hx/get* (ctx/at "/logs") :target "#dash-logs" :swap :outer-html :push-url true
                          :trigger "change, submit"))
    [:div {:class "field"}
-    [:label {:for "f-level"} "Level ≥"]
+    [:label {:for "f-level"} (text/t :void.dash/level-at-least)]
     [:select {:name "level" :id "f-level"}
-     [:option {:value ""} "any"]
+     [:option {:value ""} (text/t :void.dash/any)]
      ;(seq [l :in [:trace :debug :info :warn :error :fatal]]
         [:option {:value (string l) :selected (when (= l (st :level)) true)}
          (string l)])]]
    [:div {:class "field"}
-    [:label {:for "f-ns"} "Namespace contains"]
+    [:label {:for "f-ns"} (text/t :void.dash/namespace-contains)]
     [:input {:type "search" :name "ns" :id "f-ns" :value (st :ns)}]]
-   [:div {:class "field"} [:button {:type "submit"} "Filter"]]])
+   [:div {:class "field"} [:button {:type "submit"} (text/t :void.dash/filter)]]])
 
 (defn- csrf-slot []
   (when-let [f (dyn :void.html/csrf)] (f)))
@@ -143,21 +144,20 @@
 (defn- level-form []
   (def allowed (ctx/setting :allow-actions?))
   [:div
-   [:h2 "Log levels"]
+   [:h2 (text/t :void.dash/log-levels)]
    (if allowed
      [:form {:method "post" :action (ctx/at "/logs/level") :class "vd-toolbar"}
       (csrf-slot)
       [:div {:class "field"}
-       [:label {:for "a-ns"} "Namespace (empty = root)"]
+       [:label {:for "a-ns"} (text/t :void.dash/namespace-root)]
        [:input {:type "text" :name "ns" :id "a-ns" :placeholder "my-app.orders"}]]
       [:div {:class "field"}
-       [:label {:for "a-level"} "Level"]
+       [:label {:for "a-level"} (text/t :void.dash/level)]
        [:select {:name "level" :id "a-level"}
         ;(seq [l :in [:trace :debug :info :warn :error :fatal]]
            [:option {:value (string l) :selected (when (= :info l) true)} (string l)])]]
-      [:div {:class "field"} [:button {:type "submit"} "Set"]]]
-     [:p {:class "vd-absent"}
-      "Changing levels is off: [:dash :allow-actions] is not true in this profile — the pages stay read-only until the config says otherwise."])])
+      [:div {:class "field"} [:button {:type "submit"} (text/t :void.dash/set)]]]
+     [:p {:class "vd-absent"} (text/t :void.dash/actions-off)])])
 
 (defn- params [st]
   @{"level" (st :level) "ns" (st :ns)})
@@ -171,28 +171,29 @@
   [:div (merge {:id "dash-logs"}
                (hx/get* (ctx/at "/logs" (params st)) :trigger "every 5s" :swap :outer-html))
    [:p {:class "vd-note"}
-    (string (length shown) " of " (ring/size records) " held record"
-            (if (= 1 (ring/size records)) "" "s")
-            " (ring of " (records :capacity) ") · live tail: ")
-    [:a {:href (ctx/at "/logs/tail")} "SSE stream"]
-    (string " · dropped by async sinks: " (log/dropped))]
+    (text/t :void.dash/logs-held {:count (ring/size records)
+                                  :shown (length shown)
+                                  :total (ring/size records)
+                                  :capacity (records :capacity)})
+    [:a {:href (ctx/at "/logs/tail")} (text/t :void.dash/sse-stream)]
+    (text/t :void.dash/dropped {:dropped (log/dropped)})]
    (if (empty? shown)
-     [:p {:class "vd-empty"} "No record matches."]
+     [:p {:class "vd-empty"} (text/t :void.dash/no-record)]
      [:pre {:class "dash-jdn dash-logs"}
       ;(seq [rec :in shown]
          [:span {:class (string "dash-log-" (string (get rec :level :info)))}
           (string (record-line rec) "\n")])])])
 
-(defn logs-body [st]
-  [:div (view/live-attrs "/logs/live")
-   [:h1 "Logs"]
+(defn logs-body [st req]
+  [:div (view/live-attrs req "/logs/live")
+   [:h1 (text/t :void.dash/logs)]
    (filter-panel st)
    (logs-fragment st)
    (level-form)])
 
 (defn index [req]
   (def st (listing-state req))
-  (html/page (logs-body st) {:layout view/layout :context {:request req}
+  (html/page (logs-body st req) {:layout view/layout :context {:request req}
                              :partial (fn [] (logs-fragment st))}))
 
 # -- the live tail -------------------------------------------------------

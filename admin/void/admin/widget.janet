@@ -32,6 +32,7 @@
 (import void/htmx/hx :as hx)
 (import void/http/router :as router)
 (import ./resource :as res)
+(import ./text :as text)
 (import void/core/util :as util)
 
 # -- normalization -------------------------------------------------------
@@ -76,11 +77,12 @@
   ``What a value looks like when nobody said otherwise. `nil` is drawn
   as an em dash rather than as an empty cell: a column that is blank
   for every row and a column that is missing look identical, and only
-  one of them is a bug.``
+  one of them is a bug. The dash stays a dash in every language; the
+  two words a boolean reads as do not.``
   [v]
   (cond
     (nil? v) "—"
-    (boolean? v) (if v "yes" "no")
+    (boolean? v) (text/t (if v :void.admin/yes :void.admin/no))
     (keyword? v) (string v)
     (bytes? v) (string v)
     (number? v) (string v)
@@ -93,11 +95,11 @@
 # -- the fallback: html/form ---------------------------------------------
 
 (defn- form-spec
-  "The html/form control description of one field — projected by the
-  module that already projects schemas into controls."
+  ``The html/form control description of one field — projected by the
+  module that already projects schemas into controls, which reads the
+  schema's own `:label` (and translates a keyword one) on the way.``
   [field]
-  (def specs (form/field-specs {(field :name) (field :schema)}))
-  (merge (first specs) {:label (field :label)}))
+  (first (form/field-specs {(field :name) (field :schema)})))
 
 (def form-widget
   ``The widget every field falls back to: html/form's own projection of
@@ -216,7 +218,7 @@
        (def rows (when target (link-options target limit)))
        (when (and rows (<= (length rows) limit))
          [:select {:name (ctx :name) :id (ctx :id)}
-          [:option {:value ""} "any"]
+          [:option {:value ""} (text/t :void.admin/any)]
           (seq [r :in rows
                 :let [id (string (get r (get-in target [:entity :pk])))]]
             [:option {:value id

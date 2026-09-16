@@ -6,6 +6,7 @@
 (import void/http/ring :as ring)
 (import void/html/init :as html)
 (import void/html/form :as form)
+(import void/core/errors :as errors)
 (import void/i18n :as i18n)
 
 (log/set-level! "void" :error)
@@ -29,8 +30,15 @@
                                       :values (req :form)
                                       :errors (result :errors)}))))
 
+(defn refuse
+  "A refusal — rendered by the panic guard, which runs outside every
+  middleware and so outside everything the locale middleware bound."
+  [req]
+  (errors/raise :void.http/abort nil nil 403))
+
 (def app-routes
   (router/routes {}
+    (router/GET "/refuse" 'refuse {:name :refuse})
     (router/GET "/hello" 'hello {:name :hello})
     (router/GET "/items" 'items {:name :items})
     (router/POST "/signup" 'signup {:name :signup})))
@@ -55,7 +63,12 @@
        :messages {:hello/greeting "Привет, {name}!"
                   :hello/items {:one "{count} товар" :few "{count} товара"
                                 :many "{count} товаров" :other "{count} товара"}
-                  :void.schema/missing "заполните поле"}}]
+                  :void.schema/missing "заполните поле"
+                  # the error pages' own words are void/http's keys —
+                  # a dictionary translates them without that package
+                  # learning anything about locales
+                  :void.http/hint-403 "вы вошли не тем, кому эта страница предназначена"
+                  :void.http/hint-404 "здесь ничего нет — проверьте адрес"}}]
      :void.i18n/locale-source
      [{:name :test/app
        :doc "The profile locale a signed-in user would have — here, a header"
@@ -138,6 +151,28 @@
   (def en-form (body {:method :post :uri "/signup" :form {"age" "15"}}))
   (assert (string/find "required key is missing" en-form))
   (assert (string/find "expected at least 18, got 15" en-form))
+
+  # -- a refusal is rendered outside the chain, and is translated anyway -
+  #
+  # The panic guard is phase 0, so the dyns this middleware bound are
+  # gone with the stack that threw by the time a 403 becomes a page; an
+  # unrouted path never ran the middleware at all. Both read the locale
+  # scope off the request (`:void.i18n/scope`) instead.
+  (def refused (http/with-request {:uri "/refuse"
+                                   :headers {"accept-language" "ru"
+                                             "accept" "text/html"}}))
+  (assert (= 403 (refused :status)))
+  (assert (string/find "вы вошли не тем, кому эта страница" (string (refused :body)))
+          "a refusal thrown inside the chain renders in the locale the chain bound")
+  (assert (string/find `<html lang="ru"` (string (refused :body))))
+
+  (def missing (http/with-request {:uri "/nowhere"
+                                   :headers {"accept-language" "ru"
+                                             "accept" "text/html"}}))
+  (assert (= 404 (missing :status)))
+  (assert (string/find "здесь ничего нет" (string (missing :body)))
+          "and so does a path that never reached a route, so never ran the middleware")
+  (assert (string/find `<html lang="ru"` (string (missing :body))))
 
   # the CLI gate is contributed and passes on this composition
   (def cli (from-pairs (map |[($ :name) $] (plugin/extension boot :void.core/cli))))

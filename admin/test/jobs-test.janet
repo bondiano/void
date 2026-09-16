@@ -105,7 +105,7 @@
   # needed — the admin's forms do not depend on it being composed
   (def confirm (test/inject c {:uri "/admin/notes/-/bulk/finish?ids=1,2"}))
   (assert (= 200 (confirm :status)))
-  (assert (string/find ">2</span>" (test/text confirm)))
+  (assert (string/find "2 rows of Notes will be affected." (test/text confirm)))
 
   (def applied (test/inject c {:method :post :uri "/admin/notes/-/bulk/finish"
                                :form {:ids "1,2"}}))

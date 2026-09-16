@@ -11,6 +11,7 @@
 ### — void/security binds it in wave 3, nothing renders until then.
 
 (import void/core/schema :as schema)
+(import void/core/text :as text)
 
 (defn params
   ``Submitted form data (string keys, as void/http's parsing
@@ -62,15 +63,12 @@
         (put resp :status 422))
       resp)))
 
-(defn humanize
-  "A field key as a label: :first-name -> \"First name\". The one
-  reading of a key as words the framework has; void/admin uses it for
-  its titles too."
-  [k]
-  (def s (string/replace-all "-" " " (string k)))
-  (if (empty? s)
-    s
-    (string (string/ascii-upper (string/slice s 0 1)) (string/slice s 1))))
+(def humanize
+  ``See text/humanize — a field key as a label, :first-name -> "First
+  name". The one reading of a key as words the framework has. It lives
+  in the core because it is the fallback under every `:label`
+  (`text/label-of`), and that seam is read by packages below this one.``
+  text/humanize)
 
 (def- format-input-types
   {:email "email" :uri "url" :date "date" :password "password"})
@@ -125,13 +123,23 @@
     # validation never reads: :label (the words), :doc (the help text
     # under the control), :html/hidden (a value the page carries and
     # the visitor does not see)
-    (merge {:name k
-            :label (get props :label (humanize k))
-            :help (get props :doc)
-            :required required?}
-           base
-           over
-           {:attrs (merge (get base :attrs {}) (get over :attrs {}))})))
+    (def spec
+      (merge {:name k
+              :label (get props :label)
+              :help (get props :doc)
+              :required required?}
+             base
+             over
+             {:attrs (merge (get base :attrs {}) (get over :attrs {}))}))
+    # :label and :doc are the schema's words, and words the application
+    # wrote: a keyword is a translation key the bound catalog answers
+    # (nothing bound, or nothing carrying it — the field's own name),
+    # a string is the words as given. Resolved after the override
+    # merge, so `{:fields {:email {:label :shop/email}}}` translates too
+    (merge spec
+           {:label (text/label-of (spec :label) k)
+            :help (let [h (spec :help)]
+                    (if (keyword? h) (text/t? h) h))})))
 
 (defn- field-value [values k]
   (when values

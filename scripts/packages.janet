@@ -432,10 +432,13 @@
    # so an admin with no heavy actions composes no queue and an
    # application with no agent composes no MCP server. The suite reaches
    # void/dev for inject, void/db-sqlite for a real database to CRUD
-   # against and void/security for the CSRF slot the forms carry.
+   # against, void/security for the CSRF slot the forms carry and
+   # void/i18n for the one claim the words make: the back office is
+   # English out of the box and translated whole by a dictionary, and
+   # this package still has no edge to that one.
    {:dir "admin" :deps [:void/core :void/http :void/html :void/htmx
                         :void/db :void/authz :void/jobs :void/mcp]
-    :test-deps [:void/dev :void/db-sqlite :void/security]
+    :test-deps [:void/dev :void/db-sqlite :void/security :void/i18n]
     :jpm [:spork]}
 
    :void/bench

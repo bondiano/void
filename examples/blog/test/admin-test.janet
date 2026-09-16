@@ -228,7 +228,7 @@
 
     (def confirm (test/inject c {:uri (string "/admin/articles/-/bulk/destroy?ids=" (mine :id))}))
     (assert (= 200 (confirm :status)))
-    (assert (string/find ">1</span>" (text confirm))
+    (assert (string/find "1 row of Articles will be affected." (text confirm))
             "the number of rows is counted on the server and said out loud")
     (assert (string/find "comments" (text confirm))
             "and so is what would go with them")

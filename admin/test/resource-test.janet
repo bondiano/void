@@ -62,7 +62,10 @@
 (def name-field (first (filter |(= :name ($ :name)) (d :form-fields))))
 (assert (= :string (name-field :type)))
 (assert (name-field :required))
-(assert (= "Name" (name-field :label)))
+(assert (nil? (name-field :label))
+        "a label nobody declared is absent from the descriptor — a frozen
+         declaration cannot hold words whose locale is not known yet;
+         view/label-of humanizes the name where it draws it")
 
 (def note-field (first (filter |(= :note ($ :name)) (d :form-fields))))
 (assert (not (note-field :required)) "an :optional field is not required")
@@ -94,6 +97,7 @@
 (assert (not (e :mount)))
 (assert (deep= [:index :show] (e :actions)))
 (assert (= 3 (length (e :list))))
+(assert (= "Summary" (get-in e [:list 2 :label])) "a declared label is kept as written")
 (assert (nil? (get-in e [:list 2 :field])) "a computed column has no entity field")
 
 # :readonly is not merely "not drawn": it is out of the schema the form
@@ -102,6 +106,7 @@
 
 (assert (= 2 (length (e :filters))))
 (assert (= "Type" (get-in e [:filters 1 :label])))
+(assert (nil? (get-in e [:filters 0 :label])) "and a filter that declared none carries none")
 (assert (= :has-many (get-in e [:inlines :parts :rel :kind])))
 (assert (= :parts (get-in e [:inlines :parts :resource])))
 
@@ -116,7 +121,7 @@
 
 (assert (= "Catalog" (f :group)))
 (assert (= 3 (length (f :detail))))
-(assert (= "Name" (get-in f [:detail 1 :label])) "a detail row is labelled like a list column")
+(assert (nil? (get-in f [:detail 1 :label])) "a detail row is labelled like a list column")
 (assert (nil? (get-in f [:detail 2 :field])) "a computed detail row has no entity field")
 (assert ((get-in f [:detail 2 :value]) {}) "and it keeps the function that computes it")
 (assert (not (f :detail-derived?)) "a declared :detail is trusted as written")
