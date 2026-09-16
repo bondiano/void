@@ -832,11 +832,10 @@
 (plugin/contribute! :void.core/cli
   {:name :obs/otlp-check
    :read-only? true
-   :doc "Send an empty batch to the configured collector and report what it said: void obs otlp-check"
+   :doc "Send an empty batch to the configured collector and report what it said"
+   :args []
    :needs [:obs/otlp]
-   :fn (fn cli-check [_ & args]
-         (unless (empty? args)
-           (errorf "void obs otlp-check takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-check [_]
          (def cfg (state :cfg))
          (printf "endpoint  %s (%q)" (get cfg :endpoint) (get cfg :encoding))
          (def outcome (post! :traces (get-in cfg [:traces :path])

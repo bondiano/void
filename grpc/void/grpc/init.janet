@@ -278,10 +278,9 @@
 (plugin/contribute! :void.core/cli
   {:name :grpc/services
    :read-only? true
-   :doc "List the RPC methods this application serves: void grpc services"
-   :fn (fn cli-services [& args]
-         (unless (empty? args)
-           (errorf "void grpc services takes no arguments (got %q)" (string/join args " ")))
+   :doc "List the RPC methods this application serves"
+   :args []
+   :fn (fn cli-services []
          (def rows (mount/describe))
          (if (empty? rows)
            (print "no RPC services are registered")

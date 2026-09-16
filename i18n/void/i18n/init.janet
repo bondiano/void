@@ -224,10 +224,9 @@
 (plugin/contribute! :void.core/cli
   {:name :i18n/check
    :read-only? true
-   :doc "Print locales and dictionary sizes; a default-locale key missing from a configured locale is an error (the coverage gate): void i18n check"
-   :fn (fn cli-check [& args]
-         (unless (empty? args)
-           (errorf "void i18n check takes no arguments (got %q)" (string/join args " ")))
+   :doc "Print locales and dictionary sizes; a default-locale key missing from a configured locale is an error (the coverage gate)"
+   :args []
+   :fn (fn cli-check []
          (def s catalog/settings)
          (printf "locales  %s" (string/join (map string (s :locales)) " "))
          (printf "default  %s" (string (s :default)))

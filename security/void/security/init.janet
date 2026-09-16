@@ -510,11 +510,9 @@
 (plugin/contribute! :void.core/cli
   {:name :security/headers
    :read-only? true
-   :doc "Show the security headers, the CSP and what is enabled: void security headers"
-   :fn (fn cli-headers [& args]
-         (unless (empty? args)
-           (errorf "void security headers takes no arguments (got %q)"
-                   (string/join args " ")))
+   :doc "Show the security headers, the CSP and what is enabled"
+   :args []
+   :fn (fn cli-headers []
          (print-status))})
 
 (plugin/contribute! :void.core/health

@@ -785,34 +785,18 @@
     (each l (chain-lines ex) (print l))
     (printf "no route matches %s %s" (string/ascii-upper (string (or method :get))) path)))
 
-(defn- routes-args
-  ``The flags of `void routes`: --keys, --chain <path>, --method <m>.
-  Anything else is refused by name.``
-  [args]
-  (def opts @{})
-  (var i 0)
-  (while (< i (length args))
-    (def a (in args i))
-    (cond
-      (= a "--keys") (put opts :keys true)
-      (or (= a "--chain") (= a "--method"))
-      (do
-        (when (>= (inc i) (length args))
-          (errorf "void routes: %s takes a value" a))
-        (put opts (if (= a "--chain") :chain :method) (in args (inc i)))
-        (++ i))
-      (errorf "void routes: unknown flag %q (--keys, --chain <path>, --method <m>)" a))
-    (++ i))
-  (when (and (opts :method) (nil? (opts :chain)))
-    (error "void routes: --method only makes sense with --chain <path>"))
-  opts)
-
 (plugin/contribute! :void.core/cli
   {:name :routes
    :read-only? true
-   :doc "Print the route table: void routes [--keys] | void routes --chain <path> [--method <m>] (the chain with phases, the edge layer, out-of-chain hooks, declined middleware)"
-   :fn (fn cli-routes [& args]
-         (def opts (routes-args args))
+   :doc "Print the route table, or one path's whole chain"
+   :args []
+   :flags {"--keys" {:key :keys :type :bool :doc "print the metadata keys each route carries"}
+           "--chain" {:key :chain
+                      :doc "one path, with its phases, the edge layer, out-of-chain hooks and declined middleware"}
+           "--method" {:key :method :doc "which method of --chain's path (default: get)"}}
+   :fn (fn cli-routes [opts]
+         (when (and (opts :method) (nil? (opts :chain)))
+           (error "void routes: --method only makes sense with --chain PATH"))
          (if-let [path (opts :chain)]
            (print-chain path (when (opts :method) (keyword (string/ascii-lower (opts :method)))))
            (print-routes (routes-table) {:keys (opts :keys)})))})

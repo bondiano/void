@@ -15,12 +15,20 @@
 ### Command naming: a plain keyword :routes is `void routes`; a
 ### namespaced :openapi/export is `void openapi export`.
 ###
-### Four commands are built in rather than contributed, and for one reason
-### each: `new` and `make` run *before* there is a composition to ask
-### (./new, ./make), `repl` has to reach a process this one is not
-### (./repl), and `deploy check` and `plugins lock` read what void/core
-### owns — the deployment shape and the manifests — and void/core is not a
-### plugin.
+### A handful of commands are built in rather than contributed, and for
+### one reason each: `new` and `make` run *before* there is a
+### composition to ask (./new, ./make), `repl` has to reach a process
+### this one is not (./repl), and `deploy check` and `plugins lock` read
+### what void/core owns — the deployment shape and the manifests — and
+### void/core is not a plugin. They are declared as the same struct a
+### contributed command is (`builtins` below), so the help listing,
+### `--help` and the flag parsing are one implementation for both, and
+### the table *is* the dispatch rather than a second description of it.
+###
+### What a command takes is data — `:args`, `:flags` — and
+### void/core/cli is the only thing that reads it. That is what lets
+### `void <anything> --help` and `void help` answer without a
+### bootstrap: a declaration is readable from the manifests alone.
 
 (import void)
 (import void/core/init :as core)
@@ -30,6 +38,8 @@
 (import void/core/hooks :as hooks)
 (import void/core/deploy :as deploy)
 (import void/core/bind :as bind)
+(import void/core/cli :as cmd)
+(import void/core/util :as util)
 (import ./new :as new)
 (import ./repl :as repl)
 (import ./make :as make)
@@ -83,15 +93,13 @@
 
 # -- command words -------------------------------------------------------
 
-(defn command-words
-  "The argv words a command keyword answers to: :routes -> [\"routes\"],
-  :openapi/export -> [\"openapi\" \"export\"]."
-  [name]
-  (tuple ;(string/split "/" (string name))))
+(def command-words
+  "The argv words a command keyword answers to (void/core/cli)."
+  cmd/command-words)
 
 (defn find-command
-  ``Resolve leading argv words against the contributed commands
-  (longest match first). Returns [command remaining-args] or nil.``
+  ``Resolve leading argv words against the commands (longest match
+  first). Returns [command remaining-args] or nil.``
   [commands words]
   (def by-words
     (tabseq [c :in commands] (command-words (c :name)) c))
@@ -160,8 +168,9 @@
 (defn run-command
   ``Run one contributed command against a bootstrapped app: start the
   :needs components (plus transitive dependencies), call :fn with those
-  instances followed by the string arguments, then stop what was
-  started (reverse dependency order, `teardown!`). Returns the
+  instances and the arguments (`cmd/call`: parsed against the
+  command's own :args/:flags when it declares them), then stop what
+  was started (reverse dependency order, `teardown!`). Returns the
   command's return value.
 
   :fn is a function or a symbol — `'my-app.ops/status` names `status`
@@ -180,7 +189,7 @@
   (unless (empty? needs)
     (system/start sys needs))
   (defer (teardown! boot)
-    (f ;(map |(get-in sys [:instances $]) needs) ;args)))
+    (cmd/call command f (map |(get-in sys [:instances $]) needs) args)))
 
 # -- deploy check --------------------------------------------------------
 
@@ -213,32 +222,46 @@
       (os/exit 1))
     entries))
 
+# -- the invocation -----------------------------------------------------
+
+(def global-command
+  "The flags that come before the command word, as a command of their
+  own: `void --app ops --profile prod routes`. They are a command's
+  worth of surface and the help prints them from the same declaration."
+  {:name :void
+   :doc "the void framework CLI"
+   :flags {"--app" {:key :app :doc "module holding the `app` binding (default: main)"}
+           "--profile" {:key :profile :type :keyword :doc "profile to boot in (default: :dev)"}}})
+
 # -- help ----------------------------------------------------------------
 
-(def builtin-help
-  [["new NAME" "create a project skeleton in ./NAME"]
-   ["make resource NAME" "scaffold entity + routes + views + migration + tests"]
-   ["make auth [NAME]" "scaffold register/login/logout, reset and verify"]
-   ["dev" "run the app in the :dev profile (watcher + netrepl by default)"]
-   ["doctor" "is this machine ready? toolchain, libraries, port, socket"]
-   ["services CMD" "dev infrastructure: up|down|status|logs|print (docker compose)"]
-   ["repl" "connect to the running app's netrepl (see void repl --help)"]
-   ["deploy check" "is this composition fit for [:deploy :shape]?"]
-   ["plugins" "print the composition: plugins, points, contribution chains"]
-   ["plugins lock" "write void.lock — the composition, as a value"]
-   ["plugins check" "does the composition still match void.lock? (CI)"]
-   ["version" "print the void/core version"]
-   ["help" "this message"]])
+(defn app-commands
+  ``The `:void.core/cli` commands this project's composition declares,
+  or nil when there is no project here (or its main module will not
+  load). Phase 1 of bootstrap and no more — `plugin/declared` reads the
+  manifests and stops — because the command whose job is to help must
+  not be the one that fails on a config file.``
+  [ctx]
+  (def [ok cmds]
+    (protect (plugin/declared (resolve-plugins ((ctx :app)) (or (ctx :profile) :dev))
+                              :void.core/cli)))
+  (when ok cmds))
 
-(defn- print-help [commands]
+(defn- print-help
+  ``The listing `void` and `void help` print: two tables of the same
+  declaration, rendered by the same `cmd/summary`. `contributed` is nil
+  when there is no project here to ask, which is a different sentence
+  from an app that contributes nothing.``
+  [built-in contributed]
   (print "void — the void framework CLI")
   (print)
-  (print "Usage: void [--app MODULE] [--profile PROFILE] <command> [args]")
+  (printf "Usage: %s <command> [args]"
+          (string/join ["void" ;(cmd/flag-usage global-command)] " "))
+  (print "       void <command> --help")
   (print)
   (print "Built-in commands:")
-  (each [words doc] builtin-help
-    (printf "  %-18s %s" words doc))
-  (if (nil? commands)
+  (each c built-in (print (cmd/summary c)))
+  (if (nil? contributed)
     (do
       (print)
       (print "App commands: none — no app module found here")
@@ -246,36 +269,140 @@
     (do
       (print)
       (print "App commands (:void.core/cli):")
-      (each c commands
-        (printf "  %-18s %s"
-                (string/join (command-words (c :name)) " ")
-                (get c :doc ""))))))
+      (each c (sorted-by |($ :name) contributed) (print (cmd/summary c))))))
+
+# -- the built-in commands -----------------------------------------------
+#
+# Declared exactly as a contributed command is — :name, :doc, :args,
+# :flags — so the help listing, `--help` and the flag parsing are the
+# same code for both, and the table below *is* the dispatch rather than
+# a second description of it. The one difference is the key that runs
+# them: a built-in's `:run` takes the invocation context (the app
+# thunk, the profile) that a contributed command's `:fn` gets as
+# started components, because these four run before there is a
+# composition to start.
+
+(defn- run-builtin [ctx command args]
+  (def [opts pos] (cmd/parse command args))
+  ((command :run) ctx opts pos))
+
+(def builtins
+  ``The commands that are built in rather than contributed, and for one
+  reason each: `new` and `make` run *before* there is a composition to
+  ask, `doctor` is the command for the machine where nothing else works
+  (a broken bootstrap is one of its rows, never its crash), `services`
+  starts the infrastructure a plugin will *want* running, `repl` has to
+  reach a process this one is not, and `deploy check` / `plugins` read
+  what void/core owns — the deployment shape and the manifests — where
+  void/core is not a plugin.``
+  [{:name :new
+    :doc "create a project skeleton in ./NAME"
+    :args ["NAME"]
+    :run (fn [_ _ pos] (new/create ;pos))}
+
+   {:name :make
+    :doc "scaffold into an existing project: resource, auth, job, plugin, migration"
+    :args ["KIND" "[ARG...]"]
+    :run (fn [_ _ pos] (make/create ;pos))}
+
+   {:name :dev
+    :doc "run the app in the :dev profile (watcher + netrepl by default)"
+    :args []
+    # the one long-running built-in: the full run!/signals lifecycle,
+    # so `void new && void dev` is the whole first session. An app that
+    # declares :plugins-for gets its composition for *this* profile —
+    # run! resolves the same key, so `void dev` and `janet main.janet`
+    # cannot drift
+    :run (fn [ctx _ _]
+           (void/run! (merge ((ctx :app)) {:profile (or (ctx :profile) :dev)})))}
+
+   {:name :doctor
+    :doc "is this machine ready? toolchain, libraries, port, socket"
+    :args []
+    :run (fn [ctx _ _] (doctor/run (ctx :app)))}
+
+   {:name :services
+    :doc "dev infrastructure: up|down|status|logs|print (docker compose)"
+    :args ["ACTION" "[ARG...]"]
+    :run (fn [_ _ pos] (services/run pos))}
+
+   {:name :repl
+    :doc "connect to the running app's netrepl"
+    :args []
+    :flags {"--unix" {:key :unix :doc "path of the netrepl unix socket"}
+            "--host" {:key :host :doc "host of a tcp netrepl"}
+            "--port" {:key :port :doc "port of a tcp netrepl (default 9365)"}}
+    :run (fn [ctx opts _]
+           (repl/connect opts
+                         (fn netrepl-config []
+                           (get-in (plugin/bootstrap
+                                     (boot-opts ((ctx :app)) (ctx :profile)) true)
+                                   [:config :values :dev :netrepl] {}))))}
+
+   {:name :deploy/check
+    :doc "is this composition fit for [:deploy :shape]?"
+    :args []
+    :run (fn [ctx _ _] (deploy-check (bootstrap-app ((ctx :app)) (ctx :profile))))}
+
+   {:name :plugins
+    :doc "print the composition: plugins, points, contribution chains"
+    :args []
+    :run (fn [ctx _ _] (lock/show (bootstrap-app ((ctx :app)) (ctx :profile))))}
+
+   {:name :plugins/lock
+    :doc "write void.lock — the composition, as a value"
+    :args []
+    :flags {"--out" {:key :path :doc "where to write it (default: void.lock)"}}
+    :run (fn [ctx opts _]
+           (lock/write-lock (bootstrap-app ((ctx :app)) (ctx :profile)) opts))}
+
+   {:name :plugins/check
+    :doc "does the composition still match void.lock? (CI)"
+    :args []
+    :flags {"--lock" {:key :path :doc "the lock file to compare against"}}
+    # `check` answers false; CI reads exit codes
+    :run (fn [ctx opts _]
+           (def r (lock/check-lock (bootstrap-app ((ctx :app)) (ctx :profile)) opts))
+           (when (false? r) (flush) (os/exit 1))
+           r)}
+
+   {:name :version
+    :doc "print the void/core version"
+    :args []
+    :run (fn [_ _ _] (printf "void %s" core/version))}
+
+   {:name :help
+    :doc "this message"
+    :args []
+    :run (fn [ctx _ _] (print-help (ctx :built-in) (app-commands ctx)))}])
 
 # -- entrypoint ----------------------------------------------------------
 
-(def- global-flags {"--app" :app "--profile" :profile})
-
-(defn- parse-global
-  "Split argv into {:app :profile} global options and the remaining
-  words. Global flags are only recognized before the command word."
+(defn- split-global
+  ``Split argv into the global flags — which are only recognized before
+  the command word, so `void routes --profile x` is the command's
+  business and not ours — and the words from the command on. The flags
+  themselves are read by the one parser, off `global-command`.``
   [argv]
-  (def opts @{})
   (var i 0)
-  (while (< i (length argv))
-    (def a (argv i))
-    (if-let [k (in global-flags a)]
-      (do
-        (when (>= (inc i) (length argv))
-          (errorf "%s expects a value" a))
-        (put opts k (argv (inc i)))
-        (+= i 2))
-      (break)))
+  (while (and (< i (length argv)) (in (global-command :flags) (argv i)))
+    (+= i 2))
+  (def [opts _] (cmd/parse global-command (tuple ;(slice argv 0 (min i (length argv))))))
   [opts (tuple ;(drop i argv))])
+
+(defn- unknown-command [words names]
+  (errorf "unknown command %q — `void help` lists the available commands%s"
+          (string/join words " ")
+          (util/suggest (first words) (map |(first (cmd/command-words $)) names))))
 
 (defn dispatch
   ``Run one CLI invocation (argv without the program name). Returns the
   command's return value; throws on any failure — `main` turns that
   into exit code 1.
+
+  Resolution is one lookup over two tables — the built-ins above and
+  whatever the composition contributes — and `--help` is answered off
+  the declaration before either of them starts anything.
 
   `app` is the application's boot options when the caller already has
   them — a single binary does (`app-main` below), because `jpm build`
@@ -283,70 +410,31 @@
   require. Left out, they are loaded from the project's `main` module
   as ever.``
   [argv &opt app-value]
-  (def [gopts words] (parse-global argv))
-  (def profile (when-let [p (gopts :profile)] (keyword p)))
-  (defn the-app [] (or app-value (load-app (gopts :app))))
-  (case (first words)
-    nil (print-help nil)
-    "help" (let [[ok boot] (protect (bootstrap-app (the-app) profile))]
-             (print-help (when ok (plugin/extension boot :void.core/cli)))
-             (when ok (teardown! boot)))
-    "version" (printf "void %s" core/version)
-    "new" (new/create ;(drop 1 words))
-    # a built-in because it runs *before* there is a composition to
-    # ask: `void make` works in a project whose bootstrap is currently
-    # broken, which is often exactly when a file is being added
-    "make" (make/create ;(drop 1 words))
-    # a built-in for the strongest form of the same reason: doctor is
-    # the command for the machine where nothing else works — a broken
-    # bootstrap is one of its *rows*, never its crash (every
-    # project-shaped step inside is protected)
-    "doctor" (doctor/run (tuple ;(drop 1 words)) the-app)
-    # likewise before any composition: the dev infrastructure is what a
-    # plugin will *want* running, so it cannot wait for the plugin to boot
-    "services" (services/run (tuple ;(drop 1 words)))
-    # the one long-running built-in: the full run!/signals lifecycle in
-    # the :dev profile (--profile still wins) — `void new && void dev`
-    "dev" (do
-            (unless (empty? (drop 1 words))
-              (errorf "void dev takes no arguments (got %q) — profile via --profile"
-                      (string/join (drop 1 words) " ")))
-            (def prof (or profile :dev))
-            # an app that declares :plugins-for gets its composition
-            # for *this* profile — run! resolves the same key, so
-            # `void dev` and `janet main.janet` cannot drift
-            (void/run! (merge (the-app) {:profile prof})))
-    # a built-in rather than a contribution, because void/core owns
-    # [:deploy :shape] and void/core is not a plugin
-    "deploy" (do
-               (unless (= ["check"] (tuple ;(drop 1 words)))
-                 (errorf "unknown command %q — the only one is `void deploy check`"
-                         (string/join words " ")))
-               (deploy-check (bootstrap-app (the-app) profile)))
-    # likewise a built-in: the manifests are void/core's, and a lock file
-    # that only some compositions could write would be a lock file nobody
-    # trusts
-    "plugins" (let [boot (bootstrap-app (the-app) profile)
-                    r (lock/dispatch boot (tuple ;(drop 1 words)))]
-                # `plugins check` answers false; CI reads exit codes
-                (when (false? r) (flush) (os/exit 1))
-                r)
-    "repl" (repl/connect
-             (tuple ;(drop 1 words))
-             (fn netrepl-config []
-               (get-in (plugin/bootstrap
-                         (boot-opts (the-app) profile) true)
-                       [:config :values :dev :netrepl] {})))
-    (do
-      (def app (the-app))
-      (def boot (bootstrap-app app profile))
-      (def commands (or (plugin/extension boot :void.core/cli) []))
-      (def found (find-command commands words))
-      (unless found
-        (errorf "unknown command %q — `void help` lists the available commands"
-                (string/join words " ")))
-      (def [command args] found)
-      (run-command boot command args))))
+  (def [gopts words] (split-global argv))
+  (def ctx {:profile (gopts :profile)
+            :built-in builtins
+            :app (fn the-app [] (or app-value (load-app (gopts :app))))})
+  (if (empty? words)
+    (print-help builtins (app-commands ctx))
+    (if-let [[command args] (find-command builtins words)]
+      (if (cmd/help-wanted? command args)
+        (each l (cmd/help command) (print l))
+        (run-builtin ctx command args))
+      # a contributed command: its declaration is readable without a
+      # bootstrap, so `void jobs list --help` costs a `require` and not
+      # a composition
+      (let [declared (or (app-commands ctx) [])
+            found (find-command declared words)]
+        (cond
+          (and found (cmd/help-wanted? (first found) (get found 1)))
+          (each l (cmd/help (first found)) (print l))
+
+          (let [boot (bootstrap-app ((ctx :app)) (ctx :profile))
+                live (find-command (or (plugin/extension boot :void.core/cli) []) words)]
+            (unless live
+              (teardown! boot)
+              (unknown-command words (map |($ :name) (array ;builtins ;declared))))
+            (run-command boot (first live) (get live 1))))))))
 
 (defn- fail [err]
   # log/message-of rather than `describe`: a command that failed on a

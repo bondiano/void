@@ -317,23 +317,11 @@
 
 # -- the commands --------------------------------------------------------
 
-(defn- parse-flags [args]
-  (def opts @{})
-  (var i 0)
-  (while (< i (length args))
-    (def a (args i))
-    (case a
-      "--out" (do (put opts :path (args (inc i))) (+= i 2))
-      "--lock" (do (put opts :path (args (inc i))) (+= i 2))
-      (errorf "void plugins: unknown flag %q" a)))
-  opts)
-
 (defn write-lock
   ``The body of `void plugins lock`: write the current composition to
   `void.lock` (or `--out PATH`). Returns the composition.``
-  [boot & args]
-  (def opts (parse-flags args))
-  (def path (get opts :path default-path))
+  [boot &opt opts]
+  (def path (get (or opts {}) :path default-path))
   (def comp (composition boot))
   (spit path (render comp))
   (printf "  wrote %s" path)
@@ -347,9 +335,8 @@
   composition this checkout resolves to now. Prints nothing but the
   verdict when they agree; prints the differences and returns false
   when they do not — the caller turns that into exit 1.``
-  [boot & args]
-  (def opts (parse-flags args))
-  (def path (get opts :path default-path))
+  [boot &opt opts]
+  (def path (get (or opts {}) :path default-path))
   (def locked (read-lock path))
   (def current (composition boot))
   (if (= (locked :hash) (current :hash))
@@ -368,10 +355,7 @@
   ``The body of `void plugins`: the composition as the lock file sees
   it, without writing anything. The same value, so what it prints is
   what a lock would record.``
-  [boot & args]
-  (unless (empty? args)
-    (errorf "void plugins takes no arguments (got %q) — did you mean `void plugins lock`?"
-            (string/join args " ")))
+  [boot]
   (def comp (composition boot))
   (printf "profile %q  shape %q  void %s"
           (comp :profile) (get-in comp [:deploy :shape]) (comp :void))
@@ -392,20 +376,3 @@
               (string/format "%q" (pt :name))
               (chain (pt :contributions)))))
   comp)
-
-(def commands
-  "The `void plugins ...` subcommands, as data — the dispatcher below
-  is a lookup, not a case. `void plugins` with no subcommand prints."
-  {"lock" write-lock "check" check-lock})
-
-(defn dispatch
-  ``Run `void plugins [lock|check] [flags]` against a bootstrapped app.
-  Returns whatever the subcommand returns; `check` returns false when
-  the lock does not match, which is the caller's exit code.``
-  [boot args]
-  (def sub (first args))
-  (if (nil? sub)
-    (show boot)
-    (let [f (or (in commands sub)
-                (errorf "void plugins: unknown subcommand %q (one of: lock, check)" sub))]
-      (f boot ;(drop 1 args)))))

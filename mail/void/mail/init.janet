@@ -411,21 +411,19 @@
 (plugin/contribute! :void.core/cli
   {:name :mail/status
    :read-only? true
-   :doc "Show the transport, the sender and where mail goes: void mail status"
-   :fn (fn cli-status [& args]
-         (unless (empty? args)
-           (errorf "void mail status takes no arguments (got %q)" (string/join args " ")))
+   :doc "Show the transport, the sender and where mail goes"
+   :args []
+   :fn (fn cli-status []
          (print-status))})
 
 (plugin/contribute! :void.core/cli
   {:name :mail/send
    :read-only? false
-   :doc "Send a test message through the configured transport: void mail send <address>"
-   :fn (fn cli-send [& args]
-         (unless (= 1 (length args))
-           (error "usage: void mail send <address>"))
+   :doc "Send a test message through the configured transport"
+   :args ["ADDRESS"]
+   :fn (fn cli-send [address]
          (def receipt
-           (deliver! {:to (first args)
+           (deliver! {:to address
                       :subject "void mail send"
                       :text (string "This is `void mail send`, sent through the "
                                     (string (get settings :transport))
@@ -438,10 +436,9 @@
 (plugin/contribute! :void.core/cli
   {:name :mail/outbox
    :read-only? true
-   :doc "Print what the :memory transport kept: void mail outbox"
-   :fn (fn cli-outbox [& args]
-         (unless (empty? args)
-           (errorf "void mail outbox takes no arguments (got %q)" (string/join args " ")))
+   :doc "Print what the :memory transport kept"
+   :args []
+   :fn (fn cli-outbox []
          (if (empty? (outbox))
            (print "the outbox is empty")
            (each d (outbox)

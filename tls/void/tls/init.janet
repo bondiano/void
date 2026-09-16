@@ -175,12 +175,10 @@
 (plugin/contribute! :void.core/cli
   {:name :tls/info
    :read-only? true
-   :doc "Show which libssl is open and how it verifies peers: void tls info"
+   :doc "Show which libssl is open and how it verifies peers"
+   :args []
    :needs [:tls/lib]
-   :fn (fn cli-info [inst & args]
-         (unless (empty? args)
-           (errorf "void tls info takes no arguments (got %q)"
-                   (string/join args " ")))
+   :fn (fn cli-info [inst]
          (print-info inst))})
 
 # -- manifest ------------------------------------------------------------

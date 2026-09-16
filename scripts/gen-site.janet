@@ -31,6 +31,7 @@
 (import ./site/markdown :as md)
 (import ./site/page :as page)
 (import void/core/plugin :as plugin)
+(import void/core/cli :as cli)
 
 # -- the composition, phases 1-5 -----------------------------------------
 #
@@ -480,7 +481,12 @@
     (sorted-by
       |($ :spelling)
       (seq [c :in (or (get-in boot [:extensions :void.core/cli :resolved]) [])]
-        (merge c {:spelling (string/join (string/split "/" (string (c :name))) " ")}))))
+        # the invocation is projected from what the command declares
+        # (:args, :flags), the same declaration `void <cmd> --help`
+        # renders — a usage line written twice is a usage line that
+        # disagrees with itself
+        (merge c {:spelling (string/join (string/split "/" (string (c :name))) " ")
+                  :usage (cli/usage c)}))))
   (def body @[[:h1 "CLI reference"]
               [:p "Every command the " [:code "void"] " binary answers in "
                "this composition — commands are contributions to "
@@ -491,7 +497,7 @@
               [:dl {:class "ref"}
                ;(mapcat
                   (fn [c]
-                    [[:dt [:code (string "void " (c :spelling))]
+                    [[:dt [:code (c :usage)]
                       (when (c :read-only?)
                         [:span {:class "tag ro"} "read-only"])]
                      [:dd (or (clean-doc (c :doc)) "")

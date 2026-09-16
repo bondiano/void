@@ -398,37 +398,13 @@
 (defn- with-queue [q f]
   (with-dyns [state/queue-dyn q] (f)))
 
-(defn- flags
-  "Parse --key VALUE pairs into a table, with `parse` deciding the
-  value type per flag. Anything unknown is an error naming what is."
-  [command args spec]
-  (def out @{})
-  (var i 0)
-  (while (< i (length args))
-    (def a (args i))
-    (def key (get spec a))
-    (unless key
-      (errorf "%s: unknown flag %q (known: %s)"
-              command a (string/join (sorted (keys spec)) " ")))
-    (unless (< (inc i) (length args))
-      (errorf "%s: %s needs a value" command a))
-    (put out (key 0) ((key 1) (args (inc i))))
-    (+= i 2))
-  out)
-
-(def- as-keyword |(keyword $))
-(def- as-number |(or (scan-number $) (errorf "expected a number, got %q" $)))
-(def- as-string |$)
-(def- as-keywords |(tuple ;(map keyword (string/split "," $))))
-
 (plugin/contribute! :void.core/cli
   {:name :jobs/stats
    :read-only? true
-   :doc "Show what the queue is holding: void jobs stats"
+   :doc "Show what the queue is holding"
+   :args []
    :needs [:jobs/queue]
-   :fn (fn cli-stats [q & args]
-         (unless (empty? args)
-           (errorf "void jobs stats takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-stats [q]
          (def s (with-queue q state/stats))
          (def caps (s :backend))
          (printf "backend     %q%s" (caps :name)
@@ -455,14 +431,14 @@
 (plugin/contribute! :void.core/cli
   {:name :jobs/list
    :read-only? true
-   :doc "List records: void jobs list [--queue Q] [--state S] [--job J] [--limit N]"
+   :doc "List records"
+   :args []
+   :flags {"--queue" {:key :queue :type :keyword :doc "only this queue"}
+           "--state" {:key :state :type :keyword :doc "pending|running|waiting|completed|dead"}
+           "--job" {:key :job :type :keyword :doc "only this job"}
+           "--limit" {:key :limit :type :int :doc "how many records at most"}}
    :needs [:jobs/queue]
-   :fn (fn cli-list [q & args]
-         (def o (flags "void jobs list" args
-                       {"--queue" [:queue as-keyword]
-                        "--state" [:state as-keyword]
-                        "--job" [:job as-keyword]
-                        "--limit" [:limit as-number]}))
+   :fn (fn cli-list [q o]
          (def rows (with-queue q (fn [] (state/list-jobs o))))
          (if (empty? rows)
            (print "no jobs match")
@@ -473,14 +449,13 @@
 (plugin/contribute! :void.core/cli
   {:name :jobs/show
    :read-only? true
-   :doc "Everything about one record: void jobs show ID"
+   :doc "Everything about one record"
+   :args ["ID"]
    :needs [:jobs/queue]
-   :fn (fn cli-show [q & args]
-         (unless (= 1 (length args))
-           (error "usage: void jobs show ID"))
-         (def r (with-queue q (fn [] (state/fetch (first args)))))
+   :fn (fn cli-show [q id]
+         (def r (with-queue q (fn [] (state/fetch id))))
          (unless r
-           (errorf "no job with id %q" (first args)))
+           (errorf "no job with id %q" id))
          (each k record/fields
            (def v (get r k))
            (unless (nil? v)
@@ -491,57 +466,60 @@
 (plugin/contribute! :void.core/cli
   {:name :jobs/retry
    :read-only? false
-   :doc "Put a record back in the queue: void jobs retry ID | void jobs retry --state dead"
+   :doc "Put a record back in the queue, by id or a whole state"
+   :args ["[ID]"]
+   :flags {"--state" {:key :state :type :keyword :doc "requeue every record in this state instead"}}
    :needs [:jobs/queue]
-   :fn (fn cli-retry [q & args]
-         (if (and (= 2 (length args)) (= "--state" (first args)))
-           (let [st (keyword (args 1))
-                 rows (with-queue q (fn [] (state/list-jobs {:state st :limit 10_000})))]
+   :fn (fn cli-retry [q o & args]
+         (def id (first args))
+         (cond
+           (o :state)
+           (let [rows (with-queue q (fn [] (state/list-jobs {:state (o :state) :limit 10_000})))]
              (var n 0)
              (each r rows
                (when (with-queue q (fn [] (state/retry! (r :id)))) (++ n)))
              (printf "requeued %d %s" n (if (= 1 n) "job" "jobs")))
-           (do
-             (unless (= 1 (length args))
-               (error "usage: void jobs retry ID | void jobs retry --state dead"))
-             (if-let [r (with-queue q (fn [] (state/retry! (first args))))]
-               (printf "requeued %s (%s)" (r :id) (r :job))
-               (errorf "no job with id %q" (first args))))))})
+
+           (nil? id)
+           (error "usage: void jobs retry ID | void jobs retry --state dead")
+
+           (if-let [r (with-queue q (fn [] (state/retry! id)))]
+             (printf "requeued %s (%s)" (r :id) (r :job))
+             (errorf "no job with id %q" id))))})
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/remove
    :read-only? false
-   :doc "Drop one record: void jobs remove ID"
+   :doc "Drop one record"
+   :args ["ID"]
    :needs [:jobs/queue]
-   :fn (fn cli-remove [q & args]
-         (unless (= 1 (length args))
-           (error "usage: void jobs remove ID"))
-         (if (with-queue q (fn [] (state/remove-job! (first args))))
-           (printf "removed %s" (first args))
-           (printf "no job with id %q" (first args))))})
+   :fn (fn cli-remove [q id]
+         (if (with-queue q (fn [] (state/remove-job! id)))
+           (printf "removed %s" id)
+           (printf "no job with id %q" id)))})
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/clear
    :read-only? false
-   :doc "Drop records: void jobs clear [--queue Q] [--state S]"
+   :doc "Drop records"
+   :args []
+   :flags {"--queue" {:key :queue :type :keyword :doc "only this queue"}
+           "--state" {:key :state :type :keyword :doc "only records in this state"}}
    :needs [:jobs/queue]
-   :fn (fn cli-clear [q & args]
-         (def o (flags "void jobs clear" args
-                       {"--queue" [:queue as-keyword]
-                        "--state" [:state as-keyword]}))
+   :fn (fn cli-clear [q o]
          (def n (with-queue q (fn [] (state/clear! o))))
          (printf "dropped %d %s" n (if (= 1 n) "record" "records")))})
 
 (plugin/contribute! :void.core/cli
   {:name :jobs/work
    :read-only? false
-   :doc "Run a worker in the foreground: void jobs work [--queues a,b] [--concurrency N]"
+   :doc "Run a worker in the foreground"
+   :args []
+   :flags {"--queues" {:key :queues :type :keywords :doc "comma-separated queues to work"}
+           "--concurrency" {:key :concurrency :type :int :doc "jobs in flight at once"}
+           "--poll-interval" {:key :poll-interval :type :number :doc "seconds between polls"}}
    :needs [:jobs/queue]
-   :fn (fn cli-work [q & args]
-         (def o (flags "void jobs work" args
-                       {"--queues" [:queues as-keywords]
-                        "--concurrency" [:concurrency as-number]
-                        "--poll-interval" [:poll-interval as-number]}))
+   :fn (fn cli-work [q o]
          (def cfg (slice (get-in (plugin/running-boot) [:config :values :jobs])))
          (def w (worker/make q (merge (cfg :worker) o)))
          # `:needs [:jobs/queue]` above is true of the worker and not of
@@ -567,10 +545,9 @@
 (plugin/contribute! :void.core/cli
   {:name :jobs/schedules
    :read-only? true
-   :doc "Every declared schedule and when it fires next: void jobs schedules"
-   :fn (fn cli-schedules [& args]
-         (unless (empty? args)
-           (errorf "void jobs schedules takes no arguments (got %q)" (string/join args " ")))
+   :doc "Every declared schedule and when it fires next"
+   :args []
+   :fn (fn cli-schedules []
          (def rows (schedule/status))
          (if (empty? rows)
            (print "no schedules are declared in this process")

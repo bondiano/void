@@ -340,12 +340,11 @@
 (plugin/contribute! :void.core/cli
   {:name :redis/info
    :read-only? true
-   :doc "Show what the redis client connected to: void redis info"
+   :doc "Show what the redis client connected to"
+   :args []
    :needs [:redis/client]
    # :needs instances come first, then the string arguments
-   :fn (fn cli-info [client & args]
-         (unless (empty? args)
-           (errorf "void redis info takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-info [client]
          (def info (conn/info (client :keeper)))
          (printf "server      %s" (info :server))
          (printf "version     %s" (or (info :server-version) "(RESP2: the server has no HELLO)"))
@@ -361,11 +360,10 @@
 (plugin/contribute! :void.core/cli
   {:name :redis/ping
    :read-only? true
-   :doc "PING the configured server: void redis ping"
+   :doc "PING the configured server"
+   :args []
    :needs [:redis/client]
-   :fn (fn cli-ping [client & args]
-         (unless (empty? args)
-           (errorf "void redis ping takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-ping [client]
          (def t0 (os/clock :monotonic))
          (conn/ping (client :keeper))
          (printf "PONG (%.2f ms)" (* 1000 (- (os/clock :monotonic) t0))))})

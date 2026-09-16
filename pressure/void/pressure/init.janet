@@ -283,13 +283,11 @@
 (plugin/contribute! :void.core/cli
   {:name :pressure/status
    :read-only? true
-   :doc "Show what the pressure sampler is seeing: void pressure status"
+   :doc "Show what the pressure sampler is seeing"
+   :args []
    :needs [:pressure/sampler]
    # :needs instances come first, then the string arguments
-   :fn (fn cli-status [st & args]
-         (unless (empty? args)
-           (errorf "void pressure status takes no arguments (got %q)"
-                   (string/join args " ")))
+   :fn (fn cli-status [st]
          (print-status (state/status st)))})
 
 # -- manifest ------------------------------------------------------------

@@ -212,4 +212,37 @@
 (assert (= 1 (length (deploy/per-process entries)))
         "a per-process store is a finding; one that is per-process by design is not")
 
+# -- the built-ins are the same struct, and help costs no bootstrap ------
+#
+# `void help` and `void <command> --help` are the two things a reader
+# reaches for when the composition will not boot, so neither may need
+# one. Both read the declaration: the built-in table here, and the
+# manifests' contributions through `plugin/declared`.
+
+(each c cli/builtins
+  (assert (keyword? (c :name)) "a built-in is named like a contribution")
+  (assert (string? (c :doc)) "and documented like one")
+  (assert (function? (c :run)) "and runs")
+  # the surface is declared, not re-typed in the docstring
+  (assert (not (string/find ": void " (c :doc)))
+          (string/format "%q keeps its usage out of :doc" (c :name))))
+
+(assert (find |(= :plugins/lock ($ :name)) cli/builtins)
+        "`void plugins lock` is a command, not a branch of one")
+
+(let [[c args] (cli/find-command cli/builtins ["plugins" "lock" "--out" "x"])]
+  (assert (= :plugins/lock (c :name)) "two words win over one")
+  (assert (deep= ["--out" "x"] args)))
+
+(def declared
+  (plugin/declared [(plugin/manifest 'test/decl
+                      :contributes {:void.core/cli
+                                    [{:name :decl/thing :doc "a thing"
+                                      :args ["ID"] :fn (fn [_])}]})]
+                   :void.core/cli))
+(assert (= 1 (length declared)) "phase 1 alone sees the contributions")
+(assert (= :decl/thing ((first declared) :name)))
+(assert (deep= ["ID"] ((first declared) :args))
+        "with the declaration a help listing needs, and no config read")
+
 (print "cli-test ok")

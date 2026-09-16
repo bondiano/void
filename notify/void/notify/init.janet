@@ -386,20 +386,17 @@
 (plugin/contribute! :void.core/cli
   {:name :notify/status
    :read-only? true
-   :doc "Show the channels a notification goes out on: void notify status"
-   :fn (fn cli-status [& args]
-         (unless (empty? args)
-           (errorf "void notify status takes no arguments (got %q)" (string/join args " ")))
+   :doc "Show the channels a notification goes out on"
+   :args []
+   :fn (fn cli-status []
          (print-status))})
 
 (plugin/contribute! :void.core/cli
   {:name :notify/send
    :read-only? false
-   :doc "Send a test notification to an address: void notify send <address>"
-   :fn (fn cli-send [& args]
-         (unless (= 1 (length args))
-           (error "usage: void notify send <address>"))
-         (def to (first args))
+   :doc "Send a test notification to an address"
+   :args ["ADDRESS"]
+   :fn (fn cli-send [to]
          (def result
            (send {:key :notify/test
                   :title "void notify send"
@@ -417,10 +414,9 @@
 (plugin/contribute! :void.core/cli
   {:name :notify/outbox
    :read-only? true
-   :doc "Print what the :memory channel kept: void notify outbox"
-   :fn (fn cli-outbox [& args]
-         (unless (empty? args)
-           (errorf "void notify outbox takes no arguments (got %q)" (string/join args " ")))
+   :doc "Print what the :memory channel kept"
+   :args []
+   :fn (fn cli-outbox []
          (if (empty? (outbox))
            (print "the outbox is empty")
            (each n (outbox) (print (notification/summary n)))))})

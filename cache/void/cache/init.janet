@@ -218,12 +218,11 @@
 (plugin/contribute! :void.core/cli
   {:name :cache/stats
    :read-only? true
-   :doc "Show what the cache has been doing: void cache stats"
+   :doc "Show what the cache has been doing"
+   :args []
    :needs [:cache/store]
    # :needs instances come first, then the string arguments
-   :fn (fn cli-stats [c & args]
-         (unless (empty? args)
-           (errorf "void cache stats takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-stats [c]
          (def s (with-cache c state/stats))
          (printf "store       %q" (get-in c [:store :name]))
          (printf "prefix      %q" (c :prefix))
@@ -242,12 +241,10 @@
 (plugin/contribute! :void.core/cli
   {:name :cache/get
    :read-only? true
-   :doc "Read one key: void cache get KEY"
+   :doc "Read one key"
+   :args ["KEY"]
    :needs [:cache/store]
-   :fn (fn cli-get [c & args]
-         (unless (= 1 (length args))
-           (error "usage: void cache get KEY"))
-         (def k (first args))
+   :fn (fn cli-get [c k]
          (def [found v] (with-cache c (fn [] (state/fetch k))))
          (if found
            (printf "%s = %q" (with-cache c (fn [] (state/full-key k))) v)
@@ -256,12 +253,10 @@
 (plugin/contribute! :void.core/cli
   {:name :cache/forget
    :read-only? false
-   :doc "Drop one key: void cache forget KEY"
+   :doc "Drop one key"
+   :args ["KEY"]
    :needs [:cache/store]
-   :fn (fn cli-forget [c & args]
-         (unless (= 1 (length args))
-           (error "usage: void cache forget KEY"))
-         (def k (first args))
+   :fn (fn cli-forget [c k]
          (if (with-cache c (fn [] (state/delete! k)))
            (printf "dropped %s" (with-cache c (fn [] (state/full-key k))))
            (printf "%s was not cached" (with-cache c (fn [] (state/full-key k))))))})
@@ -269,13 +264,13 @@
 (plugin/contribute! :void.core/cli
   {:name :cache/clear
    :read-only? false
-   :doc "Drop everything under the cache prefix: void cache clear (--everything when the prefix is empty and every key is meant)"
+   :doc "Drop everything under the cache prefix"
+   :args []
+   :flags {"--everything" {:key :everything :type :bool
+                           :doc "the prefix is empty and every key really is meant"}}
    :needs [:cache/store]
-   :fn (fn cli-clear [c & args]
-         (def everything (deep= args @["--everything"]))
-         (unless (or (empty? args) everything)
-           (errorf "void cache clear takes no arguments but --everything (got %q)" (string/join args " ")))
-         (def n (with-cache c (fn [] (state/clear! (when everything :everything)))))
+   :fn (fn cli-clear [c o]
+         (def n (with-cache c (fn [] (state/clear! (when (o :everything) :everything)))))
          (printf "dropped %d %s under %q"
                  n (if (= 1 n) "entry" "entries") (c :prefix)))})
 

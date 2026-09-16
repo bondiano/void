@@ -13,19 +13,6 @@
   "Where void/dev serves netrepl unless configured otherwise."
   ".void/repl.sock")
 
-(defn- parse-flags [args]
-  (def opts @{})
-  (var i 0)
-  (while (< i (length args))
-    (def a (args i))
-    (case a
-      "--unix" (do (put opts :unix (args (inc i))) (+= i 2))
-      "--host" (do (put opts :host (args (inc i))) (+= i 2))
-      "--port" (do (put opts :port (args (inc i))) (+= i 2))
-      "--help" (do (put opts :help true) (++ i))
-      (errorf "void repl: unknown flag %q (try --help)" a)))
-  opts)
-
 (defn connect
   ``Connect a repl to the running application:
 
@@ -33,15 +20,12 @@
       void repl --unix PATH
       void repl --host H --port P   # tcp netrepl
 
-  `config-thunk` (optional) returns the app's :dev :netrepl config
-  slice; it is only consulted when no flag points elsewhere, and its
-  failure falls back to the defaults (a project whose bootstrap is
+  `opts` is what void/core/cli parsed off the flags the command
+  declares. `config-thunk` (optional) returns the app's :dev :netrepl
+  config slice; it is only consulted when no flag points elsewhere, and
+  its failure falls back to the defaults (a project whose bootstrap is
   currently broken must still be reachable over the repl).``
-  [args &opt config-thunk]
-  (def opts (parse-flags args))
-  (when (opts :help)
-    (print "usage: void repl [--unix PATH | --host HOST --port PORT]")
-    (break))
+  [opts &opt config-thunk]
   (def cfg
     (if (or (opts :unix) (opts :host) (nil? config-thunk))
       {}

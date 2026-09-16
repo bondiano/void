@@ -405,22 +405,19 @@
 (plugin/contribute! :void.core/cli
   {:name :auth/hash
    :read-only? true
-   :doc "Hash a password with the configured hasher: void auth hash <password>"
+   :doc "Hash a password with the configured hasher"
+   :args ["PASSWORD"]
    :needs [:auth/registry]
-   :fn (fn cli-hash [_ & args]
-         (unless (= 1 (length args))
-           (error "usage: void auth hash <password>"))
-         (print (hash-mod/hash (first args))))})
+   :fn (fn cli-hash [_ password]
+         (print (hash-mod/hash password)))})
 
 (plugin/contribute! :void.core/cli
   {:name :auth/strategies
    :read-only? true
-   :doc "List the authentication strategies in this composition: void auth strategies"
+   :doc "List the authentication strategies in this composition"
+   :args []
    :needs [:auth/registry]
-   :fn (fn cli-strategies [_ & args]
-         (unless (empty? args)
-           (errorf "void auth strategies takes no arguments (got %q)"
-                   (string/join args " ")))
+   :fn (fn cli-strategies [_]
          (printf "%-14s %-8s %-8s %-10s %s" "strategy" "request" "login" "cookie" "order")
          (def order (or strategy/order (map |($ :name) (strategy/request-strategies))))
          (each name (strategy/known)
@@ -435,13 +432,12 @@
 (plugin/contribute! :void.core/cli
   {:name :auth/token
    :read-only? false
-   :doc "Mint an API token: void auth token <subject> [name]"
+   :doc "Mint an API token"
+   :args ["SUBJECT" "[NAME]"]
    :needs [:auth/registry]
-   :fn (fn cli-token [value & args]
-         (unless (or (= 1 (length args)) (= 2 (length args)))
-           (error "usage: void auth token <subject> [name]"))
-         (def out (token-mod/issue (value :tokens) (first args)
-                                   {:name (get args 1 "api token")}))
+   :fn (fn cli-token [value subject &opt name]
+         (def out (token-mod/issue (value :tokens) subject
+                                   {:name (or name "api token")}))
          (print (out :token))
          (eprint "the secret is shown once — it is not recoverable from the store"))})
 

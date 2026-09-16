@@ -36,6 +36,7 @@
 
 (import spork/json)
 (import void/core/plugin :as plugin)
+(import void/core/cli :as cli)
 (import void/core/schema :as schema)
 (import void/core/system :as system)
 (import void/core/bind :as bind)
@@ -179,7 +180,10 @@
             args (argv (or arguments @{}))
             inst (instances boot (get cmd :needs []) (get opts :start-needs false))]
         (with-dyns [:out out]
-          (f ;inst ;args)))))
+          # the same calling convention the binary uses: argv parsed
+          # against what the command declares, so an agent that passes
+          # an unknown flag hears the same sentence a person does
+          (cli/call cmd f inst args)))))
   (if ok
     {:text (rendered out value) :error? false}
     {:text (string (failure-text value)
@@ -330,7 +334,8 @@
   (def title (string "void " (string/replace-all "/" " " (string (cmd :name)))))
   @{:name name
     :title title
-    :description (get cmd :doc (string "The `" name "` command of this application"))
+    :description (string (get cmd :doc (string "The `" name "` command of this application"))
+                         "\n\nusage: " (cli/usage cmd))
     :input-schema command-input-schema
     :annotations (annotations cmd title)
     :read-only? (true? (get cmd :read-only?))

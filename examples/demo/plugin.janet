@@ -30,7 +30,8 @@
 (plugin/contribute! :void.core/cli
   {:name :demo/greet
    :read-only? true
-   :doc "Print a greeting for each NAME argument"
+   :doc "Print a greeting for each name"
+   :args ["NAME..."]
    :needs [:demo/greeter-service]
    :fn (fn [inst & names] (each n names (print (greet inst n))))})
 

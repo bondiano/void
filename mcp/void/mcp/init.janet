@@ -212,17 +212,19 @@
 
 (plugin/contribute! :void.core/cli
   {:name :mcp/tools
-   :doc "Show what this composition exposes over MCP, and what it withholds: void mcp tools"
+   :doc "Show what this composition exposes over MCP, and what it withholds"
+   :args []
    :read-only? true
-   :fn (fn cli-tools [& _] (print-tools))})
+   :fn (fn cli-tools [] (print-tools))})
 
 (plugin/contribute! :void.core/cli
   {:name :mcp/serve
-   :doc "Speak MCP over stdin/stdout, one JSON-RPC message per line: void mcp serve"
+   :doc "Speak MCP over stdin/stdout, one JSON-RPC message per line"
+   :args []
    # not read-only, and deliberately not exposable (see build-settings):
    # this is the command that *is* the server
    :read-only? false
-   :fn (fn cli-serve [& _]
+   :fn (fn cli-serve []
          (log/info "mcp stdio server starting" :ns log-ns
                    :tools (length (get (server-value {:start-needs true}) :tools)))
          (stdio/serve (fn stdio-handle [msg]

@@ -85,15 +85,13 @@
 (plugin/contribute! :void.core/cli
   {:name :shop/seed
    :read-only? false
-   :doc "Fill an empty shop with a catalog and two accounts: void shop seed"
+   :doc "Fill an empty shop with a catalog and two accounts"
+   :args []
    # the components this command needs started, and no others: a pool
    # to write through, the auth registry for the user store and the
    # crypto library, because seeding an account hashes a password
    :needs [:db/pool :auth/registry :crypto/lib]
-   :fn (fn cli-seed [_pool _auth _crypto & args]
-         (unless (empty? args)
-           (errorf "void shop seed takes no arguments (got %q) — the catalog is in src/seed.janet"
-                   (string/join args " ")))
+   :fn (fn cli-seed [_pool _auth _crypto]
          (def out (seed/seed!))
          (printf "%d products created, %d already there"
                  (out :products-created) (out :products-kept))
@@ -109,13 +107,14 @@
    # nothing else is. One keyword, two audiences, and no MCP code in this
    # application
    :read-only? true
-   :doc "What is running out: void shop stock [threshold]"
+   :doc "What is running out"
+   :args ["[THRESHOLD]"]
    :needs [:db/pool]
-   :fn (fn cli-stock [_pool & args]
+   :fn (fn cli-stock [_pool &opt units]
          (def threshold
-           (if (empty? args) catalog/low-stock-threshold (scan-number (first args))))
+           (if (nil? units) catalog/low-stock-threshold (scan-number units)))
          (unless (and threshold (>= threshold 0))
-           (errorf "void shop stock takes a number of units (got %q)" (first args)))
+           (errorf "void shop stock takes a number of units (got %q)" units))
          (def low (catalog/low-stock threshold))
          (if (empty? low)
            (printf "nothing at or below %d units" threshold)

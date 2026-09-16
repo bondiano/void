@@ -534,21 +534,19 @@
 (plugin/contribute! :void.core/cli
   {:name :obs/status
    :read-only? true
-   :doc "Show what obs is seeing: void obs status"
+   :doc "Show what obs is seeing"
+   :args []
    :needs [:obs/registry :obs/tracer]
-   :fn (fn cli-status [_ _ & args]
-         (unless (empty? args)
-           (errorf "void obs status takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-status [_ _]
          (print-status (status)))})
 
 (plugin/contribute! :void.core/cli
   {:name :obs/metrics
    :read-only? true
-   :doc "Print this process's Prometheus exposition: void obs metrics"
+   :doc "Print this process's Prometheus exposition"
+   :args []
    :needs [:obs/registry]
-   :fn (fn cli-metrics [_ & args]
-         (unless (empty? args)
-           (errorf "void obs metrics takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-metrics [_]
          (prin (render)))})
 
 # -- manifest ------------------------------------------------------------

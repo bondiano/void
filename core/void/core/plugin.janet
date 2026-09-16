@@ -51,4 +51,4 @@
 
 (re-export "./boot"
            ['running-boot 'last-boot 'bootstrap 'start! 'shutdown! 'dry-run
-            'extension 'health 'inspect 'why])
+            'declared 'extension 'health 'inspect 'why])

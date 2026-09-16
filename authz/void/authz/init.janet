@@ -235,24 +235,21 @@
 (plugin/contribute! :void.core/cli
   {:name :authz/policies
    :read-only? true
-   :doc "List the policies in this composition: void authz policies"
+   :doc "List the policies in this composition"
+   :args []
    :needs [:authz/registry]
-   :fn (fn cli-policies [_ & args]
-         (unless (empty? args)
-           (errorf "void authz policies takes no arguments (got %q)"
-                   (string/join args " ")))
+   :fn (fn cli-policies [_]
          (print-policies))})
 
 (plugin/contribute! :void.core/cli
   {:name :authz/explain
    :read-only? true
-   :doc "Why a policy allows or denies: void authz explain <policy> [subject] [role=... attr=...]"
+   :doc "Why a policy allows or denies, for a subject and its attributes"
+   :args ["POLICY" "[SUBJECT]" "[KEY=VALUE...]"]
    :needs [:authz/registry]
-   :fn (fn cli-explain [_ & args]
-         (when (empty? args)
-           (error "usage: void authz explain <policy> [subject] [key=value ...]"))
-         (def name (keyword (first args)))
-         (def rest (drop 1 args))
+   :fn (fn cli-explain [_ policy & args]
+         (def name (keyword policy))
+         (def rest args)
          (def subject (when (and (first rest) (not (string/find "=" (first rest))))
                         (first rest)))
          (def pairs (filter |(string/find "=" $) rest))

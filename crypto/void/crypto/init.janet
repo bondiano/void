@@ -214,13 +214,11 @@
 (plugin/contribute! :void.core/cli
   {:name :crypto/info
    :read-only? true
-   :doc "Show which libcrypto is open and what it provides: void crypto info"
+   :doc "Show which libcrypto is open and what it provides"
+   :args []
    :needs [:crypto/lib]
    # :needs instances come first, then the string arguments
-   :fn (fn cli-info [inst & args]
-         (unless (empty? args)
-           (errorf "void crypto info takes no arguments (got %q)"
-                   (string/join args " ")))
+   :fn (fn cli-info [inst]
          (print-info inst))})
 
 # -- manifest ------------------------------------------------------------

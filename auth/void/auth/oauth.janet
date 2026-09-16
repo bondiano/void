@@ -715,10 +715,11 @@
 
 (plugin/contribute! :void.core/cli
   {:name :auth/oauth-check
-   :doc "Fetch the issuer's metadata and keys and report what this resource server would accept: void auth oauth-check"
+   :doc "Fetch the issuer's metadata and keys and report what this resource server would accept"
+   :args []
    :read-only? true
    :needs [:auth.oauth/keys]
-   :fn (fn cli-check [ring & _]
+   :fn (fn cli-check [ring]
          (printf "resource:  %s" (or (settings :audience) "(unset)"))
          (printf "issuer:    %s" (or (settings :issuer) "(none — jwks-uri or introspection only)"))
          (printf "mode:      %q" (settings :mode))

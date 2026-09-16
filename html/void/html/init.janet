@@ -376,10 +376,9 @@
 (plugin/contribute! :void.core/cli
   {:name :assets/build
    :read-only? false
-   :doc "Compile and fingerprint the assets: void assets build"
-   :fn (fn cli-build [& args]
-         (unless (empty? args)
-           (errorf "void assets build takes no arguments (got %q)" (string/join args " ")))
+   :doc "Compile and fingerprint the assets"
+   :args []
+   :fn (fn cli-build []
          (def cfg (asset-config))
          (def manifest (build-assets!))
          (printf "assets     %s -> %s (%d files)"
@@ -411,10 +410,9 @@
 (plugin/contribute! :void.core/cli
   {:name :assets/install
    :read-only? false
-   :doc "Download the standalone tailwind compiler: void assets install"
-   :fn (fn cli-install [& args]
-         (unless (empty? args)
-           (errorf "void assets install takes no arguments (got %q)" (string/join args " ")))
+   :doc "Download the standalone tailwind compiler"
+   :args []
+   :fn (fn cli-install []
          (def cfg (get (asset-config) :tailwind {}))
          (start-network!)
          (def r (tailwind/install! cfg))
@@ -429,10 +427,9 @@
 (plugin/contribute! :void.core/cli
   {:name :assets/info
    :read-only? true
-   :doc "Where the assets and the tailwind compiler are: void assets info"
-   :fn (fn cli-info [& args]
-         (unless (empty? args)
-           (errorf "void assets info takes no arguments (got %q)" (string/join args " ")))
+   :doc "Where the assets and the tailwind compiler are"
+   :args []
+   :fn (fn cli-info []
          (def a ((context) :assets))
          (def cfg (asset-config))
          (def tw (get cfg :tailwind {}))

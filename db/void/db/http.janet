@@ -170,13 +170,12 @@
 (plugin/contribute! :void.core/cli
   {:name :db-http/session-ddl
    :read-only? true
-   :doc "Print the SQL the database session store needs (connects, to learn the dialect): void db-http session-ddl"
+   :doc "Print the SQL the database session store needs (connects, to learn the dialect)"
+   :args []
    # the pool, for its dialect — the statement to print is the one this
    # composition would run
    :needs [:db/pool]
-   :fn (fn cli-ddl [_ & args]
-         (unless (empty? args)
-           (errorf "void db-http session-ddl takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-ddl [_]
          (each sql (session-ddl ((state/driver) :dialect) ((session-cfg) :table))
            (printf "%s;\n" sql)))})
 

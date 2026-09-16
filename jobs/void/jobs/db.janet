@@ -621,14 +621,13 @@
 (plugin/contribute! :void.core/cli
   {:name :jobs-db/ddl
    :read-only? true
-   :doc "Print the SQL this backend needs (connects, to learn the dialect): void jobs-db ddl"
+   :doc "Print the SQL this backend needs (connects, to learn the dialect)"
+   :args []
    # the pool, for its dialect: the same declaration is a different
    # string on each engine, and the one to print is the one this
    # composition runs against
    :needs [:db/pool]
-   :fn (fn cli-ddl [_ & args]
-         (unless (empty? args)
-           (errorf "void jobs-db ddl takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-ddl [_]
          (def cfg (merge defaults
                          (or (get-in (plugin/running-boot) [:config :values :jobs-db]) {})))
          (each sql (ddl ((db/current-driver) :dialect) (cfg :table))

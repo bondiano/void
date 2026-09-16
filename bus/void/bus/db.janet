@@ -755,11 +755,10 @@
 (plugin/contribute! :void.core/cli
   {:name :bus-db/ddl
    :read-only? true
-   :doc "Print the DDL of the message log, the cursors and the outbox (connects, to learn the dialect): void bus-db ddl"
+   :doc "Print the DDL of the message log, the cursors and the outbox (connects, to learn the dialect)"
+   :args []
    :needs [:db/pool]
-   :fn (fn cli-ddl [_ & args]
-         (unless (empty? args)
-           (errorf "void bus-db ddl takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-ddl [_]
          (def cfg (slice (state/config-slice :bus-db)))
          (each sql (ddl ((db/current-driver) :dialect) (cfg :table))
            (print sql ";")))})
@@ -767,11 +766,10 @@
 (plugin/contribute! :void.core/cli
   {:name :bus-db/cursors
    :read-only? true
-   :doc "Where each consumer group has got to: void bus-db cursors"
+   :doc "Where each consumer group has got to"
+   :args []
    :needs [:bus.db/schema :db/pool]
-   :fn (fn cli-cursors [_ _pool & args]
-         (unless (empty? args)
-           (errorf "void bus-db cursors takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-cursors [_ _pool]
          (def cfg (slice (state/config-slice :bus-db)))
          (def tbl (cfg :table))
          (def rows
@@ -800,11 +798,10 @@
 (plugin/contribute! :void.core/cli
   {:name :bus-db/outbox
    :read-only? true
-   :doc "What the outbox still owes: void bus-db outbox"
+   :doc "What the outbox still owes"
+   :args []
    :needs [:bus.db/schema :db/pool]
-   :fn (fn cli-outbox [_ _pool & args]
-         (unless (empty? args)
-           (errorf "void bus-db outbox takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-outbox [_ _pool]
          (unless current-backend
            (error "this process is not using the :db bus backend"))
          (def pending (db/with-conn ((current-backend :outbox-pending) 20)))

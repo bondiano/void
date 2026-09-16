@@ -24,8 +24,9 @@
 (add-tree (string here "/../http"))
 (add-tree (string here "/../rest"))
 
+(import void/core/cli :as cmd)
 (import void/bench/runner :as runner)
-(require "void/bench/init")
+(import void/bench/init :as bench)
 
 (def app
   "Boot options the void CLI reads — :void/bench contributes `void bench`."
@@ -35,7 +36,13 @@
 (defn main
   "Binscript-style entrypoint: errors print to stderr and exit 1."
   [& args]
-  (def [ok err] (protect (runner/run-cli (tuple ;(drop 1 args)))))
+  (def [ok err]
+    (protect
+      (let [argv (tuple ;(drop 1 args))]
+        (if (cmd/help-wanted? bench/command argv)
+          (each l (cmd/help bench/command) (print l))
+          (let [[opts words] (cmd/parse bench/command argv)]
+            (runner/run words opts))))))
   (unless ok
     (eprintf "bench: %s" (if (string? err) err (describe err)))
     (os/exit 1)))

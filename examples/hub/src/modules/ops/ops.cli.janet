@@ -53,12 +53,10 @@
 (plugin/contribute! :void.core/cli
   {:name :hub/replay
    :read-only? false
-   :doc "Route a kept delivery again: void hub replay DELIVERY (the sender's id, or the row id)"
+   :doc "Route a kept delivery again (the sender's delivery id, or the row id)"
+   :args ["DELIVERY"]
    :needs [:db/pool :storage/store :jobs/queue]
-   :fn (fn cli-replay [_db _store queue & args]
-         (unless (= 1 (length args))
-           (error "usage: void hub replay DELIVERY"))
-         (def ident (first args))
+   :fn (fn cli-replay [_db _store queue ident]
          (def row (or (intake/find-delivery ident)
                       (errorf "no delivery %s — `void hub replay` takes the sender's delivery id or the row id"
                               ident)))

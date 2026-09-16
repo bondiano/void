@@ -248,10 +248,11 @@
 
 (plugin/contribute! :void.core/cli
   {:name :oauth/check
-   :doc "Resolve every configured provider — endpoints, redirect URI, scopes, algorithms — from this side of the config: void oauth check"
+   :doc "Resolve every configured provider — endpoints, redirect URI, scopes, algorithms — from this side of the config"
+   :args []
    :read-only? true
    :needs [:oauth/providers]
-   :fn (fn cli-check [rings & _]
+   :fn (fn cli-check [rings]
          (def cfg provider/settings)
          (if (empty? (cfg :providers))
            (print "no [:oauth :providers] configured")

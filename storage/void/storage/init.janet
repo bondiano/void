@@ -224,23 +224,20 @@
 (plugin/contribute! :void.core/cli
   {:name :storage/info
    :read-only? true
-   :doc "Show the active store: void storage info"
+   :doc "Show the active store"
+   :args []
    :needs [:storage/store]
-   :fn (fn cli-info [st & args]
-         (unless (empty? args)
-           (errorf "void storage info takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-info [st]
          (printf "store    %q" (st :name))
          (printf "shared   %q" (store/shared? st)))})
 
 (plugin/contribute! :void.core/cli
   {:name :storage/put
    :read-only? false
-   :doc "Store a file: void storage put SRC [KEY] — the key is generated from the filename when left out"
+   :doc "Store a file — the key is generated from the filename when left out"
+   :args ["SRC" "[KEY]"]
    :needs [:storage/store]
-   :fn (fn cli-put [st & args]
-         (unless (or (= 1 (length args)) (= 2 (length args)))
-           (error "usage: void storage put SRC [KEY]"))
-         (def [src k0] args)
+   :fn (fn cli-put [st src &opt k0]
          (unless (= :file (os/stat src :mode))
            (errorf "no such file: %s" src))
          (def k (or k0 (key/generate {:filename src})))
@@ -252,12 +249,10 @@
 (plugin/contribute! :void.core/cli
   {:name :storage/url
    :read-only? true
-   :doc "The URL of an object: void storage url KEY [EXPIRES-SECONDS]"
+   :doc "The URL of an object"
+   :args ["KEY" "[EXPIRES-SECONDS]"]
    :needs [:storage/store]
-   :fn (fn cli-url [st & args]
-         (unless (or (= 1 (length args)) (= 2 (length args)))
-           (error "usage: void storage url KEY [EXPIRES-SECONDS]"))
-         (def [k expires] args)
+   :fn (fn cli-url [st k &opt expires]
          (def opts (if expires
                      {:expires (or (scan-number expires)
                                    (errorf "EXPIRES-SECONDS must be a number, got %q" expires))}
@@ -269,12 +264,10 @@
 (plugin/contribute! :void.core/cli
   {:name :storage/rm
    :read-only? false
-   :doc "Drop an object: void storage rm KEY"
+   :doc "Drop an object"
+   :args ["KEY"]
    :needs [:storage/store]
-   :fn (fn cli-rm [st & args]
-         (unless (= 1 (length args))
-           (error "usage: void storage rm KEY"))
-         (def k (first args))
+   :fn (fn cli-rm [st k]
          (if (with-store st (fn [] (state/delete! k)))
            (printf "dropped %s" k)
            (printf "%s held nothing" k)))})

@@ -422,34 +422,13 @@
 (defn- with-broker [br f]
   (with-dyns [state/broker-dyn br] (f)))
 
-(defn- flags
-  "Parse --key VALUE pairs into a table, with `parse` deciding the
-  value type per flag. Anything unknown is an error naming what is."
-  [command args spec]
-  (def out @{})
-  (var i 0)
-  (while (< i (length args))
-    (def a (args i))
-    (def key (get spec a))
-    (unless key
-      (errorf "%s: unknown flag %q (known: %s)"
-              command a (string/join (sorted (keys spec)) " ")))
-    (unless (< (inc i) (length args))
-      (errorf "%s: %s needs a value" command a))
-    (put out (key 0) ((key 1) (args (inc i))))
-    (+= i 2))
-  out)
-
-(def- as-number |(or (scan-number $) (errorf "expected a number, got %q" $)))
-
 (plugin/contribute! :void.core/cli
   {:name :bus/stats
    :read-only? true
-   :doc "What this process's bus is and what it has carried: void bus stats"
+   :doc "What this process's bus is and what it has carried"
+   :args []
    :needs [:bus/broker]
-   :fn (fn cli-stats [br & args]
-         (unless (empty? args)
-           (errorf "void bus stats takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-stats [br]
          (def s (with-broker br state/stats))
          (def caps (s :backend))
          (printf "backend     %q" (caps :name))
@@ -473,10 +452,9 @@
 (plugin/contribute! :void.core/cli
   {:name :bus/handlers
    :read-only? true
-   :doc "Every declared handler, its topic and its group: void bus handlers"
-   :fn (fn cli-handlers [& args]
-         (unless (empty? args)
-           (errorf "void bus handlers takes no arguments (got %q)" (string/join args " ")))
+   :doc "Every declared handler, its topic and its group"
+   :args []
+   :fn (fn cli-handlers []
          (def names (router/defined))
          (if (empty? names)
            (print "no bus handlers are declared in this process")
@@ -492,23 +470,23 @@
 (plugin/contribute! :void.core/cli
   {:name :bus/publish
    :read-only? false
-   :doc "Publish a message by hand: void bus publish TOPIC 'jdn payload'"
+   :doc "Publish a message by hand"
+   :args ["TOPIC" "PAYLOAD"]
    :needs [:bus/broker]
-   :fn (fn cli-publish [br & args]
-         (unless (= 2 (length args))
-           (error "usage: void bus publish TOPIC 'jdn payload'"))
-         (def topic (keyword (first args)))
-         (def payload (parse (args 1)))
+   :fn (fn cli-publish [br topic-word jdn]
+         (def topic (keyword topic-word))
+         (def payload (parse jdn))
          (def msg (with-broker br (fn [] (state/publish topic payload))))
          (printf "published %s on %q" (msg :id) topic))})
 
 (plugin/contribute! :void.core/cli
   {:name :bus/tail
    :read-only? true
-   :doc "The messages the in-process backend has seen: void bus tail [--limit N]"
+   :doc "The messages the in-process backend has seen"
+   :args []
+   :flags {"--limit" {:key :limit :type :int :doc "how many messages (default 20)"}}
    :needs [:bus/broker]
-   :fn (fn cli-tail [br & args]
-         (def o (flags "void bus tail" args {"--limit" [:limit as-number]}))
+   :fn (fn cli-tail [br o]
          (def rows (with-broker br (fn [] (recent (get o :limit 20)))))
          (if (empty? rows)
            (print "nothing has gone past")
@@ -517,11 +495,10 @@
 (plugin/contribute! :void.core/cli
   {:name :bus/consume
    :read-only? false
-   :doc "Consume in the foreground, the way a worker process does: void bus consume"
+   :doc "Consume in the foreground, the way a worker process does"
+   :args []
    :needs [:bus/broker]
-   :fn (fn cli-consume [br & args]
-         (unless (empty? args)
-           (errorf "void bus consume takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-consume [br]
          (when (empty? (router/defined))
            (error "no bus handlers are declared in this process — `void bus consume` runs the handlers this process imported, and it imported none"))
          (def groups

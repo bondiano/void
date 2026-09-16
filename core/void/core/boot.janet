@@ -468,6 +468,28 @@
   (log/close!)                    # stop async log writers
   boot)
 
+(defn declared
+  ``Every contribution to `point` the plugins in `entries` declare —
+  phase 1 alone, and not even all of it: the manifests are resolved
+  (values, registered keywords, module paths), nothing is read from a
+  config file, no :on-load runs, no graph is built and no plugin is
+  asked whether its `:when` holds.
+
+  This is what `void help` needs and the only thing it needs. Listing
+  the commands a composition carries used to cost a bootstrap — five
+  phases and two lifecycle hooks — so the one command whose job is to
+  help was the one that failed on a bad config, which is when a reader
+  is likeliest to be typing it.
+
+  The price is that the list is what the composition *declares* rather
+  than what this profile activates, and for a help listing that is the
+  better of the two answers anyway.``
+  [entries point]
+  (def errors @[])
+  (def ms (load-manifests entries errors))
+  (checked :load errors)
+  (tuple ;(mapcat |(get-in $ [:contributes point] []) ms)))
+
 (defn dry-run
   ``Phases 1-5 without starting anything — the full validation of a
   system configuration for CI: :void-api and :requires compatibility,

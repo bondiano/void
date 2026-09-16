@@ -276,10 +276,7 @@
 (defn run
   "The command: gather, print, exit 1 when a row is a FAIL (CI reads
   exit codes; a person reads the phrases)."
-  [words &opt load-app]
-  (unless (empty? words)
-    (errorf "void doctor takes no arguments (got %q)"
-            (string/join words " ")))
+  [&opt load-app]
   (def rows (gather load-app))
   (each l (report rows) (print l))
   (when (some |(= :fail ($ :status)) rows)

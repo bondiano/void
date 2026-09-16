@@ -406,14 +406,16 @@
 (plugin/contribute! :void.core/cli
   {:name :admin/resources
    :read-only? true
-   :doc "Print the declared admin resources: void admin resources"
-   :fn (fn cli-resources [& _] (print-resources))})
+   :doc "Print the declared admin resources"
+   :args []
+   :fn (fn cli-resources [] (print-resources))})
 
 (plugin/contribute! :void.core/cli
   {:name :admin/widgets
    :read-only? true
-   :doc "Print which widget draws which field, and why: void admin widgets"
-   :fn (fn cli-widgets [& _] (print-widgets))})
+   :doc "Print which widget draws which field, and why"
+   :args []
+   :fn (fn cli-widgets [] (print-widgets))})
 
 # -- manifest ------------------------------------------------------------
 

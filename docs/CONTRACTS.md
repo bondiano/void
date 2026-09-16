@@ -194,12 +194,12 @@ key plus a deprecation alias for the old name, never a mutation.
 ### `:void.core/cli`
 
 - **owner:** `:void/core` · **cardinality:** `:many`
-- CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to "does running this change anything?" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it, so silence means "unknown" and unknown is never offered
+- CLI commands: {:name :db/migrate :fn <fn or symbol> :doc ... :args ["NAME" "[KEY]" "FIELD..."] :flags {"--step" {:key :step :type :int :doc ...}} :needs [component-keys] :read-only? true|false}. :read-only? is the command's own answer to "does running this change anything?" — void/mcp exposes a read-only command to an agent as a tool and withholds every other one until an operator allowlists it, so silence means "unknown" and unknown is never offered. :args and :flags are the command's surface as data: void/core/cli parses argv against them, renders `--help` and the help listing from them, and refuses a count or a flag they do not allow — an :args of [] is "takes no arguments", a bracketed name is optional and a trailing ... is the rest. A command that declares :flags is called with the parsed options table ahead of its positionals; one that declares neither gets its arguments raw
 - **key:** `:name` · resolved sorted by `:name` · a repeat fails the boot with `duplicate CLI command <name>`
 - **contribution schema:**
 
   ```janet
-  {:doc [:optional :string] :fn [:or :function :symbol] :name :keyword :needs [:optional [:vector :keyword]] :read-only? [:optional :boolean]}
+  {:args [:optional [:vector :string]] :doc [:optional :string] :flags [:optional [:map-of :string {:doc [:optional :string] :key :keyword :type [:optional [:enum :string :int :number :keyword :keywords :bool]]}]] :fn [:or :function :symbol] :name :keyword :needs [:optional [:vector :keyword]] :read-only? [:optional :boolean]}
   ```
 
 ### `:void.core/config-source`

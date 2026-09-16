@@ -265,15 +265,16 @@
 (plugin/contribute! :void.core/cli
   {:name :proto/list
    :read-only? true
-   :doc "List every registered protobuf descriptor: void proto list [messages|enums|services]"
-   :fn (fn cli-list [& args]
-         (def kind (case (first args)
+   :doc "List every registered protobuf descriptor"
+   :args ["[messages|enums|services]"]
+   :fn (fn cli-list [&opt word]
+         (def kind (case word
                      nil nil
                      "messages" :message
                      "enums" :enum
                      "services" :service
                      (errorf "void proto list takes messages, enums or services (got %q)"
-                             (first args))))
+                             word)))
          (def names (descriptor/registered kind))
          (if (empty? names)
            (print "no protobuf descriptors are registered")
@@ -282,11 +283,9 @@
 (plugin/contribute! :void.core/cli
   {:name :proto/describe
    :read-only? true
-   :doc "Print a descriptor as .proto source: void proto describe example.Order"
-   :fn (fn cli-describe [& args]
-         (unless (= 1 (length args))
-           (error "void proto describe takes one name: void proto describe example.Order"))
-         (def name (first args))
+   :doc "Print a descriptor as .proto source (void proto describe example.Order)"
+   :args ["NAME"]
+   :fn (fn cli-describe [name]
          (def d (or (descriptor/lookup name)
                     (descriptor/lookup (keyword name))
                     (errorf "nothing is registered as %q (void proto list shows what is)" name)))

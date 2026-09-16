@@ -1,5 +1,6 @@
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
+(import void/core/cli :as cli)
 (import void/core/system :as system)
 (import void/core/log :as log)
 (import void/cache :as cache)
@@ -93,13 +94,20 @@
   # and they run — the surface they print through is the one that
   # shadows `get`, which is a compile-order question worth a test
   (defn- command [name] (find |(= name ($ :name)) cli))
+  (defn- run [name args]
+    # through the one calling convention, not around it: `cli/call`
+    # parses the arguments against what the command declares, which is
+    # what the binary and void/mcp both do with them
+    (def cmd (command name))
+    (protect (with-dyns [:out @""] (cli/call cmd (cmd :fn) [c] args))))
   (cache/put! "shown" 1)
   (each [name args] [[:cache/stats []] [:cache/get ["shown"]] [:cache/get ["missing"]]
                      [:cache/forget ["shown"]] [:cache/forget ["shown"]] [:cache/clear []]]
-    (def [ok err] (protect (with-dyns [:out @""] (((command name) :fn) c ;args))))
+    (def [ok err] (run name args))
     (assert ok (string/format "%q %j runs: %q" name args err)))
-  (each [name args] [[:cache/stats ["extra"]] [:cache/get []] [:cache/clear ["extra"]]]
-    (def [ok] (protect (with-dyns [:out @""] (((command name) :fn) c ;args))))
+  (each [name args] [[:cache/stats ["extra"]] [:cache/get []] [:cache/clear ["extra"]]
+                     [:cache/clear ["--nope"]]]
+    (def [ok] (run name args))
     (assert (not ok) (string/format "%q %j is a usage error, not a surprise" name args))))
 
 # -- the plugin leaves no trace when it is not there ---------------------

@@ -310,68 +310,6 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(def- usage
-  ``usage: void bench [TARGETS|all|baselines] [flags]
-       void bench compare BASE.jdn CURRENT.jdn [--threshold PCT]
-       void bench budgets [FILE]   # budget check of a saved result set
-                                   # (default results/baseline.jdn)
-       void bench list
-
-flags:
-  --quick          smoke profile: warmup 3s, 2×5s (CI shared runners)
-  --runs N         timed runs per mode (default 3)
-  --duration S     seconds per run (default 60)
-  --warmup S       warmup seconds (default 30)
-  --out FILE       also write the result set to FILE
-  --record         freeze this run as results/baseline.jdn
-  --check          compare against the recorded baseline, exit 1 on
-                   any >5% regression
-  --against FILE   baseline file for --check
-  --threshold PCT  allowed degradation percent (default 5)
-  --budgets        also enforce the absolute budgets on this run,
-                   exit 1 on any MISS or unmeasured budget
-                   (docs/BENCH-v0.1.md: reference-environment check,
-                   not for shared CI runners)
-
-tools: wrk (max throughput) and wrk2 (latency under fixed rate) on
-PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
-
-(def- value-flags
-  {"--runs" :runs "--duration" :duration "--warmup" :warmup
-   "--out" :out "--against" :against "--threshold" :threshold})
-
-(def- bool-flags
-  {"--quick" :quick "--record" :record "--check" :check "--help" :help
-   "--budgets" :budgets})
-
-(defn- parse-args [args]
-  (def flags @{})
-  (def words @[])
-  (var i 0)
-  (while (< i (length args))
-    (def a (in args i))
-    (cond
-      (in bool-flags a)
-      (do (put flags (bool-flags a) true) (++ i))
-
-      (in value-flags a)
-      (do
-        (when (>= (inc i) (length args))
-          (errorf "%s expects a value" a))
-        (put flags (value-flags a) (in args (inc i)))
-        (+= i 2))
-
-      (string/has-prefix? "--" a)
-      (errorf "unknown flag %q\n%s" a usage)
-
-      (do (array/push words a) (++ i))))
-  [words flags])
-
-(defn- num-flag [flags k dflt]
-  (if-let [v (flags k)]
-    (or (scan-number v) (errorf "--%s expects a number, got %q" k v))
-    dflt))
-
 (defn- resolve-targets [words]
   (def out @[])
   (each w words
@@ -402,7 +340,7 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
   tools)
 
 (defn- threshold [flags]
-  (/ (num-flag flags :threshold (* 100 results/default-threshold)) 100))
+  (/ (get flags :threshold (* 100 results/default-threshold)) 100))
 
 (defn enforce-budgets
   ``The absolute gate: every budgeted target present in `res`
@@ -443,15 +381,13 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
     (printf "  %-18s %s%s" tname (spec :doc)
             (if (spec :baseline) " [baseline]" ""))))
 
-(defn run-cli
-  ``Entry point for `void bench` and `janet bench/main.janet` — raw
-  string arguments in, throws on any failure (regressions included);
-  the CLI turns that into exit code 1.``
-  [args]
-  (def [words flags] (parse-args args))
+(defn run
+  ``Entry point for `void bench` and `janet bench/main.janet`: the
+  target words and the flags void/core/cli parsed off the same
+  declaration both of them read (void/bench's `command`). Throws on any
+  failure, regressions included; the CLI turns that into exit code 1.``
+  [words flags]
   (cond
-    (flags :help) (print usage)
-
     (= (first words) "list") (print-targets)
 
     (= (first words) "compare")
@@ -473,9 +409,9 @@ PATH; override with VOID_BENCH_WRK / VOID_BENCH_WRK2.``)
     (do
       (def tnames (resolve-targets words))
       (def settings
-        {:runs (math/floor (num-flag flags :runs (if (flags :quick) 2 3)))
-         :duration (math/floor (num-flag flags :duration (if (flags :quick) 5 60)))
-         :warmup (math/floor (num-flag flags :warmup (if (flags :quick) 3 30)))})
+        {:runs (get flags :runs (if (flags :quick) 2 3))
+         :duration (get flags :duration (if (flags :quick) 5 60))
+         :warmup (get flags :warmup (if (flags :quick) 3 30))})
       # B4 brings its own generator, so a run that asks only for it
       # needs neither wrk nor wrk2 on the machine
       (def wrk-needed?

@@ -284,10 +284,11 @@
 (plugin/contribute! :void.core/cli
   {:name :db/postgres-info
    :read-only? true
-   :doc "Show what the Postgres driver connected to: void db postgres-info"
+   :doc "Show what the Postgres driver connected to"
+   :args []
    :needs [:db.postgres/driver]
    # :needs instances come first, then the string arguments
-   :fn (fn cli-info [drv & _]
+   :fn (fn cli-info [drv]
          (def caps (drv :capabilities))
          (def info ((drv :connection-info) (drv :keeper)))
          (printf "libpq       %s (%s)"

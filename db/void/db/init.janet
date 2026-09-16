@@ -220,17 +220,13 @@
 (plugin/contribute! :void.core/cli
   {:name :db/migrate
    :read-only? false
-   :doc "Apply pending migrations: void db migrate [--step N] [--to VERSION]"
+   :doc "Apply pending migrations"
+   :args []
+   :flags {"--step" {:key :step :type :int :doc "at most this many migrations"}
+           "--to" {:key :to :doc "stop at this version"}}
    :needs [:db/pool]
-   :fn (fn cli-migrate [_ & args]
-         (def opts (migration-opts (config-slice)))
-         (var i 0)
-         (while (< i (length args))
-           (def a (args i))
-           (case a
-             "--step" (do (put opts :step (scan-number (args (inc i)))) (+= i 2))
-             "--to" (do (put opts :to (args (inc i))) (+= i 2))
-             (errorf "void db migrate: unknown flag %q" a)))
+   :fn (fn cli-migrate [_ o]
+         (def opts (merge (migration-opts (config-slice)) o))
          (def done (migrate/up! opts))
          (if (empty? done)
            (print "nothing to migrate")
@@ -239,17 +235,13 @@
 (plugin/contribute! :void.core/cli
   {:name :db/rollback
    :read-only? false
-   :doc "Roll the last migration back: void db rollback [--step N] [--to VERSION]"
+   :doc "Roll the last migration back"
+   :args []
+   :flags {"--step" {:key :step :type :int :doc "at most this many migrations"}
+           "--to" {:key :to :doc "roll back down to this version"}}
    :needs [:db/pool]
-   :fn (fn cli-rollback [_ & args]
-         (def opts (migration-opts (config-slice)))
-         (var i 0)
-         (while (< i (length args))
-           (def a (args i))
-           (case a
-             "--step" (do (put opts :step (scan-number (args (inc i)))) (+= i 2))
-             "--to" (do (put opts :to (args (inc i))) (+= i 2))
-             (errorf "void db rollback: unknown flag %q" a)))
+   :fn (fn cli-rollback [_ o]
+         (def opts (merge (migration-opts (config-slice)) o))
          (def done (migrate/down! opts))
          (if (empty? done)
            (print "nothing to roll back")
@@ -258,31 +250,28 @@
 (plugin/contribute! :void.core/cli
   {:name :db/status
    :read-only? true
-   :doc "Show migration state: void db status"
+   :doc "Show migration state"
+   :args []
    :needs [:db/pool]
-   :fn (fn cli-status [_ & args]
-         (unless (empty? args)
-           (errorf "void db status takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-status [_]
          (def opts (migration-opts (config-slice)))
          (print-status (migrate/status (opts :dir) (opts :table))))})
 
 (plugin/contribute! :void.core/cli
   {:name :db/new
    :read-only? false
-   :doc "Scaffold a migration file: void db new NAME"
-   :fn (fn cli-new [& args]
-         (unless (= 1 (length args))
-           (error "usage: void db new NAME"))
+   :doc "Scaffold a migration file"
+   :args ["NAME"]
+   :fn (fn cli-new [name]
          (def opts (migration-opts (config-slice)))
-         (print (migrate/create! (first args) (opts :dir))))})
+         (print (migrate/create! name (opts :dir))))})
 
 (plugin/contribute! :void.core/cli
   {:name :db/erd
    :read-only? true
-   :doc "Print a Mermaid ER diagram of the registered entities: void db erd"
-   :fn (fn cli-erd [& args]
-         (unless (empty? args)
-           (errorf "void db erd takes no arguments (got %q)" (string/join args " ")))
+   :doc "Print a Mermaid ER diagram of the registered entities"
+   :args []
+   :fn (fn cli-erd []
          (prin (erd/mermaid)))})
 
 # -- manifest ------------------------------------------------------------

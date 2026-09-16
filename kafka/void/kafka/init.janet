@@ -156,9 +156,10 @@
 (plugin/contribute! :void.core/cli
   {:name :kafka/info
    :read-only? true
-   :doc "Show what the Kafka client is connected to: void kafka info"
+   :doc "Show what the Kafka client is connected to"
+   :args []
    :needs [:kafka/client]
-   :fn (fn cli-info [v & _]
+   :fn (fn cli-info [v]
          (def cfg (v :cfg))
          (printf "library     %s (%s)" (librdkafka/version)
                  (or librdkafka/library-path "?"))

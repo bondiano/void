@@ -205,10 +205,11 @@
 (plugin/contribute! :void.core/cli
   {:name :db/mysql-info
    :read-only? true
-   :doc "Show what the MySQL driver connected to: void db mysql-info"
+   :doc "Show what the MySQL driver connected to"
+   :args []
    :needs [:db.mysql/driver]
    # :needs instances come first, then the string arguments
-   :fn (fn cli-info [drv & _]
+   :fn (fn cli-info [drv]
          (def info ((drv :connection-info) (drv :keeper)))
          (printf "server      %s" (info :server))
          (printf "client      %s (%s)" (info :client) (info :library))

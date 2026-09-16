@@ -200,12 +200,10 @@
 (plugin/contribute! :void.core/cli
   {:name :authz/routes
    :read-only? true
-   :doc "Show which policy guards which route: void authz routes"
+   :doc "Show which policy guards which route"
+   :args []
    :needs [:http/kernel]
-   :fn (fn cli-routes [_ & args]
-         (unless (empty? args)
-           (errorf "void authz routes takes no arguments (got %q)"
-                   (string/join args " ")))
+   :fn (fn cli-routes [_]
          (print-routes))})
 
 (plugin/defplugin void/authz-http

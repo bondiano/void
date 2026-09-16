@@ -341,11 +341,10 @@
 (plugin/contribute! :void.core/cli
   {:name :auth/sweep
    :read-only? false
-   :doc "Delete expired one-time codes: void auth sweep"
+   :doc "Delete expired one-time codes"
+   :args []
    :needs [:auth.db/challenges]
-   :fn (fn cli-sweep [challenges & args]
-         (unless (empty? args)
-           (errorf "void auth sweep takes no arguments (got %q)" (string/join args " ")))
+   :fn (fn cli-sweep [challenges]
          ((challenges :sweep))
          (print "expired challenges deleted"))})
 
