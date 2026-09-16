@@ -1,2 +1,6 @@
 .void/
 jpm_tree/
+build/
+
+# compiled by the tailwind step from styles/app.css
+assets/app.css

@@ -7,6 +7,7 @@ one: signing in (by password, or by a link that arrives in the mail),
 a row-level policy, and the browser protections that come with
 composing a few more plugins.
 
+    void assets install # the tailwind compiler, once (no node, no npm)
     void db migrate     # create the schema
     void dev            # run the app (dev profile: watcher + netrepl)
     void routes         # print the route table

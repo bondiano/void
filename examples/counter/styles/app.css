@@ -1,0 +1,11 @@
+/* counter — the stylesheet source.
+   `void dev` keeps the compiler in --watch on this file ([:html :assets
+   :tailwind], config/default.janet) and writes assets/app.css, which is
+   what the layout links through (html/asset "app.css"). Nothing here is
+   checked in: the compiled file is generated, the source is this. */
+
+@import "tailwindcss";
+
+/* .janet is not an extension tailwind scans on its own, so the one
+   file this application's markup lives in is named. */
+@source "../app.janet";

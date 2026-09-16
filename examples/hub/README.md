@@ -295,6 +295,7 @@ again.
 janet ../../scripts/install-tree.janet         # the bundle -> ../../.void-tree
 eval "$(janet ../../scripts/install-tree.janet --export)"
 
+void assets install                            # the tailwind compiler, once (no node, no npm)
 void db migrate                                # create the schema
 void dev                                       # dev profile: watcher + netrepl
 void routes                                    # the route table

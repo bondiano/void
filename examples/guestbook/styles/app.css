@@ -1,0 +1,61 @@
+/* guestbook — the stylesheet source.
+   `void dev` keeps the compiler in --watch on this file ([:html :assets
+   :tailwind], config/default.janet) and writes assets/app.css, which is
+   what the layout links through (html/asset "app.css"). */
+
+@import "tailwindcss";
+
+/* .janet is not an extension tailwind scans on its own, so the file
+   this application's markup lives in is named. */
+@source "../app.janet";
+
+@theme {
+  --color-paper: oklch(0.985 0.012 85);
+  --color-ink: oklch(0.28 0.02 60);
+}
+
+/* ------------------------------------------------------------------
+   The markup void/html/form writes.
+
+   `form/form` projects a <form> out of a schema: a `.field` per entry,
+   a <label>, the control, and `.field-errors` under an invalid one. So
+   those class names are not this application's to choose — they are the
+   shape the helper emits, and this is where a project says what they
+   look like. Utility classes go in the markup; @apply goes here, where
+   the markup belongs to somebody else.
+   ------------------------------------------------------------------ */
+@layer components {
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .field label {
+    @apply text-sm font-medium text-ink/60;
+  }
+
+  .field input,
+  .field textarea {
+    @apply w-full rounded-xl border border-ink/15 bg-white px-3.5 py-2.5 text-ink
+           shadow-sm outline-none transition
+           placeholder:text-ink/30
+           focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15;
+  }
+
+  .field textarea {
+    @apply min-h-28 resize-y leading-relaxed;
+  }
+
+  .field-invalid input,
+  .field-invalid textarea {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500/15;
+  }
+
+  .field-errors {
+    @apply m-0 list-none p-0 text-sm text-red-600;
+  }
+
+  form button[type="submit"] {
+    @apply self-start rounded-xl bg-ink px-5 py-2.5 font-semibold text-paper
+           shadow-sm transition hover:bg-amber-700 active:scale-[0.98];
+  }
+}

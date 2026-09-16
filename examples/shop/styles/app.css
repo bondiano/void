@@ -1,0 +1,120 @@
+/* void shop — the stylesheet source.
+   `void dev` keeps the standalone tailwind compiler in --watch on this
+   file ([:html :assets :tailwind], config/default.janet) and writes
+   assets/app.css, which is what the layout links through (html/asset
+   "app.css") — the logical path in development, the fingerprinted one
+   after `void assets build`. The back office is not styled here:
+   void/admin brings its own page frame. */
+
+@import "tailwindcss";
+
+/* .janet is not an extension tailwind scans on its own, so the source
+   tree this application's markup lives in is named. */
+@source "../src/**/*.janet";
+
+/* ------------------------------------------------------------------
+   The markup somebody else writes.
+
+   `form/form` projects a <form> out of a schema — a `.field` per entry,
+   a <label>, the control, `.field-errors` under an invalid one — and
+   `html/flash-view` writes `.vd-flash.is-<tone>` for the line a redirect
+   carries. Those class names are not this application's to choose, so
+   this is where it says what they look like: utility classes go in the
+   markup, @apply goes here, where the markup belongs to a helper.
+   ------------------------------------------------------------------ */
+@layer components {
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .field label {
+    @apply text-sm font-medium text-slate-500;
+  }
+
+  /* a control whose label the view blanked (the cart's quantity) takes
+     no line for it */
+  .field label:empty {
+    @apply hidden;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    @apply w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5
+           text-slate-900 shadow-sm outline-none transition
+           placeholder:text-slate-400
+           focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15;
+  }
+
+  .field input[type="number"] {
+    @apply w-24 text-center tabular-nums;
+  }
+
+  .field-help {
+    @apply m-0 text-sm text-slate-400;
+  }
+
+  .field-invalid input,
+  .field-invalid select,
+  .field-invalid textarea {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500/15;
+  }
+
+  .field-errors,
+  .form-errors {
+    @apply m-0 list-none p-0 text-sm text-red-600;
+  }
+
+  /* :has, so the one-button forms — sign out, "place the order" — stay
+     what the markup around them made them: a form is a column when it
+     has fields in it. */
+  form:has(.field) {
+    @apply flex flex-col gap-4;
+  }
+
+  form:has(.field) button[type="submit"],
+  .cta button[type="submit"] {
+    @apply cursor-pointer self-start rounded-lg bg-indigo-600 px-5 py-2.5
+           text-sm font-semibold text-white shadow-sm transition
+           hover:bg-indigo-500 active:scale-[0.98];
+  }
+
+  /* the cart row's quantity control: a field and its button on one
+     line. `form.inline-form` rather than `.inline-form`, so that it
+     outweighs the `form:has(.field)` column above it — the quantity
+     control is a form with a field in it too. */
+  form.inline-form {
+    @apply flex-row items-end gap-2;
+  }
+
+  form.inline-form button[type="submit"] {
+    @apply cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2.5
+           text-sm font-medium text-slate-600 shadow-sm transition
+           hover:border-slate-400 hover:text-slate-900;
+  }
+
+  /* sign out, in the header */
+  .quiet-form button[type="submit"] {
+    @apply cursor-pointer rounded-md border-0 bg-transparent p-0 text-sm
+           text-slate-500 transition hover:text-slate-900;
+  }
+
+  /* the one line a write carries through its redirect */
+  .vd-flashes {
+    @apply mx-auto mt-6 flex max-w-5xl flex-col gap-2 px-6;
+  }
+
+  .vd-flash {
+    @apply m-0 rounded-lg border px-4 py-3 text-sm;
+  }
+
+  .vd-flash.is-ok,
+  .vd-flash.is-info {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-900;
+  }
+
+  .vd-flash.is-error,
+  .vd-flash.is-warn {
+    @apply border-amber-300 bg-amber-50 text-amber-900;
+  }
+}

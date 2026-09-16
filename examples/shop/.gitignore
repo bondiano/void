@@ -13,3 +13,7 @@ storage/
 # different process from the one the compose file runs — which is why
 # the repository carries none and the deployment takes its own.
 void.lock
+build/
+
+# compiled by the tailwind step from styles/app.css
+assets/app.css

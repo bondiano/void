@@ -12,6 +12,7 @@ Everything here runs on **sqlite or Postgres**, chosen by one
 environment variable, and the suite runs twice to keep that honest.
 
 ```sh
+void assets install   # the tailwind compiler, once (no node, no npm)
 void db migrate       # create the schema
 void shop seed        # a catalog, a customer and a staff account
 void dev              # dev profile: watcher + netrepl + the app

@@ -32,11 +32,25 @@
   places.``
   [state]
   (when-let [msg (get state :message)]
-    [:p {:class (string "notice " (get state :tone "ok"))} msg]))
+    (def tone (get state :tone "ok"))
+    [:p {:class (string "my-6 rounded-lg border px-4 py-3 text-sm "
+                        (case tone
+                          "bad" "border-red-200 bg-red-50 text-red-800"
+                          "warn" "border-amber-300 bg-amber-50 text-amber-900"
+                          "border-emerald-200 bg-emerald-50 text-emerald-900"))}
+     msg]))
+
+(def nav-link
+  "Every item in the nav bar is the same item — a second copy of this
+  string is how they start disagreeing."
+  "text-sm font-medium text-slate-600 no-underline transition hover:text-slate-900")
 
 (defn- nav-cart [count]
-  [:a {:href "/cart"} "Cart "
-   [:span {:class "badge" :id "cart-badge"} (string count)]])
+  [:a {:class (string nav-link " inline-flex items-center gap-2") :href "/cart"}
+   "Cart"
+   [:span {:id "cart-badge"
+           :class "inline-flex min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-white"}
+    (string count)]])
 
 (defn staff?
   ``Does whoever is asking hold the staff role?
@@ -54,11 +68,13 @@
 
 (defn- who-bar []
   (if (auth/current-user)
-    [:span {:class "who"}
-     (or (auth/claim :name) (auth/subject)) " · "
+    [:span {:class "flex items-center gap-2 text-sm text-slate-500"}
+     [:span {:class "font-medium text-slate-900"}
+      (or (auth/claim :name) (auth/subject))]
+     "·"
      (form/form {} {:action "/sign-out" :submit "Sign out"
-                    :attrs {:class "inline"}})]
-    [:a {:href "/sign-in"} "Sign in"]))
+                    :attrs {:class "quiet-form contents"}})]
+    [:a {:class nav-link :href "/sign-in"} "Sign in"]))
 
 (defn layout
   ``The one page frame.
@@ -74,25 +90,27 @@
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
      [:title "void shop"]
-     [:link {:rel "stylesheet" :href (html/asset "shop.css")}]
+     [:link {:rel "stylesheet" :href (html/asset "app.css")}]
      (when req (security/htmx-meta req))
      [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
-    [:body (if req (security/htmx-attrs req) {})
-     [:header {:class "site"}
-      [:div {:class "bar"}
-       [:a {:class "brand" :href "/"} "void shop"]
-       [:nav
-        [:a {:href "/"} "Catalog"]
-        (when (auth/current-user) [:a {:href "/orders"} "Orders"])
-        (when (staff?) [:a {:href "/admin"} "Desk"])
+    [:body (merge (if req (security/htmx-attrs req) {})
+                  {:class "flex min-h-dvh flex-col bg-slate-50 text-slate-900 antialiased"})
+     [:header {:class "sticky top-0 z-10 border-b border-slate-200 bg-white/85 backdrop-blur"}
+      [:div {:class "mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-4"}
+       [:a {:class "text-lg font-bold tracking-tight text-slate-900 no-underline" :href "/"}
+        "void shop"]
+       [:nav {:class "ml-auto flex flex-wrap items-center gap-x-6 gap-y-2"}
+        [:a {:class nav-link :href "/"} "Catalog"]
+        (when (auth/current-user) [:a {:class nav-link :href "/orders"} "Orders"])
+        (when (staff?) [:a {:class nav-link :href "/admin"} "Desk"])
         (nav-cart (if req (cart-session/item-count req) 0))
         (who-bar)]]]
-     [:main content]
-     [:footer {:class "site"}
+     [:main {:class "mx-auto w-full max-w-5xl grow px-6 py-10"} content]
+     [:footer {:class "border-t border-slate-200 bg-white px-6 py-6 text-center text-sm text-slate-500"}
       "A void example application — "
-      [:a {:href "/api/products"} "JSON API"] " · "
-      [:a {:href "/openapi.json"} "OpenAPI"] " · "
-      [:a {:href "/health"} "health"]]]))
+      [:a {:class "text-indigo-600 no-underline hover:underline" :href "/api/products"} "JSON API"] " · "
+      [:a {:class "text-indigo-600 no-underline hover:underline" :href "/openapi.json"} "OpenAPI"] " · "
+      [:a {:class "text-indigo-600 no-underline hover:underline" :href "/health"} "health"]]]))
 
 (defn page
   ``A view, rendered into the frame. Every HTML handler in this

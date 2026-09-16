@@ -12,3 +12,6 @@ storage/
 # the compose file reads secrets from here: the webhook secret, the bot
 # token, the signing key. It is this machine, not this repository
 .env
+
+# compiled by the tailwind step from styles/app.css
+assets/app.css

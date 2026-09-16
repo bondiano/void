@@ -2,6 +2,7 @@
 A [void](https://github.com/bondiano/void) application — the wave-5
 experiment: a live counter on `void/datastar`, the Biff idiom.
 
+    void assets install # the tailwind compiler, once (no node, no npm)
     void dev            # run the app (dev profile: watcher + netrepl)
     void routes         # print the route table
     void repl           # repl into the running process

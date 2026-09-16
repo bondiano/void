@@ -1,0 +1,102 @@
+/* blog — the stylesheet source.
+   `void dev` keeps the compiler in --watch on this file ([:html :assets
+   :tailwind], config/default.janet) and writes assets/app.css, which is
+   what the layout links through (html/asset "app.css"). The back office
+   is not styled here: void/admin brings its own page frame. */
+
+@import "tailwindcss";
+
+/* .janet is not an extension tailwind scans on its own, so the files
+   this application's markup lives in are named. */
+@source "../views.janet";
+@source "../app.janet";
+
+@theme {
+  --font-display: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+/* ------------------------------------------------------------------
+   The markup somebody else writes.
+
+   `form/form` projects a <form> out of a schema — a `.field` per entry,
+   a <label>, the control, `.field-errors` under an invalid one — and
+   `html/flash-view` writes `.vd-flash.is-<tone>` for the line a redirect
+   carries. Those class names are not this application's to choose, so
+   this is where it says what they look like: utility classes go in the
+   markup, @apply goes here, where the markup belongs to a helper.
+   ------------------------------------------------------------------ */
+@layer components {
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .field label {
+    @apply text-sm font-medium text-stone-500;
+  }
+
+  .field input,
+  .field textarea,
+  .field select {
+    @apply w-full rounded-lg border border-stone-300 bg-white px-3.5 py-2.5
+           text-stone-900 outline-none transition
+           placeholder:text-stone-400
+           focus:border-stone-900 focus:ring-4 focus:ring-stone-900/10;
+  }
+
+  .field textarea {
+    @apply min-h-40 resize-y leading-relaxed;
+  }
+
+  .field-help {
+    @apply m-0 text-sm text-stone-400;
+  }
+
+  .field-invalid input,
+  .field-invalid textarea {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500/10;
+  }
+
+  .field-errors,
+  .form-errors {
+    @apply m-0 list-none p-0 text-sm text-red-600;
+  }
+
+  /* :has, so that the one-button forms — sign out, "send it again" —
+     stay inline: a form is a column when it has fields in it. */
+  form:has(.field) {
+    @apply flex flex-col gap-4;
+  }
+
+  form:has(.field) button[type="submit"] {
+    @apply self-start rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold
+           text-stone-50 transition hover:bg-stone-700 active:scale-[0.98];
+  }
+
+  /* the one-button forms: sign out in the header. A form is still the
+     right element — signing out is a write — but it should read as the
+     quiet control it is. */
+  .quiet-form button[type="submit"] {
+    @apply cursor-pointer rounded-md border-0 bg-transparent p-0 text-sm
+           text-stone-500 underline underline-offset-4 transition
+           hover:text-stone-900;
+  }
+
+  /* the one line a write carries through its redirect */
+  .vd-flashes {
+    @apply mx-auto mb-0 mt-8 flex max-w-2xl flex-col gap-2 px-6;
+  }
+
+  .vd-flash {
+    @apply m-0 rounded-lg border px-4 py-3 text-sm;
+  }
+
+  .vd-flash.is-ok,
+  .vd-flash.is-info {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-900;
+  }
+
+  .vd-flash.is-error,
+  .vd-flash.is-warn {
+    @apply border-amber-300 bg-amber-50 text-amber-900;
+  }
+}

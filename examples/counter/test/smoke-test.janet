@@ -39,7 +39,7 @@
   (assert (string/find "integrity=\"sha384-" body) "pinned, with its integrity hash")
   (assert (string/find "data-on:click" body) "the buttons are Datastar actions")
   (assert (string/find "data-signals" body) "the step travels as a signal")
-  (assert (string/find "count: 0" body))
+  (assert (string/find `data-count="0"` body) "the count is on the element, not in a sentence")
 
   (def morph (test/inject c {:uri "/"
                              :headers {"datastar-request" "true"}}))
@@ -50,24 +50,24 @@
   (assert (string/find "selector title" ((evs 0) :data)))
   (assert (string/find "<title>counter — 0</title>" ((evs 0) :data)))
   (assert (string/find "selector body" ((evs 1) :data)))
-  (assert (string/find "count: 0" ((evs 1) :data)))
+  (assert (string/find `data-count="0"` ((evs 1) :data)))
 
   # -- actions: signals in, the same page out ----------------------------
   (def inc2 (test/inject c {:uri "/inc"
                             :headers {"datastar-request" "true"}
                             :json {:by 2}}))
-  (assert (string/find "count: 2" ((get (test/sse-events inc2) 1) :data))
+  (assert (string/find `data-count="2"` ((get (test/sse-events inc2) 1) :data))
           "the :by signal drives the step")
 
   # the same handler still answers a plain request with the document
   (def plain (test/inject c {:method :post :uri "/inc"}))
   (assert (string/has-prefix? "<!DOCTYPE html>" (test/text plain)))
-  (assert (string/find "count: 3" (test/text plain)))
+  (assert (string/find `data-count="3"` (test/text plain)))
 
   (def dec1 (test/inject c {:uri "/dec"
                             :headers {"datastar-request" "true"}
                             :json {:by 3}}))
-  (assert (string/find "count: 0" ((get (test/sse-events dec1) 1) :data)))
+  (assert (string/find `data-count="0"` ((get (test/sse-events dec1) 1) :data)))
 
   # -- the live half: /live parks in the room, a mutation pokes it -------
   (def live (http/with-request {:uri "/live"}))
@@ -77,7 +77,7 @@
 
   # the initial morph resynchronizes the page on (re)connect
   (assert (string/find "<title>counter — 0</title>" (resume frames)))
-  (assert (string/find "count: 0" (resume frames)))
+  (assert (string/find `data-count="0"` (resume frames)))
   (def reg (get-in (c :boot) [:system :instances :datastar/registry]))
   (assert (= 1 (length (reg :rooms))) "the stream joined the :counter room")
 
@@ -87,7 +87,7 @@
                   :headers {"datastar-request" "true"}
                   :json {:by 5}})
   (assert (string/find "<title>counter — 5</title>" (resume frames)))
-  (assert (string/find "count: 5" (resume frames)))
+  (assert (string/find `data-count="5"` (resume frames)))
 
   # -- explain-route: the morph key and its middleware are visible -------
   (def ex (http/explain-route "/"))

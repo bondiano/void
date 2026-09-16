@@ -1,0 +1,68 @@
+/* hub — the stylesheet source.
+   `void dev` keeps the standalone tailwind compiler in --watch on this
+   file ([:html :assets :tailwind], config/default.janet) and writes
+   assets/app.css, which is what the layout links through (html/asset
+   "app.css"). It covers the six account pages and nothing else: the
+   desk — which is the front door of this application — is void/admin's
+   own page frame, with its own fingerprinted stylesheet. */
+
+@import "tailwindcss";
+
+/* .janet is not an extension tailwind scans on its own, so the source
+   tree this application's markup lives in is named. */
+@source "../src/**/*.janet";
+
+/* ------------------------------------------------------------------
+   The markup `form/form` writes: a `.field` per schema entry, a
+   <label>, the control, `.field-errors` under an invalid one. Those
+   class names are not this application's to choose, so this is where it
+   says what they look like — utility classes go in the markup, @apply
+   goes here, where the markup belongs to a helper.
+   ------------------------------------------------------------------ */
+@layer components {
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .field label {
+    @apply text-sm font-medium text-slate-400;
+  }
+
+  .field input {
+    @apply w-full rounded-lg border border-white/10 bg-slate-950/60 px-3.5 py-2.5
+           font-mono text-sm text-slate-100 outline-none transition
+           placeholder:text-slate-600
+           focus:border-emerald-400/60 focus:ring-4 focus:ring-emerald-400/10;
+  }
+
+  .field-help {
+    @apply m-0 text-sm text-slate-500;
+  }
+
+  .field-invalid input {
+    @apply border-red-500/60 focus:border-red-500 focus:ring-red-500/10;
+  }
+
+  .field-errors,
+  .form-errors {
+    @apply m-0 list-none p-0 text-sm text-red-400;
+  }
+
+  /* :has, so the one-button forms — sign out, "send it again" — stay
+     inline: a form is a column when it has fields in it. */
+  form:has(.field) {
+    @apply flex flex-col gap-4;
+  }
+
+  form:has(.field) button[type="submit"] {
+    @apply mt-2 cursor-pointer rounded-lg bg-emerald-500 px-5 py-2.5 text-sm
+           font-semibold text-slate-950 transition
+           hover:bg-emerald-400 active:scale-[0.98];
+  }
+
+  .quiet-form button[type="submit"] {
+    @apply cursor-pointer rounded-lg border border-white/10 bg-transparent
+           px-3 py-1.5 text-sm text-slate-400 transition
+           hover:border-white/25 hover:text-slate-100;
+  }
+}

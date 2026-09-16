@@ -21,12 +21,19 @@
 
  :db {:migrations {:dir "db/migrations"}}
 
- # The stylesheet, served straight out of the source tree in
- # development ([:html :assets] passthrough) and out of the
- # fingerprinted build after `assets/build!` — the markup is
- # `(html/asset "shop.css")` either way (src/web/layout.janet).
  :http {:session {:enabled true}
         :static {:root "assets" :prefix "/assets/"}}
+
+ # The stylesheet, at both ends. `styles/app.css` is the source the
+ # standalone tailwind compiler reads — no node, no npm; `void assets
+ # install` downloads the binary once and `void dev` keeps it in
+ # --watch. `assets/app.css` is what it writes, inside [:html :assets
+ # :root] so that development serves it straight out of the tree and
+ # `void assets build` fingerprints it with everything else.
+ :html {:assets {:root "assets"
+                 :out "build/assets"
+                 :tailwind {:input "styles/app.css"
+                            :output "assets/app.css"}}}
 
  # the catalog is read on every page and written by nobody but an
  # operator, which is the shape a cache is actually for

@@ -24,8 +24,7 @@
      :values {:product-id (product :id) :quantity 1}
      :fields {:product-id {:control :input :type "hidden" :label ""}
               :quantity {:control :input :type "number"}}
-     :submit "Add to cart"
-     :attrs {:class "void-form"}}))
+     :submit "Add to cart"}))
 
 (defn- quantity-form [line]
   ``The quantity control: an htmx post that swaps the whole cart back
@@ -37,7 +36,7 @@
      :values {:quantity (line :quantity)}
      :fields {:quantity {:control :input :type "number" :label ""}}
      :submit "Update"
-     :attrs (merge {:class "inline"}
+     :attrs (merge {:class "inline-form"}
                    (hx/post (string "/cart/items/" (line :product-id))
                             :target "#cart" :swap :outer-html))}))
 
@@ -49,28 +48,43 @@
   [lines summary &opt state]
   (default state {})
   [:div {:id "cart"}
-   [:h1 "Your cart"]
+   [:h1 {:class "text-3xl font-bold tracking-tight"} "Your cart"]
    (layout/notice state)
    (if (empty? lines)
-     [:p "Nothing in it yet. " [:a {:href "/"} "Have a look around"] "."]
-     [:div
-      [:table {:class "lines"}
-       [:thead
-        [:tr [:th "Item"] [:th {:class "num"} "Price"] [:th "Quantity"]
-         [:th {:class "num"} "Total"]]]
-       [:tbody
-        (seq [line :in lines]
-          (let [product (db/rel line :product)]
-            [:tr
-             [:td [:a {:href (string "/products/" (product :id))} (product :name)]]
-             [:td {:class "num"} (values/format-price (product :price-cents))]
-             [:td (quantity-form line)]
-             [:td {:class "num"} (values/format-price (service/line-total line))]]))]
-       [:tfoot
-        [:tr [:td {:colspan "3"} "Total"]
-         [:td {:class "num"} (values/format-price (summary :subtotal-cents))]]]]
-      (if (auth/current-user)
-        (form/form {} {:action "/checkout" :submit "Place the order"})
-        [:p {:class "notice"}
-         [:a {:href "/sign-in"} "Sign in"]
-         " to place the order — the cart comes with you."])])])
+     [:p {:class "mt-6 rounded-2xl border border-dashed border-slate-300 px-5 py-10 text-center text-slate-400"}
+      "Nothing in it yet. "
+      [:a {:class "text-indigo-600 no-underline hover:underline" :href "/"}
+       "Have a look around"] "."]
+     [:div {:class "mt-8"}
+      [:div {:class "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"}
+       [:table {:class "w-full border-collapse text-left"}
+        [:thead {:class "border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-widest text-slate-500"}
+         [:tr [:th {:class "px-5 py-3 font-medium"} "Item"]
+          [:th {:class "px-5 py-3 text-right font-medium"} "Price"]
+          [:th {:class "px-5 py-3 font-medium"} "Quantity"]
+          [:th {:class "px-5 py-3 text-right font-medium"} "Total"]]]
+        [:tbody
+         (seq [line :in lines]
+           (let [product (db/rel line :product)]
+             [:tr {:class "border-b border-slate-100 last:border-0"}
+              [:td {:class "px-5 py-4"}
+               [:a {:class "font-medium text-slate-900 no-underline hover:text-indigo-700"
+                    :href (string "/products/" (product :id))}
+                (product :name)]]
+              [:td {:class "px-5 py-4 text-right tabular-nums"}
+               (values/format-price (product :price-cents))]
+              [:td {:class "px-5 py-4"} (quantity-form line)]
+              [:td {:class "px-5 py-4 text-right font-medium tabular-nums"}
+               (values/format-price (service/line-total line))]]))]
+        [:tfoot {:class "border-t border-slate-200 bg-slate-50"}
+         [:tr [:td {:class "px-5 py-4 font-semibold" :colspan "3"} "Total"]
+          [:td {:class "px-5 py-4 text-right text-lg font-semibold tabular-nums"}
+           (values/format-price (summary :subtotal-cents))]]]]]
+      [:div {:class "mt-6"}
+       (if (auth/current-user)
+         (form/form {} {:action "/checkout" :submit "Place the order"
+                        :attrs {:class "cta"}})
+         [:p {:class "rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600"}
+          [:a {:class "font-medium text-indigo-600 no-underline hover:underline" :href "/sign-in"}
+           "Sign in"]
+          " to place the order — the cart comes with you."])]])])

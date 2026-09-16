@@ -18,7 +18,22 @@
         # under no group that names one. So the number that is true of
         # almost every route lives here and the exception says so on
         # itself (./intake.janet)
-        :max-body 65536}
+        :max-body 65536
+        :static {:root "assets" :prefix "/assets/"}}
+
+ # The stylesheet of the six account pages, at both ends.
+ # `styles/app.css` is the source the standalone tailwind compiler
+ # reads — no node, no npm; `void assets install` downloads the binary
+ # once and `void dev` keeps it in --watch. `assets/app.css` is what it
+ # writes, inside [:html :assets :root] so that development serves it
+ # straight out of the tree and `void assets build` fingerprints it.
+ # The desk brings its own: void/admin serves a fingerprinted
+ # stylesheet from its own prefix, which is why the CSP below needs no
+ # :style-src line.
+ :html {:assets {:root "assets"
+                 :out "build/assets"
+                 :tailwind {:input "styles/app.css"
+                            :output "assets/app.css"}}}
 
  :db-sqlite {:path "db/hub.sqlite3"}
 

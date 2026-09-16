@@ -19,32 +19,66 @@
 # -- views (plain functions returning hiccup) ----------------------------
 
 (defn layout [content context]
-  (html/html5
+  (html/html5 {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
+     [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
      # the <title> is state too — the morph patches it by selector,
      # the one piece of a document id-matching cannot reach
      [:title (string "counter — " (state :n))]
+     # the compiled stylesheet: the logical name in development, the
+     # fingerprinted one after `void assets build` — the markup does
+     # not know which (config/default.janet)
+     [:link {:rel "stylesheet" :href (html/asset "app.css")}]
      # the layout is the application's, so loading datastar.js is its
      # decision — the plugin supplies the pinned tag with its
      # integrity hash, the way admin and dash carry htmx's
      (datastar/script-tag)]
-    [:body content]))
+    [:body {:class "min-h-dvh bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/40"}
+     content]))
+
+(def button-class
+  "The two step buttons are one button — a second copy of this string is
+  how they start disagreeing."
+  (string "grid h-14 w-14 place-items-center rounded-2xl border border-white/10 "
+          "bg-white/5 text-3xl font-light text-white transition "
+          "hover:border-indigo-400/50 hover:bg-indigo-500/20 "
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 "
+          "active:scale-95"))
 
 (defn counter-view
   "The page: signals declare the step, data-init opens the live
   stream, and the buttons post to handlers that return this same view."
   []
-  [:main (merge {:id "counter"}
+  (def n (state :n))
+  [:main (merge {:id "counter"
+                 :class "relative isolate grid min-h-dvh place-items-center overflow-hidden px-6 py-16"}
                 (ds/signals {:by 1})
                 (ds/load (ds/action :get "/live" {:open-when-hidden true})))
-   [:h1 {:id "count"} (string "count: " (state :n))]
-   [:p
-    [:button (ds/on :click (ds/action :post "/dec")) "−"]
-    [:input (merge {:type "number"} (ds/bind "by"))]
-    [:button (ds/on :click (ds/action :post "/inc")) "+"]]
-   [:p {:class "hint"}
-    "Open this page in two windows — every tab converges."]])
+   # the glow behind the card: one radial gradient, no image and no
+   # element anything else has to reason about
+   [:div {:aria-hidden "true"
+          :class "pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_40rem_at_50%_-10%,rgb(79_70_229/0.28),transparent)]"}]
+   [:div {:class "w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-10 text-center shadow-2xl shadow-indigo-950/60 backdrop-blur-xl"}
+    [:p {:class "text-xs font-semibold uppercase tracking-[0.3em] text-indigo-300/80"}
+     "void · datastar"]
+    [:h1 {:id "count" :data-count (string n)
+          :class "mt-8 font-mono text-8xl font-bold tabular-nums leading-none text-white drop-shadow-[0_0_2.5rem_rgb(99_102_241/0.55)]"}
+     (string n)]
+    [:div {:class "mt-10 flex items-center justify-center gap-3"}
+     [:button (merge (ds/on :click (ds/action :post "/dec"))
+                     {:type "button" :aria-label "decrement"
+                      :class button-class})
+      "−"]
+     [:input (merge {:type "number" :aria-label "step"
+                     :class "h-14 w-20 rounded-2xl border border-white/10 bg-slate-900/80 text-center font-mono text-lg tabular-nums text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"}
+                    (ds/bind "by"))]
+     [:button (merge (ds/on :click (ds/action :post "/inc"))
+                     {:type "button" :aria-label "increment"
+                      :class button-class})
+      "+"]]
+    [:p {:class "mt-8 text-sm leading-relaxed text-slate-400"}
+     "Open this page in two windows — every tab converges."]]])
 
 # -- handlers ------------------------------------------------------------
 

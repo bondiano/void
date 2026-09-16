@@ -111,6 +111,16 @@ if [ -n "$watch" ]; then while read -r _; do :; done; fi
 (def fake (fake-compiler (string bin-dir "/tailwindcss") copier))
 
 # -- finding it ----------------------------------------------------------
+#
+# PATH is the third place `locate` looks, so every assertion below about
+# a compiler being *absent* is only true on a machine that has none on
+# PATH — which stopped being every machine the moment the examples
+# started asking for one. The suite owns the answer instead of the
+# developer's shell: PATH is emptied for the lookups below and put back
+# before anything runs the fake compiler, which is a shell script and
+# needs a PATH of its own.
+(def shell-path (os/getenv "PATH"))
+(os/setenv "PATH" (string tmp "/no-such-dir"))
 
 (assert (= fake ((tw/locate {:bin fake}) :path)))
 (assert (= :config ((tw/locate {:bin fake}) :source)))
@@ -143,11 +153,10 @@ if [ -n "$watch" ]; then while read -r _; do :; done; fi
 (assert (= fake (tw/on-path "tailwindcss" (string "/nope:" bin-dir))))
 (assert (nil? (tw/on-path "tailwindcss" "/nope")))
 
-(def real-path (os/getenv "PATH"))
 (os/setenv "PATH" (string (os/cwd) "/" bin-dir))
 (def on-path (tw/locate {:dir (string tmp "/empty") :platform "linux-x64"
                          :version "latest"}))
-(os/setenv "PATH" real-path)
+(os/setenv "PATH" (string tmp "/no-such-dir"))
 (assert (= :path (on-path :source))
         "with nothing configured and nothing cached, PATH is the last place")
 (assert (string/has-suffix? "/tailwindcss" (on-path :path)))
@@ -160,6 +169,9 @@ if [ -n "$watch" ]; then while read -r _; do :; done; fi
 (each fragment ["void assets install" ":bin" "plan9-x64"]
   (assert (string/find fragment err5)
           (string/format "the not-found error is missing %q: %s" fragment err5)))
+
+# the lookups are done; the fake compiler runs from here on
+(os/setenv "PATH" shell-path)
 
 # -- the argv ------------------------------------------------------------
 

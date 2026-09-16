@@ -26,7 +26,20 @@
  # Wave 3 signs people in, and a sign-in rides on a session. The store
  # is in-process, which is exactly as wrong for a second machine as it
  # is for a second prefork worker — one deployment shape, one check.
- :http {:session {:enabled true}}
+ :http {:session {:enabled true}
+        :static {:root "assets" :prefix "/assets/"}}
+
+ # The stylesheet, at both ends. `styles/app.css` is the source the
+ # standalone tailwind compiler reads — no node, no npm; `void assets
+ # install` downloads the binary once and `void dev` keeps it in
+ # --watch. `assets/app.css` is what it writes, inside [:html :assets
+ # :root] so that development serves it straight out of the tree and
+ # `void assets build` fingerprints it with everything else. The markup
+ # is `(html/asset "app.css")` either way (views.janet).
+ :html {:assets {:root "assets"
+                 :out "build/assets"
+                 :tailwind {:input "styles/app.css"
+                            :output "assets/app.css"}}}
 
  :db {:migrations {:dir "db/migrations"}}
 

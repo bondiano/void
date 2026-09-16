@@ -2,6 +2,7 @@
 A [void](https://github.com/bondiano/void) application — a
 server-rendered HTMX guestbook with schema-validated forms.
 
+    void assets install # the tailwind compiler, once (no node, no npm)
     void dev            # run the app (dev profile: watcher + netrepl)
     void routes         # print the route table
     void repl           # repl into the running process

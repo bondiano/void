@@ -3,3 +3,7 @@ db/*.sqlite3
 db/*.sqlite3-*
 # the :file mail transport, in dev
 tmp/
+build/
+
+# compiled by the tailwind step from styles/app.css
+assets/app.css

@@ -128,6 +128,12 @@
   # the CLI path honours [:log] the way run! does (start! configures
   # the logger for the long-running path)
   (log/configure! (get-in boot [:config :values :log]) (boot :profile))
+  # and it attaches the boot the way start! does, before the first hook
+  # runs: a component asking for `:deps [:void/boot]` — every database
+  # driver does — is resolved against the boot in force, and without
+  # this line `void db migrate` failed on the seam rather than on
+  # anything about migrating
+  (system/attach-boot! (boot :system) boot)
   (hooks/run! (boot :hooks) :config-loaded boot)
   (hooks/run! (boot :hooks) :before-start boot)
   boot)

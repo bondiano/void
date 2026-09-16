@@ -18,16 +18,21 @@
 (defn who-bar
   "Who is signed in, and the way out."
   []
+  (def link "text-sm text-slate-400 no-underline transition hover:text-slate-100")
   (if (auth/current-user)
-    [:p {:class "who"}
+    [:div {:class "flex flex-wrap items-center gap-x-4 gap-y-2"}
      # the claim comes off the identity, which void/auth-http re-read
      # from the store on this request — no second query for a greeting
-     "Signed in as " [:strong (or (auth/claim :email) (auth/subject))] " · "
-     [:a {:href "/verify"} "Your address"] " "
-     (form/form {} {:action "/logout" :submit "Sign out"})]
-    [:p {:class "who"}
-     [:a {:href "/login"} "Sign in"] " · "
-     [:a {:href "/register"} "Create an account"]]))
+     [:span {:class "text-sm text-slate-500"}
+      "Signed in as "
+      [:strong {:class "font-mono font-medium text-emerald-400"}
+       (or (auth/claim :email) (auth/subject))]]
+     [:a {:class link :href "/verify"} "Your address"]
+     (form/form {} {:action "/logout" :submit "Sign out"
+                    :attrs {:class "quiet-form contents"}})]
+    [:div {:class "flex flex-wrap items-center gap-x-4 gap-y-2"}
+     [:a {:class link :href "/login"} "Sign in"]
+     [:a {:class link :href "/register"} "Create an account"]]))
 
 (defn layout
   "The frame every page of this application that is not the desk goes
@@ -37,10 +42,19 @@
     [:head
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-     [:title "hub"]]
-    [:body
-     [:header (who-bar)]
-     [:main content]]))
+     [:title "hub"]
+     # the compiled stylesheet: the logical name in development, the
+     # fingerprinted one after `void assets build` — the markup does
+     # not know which (config/default.janet)
+     [:link {:rel "stylesheet" :href (html/asset "app.css")}]]
+    [:body {:class "min-h-dvh bg-slate-950 text-slate-200 antialiased"}
+     [:header {:class "border-b border-white/5 bg-slate-900/50"}
+      [:div {:class "mx-auto flex max-w-md flex-wrap items-center justify-between gap-3 px-6 py-4"}
+       [:a {:class "font-mono text-sm font-semibold tracking-widest text-slate-100 no-underline"
+            :href "/"}
+        "HUB"]
+       (who-bar)]]
+     [:main {:class "mx-auto max-w-md px-6 py-16"} content]]))
 
 (defn page
   "Hiccup in the frame — what a controller hands back as a response

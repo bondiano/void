@@ -23,12 +23,18 @@
 # -- views (plain functions returning hiccup) ----------------------------
 
 (defn layout [content context]
-  (html/html5
+  (html/html5 {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
+     [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
      [:title "guestbook"]
+     # the compiled stylesheet: the logical name in development, the
+     # fingerprinted one after `void assets build` — the markup does
+     # not know which (config/default.janet)
+     [:link {:rel "stylesheet" :href (html/asset "app.css")}]
      [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
-    [:body [:main content]]))
+    [:body {:class "min-h-dvh bg-paper text-ink antialiased"}
+     [:main {:class "mx-auto max-w-2xl px-6 py-16"} content]]))
 
 (defn guestbook-view
   "The #guestbook fragment: schema-driven form plus the entries list.
@@ -36,19 +42,31 @@
   schema errors back in and the same markup re-renders annotated."
   [&opt values errors]
   [:div {:id "guestbook"}
-   [:h1 "guestbook guestbook"]
-   (form/form Entry
-     {:action "/entries"
-      :values values
-      :errors errors
-      :fields {:message {:control :textarea}}
-      :submit "Sign"
-      :attrs (hx/post "/entries" :target "#guestbook" :swap :outer-html)})
-   [:ul {:class "entries"}
+   [:header {:class "mb-10"}
+    [:p {:class "text-xs font-semibold uppercase tracking-[0.25em] text-amber-700/70"}
+     "a void example"]
+    [:h1 {:class "mt-3 text-4xl font-bold tracking-tight"} "Guestbook"]
+    [:p {:class "mt-2 text-ink/60"}
+     "Leave a line. The form below is a projection of the schema above it."]]
+   [:div {:class "rounded-2xl border border-ink/10 bg-white p-6 shadow-sm shadow-ink/5"}
+    (form/form Entry
+      {:action "/entries"
+       :values values
+       :errors errors
+       :fields {:message {:control :textarea}}
+       :submit "Sign"
+       # `form/form` writes the fields; this says how they stack, and
+       # styles/app.css says what one looks like
+       :attrs (merge {:class "flex flex-col gap-5"}
+                     (hx/post "/entries" :target "#guestbook" :swap :outer-html))})]
+   [:ul {:class "mt-10 flex list-none flex-col gap-3 p-0"}
     (if (empty? entries)
-      [:li {:class "empty"} "No entries yet — sign the book."]
+      [:li {:class "rounded-2xl border border-dashed border-ink/15 px-5 py-10 text-center text-ink/45"}
+       "No entries yet — sign the book."]
       (seq [e :in (reverse entries)]
-        [:li [:strong (e :name)] ": " (e :message)]))]])
+        [:li {:class "rounded-2xl border border-ink/10 bg-white px-5 py-4 shadow-sm shadow-ink/5"}
+         [:p {:class "text-sm font-semibold text-amber-800"} (e :name)]
+         [:p {:class "mt-1 whitespace-pre-line leading-relaxed text-ink/80"} (e :message)]]))]])
 
 # -- handlers ------------------------------------------------------------
 
