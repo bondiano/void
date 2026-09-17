@@ -133,6 +133,9 @@
   (tuple ;(map |($ 0) columns)))
 
 (defn- unique-index
+  {:params [:keyword :string]
+   :ret {:create-index :string :on :string :if-not-exists :boolean :columns [:keyword]
+         :unique :boolean & r}}
   ``The index that makes unique jobs exact. Partial — `WHERE unique_key
   IS NOT NULL` — so it is the size of the keys in play, not of the
   history. An engine without partial indexes gets the plain unique
@@ -150,6 +153,7 @@
     idx))
 
 (defn- statements
+  {:params [:keyword :string] :ret [:any]}
   "The schema as builder statements, in creation order."
   [dialect table]
   [{:create-table table :if-not-exists true :columns columns}
@@ -173,11 +177,13 @@
   an argument because the same declaration is a different string on
   each engine, and a migration file asks for the one it runs against
   (`((db/current-driver) :dialect)`).``
+  {:params [:keyword :string?] :ret [:string]}
   [dialect &opt table]
   (default table (defaults :table))
   (tuple ;(map |(first (builder/format $ dialect)) (statements dialect table))))
 
 (defn create-tables!
+  {:params [:string?] :ret :any}
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
   (db/ddl! (ddl ((db/current-driver) :dialect) table)))
@@ -185,6 +191,23 @@
 # -- rows <-> records ----------------------------------------------------
 
 (defn record->row
+  {:params [{:id :string? :job :keyword? :args (or @[:any] [:any] :nil) :queue :keyword?
+             :priority :number? :state :keyword? :attempt :number? :max-attempts :number?
+             :backoff :any :timeout :number? :run-at :number? :enqueued-at :number?
+             :started-at :number? :claimed-at :number? :finished-at :number?
+             :unique-key :string? :unique-until :number? :group :string? :parent :string?
+             :children-left :number?
+             :children (or @[{:id :string :job :keyword :result :any}] :nil)
+             :result :any :error :string? :failures (or @[:any] :nil) :token :string?
+             :traceparent :string? & r}]
+   :ret @{:id :any :job :string :args :string :queue :string :priority :number :state :string
+          :attempt :number :max-attempts :number :backoff :string? :timeout :number?
+          :run-at :number :enqueued-at :number :started-at :number? :claimed-at :number?
+          :finished-at :number? :unique-key :string? :unique-until :number?
+          :group-key :string? :parent :string? :children-left :number? :children :string?
+          :result :string? :error :string? :failures :string :token :string?
+          :traceparent :string?}
+   :throws [:string]}
   "A record as the columns that store it — the two structured fields
   as jdn, everything else as itself."
   [r]
@@ -216,9 +239,22 @@
     :token (get r :token)
     :traceparent (get r :traceparent)})
 
-(defn- kw [v] (when v (keyword v)))
+(defn- kw
+  {:params [:any] :ret :keyword?}
+  "A stored column value as a keyword, or nil for one that was never set."
+  [v]
+  (when v (keyword v)))
 
 (defn row->record
+  {:params [(or {:keyword :any} :nil)]
+   :ret (or @{:id :any :job :keyword? :args [:any] :queue :keyword? :priority :number
+              :state :keyword? :attempt :number :max-attempts :number :backoff :any
+              :timeout :number? :run-at :number :enqueued-at :number :started-at :number?
+              :claimed-at :number? :finished-at :number? :unique-key :string?
+              :unique-until :number? :group :string? :parent :string? :children-left :number?
+              :children (or @[:any] :nil) :result :any :error :any :failures @[:any]
+              :token :string? :traceparent :string?}
+             :nil)}
   "A row back into a record."
   [row]
   (when row
@@ -255,7 +291,18 @@
   "The states that still hold a unique key."
   ["pending" "running" "waiting"])
 
-(defn- select-one [table where]
+(defn- select-one
+  {:params [:string :any]
+   :ret (or @{:id :any :job :keyword? :args [:any] :queue :keyword? :priority :number
+              :state :keyword? :attempt :number :max-attempts :number :backoff :any
+              :timeout :number? :run-at :number :enqueued-at :number :started-at :number?
+              :claimed-at :number? :finished-at :number? :unique-key :string?
+              :unique-until :number? :group :string? :parent :string? :children-left :number?
+              :children (or @[:any] :nil) :result :any :error :any :failures @[:any]
+              :token :string? :traceparent :string?}
+             :nil)}
+  "The one record matching a builder :where, or nil."
+  [table where]
   (row->record (db/one-row {:select col-keys :from table :where where})))
 
 (defn- skip-locked?
@@ -264,6 +311,7 @@
   statement; where it cannot, it is a SELECT and an UPDATE inside a
   transaction. Asked of the dialect rather than of the engine's name:
   it is the capability the two claims differ by.``
+  {:params [] :ret :boolean}
   []
   (db/capability ((db/current-driver) :dialect) :skip-locked))
 
@@ -272,6 +320,14 @@
   captured but the table name and the retention policy: which
   database, which driver and which dialect are read off the pool at
   call time, so the backend outlives a restart of the pool under it.``
+  {:params [(or {:keyword :any} :nil)]
+   :ret {:name :keyword :shared? :boolean :transactional? :boolean
+         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any) :reap! (fn [& :any] :any)
+         :touch! (fn [& :any] :any) :release-parent! (fn [& :any] :any)
+         :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any) :rate-take! (fn [& :any] :any)
+         :stats (fn [] :any) :close (fn [] :any)}}
   [opts]
   # `tbl`, not `table`: the name would shadow the constructor this
   # module builds statement maps with, and a string in function

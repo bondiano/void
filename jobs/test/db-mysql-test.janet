@@ -29,7 +29,10 @@
 
 (def p (pool/make (server/driver) {:size 4}))
 
-(defn- drop-tables! []
+(defn- drop-tables!
+  {:params [] :ret :nil}
+  "Drop this suite's table and its lock/rate tables."
+  []
   (each t [tbl (string tbl "_locks") (string tbl "_rates")]
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) []
                     {:kind :write :prepared false})))

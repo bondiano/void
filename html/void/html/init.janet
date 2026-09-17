@@ -48,7 +48,15 @@
   not a component, so it is a var rather than a `system/ambient`."
   nil)
 
-(defn- context []
+(defn- context
+  {:params [] :ret {:engine-name :keyword :engines {:keyword :any}
+                    :assets {:prefix :string :manifest (or {:string :string} :nil)}
+                    :config {:any :any} & r}
+   :throws [:string]}
+  "The running html context, or an error naming the hook that builds
+  it — read by every function below that needs the selected engine or
+  the asset manifest."
+  []
   (or current-context
       (error "void/html is not booted — plugin/start! builds the html context at :before-start")))
 
@@ -79,6 +87,14 @@
 # -- view responses ------------------------------------------------------
 
 (defn page
+  {:params [:any
+            (or {:layout :any :status :number? :headers (or {:any :any} :nil)
+                 :context (or {:any :any} :nil) :engine :keyword?
+                 :title :any :head :any :partial :any & r}
+                :nil)]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``A lazy view response — content and layout as data, rendered by the
   :void.html/render middleware on the way out:
 
@@ -117,12 +133,21 @@
   resp)
 
 (defn fragment
+  {:params [:any
+            (or {:status :number? :headers (or {:any :any} :nil)
+                 :context (or {:any :any} :nil) :engine :keyword?
+                 :title :any :head :any :partial :any & r}
+                :nil)]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "A lazy view response with no layout — html/page with :layout nil
   forced (partials, htmx fragments)."
   [content &opt opts]
   (page content (merge (or opts {}) {:layout nil})))
 
 (defn view-response?
+  {:params [:any] :ret :boolean :narrows {:void.html/content :any & r}}
   "Is this response a lazy view response the render middleware will
   finalize?"
   [resp]
@@ -130,6 +155,7 @@
        (not (nil? (get resp :void.html/content)))))
 
 (defn partial-request?
+  {:params [(or {:headers (or {:string :string} :nil) & r} :nil)] :ret :boolean :narrows :any}
   ``Is this request for a fragment — htmx 4's HX-Request-Type:
   partial, a swap that lands in some element? One header read, here
   rather than in void/htmx, because the render middleware is what
@@ -137,7 +163,18 @@
   [req]
   (= "partial" (get-in req [:headers "hx-request-type"])))
 
-(defn- finalize [resp req]
+(defn- finalize
+  {:params [@{:void.html/content :any :void.html/layout :any
+              :void.html/context (or {:any :any} :nil)
+              :void.html/engine :keyword? :void.html/partial :any & r}
+            (or {:headers (or {:string :string} :nil) & r} :nil)]
+   :ret @{:void.html/content :any :void.html/layout :any
+          :void.html/context (or {:any :any} :nil) :body :any & r}
+   :throws [:string]}
+  "Render a view response's content (or its :partial, for a partial
+  request) through the selected engine, and put the result on
+  :body."
+  [resp req]
   (def ctx (context))
   (def ename (get resp :void.html/engine (ctx :engine-name)))
   (def engine
@@ -163,6 +200,9 @@
   resp)
 
 (defn render-now
+  {:params [:any (or {:headers (or {:string :string} :nil) & r} :nil)]
+   :ret :any
+   :throws [:string]}
   ``Render a lazy view response here and now instead of leaving it to
   the render middleware on the way out: the same response, with `:body`
   the rendered page. Anything that is not a view response passes
@@ -209,11 +249,21 @@
   "Where flashes wait in the session."
   :void.html/flash)
 
-(defn- session-of [req]
+(defn- session-of
+  {:params [(or {:session (or @{:any :any} :nil) & r} :nil)]
+   :ret @{:any :any}
+   :throws [:string]}
+  "The request's session table, or an error naming the config that
+  puts one there."
+  [req]
   (or (get req :session)
       (error "html/flash! needs a session — enable [:http :session] (void/http's session middleware puts one on the request)")))
 
 (defn flash!
+  {:params [(or {:session (or @{:any :any} :nil) & r} :nil)
+            (enum :ok :warn :danger :note) :any]
+   :ret :nil
+   :throws [:string]}
   ``Queue a message for the next page: `tone` is :ok, :warn, :danger
   or :note, `text` the sentence.
 
@@ -225,6 +275,8 @@
   nil)
 
 (defn flashes
+  {:params [(or {:session (or @{:any :any} :nil) & r} :nil)]
+   :ret [{:tone :keyword :text :string}]}
   ``The waiting messages — `[{:tone :text} ...]` — taken out of the
   session, so they show once. An empty tuple without a session.``
   [req]
@@ -235,6 +287,7 @@
     []))
 
 (defn flash-view
+  {:params [(or {:session (or @{:any :any} :nil) & r} :nil)] :ret (or :tuple :nil)}
   ``The waiting messages as hiccup, one `.vd-flash.is-<tone>` block
   each — for a layout's slot above the content. nil when there are
   none.``
@@ -248,6 +301,12 @@
 # -- pager ---------------------------------------------------------------
 
 (defn pager
+  {:params [{:page :number? :per-page :number? :total :number?
+             :href (or (fn [a] :string) :nil)
+             :attrs (or (fn [a] :any) :nil)
+             :noun :string? & r}]
+   :ret :tuple
+   :throws [:string]}
   ``Pagination as hiccup — the count, previous, "page N of M", next:
 
       (html/pager {:page 2 :per-page 25 :total 130
@@ -265,7 +324,10 @@
   (def href (or (opts :href) (error "html/pager needs :href")))
   (def extra (get opts :attrs (fn [_] {})))
   (def noun (get opts :noun "row"))
-  (defn link [p text]
+  (defn link
+    {:params [:number :string] :ret :tuple}
+    "One pager link — previous, or next — with :attrs merged on."
+    [p text]
     (def url (href p))
     [:a (merge {:href url} (extra url)) text])
   [:div {:class "vd-pager"}
@@ -276,11 +338,25 @@
 
 # -- assets --------------------------------------------------------------
 
-(defn- normalize-prefix [p]
+(defn- normalize-prefix
+  {:params [:string] :ret :string}
+  "A mount prefix with a leading and a trailing slash, whichever it
+  was missing."
+  [p]
   (def lead (if (string/has-prefix? "/" p) p (string "/" p)))
   (if (string/has-suffix? "/" lead) lead (string lead "/")))
 
-(defn- build-assets-state [acfg]
+(defn- build-assets-state
+  {:params [(or {:tailwind (or {:any :any} :nil) :prefix :string?
+                :manifest :string? :out :string?
+                :mode (or (enum :auto :passthrough :manifest) :nil) & r}
+               :nil)]
+   :ret {:prefix :string :manifest (or {:string :string} :nil)}
+   :throws [:string]}
+  "The :assets slice of the html context: the normalized prefix, and
+  the fingerprint manifest loaded per [:html :assets :mode] — nil for
+  dev passthrough."
+  [acfg]
   (def cfg (or acfg {}))
   # a half-named compile is refused here rather than at the first
   # build: the boot is where a developer is still reading errors
@@ -300,6 +376,7 @@
   {:prefix prefix :manifest manifest})
 
 (defn asset
+  {:params [:string] :ret :string :throws [:string]}
   ``URL for a logical asset path through the loaded manifest, or the
   passthrough URL when none is loaded (see assets/href):
 
@@ -311,6 +388,11 @@
 # -- context build (:before-start hook) ----------------------------------
 
 (defn build-context
+  {:params [:any]
+   :ret @{:engine-name :keyword :engines {:keyword :any}
+          :assets {:prefix :string :manifest (or {:string :string} :nil)}
+          :config {:any :any} & r}
+   :throws [:string]}
   "Assemble the html context from a boot value: resolve the engine
   point, check the configured engine exists, load the asset manifest
   per [:html :assets]. Normally called by the :before-start hook."
@@ -349,11 +431,19 @@
 # no component (`:needs` is empty).
 
 (defn asset-config
+  {:params [] :ret {:root :string? :out :string? :prefix :string? :manifest :string?
+                    :tailwind (or {:any :any} :nil) & r}
+   :throws [:string]}
   "The [:html :assets] slice of the running composition."
   []
   (get-in (context) [:config :assets] {}))
 
 (defn build-assets!
+  {:params [(or {:root :string? :out :string? :manifest :string?
+                :tailwind (or {:any :any} :nil) & r}
+               :nil)]
+   :ret @{:string :string}
+   :throws [:string]}
   ``Build this composition's assets — the body of `void assets build`:
   compile the stylesheet when `[:html :assets :tailwind]` names one,
   then fingerprint everything under `:root` into `:out` and write the
@@ -388,6 +478,7 @@
          manifest)})
 
 (defn- start-network!
+  {:params [] :ret :nil}
   ``Start whatever provides `:void/tls` in this composition, if anything
   does.
 

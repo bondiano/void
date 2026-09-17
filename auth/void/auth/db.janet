@@ -80,7 +80,13 @@
    :tokens {:table "auth_tokens"}
    :challenges {:table "auth_challenges"}})
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:users @{:keyword :any} :tokens @{:keyword :any}
+          :challenges @{:keyword :any} & r}}
+  "The [:auth-db] slice, defaulted key by key so an application that
+  overrides one column keeps the rest."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   (each key [:users :tokens :challenges]
     (put c key (merge (defaults key) (get cfg key {}))))
@@ -89,6 +95,7 @@
 # -- DDL as data ---------------------------------------------------------
 
 (defn tables
+  {:params [(or {:keyword :any} :nil)] :ret [{:keyword :any}]}
   ``The two tables void owns, as `void/db/builder` statements — put
   them in a migration of the application's own:
 
@@ -126,6 +133,7 @@
    {:create-index (string challenges "_expires_idx") :on challenges :columns [:expires]}])
 
 (defn drop-tables
+  {:params [(or {:keyword :any} :nil)] :ret [{:drop-table :any}]}
   "The other direction, for a migration's `down`."
   [&opt cfg]
   (def c (slice cfg))
@@ -134,22 +142,39 @@
 
 # -- helpers -------------------------------------------------------------
 
-(defn- json-out [value]
+(defn- json-out
+  {:params [:any] :ret :string? :throws [:string]}
+  "A value as the JSON text a column stores, or nil for nothing worth
+  a row — an empty list or dict reads back the same as absent."
+  [value]
   (if (or (nil? value) (and (indexed? value) (empty? value)) (and (dictionary? value) (empty? value)))
     nil
     (json/encode value)))
 
-(defn- json-in [text]
+(defn- json-in
+  {:params [:any] :ret :any}
+  "The value behind a JSON column, or nil for an empty or unparseable
+  one — a data problem here is never worth a 500."
+  [text]
   (when (and text (not (empty? (string text))))
     (def [ok value] (protect (json/decode text true)))
     (when ok value)))
 
-(defn- column [cfg key]
+(defn- column
+  {:params [{:keyword :any} :keyword] :ret :keyword}
+  "One config key of `cfg`, as the keyword `void/db` addresses a
+  column by."
+  [cfg key]
   (keyword (get cfg key)))
 
 # -- the user store ------------------------------------------------------
 
 (defn user-store
+  {:params [{:table :any :id-column :any :subject-kind :any
+             :claims-columns (or @[:any] :nil) :email-column :any
+             :username-column :any :password-column :any & r}]
+   :ret {:name :keyword :table :keyword :find :function :secret :function
+         :subject :function :claims :function}}
   ``A user store over an existing table. Reads only: this plugin never
   writes to a table it did not create, so `:update-secret` is absent
   and a rehash-on-login is the application's to perform.``
@@ -158,8 +183,15 @@
   (def id-col (column cfg :id-column))
   (def kind (cfg :subject-kind))
   (def claims-cols (map keyword (get cfg :claims-columns [])))
-  (defn subject-of [row] (string kind ":" (get row id-col)))
-  (defn column-for [by]
+  (defn subject-of {:params [{:keyword :any}] :ret :string}
+    "This row's identity subject — the configured kind, colon, id column."
+    [row] (string kind ":" (get row id-col)))
+  (defn column-for
+    {:params [:keyword] :ret :keyword?}
+    "The column a selector's `:by` addresses, or nil for a selector
+    this table has no column for — the WHERE clause a login form does
+    not get to choose."
+    [by]
     (case by
       :subject id-col
       :id id-col
@@ -198,10 +230,20 @@
 # -- the token store -----------------------------------------------------
 
 (defn token-store
+  {:params [{:table :any & r}]
+   :ret {:name :keyword :table :keyword :shared? :boolean :find :function
+         :put :function :delete :function :touch :function :list :function}}
   "An API-token store over the table `tables` creates."
   [cfg]
   (def table (keyword (cfg :table)))
-  (defn row->record [row]
+  (defn row->record
+    {:params [(or {:keyword :any} :nil)]
+     :ret (or {:id :any :digest :any :subject :any :name :any :scopes @[:keyword]
+               :claims {:keyword :any} :created :any :expires :any :used :any}
+              :nil)}
+    "A token row as the store contract's record — scopes back as
+    keywords, whichever store answers."
+    [row]
     (when row
       {:id (row :id)
        :digest (row :digest)
@@ -248,6 +290,9 @@
 # -- the challenge store -------------------------------------------------
 
 (defn challenge-store
+  {:params [{:table :any & r}]
+   :ret {:name :keyword :table :keyword :shared? :boolean
+         :put :function :take :function :sweep :function}}
   "A store for magic links and one-time codes, single-use by
   transaction."
   [cfg]

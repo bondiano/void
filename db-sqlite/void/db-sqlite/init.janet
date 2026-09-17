@@ -44,6 +44,7 @@
 (def tx-modes "See driver/tx-modes — the :isolation values." sqlite/tx-modes)
 
 (defn use-module!
+  {:params [:table] :ret :table}
   ``Hand the driver the janet-lang/sqlite3 module instead of letting it
   `require` one. There is exactly one caller: a single binary
   (docs/DEPLOY.md), which has the module linked into the executable and
@@ -91,6 +92,7 @@
    :tx-mode :immediate})
 
 (defn pool-size
+  {:params [(or {:config {:values :any & r} & r} :nil)] :ret :number}
   ``The [:db :pool :size] void/db will run with (1 when unknown).
 
   The boot is an argument because the component has one — `:deps
@@ -103,6 +105,14 @@
   (get-in boot [:config :values :db :pool :size] 1))
 
 (defn pragmas
+  {:params [{:busy-timeout :number?
+             :foreign-keys :boolean?
+             :journal-mode :keyword?
+             :synchronous :keyword?
+             :pragmas (or {:keyword :any} :nil)
+             & r}
+            :boolean?]
+   :ret @[[:keyword :any]]}
   ``The pragmas applied to every connection, in order: the timeout
   first (so the rest can wait for a busy database), then the declared
   ones, then whatever [:db-sqlite :pragmas] adds. An in-memory
@@ -110,7 +120,12 @@
   skipped there.``
   [cfg &opt memory?]
   (def out @[])
-  (defn add [pragma key]
+  (defn add
+    {:params [:keyword :keyword] :ret (or :nil @[[:keyword :any]])}
+    "Push [pragma key-in-cfg] onto `out` when `cfg` sets `key`, dropping
+    it silently otherwise — an unconfigured pragma is left at sqlite's
+    own default rather than forced."
+    [pragma key]
     (def v (get cfg key))
     (unless (nil? v) (array/push out [pragma v])))
   # the in-C busy handler blocks the whole event loop while it waits,

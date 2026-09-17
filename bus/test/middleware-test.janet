@@ -5,10 +5,19 @@
 
 (log/set-level! "void" :fatal)
 
-(defn- msg [&opt extra]
+(defn- msg
+  {:params [(or :nil {:keyword :any})] :ret @{:id :string :topic :keyword :payload :any
+                                               :meta :table & r}}
+  "A ready-made message, with `extra` merged over it."
+  [&opt extra]
   (merge (message/make :t/x {:n 1}) (or extra {})))
 
-(defn- run [m handler &opt in opts]
+(defn- run
+  {:params [{:wrap (fn [:any :any] :any) & r} (fn [:any] :any) :any (or :nil {:keyword :any})]
+   :ret :any}
+  "Run one middleware around `handler`, on `in` (default a fresh
+  message) with `opts` (default none)."
+  [m handler &opt in opts]
   (((m :wrap) handler (or opts {})) (or in (msg))))
 
 # -- the phase scale is void/http's ---------------------------------------
@@ -23,7 +32,13 @@
 # -- order: lowest phase outermost ---------------------------------------
 
 (def trace @[])
-(defn- marker [name phase]
+(defn- marker
+  {:params [:keyword :number]
+   :ret {:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+         :named :boolean :when (or :nil (fn [:any] :boolean)) & r}}
+  "A middleware that records its own name entering and leaving,
+  in `trace` — what asserts the chain's order."
+  [name phase]
   (mw/normalize
     {:name name :phase phase
      :wrap (fn [handler _]

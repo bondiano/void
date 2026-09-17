@@ -38,6 +38,10 @@
 # -- the desk's changes, onto the bus ------------------------------------
 
 (defn- record-change!
+  {:params [{:action :keyword :subject :any :resource :keyword :id :any
+             :before (or {:any :any} :nil) :after (or {:any :any} :nil) & r}]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   ``Turn one `:void.admin/changed` announcement into a bus message,
   which is the entire integration: void/admin does not know what a bus
   is, ./audit.consumer does not know what an admin is, and the trail

@@ -22,17 +22,30 @@
 
 # -- the application -----------------------------------------------------
 
-(defn who [req]
+(defn who
+  {:params [{:keyword :any}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The current subject, or \"nobody\" — the route every strategy in
+  this suite is checked against."
+  [req]
   (ring/text 200 (or (auth/subject) "nobody")))
 
-(defn login [req]
+(defn login
+  {:params [{:form (or {:any :any} :nil) & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
+  "A login form handler: password-check the submitted form, and sign
+  in on success."
+  [req]
   (def result (auth/check-password (state/users) (req :form)))
   (if-let [id (result :identity)]
     (do (auth-http/login! req id)
         (ring/text 200 (string "welcome " (id :subject))))
     (ring/text 401 (string "no: " (result :reason)))))
 
-(defn logout [req]
+(defn logout
+  {:params [{:session :any & r}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Sign the current session out."
+  [req]
   (auth-http/logout! req)
   (ring/text 200 "bye"))
 
@@ -57,7 +70,10 @@
 
 (def plugins ["void/http/init" "void/crypto/init" "void/auth/init" "void/auth/http" app])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env @{:any :any} :cli {:keyword :any}}}
+  "The composition config, with `extra` merged into the :cli slice."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}
                 :http {:port 0 :session {:enabled true} :access-log false}
@@ -243,7 +259,10 @@
 # what local-path? passes is where the visitor goes, everything else is
 # the default.
 
-(defn- with-next [raw]
+(defn- with-next
+  {:params [:any] :ret @{:query @{:any :any}}}
+  "A request whose query carries `raw` as `next` (or nothing, for nil)."
+  [raw]
   @{:query (if (nil? raw) @{} @{"next" raw})})
 
 (assert (= "/dash" (auth-http/safe-next (with-next "/dash")))

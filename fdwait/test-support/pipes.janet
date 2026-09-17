@@ -12,6 +12,7 @@
 (ffi/defbind-alias close c-close :int [fd :int])
 
 (defn make
+  {:params [] :ret [:number :number] :throws [:string]}
   "A fresh pipe as [read-fd write-fd]."
   []
   (def cell (ffi/malloc 8))
@@ -21,11 +22,13 @@
     [(ffi/read :int cell 0) (ffi/read :int cell 4)]))
 
 (defn put!
+  {:params [:number] :ret :abstract}
   "Write one byte into a pipe's write end."
   [fd]
   (c-write fd @"x" 1))
 
 (defn take!
+  {:params [:number] :ret :string}
   "Read one byte from a pipe's read end; the string read."
   [fd]
   (def buf (buffer/new-filled 1))
@@ -34,4 +37,7 @@
   (def n (int/to-number (c-read fd buf 1)))
   (string (buffer/slice buf 0 (max 0 n))))
 
-(defn close! [fd] (c-close fd))
+(defn close!
+  {:params [:number] :ret :number}
+  "Close one end of a pipe."
+  [fd] (c-close fd))

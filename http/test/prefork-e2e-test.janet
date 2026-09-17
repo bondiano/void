@@ -15,7 +15,13 @@
   (os/spawn ["janet" "test-support/fixtures/prefork-app.janet"] :ep
             (merge (os/environ) {"VOID_TEST_PORT" (string port)})))
 
-(defn- try-get [path]
+(defn- try-get
+  {:params [:string] :ret (or :buffer :nil)}
+  "One best-effort GET against the shared port: the raw response
+  bytes, or nil if nothing is listening yet or the connection failed
+  — the boot-wait and drain-wait loops poll this rather than treating
+  a refused connection as a test failure."
+  [path]
   (def [ok resp]
     (protect
       (with [conn (net/connect "127.0.0.1" (string port))]

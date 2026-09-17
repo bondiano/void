@@ -4,7 +4,12 @@
 
 # -- sha1, against the vectors that define it ----------------------------
 
-(defn- hex [s] (string/join (seq [b :in s] (string/format "%02x" b))))
+(defn- hex
+  {:params [:string] :ret :string}
+  "A byte string as lowercase hex, for comparing against a published
+  test vector."
+  [s]
+  (string/join (seq [b :in s] (string/format "%02x" b))))
 
 (each [input want]
   [["" "da39a3ee5e6b4b0d3255bfef95601890afd80709"]
@@ -30,7 +35,12 @@
   (assert (not (handshake/valid-key? bad))
           (string/format "%q is not a Sec-WebSocket-Key" bad)))
 
-(defn- request [&opt headers method]
+(defn- request
+  {:params [(or @{:string :any} :nil) :keyword?]
+   :ret @{:method :keyword :path :string :headers @{:string :any}}}
+  "A well-formed upgrade request, `headers` merged over the defaults
+  that make it one."
+  [&opt headers method]
   @{:method (or method :get)
     :path "/live"
     :headers (merge @{"upgrade" "websocket"
@@ -88,7 +98,11 @@
 
 # -- the client's side of the same check ---------------------------------
 
-(defn- answer [&opt over status]
+(defn- answer
+  {:params [(or @{:string :any} :nil) :number?]
+   :ret @{:status :number :message :string :headers @{:string :any}}}
+  "A well-formed 101 handshake answer, `over` merged over its headers."
+  [&opt over status]
   @{:status (or status 101)
     :message "Switching Protocols"
     :headers (merge @{"upgrade" "websocket"

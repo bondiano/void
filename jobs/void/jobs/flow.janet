@@ -50,7 +50,10 @@
    :max-attempts true :backoff true :timeout true :unique true
    :unique-ttl true :group true :delay true :at true})
 
-(defn- check-spec [spec]
+(defn- check-spec
+  {:params [:any] :ret (or @[:any] [:any])}
+  "Validate a flow node's shape and return its :children (or [])."
+  [spec]
   (unless (dictionary? spec)
     (errorf "a flow node must be a dictionary {:job :args :children}, got %q" spec))
   (unless (keyword? (get spec :job))
@@ -65,14 +68,21 @@
     (errorf "flow node %q: :children must be a tuple of nodes, got %q" (spec :job) cs))
   cs)
 
-(defn- enqueue-opts [spec extra]
+(defn- enqueue-opts
+  {:params [{:keyword :any} {:keyword :any}] :ret {:keyword :any}}
+  "The subset of `spec`'s keys that `enqueue-with` takes, merged over `extra`."
+  [spec extra]
   (def out (table ;(kvs extra)))
   (each k [:queue :priority :max-attempts :backoff :timeout
            :unique :unique-ttl :group :delay :at]
     (when (in spec k) (put out k (get spec k))))
   (table/to-struct out))
 
-(defn- enqueue-node [spec parent-id]
+(defn- enqueue-node
+  {:params [{:job :keyword & r} :string?] :ret @{:keyword :any} :throws [:string]}
+  "Enqueue one flow node and, recursively, its children, pointing each
+  child back at the parent it was just given."
+  [spec parent-id]
   (def children (check-spec spec))
   (def n (length children))
   (def parent
@@ -85,6 +95,7 @@
   parent)
 
 (defn flow
+  {:params [{:job :keyword & r}] :ret @{:keyword :any} :throws [:string]}
   ``Enqueue a job graph and return the root record. Every node takes
   the keys `enqueue-with` takes, plus :children — nodes of the same
   shape, nested as deeply as the work is.
@@ -109,6 +120,7 @@
 (def children "See state/children — what this job's children returned." state/children)
 
 (defn pending-children
+  {:params [:string] :ret [:any]}
   "The records of `id`'s children that have not finished yet — the
   reader behind `void jobs show` on a waiting parent."
   [id]

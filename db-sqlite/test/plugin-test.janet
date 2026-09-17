@@ -13,7 +13,12 @@
 (def sandbox (string (os/cwd) "/.tmp-plugin-test-" (os/time)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove a file or directory, quietly doing nothing when
+  the path is already gone — the sandbox cleanup every fixture defers
+  to."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))
@@ -24,7 +29,11 @@
 
 (def plugins ["void/db/init" "void/db-sqlite/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env @{:keyword :any} :cli @{:keyword :any}}}
+  "The composition's config: a pool of two and a quiet query log,
+  merged with whatever `extra` this test wants to override or add."
+  [extra]
   {:env @{}
    :cli (merge {:db {:pool {:size 2} :n1-guard :strict}
                 # plugin/start! wires the logger from config; the query

@@ -14,25 +14,48 @@
 
 (def seen-on-response @[])
 
-(defn hello [req] (ring/text 200 "hello"))
+(defn hello
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "The plain-text baseline route: no session, no body, nothing but
+  200 hello — the control every other assertion in this suite is
+  measured against."
+  [req] (ring/text 200 "hello"))
 
-(defn whoami [req]
+(defn whoami
+  {:params [@{:session @{:n :number? & r} & r}] :ret @{:status :number :body :string & r}}
+  "Bumps and reports the visit counter on the request's session table
+  — the handler the cookie-jar assertions drive twice to prove the
+  session survives across injects."
+  [req]
   (put (req :session) :n (inc (get (req :session) :n 0)))
   (ring/text 200 (string "visit " (get-in req [:session :n]))))
 
-(defn echo-json [req]
+(defn echo-json
+  {:params [@{:parsed-body (or @{:string :any} :nil) & r}] :ret @{:status :number :headers @{:string :string} :body :string}}
+  "Echoes the :title field the test body codec decoded, to prove the
+  codec ran and its result reached the handler as :parsed-body."
+  [req]
   {:status 200
    :headers @{"content-type" "application/json"}
    :body (string "{\"got\":\"" (get-in req [:parsed-body "title"] "?") "\"}")})
 
 # a route that speaks its own wire format: the body reaches it as bytes
-(defn raw-echo [req]
+(defn raw-echo
+  {:params [@{:body :string :parsed-body :any & r}] :ret @{:status :number :body :string & r}}
+  "Reports the raw body length and whether the parsing middleware ran
+  — the :void.http/body :raw route this suite uses to prove that
+  wrapper is absent from the chain rather than merely skipped."
+  [req]
   (ring/text 200 (string "raw " (length (req :body))
                          (if (nil? (req :parsed-body)) " unparsed" " parsed"))))
 
 (var decoded 0)
 
-(defn events [req]
+(defn events
+  {:params [:any] :ret :any}
+  "An SSE route: two ticks over a coroutine, for the wire serializer
+  to frame and the inject client's sse-events to parse back out."
+  [req]
   (ring/sse (coro
               (yield {:event "tick" :data "one"})
               (yield {:data "two"}))))

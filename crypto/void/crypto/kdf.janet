@@ -60,7 +60,11 @@
 
 # -- the computation, over an already-open library -----------------------
 
-(defn- bound [handle name ret & argtypes]
+(defn- bound
+  {:params [:abstract :string :any :any] :ret (fn [& args] :any) :throws [:string]}
+  "Look up one symbol in an already-open library and wrap it as a
+  callable ffi function under the given return and argument types."
+  [handle name ret & argtypes]
   (def ptr (ffi/lookup handle name))
   (unless ptr (errorf "%s is not in this libcrypto" name))
   (def sig (ffi/signature :default ret ;argtypes))
@@ -77,6 +81,7 @@
 (def- param-unsigned-integer 2)
 
 (defn- ossl-params
+  {:params [[[:string :keyword :any]]] :ret [:buffer @[(or :string :buffer)]]}
   ``Build an OSSL_PARAM array from [name kind value] triples, kind
   being :octets or :uint, terminated by OSSL_PARAM_END. Returns
   [buffer roots] — `roots` holds every janet value the array points
@@ -129,10 +134,15 @@
       (errorf "unknown OSSL_PARAM kind %q" kind)))
   [buf roots])
 
-(defn- digest-md [handle name]
+(defn- digest-md
+  {:params [:abstract :string] :ret :pointer :throws [:string]}
+  "The EVP_MD pointer a named `EVP_sha*` accessor returns."
+  [handle name]
   ((bound handle name :ptr)))
 
 (defn derive-with
+  {:params [:abstract {:kind :keyword :password (or :string :buffer) :salt (or :string :buffer) :length :number & r}]
+   :ret :string :throws [:string]}
   ``One derivation over an already-open library handle. `spec` is
   plain data — this function is what runs inside the worker thread,
   so it may not touch this module's state or ./lib's bindings.
@@ -215,6 +225,7 @@
 # -- running it somewhere sensible ---------------------------------------
 
 (defn thread-work
+  {:params [[:abstract :string {:kind :keyword & r}]] :ret :nil}
   ``The worker thread's body: open the library by path, derive, answer
   on the channel. Takes plain data only (see the module docstring) —
   `payload` is [channel library-path spec].``
@@ -224,6 +235,7 @@
   (ev/give ch (if ok [:ok res] [:error (string res)])))
 
 (defn derive
+  {:params [{:kind :keyword & r}] :ret :string :throws [:string]}
   ``Derive a key from `spec` — on a worker thread unless `in-thread`
   is false. Returns raw bytes.``
   [spec]
@@ -238,6 +250,9 @@
 # -- the three functions -------------------------------------------------
 
 (defn scrypt
+  {:params [(or :string :buffer) (or :string :buffer)
+            (or {:n :number? :r :number? :p :number? :length :number? :maxmem :number? & r} :nil)]
+   :ret :string :throws [:string]}
   ``scrypt (RFC 7914) over a password and a salt. Options override
   `defaults`: :n (CPU/memory cost, a power of two), :r, :p, :length,
   :maxmem.``
@@ -246,6 +261,9 @@
                  {:password password :salt salt})))
 
 (defn pbkdf2
+  {:params [(or :string :buffer) (or :string :buffer)
+            (or {:iterations :number? :length :number? :digest :keyword? & r} :nil)]
+   :ret :string :throws [:string]}
   "PBKDF2-HMAC over a password and a salt. Options: :iterations,
   :length, :digest (:sha256 :sha512 :sha1)."
   [password salt &opt opts]
@@ -253,6 +271,10 @@
                  {:password password :salt salt})))
 
 (defn argon2id
+  {:params [(or :string :buffer) (or :string :buffer)
+            (or {:t :number? :m :number? :lanes :number? :length :number?
+                 :secret :any :ad :any & r} :nil)]
+   :ret :string :throws [:string]}
   ``argon2id over a password and a salt — OpenSSL 3.2+ only, see
   `(crypto/algorithms)`. Options: :t (passes), :m (memory in KiB),
   :lanes, :length, :secret (a pepper the application holds and the
@@ -262,6 +284,7 @@
                  {:password password :salt salt})))
 
 (defn available?
+  {:params [:keyword] :ret :boolean}
   "Can this library derive with `kind`?"
   [kind]
   (truthy? (get (lib/algorithms) kind)))

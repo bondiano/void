@@ -3,7 +3,11 @@
 (import void/proto/parse :as parse)
 (import void/proto/descriptor :as desc)
 
-(defn- refused [source why]
+(defn- refused
+  {:params [:string :string] :ret :string}
+  "Assert that parsing `source` fails, and return the error as a
+  string."
+  [source why]
   (def [ok err] (protect (parse/parse source "<test>")))
   (assert (not ok) why)
   (if (string? err) err (string/format "%q" err)))

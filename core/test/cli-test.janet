@@ -1,6 +1,10 @@
 (import ../void/core/cli :as cli)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :any}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error for further assertions."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
@@ -96,7 +100,12 @@
 
 # -- call ----------------------------------------------------------------
 
-(defn- called [command f args] (cli/call command f [:instance] args))
+(defn- called
+  {:params [{:name :keyword & r} (fn [& :any] :any) (or @[:string] [:string])] :ret :any}
+  "Call `command` through `cli/call` with a fixed `[:instance]`
+  instances tuple, so each test only has to name what varies."
+  [command f args]
+  (cli/call command f [:instance] args))
 
 (assert (deep= [:instance "a" "b"]
                (called {:name :raw} (fn [& a] a) ["a" "b"]))

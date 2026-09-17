@@ -11,6 +11,9 @@
 (def key "test-support/certs/server-key.pem")
 
 (defn start
+  {:params [(fn [a] b)]
+   :ret {:port :number :listener :abstract :ctx :pointer}
+   :throws [:string]}
   "Listen on an ephemeral loopback port; `handler` gets each
   connection as an accept-side TLS stream. Returns {:port :listener
   :ctx}; `stop` closes it."
@@ -38,6 +41,9 @@
   {:port port :listener listener :ctx ctx})
 
 (defn stop
+  {:params [@{:listener :abstract :ctx :pointer & r}] :ret :nil}
+  "Stop a server `start` returned: close the listener and its TLS
+  context."
   [srv]
   (protect (:close (srv :listener)))
   (stream/close-context (srv :ctx))

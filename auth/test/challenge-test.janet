@@ -86,7 +86,12 @@
 
 (log/set-level! "void" :fatal)
 
-(defn- with-deliverers [ds f]
+(defn- with-deliverers
+  {:params [(or @[{:name :keyword :fn :function}] [{:name :keyword :fn :function}]) (fn [] :any)]
+   :ret :any}
+  "Run `f` with `ds` standing in for the composition's :void.auth/deliver
+  contributions, over the same challenge store the rest of the suite uses."
+  [ds f]
   (with-dyns [state/auth-dyn (state/make {:challenges codes :deliver ds})]
     (f)))
 

@@ -47,6 +47,7 @@
 (def- fallback-mime "application/octet-stream")
 
 (defn mime-type
+  {:params [:string] :ret :string}
   "content-type for a file path, by extension."
   [path]
   (def ext
@@ -62,6 +63,7 @@
       :main (% (any :chr))}))
 
 (defn path-decode
+  {:params [:string] :ret :string?}
   "Percent-decode a URL path (no +-to-space — that is query syntax).
   Returns nil on a malformed escape."
   [path]
@@ -69,6 +71,7 @@
     (first m)))
 
 (defn safe-join
+  {:params [:string :string?] :ret :string?}
   ``Resolve a decoded URL path under a root directory, or nil when the
   path escapes it (.. segments) or contains NUL. Empty segments
   collapse ("//" is fine, it cannot climb).``
@@ -80,6 +83,7 @@
       (string root "/" (string/join segs "/")))))
 
 (defn etag
+  {:params [{:size :number :modified :number & r}] :ret :string}
   "Strong ETag from a file's stat: \"<size>-<mtime>\"."
   [st]
   (string/format "\"%x-%x\"" (st :size) (math/trunc (* 1000 (st :modified)))))
@@ -91,6 +95,7 @@
         -1)))
 
 (defn- parse-range
+  {:params [:string? :number] :ret (or :nil (enum :unsatisfiable) [:number :number])}
   "One satisfiable [start end-inclusive] from a Range header against a
   file size, nil to serve the whole file, :unsatisfiable for a 416.
   Multi-range requests are ignored (whole file) — valid per RFC 9110."
@@ -112,6 +117,12 @@
             [start (if (= :eof end) (dec size) (min end (dec size)))]))))))
 
 (defn file-response
+  {:params [{:headers {:any :any} & r} :string
+            (or {:mime :string? :max-file-size :number?
+                 :headers (or {:any :any} :nil) & r}
+                :nil)]
+   :ret (or :nil @{:status :number :body (or :nil :string) :headers @{:any :any}})
+   :throws [:string]}
   ``Serve one file: 200 (or 206 on a satisfiable Range), 304 on a
   matching If-None-Match, 416 with content-range on an unsatisfiable
   range, nil when the path is not a regular file. Options: :mime
@@ -150,6 +161,11 @@
                                                         start end (st :size))}))))))))
 
 (defn wrap-static
+  {:params [(fn [{:path :string :method :keyword :headers {:any :any} & r}] :any)
+            {:root :string :prefix :string? :index :string? :mime :string?
+             :max-file-size :number? :headers (or {:any :any} :nil) & r}]
+   :ret (fn [{:path :string :method :keyword :headers {:any :any} & r}] :any)
+   :throws [:string]}
   ``Middleware serving files from :root under :prefix (default "/") in
   front of the handler; GET and HEAD only. A directory path serves its
   :index (default "index.html") when present. Falls through to the

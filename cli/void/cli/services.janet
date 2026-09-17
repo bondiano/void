@@ -24,6 +24,7 @@
    "logs" ["logs" "--follow" "--tail" "100"]})
 
 (defn plan
+  {:params [:string :string] :ret [:string] :throws [:string]}
   "The full argv for one subcommand (extra words pass through to
   compose). Throws by name on a subcommand that is not one."
   [action & extra]
@@ -34,6 +35,7 @@
   ["docker" "compose" "-f" compose-file ;words ;extra])
 
 (defn- project-name
+  {:params [] :ret :string}
   "The compose template's one hole, from the directory this runs in —
   squeezed to the [a-z0-9-] a project name is made of."
   []
@@ -45,14 +47,24 @@
       (buffer/push-string out c)))
   (if (empty? out) "app" (string out)))
 
-(defn- docker-missing []
+(defn- docker-missing
+  {:params [] :ret :never :throws [:string]}
+  "Explain why `docker` has to be on PATH for this command to run."
+  []
   (error "docker is not on PATH — `void services` is docker compose with the file name filled in; install docker, or run postgres/redis your own way (the file says which ports the app expects)"))
 
-(defn- file-missing []
+(defn- file-missing
+  {:params [] :ret :never :throws [:string]}
+  "Explain that the compose file `void new` writes is missing here, and
+  how to get an equivalent one without it."
+  []
   (errorf "no %s here — `void new` writes it; for an existing project, print the same template and keep what you like:\n  void services print > %s"
           compose-file compose-file))
 
-(defn- on-path? [name]
+(defn- on-path?
+  {:params [:string] :ret :boolean? :narrows :any}
+  "Whether an executable of this name is somewhere on PATH."
+  [name]
   (when-let [path-env (os/getenv "PATH")]
     (some (fn [dir]
             (unless (empty? dir)
@@ -60,6 +72,7 @@
           (string/split ":" path-env))))
 
 (defn run
+  {:params [[:string]] :ret (or :nil :number) :throws [:string]}
   "The command. `print` writes the rendered template to stdout and
   nothing else; the rest exec docker compose and return its exit code
   (non-zero exits non-zero, so CI can trust it)."

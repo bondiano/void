@@ -13,6 +13,10 @@
 # -- driving the decoder over a split stream -----------------------------
 
 (defn- decode-split
+  {:params [:string :number
+            (or {:max-body (or :number :nil) :max-line (or :number :nil) & r} :nil)
+            :number?]
+   :ret [:struct :string :number]}
   "Feed `raw` into a fresh buffer `piece` bytes at a time, calling the
   decoder whenever it asked for more (or at the start). Returns
   [final-state body calls] where calls counts decoder invocations."
@@ -23,7 +27,11 @@
   (var st (wire/chunked-start start))
   (var calls 0)
   (var i 0)
-  (defn decode! []
+  (defn decode!
+    {:params [] :ret :buffer}
+    "Runs the decoder once more over whatever `buf` holds, appending
+    what it emitted to `body`."
+    []
     (++ calls)
     (set st (wire/decode-chunked buf st limits))
     (buffer/push body (st :out)))
@@ -39,11 +47,16 @@
   [st (string body) calls])
 
 (defn- every-split
+  {:params [:string] :ret @[:number]}
   "Every piece size from 1 to the whole stream."
   [raw]
   (range 1 (inc (length raw))))
 
 (defn- check-all-splits
+  {:params [:string :string
+            {:phase :keyword :body :string? :pos :number? :reason :keyword?}
+            (or {:max-body (or :number :nil) :max-line (or :number :nil) & r} :nil)]
+   :ret :nil}
   "Decode `raw` at every split and assert each outcome matches `expect`:
   `:phase`, and `:body`/`:pos` or `:reason` as given."
   [label raw expect &opt limits]
@@ -172,6 +185,7 @@
 # -- read-chunked: the caller's I/O, not the decoder's -------------------
 
 (defn- feeder
+  {:params [:buffer :string :number :any] :ret (fn [:number] :any)}
   "A `want` that appends `raw` to buf `piece` bytes at a time until
   buf is at least n long, or throws `at-eof` when raw runs out —
   what a socket read loop does, without the socket."

@@ -65,26 +65,47 @@
     :pings 0 :pongs 0 :dropped 0 :overflows 0 :errors 0})
 
 (defn stats
+  {:params [] :ret {:keyword :number}}
   "What this process's websockets have done since it started."
   []
   (table/to-struct counters))
 
 (defn reset-stats!
+  {:params [] :ret :nil}
   "Zero the counters — for a test that asserts on them."
   []
   (eachk k counters (put counters k 0))
   nil)
 
-(defn- count! [key &opt n]
+(defn- count!
+  {:params [:keyword :number?] :ret @{:keyword :number}}
+  "Bump one counter by `n` (default 1)."
+  [key &opt n]
   (put counters key (+ (get counters key 0) (or n 1))))
 
 (var- next-id 0)
 
-(defn- now [] (os/clock :monotonic))
+(defn- now
+  {:params [] :ret :number}
+  "The monotonic clock, in seconds — what every age and timeout in
+  this module is measured against."
+  []
+  (os/clock :monotonic))
 
 # -- construction --------------------------------------------------------
 
 (defn make
+  {:params [:any (or {:request :any :protocol :any :registry :any
+                      :max-frame :number? :max-message :number?
+                      :send-queue :number? :overflow :keyword?
+                      :close-timeout :number? & r}
+                     :nil)]
+   :ret @{:id :number :socket :any :request :any :protocol :any
+          :registry :any :config @{:keyword :any} :outbox :any
+          :state :keyword :rooms @{:keyword :any} :data @{:any :any}
+          :opened :number :last-recv :number :awaiting-pong :number?
+          :sent :number :received :number :dropped :number
+          :writer-done :boolean}}
   ``A connection value over an already-upgraded socket. `opts` carries
   the limits above plus:
     :request   the upgrade request — an application reads its session,
@@ -117,15 +138,25 @@
     :writer-done false})
 
 (defn open?
+  {:params [{:state :keyword & r}] :ret :boolean}
   "Is this connection still able to carry application messages?"
   [conn]
   (= :open (conn :state)))
 
 (defn closed?
+  {:params [{:state :keyword & r}] :ret :boolean}
+  "Is this connection past the closing handshake and its socket gone?"
   [conn]
   (= :closed (conn :state)))
 
 (defn info
+  {:params [{:id :number :state :keyword :protocol :any
+             :rooms @{:keyword :any} :opened :number :last-recv :number
+             :sent :number :received :number :dropped :number
+             :outbox :any & r}]
+   :ret {:id :number :state :keyword :protocol :any :rooms [:keyword]
+         :age :number :idle :number :sent :number :received :number
+         :dropped :number :queued :number}}
   "A snapshot of one connection, for a health endpoint, a log line or
   a test."
   [conn]
@@ -142,12 +173,25 @@
 
 # -- the outbound queue --------------------------------------------------
 
-(defn- drop-socket! [conn]
+(defn- drop-socket!
+  {:params [{:state :keyword :socket :any :outbox :any & r}]
+   :ret [:boolean :any]}
+  "End the connection at the socket: mark it closed, and best-effort
+  close the socket and the outbound queue underneath whatever is
+  still using them."
+  [conn]
   (put conn :state :closed)
   (protect (:close (conn :socket)))
   (protect (ev/chan-close (conn :outbox))))
 
-(defn- overflow! [conn]
+(defn- overflow!
+  {:params [{:dropped :number :config @{:keyword :any} :outbox :any
+             :id :number :socket :any :state :keyword & r}]
+   :ret :boolean}
+  "The outbound queue is full: count the drop and either report it (so
+  the caller skips this send) or close the connection, per
+  `[:ws :overflow]`. Always answers false — nothing was queued."
+  [conn]
   (count! :overflows)
   (put conn :dropped (inc (conn :dropped)))
   (count! :dropped)
@@ -163,6 +207,10 @@
       false)))
 
 (defn enqueue!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any & r}
+            (or :string :buffer)]
+   :ret :boolean}
   ``Put already-framed bytes on this connection's outbound queue.
   Returns true when queued, false when the connection is gone or the
   queue overflowed.
@@ -182,6 +230,8 @@
       true)))
 
 (defn abandon!
+  {:params [{:state :keyword :socket :any :outbox :any & r}]
+   :ret {:state :keyword :socket :any :outbox :any & r}}
   ``Drop the socket without a close frame. For a peer that has stopped
   answering pings there is nobody left to send a code to, and a close
   handshake with a dead connection is a five-second wait for nothing.``
@@ -200,6 +250,9 @@
   :void.ws/eof)
 
 (defn- writer
+  {:params [{:socket :any :outbox :any :id :number :state :keyword
+             :dropped :number :config @{:keyword :any} :writer-done :boolean & r}]
+   :ret [:boolean :any]}
   "The fiber that drains the outbound queue onto the socket, and the
   only place the socket is closed on an orderly end."
   [conn]
@@ -239,6 +292,10 @@
 # -- sending -------------------------------------------------------------
 
 (defn send-frame!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number & r}
+            :keyword (or :string :buffer :nil)]
+   :ret :boolean}
   "Frame and queue one message. `opcode` is a ./frame opcode keyword."
   [conn opcode &opt payload]
   (def queued (enqueue! conn (frame/encode opcode payload)))
@@ -248,6 +305,10 @@
   queued)
 
 (defn enqueue-message!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number & r}
+            (or :string :buffer)]
+   :ret :boolean?}
   ``Queue already-framed *data* bytes and count them as a message —
   what a broadcast uses, having framed the message once for everybody
   (./rooms). Returns true when queued.``
@@ -258,16 +319,28 @@
     true))
 
 (defn send!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number & r}
+            :any]
+   :ret :boolean}
   "Send a text message."
   [conn text]
   (send-frame! conn :text (string text)))
 
 (defn send-binary!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number & r}
+            (or :string :buffer)]
+   :ret :boolean}
   "Send a binary message."
   [conn bytes]
   (send-frame! conn :binary bytes))
 
 (defn ping!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number :awaiting-pong :any & r}
+            (or :string :buffer :nil)]
+   :ret :boolean}
   "Send a ping with an optional ≤125-byte payload."
   [conn &opt payload]
   (count! :pings)
@@ -275,12 +348,23 @@
   (send-frame! conn :ping payload))
 
 (defn pong!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number & r}
+            (or :string :buffer :nil)]
+   :ret :boolean}
   "Send an unsolicited pong — RFC 6455 §5.5.3 allows one as a
   unidirectional heartbeat."
   [conn &opt payload]
   (send-frame! conn :pong payload))
 
 (defn close!
+  {:params [{:state :keyword :outbox :any :dropped :number
+             :config @{:keyword :any} :id :number :socket :any
+             :sent :number & r}
+            (or :keyword :number :nil) :string?]
+   :ret {:state :keyword :outbox :any :dropped :number
+         :config @{:keyword :any} :id :number :socket :any
+         :sent :number & r}}
   ``Begin the closing handshake: queue a close frame and give the peer
   up to :close-timeout to answer before the socket is dropped.
   Idempotent — closing a closing connection does nothing.``
@@ -300,7 +384,10 @@
 
 # -- the reader ----------------------------------------------------------
 
-(defn- consume! [buf n]
+(defn- consume!
+  {:params [:buffer :number] :ret :buffer}
+  "Drop the first `n` bytes already consumed out of `buf`, in place."
+  [buf n]
   (if (>= n (length buf))
     (buffer/clear buf)
     (let [rest (string/slice buf n)]
@@ -308,6 +395,11 @@
       (buffer/push buf rest))))
 
 (defn- finish!
+  {:params [{:state :keyword :outbox :any :config @{:keyword :any}
+             :writer-done :boolean :socket :any :id :number & r}
+            {:code :number :name :keyword? :reason :string}
+            {:on-detach (or (fn [a] :any) :nil) :on-close (or (fn [a b] :any) :nil) & r}]
+   :ret {:code :number :name :keyword? :reason :string}}
   ``End the connection: let the writer put whatever is still queued —
   the close frame, above all — on the wire, then close.``
   [conn close-info handlers]
@@ -333,6 +425,11 @@
   close-info)
 
 (defn- protocol-close!
+  {:params [{:state :keyword :outbox :any :dropped :number
+             :config @{:keyword :any} :id :number :socket :any
+             :sent :number & r}
+            :number :string]
+   :ret {:code :number :name :keyword? :reason :string}}
   "Answer a protocol violation with the close code it names, and end."
   [conn code message]
   (when (= :open (conn :state))
@@ -343,7 +440,16 @@
                    message)))
   {:code code :name (get frame/close-names code) :reason message})
 
-(defn- run-handler [conn handlers key & args]
+(defn- run-handler
+  {:params [{:state :keyword :outbox :any :dropped :number
+             :config @{:keyword :any} :id :number :socket :any
+             :sent :number & r}
+            {:keyword (or (fn [a & b] :any) :nil)} :keyword :any]
+   :ret :any}
+  "Run a `handlers` callback if the spec set one, logging and closing
+  the connection with 1011 when it throws rather than letting the
+  failure reach the fiber that would take the whole connection with it."
+  [conn handlers key & args]
   (when-let [h (get handlers key)]
     (def [ok err] (protect (h conn ;args)))
     (unless ok
@@ -355,7 +461,20 @@
       # the failure was ours
       (close! conn :internal-error "handler error"))))
 
-(defn- serve* "`serve` with nothing bound around it."
+(defn- serve*
+  {:params [@{:id :number :socket :any :request :any :protocol :any
+             :registry :any :config @{:keyword :any} :outbox :any
+             :state :keyword :rooms @{:keyword :any} :data @{:any :any}
+             :opened :number :last-recv :number :awaiting-pong :number?
+             :sent :number :received :number :dropped :number
+             :writer-done :boolean & r}
+            {:on-open (or (fn [a] :any) :nil)
+             :on-message (or (fn [a b] :any) :nil)
+             :on-close (or (fn [a b] :any) :nil)
+             :on-detach (or (fn [a] :any) :nil) & r}
+            :string?]
+   :ret {:code :number :name :keyword? :reason :string}}
+  "`serve` with nothing bound around it."
   [conn handlers &opt leftover]
   (def sock (conn :socket))
   (def cfg (conn :config))
@@ -371,7 +490,15 @@
   (var frag-opcode nil)
   (def frag @"")
 
-  (defn handle-frame [f]
+  (defn handle-frame
+    {:params [{:fin :boolean :opcode :keyword :payload :string :size :number}]
+     :ret (or {:code :number :name :keyword? :reason :string} :nil)
+     :throws [{:ws/close :number :message :string}]}
+    "Count and dispatch one parsed frame: answer control frames here,
+    assemble a fragmented message across continuations, and hand a
+    complete one to `:on-message`. Returns the close info once the
+    peer's own close is answered, else nil."
+    [f]
     (def payload (f :payload))
     (count! :frames-in)
     (count! :bytes-in (length payload))
@@ -477,6 +604,18 @@
   (finish! conn result handlers))
 
 (defn serve
+  {:params [@{:id :number :socket :any :request :any :protocol :any
+             :registry :any :config @{:keyword :any} :outbox :any
+             :state :keyword :rooms @{:keyword :any} :data @{:any :any}
+             :opened :number :last-recv :number :awaiting-pong :number?
+             :sent :number :received :number :dropped :number
+             :writer-done :boolean & r}
+            {:on-open (or (fn [a] :any) :nil)
+             :on-message (or (fn [a b] :any) :nil)
+             :on-close (or (fn [a b] :any) :nil)
+             :on-detach (or (fn [a] :any) :nil) & r}
+            :string?]
+   :ret {:code :number :name :keyword? :reason :string}}
   ``Run one connection to its end: read frames, assemble messages,
   answer control frames and hand every complete message to
   `(:on-message handlers)`. Returns the close info

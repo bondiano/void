@@ -17,7 +17,12 @@
 
 # -- a client can connect and evaluate into the shared env ---------------
 
-(defn roundtrip [code]
+(defn roundtrip
+  {:params [:string] :ret :string}
+  "Connect to the test server, send `code` for evaluation, and return
+  its printed result (skipping the prompt lines the server sends
+  between messages)."
+  [code]
   (def s (net/connect :unix sock))
   (defer (:close s)
     (def send (msg/make-send s))

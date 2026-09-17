@@ -35,6 +35,7 @@
   temple/create)
 
 (defn render
+  {:params [(fn [a] :any) :any] :ret :buffer}
   "Run a compiled template with `args`, returning the output buffer."
   [tmpl args]
   (def buf @"")
@@ -43,6 +44,7 @@
   buf)
 
 (defn engine-render
+  {:params [(fn [a] :any) (or {:layout (or (fn [a] :any) :nil) & r} :nil)] :ret :buffer}
   "The :void.html/engine renderer: render the view template with the
   context as args; when the context carries a :layout template, render
   it with the view's output as :content."

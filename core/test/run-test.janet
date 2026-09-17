@@ -23,7 +23,11 @@
 (def proc (os/spawn @("janet" "test-support/run-app.janet") :p {:out :pipe :err :pipe}))
 (def out (proc :out))
 
-(defn read-until [pat deadline]
+(defn read-until
+  {:params [:string :number] :ret :buffer :throws [:string]}
+  "Read from the subprocess's stdout, accumulating into a buffer,
+  until `pat` appears or `deadline` seconds pass."
+  [pat deadline]
   (def buf @"")
   (ev/with-deadline deadline
     (while (not (string/find pat buf))

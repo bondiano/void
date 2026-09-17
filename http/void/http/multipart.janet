@@ -25,6 +25,7 @@
       :main (* :ows :token (any :param) :ows -1)}))
 
 (defn boundary
+  {:params [:string?] :ret :string?}
   "Extract the boundary from a multipart content-type header value, or
   nil when the header is not multipart or carries no boundary."
   [content-type]
@@ -37,7 +38,11 @@
           (set out (m (inc i)))))
       out)))
 
-(defn- parse-part-headers [chunk]
+(defn- parse-part-headers
+  {:params [:string] :ret @{:string :string}}
+  "Parse the header block ahead of one part's content (colon-separated
+  lines, no folding) into a table of lowercase names to trimmed values."
+  [chunk]
   (def headers @{})
   (each line (string/split "\r\n" chunk)
     (when-let [i (string/find ":" line)]
@@ -47,6 +52,7 @@
   headers)
 
 (defn content-disposition
+  {:params [:string?] :ret @{:keyword :string}}
   ``Parse a `Content-Disposition` header value into
   `{:type "form-data" :name "avatar" :filename "me.png"}` — the
   parameters as keywords, the disposition type under `:type`. Returns
@@ -65,10 +71,17 @@
         (put out (keyword (string/ascii-lower (m i))) (m (inc i))))))
   out)
 
-(defn- parse-disposition [headers]
+(defn- parse-disposition
+  {:params [@{:string :string}] :ret @{:keyword :string}}
+  "content-disposition over one part's already-parsed header table."
+  [headers]
   (content-disposition (get headers "content-disposition")))
 
 (defn parse
+  {:params [:string :string]
+   :ret @[{:name :string? :filename :string? :content-type :string?
+           :headers @{:string :string} :value :string}]
+   :throws [:string]}
   ``Parse a multipart body against its boundary into parts:
 
       [{:name "avatar" :filename "me.png"
@@ -105,6 +118,9 @@
   parts)
 
 (defn fields
+  {:params [(or @[{:name :string? :filename :string? :value :any & r}]
+                [{:name :string? :filename :string? :value :any & r}])]
+   :ret @{:string :any}}
   "Fold the non-file parts into a name -> value table (duplicate names
   accumulate into arrays), like a urlencoded form."
   [parts]
@@ -120,6 +136,9 @@
   out)
 
 (defn files
+  {:params [(or @[{:name :string? :filename :string? :value :any & r}]
+                [{:name :string? :filename :string? :value :any & r}])]
+   :ret @{:string :any}}
   ``Fold the file parts into a name -> part table (duplicate names
   accumulate into arrays) — the file half of what `fields` does for
   plain values. A file input left empty submits a part with an empty
@@ -141,6 +160,7 @@
 # -- building ------------------------------------------------------------
 
 (defn new-boundary
+  {:params [] :ret :string}
   ``A boundary no body will contain: a fixed prefix and sixteen random
   hex characters. Random rather than derived from the content, because
   a boundary chosen by scanning the parts would have to scan them all
@@ -149,13 +169,19 @@
   (string "----voidFormBoundary"
           (string/join (seq [x :in (os/cryptorand 8)] (string/format "%02x" x)))))
 
-(defn- quote-param [s]
+(defn- quote-param
+  {:params [:string] :ret :string}
+  "Quote and escape a value for a Content-Disposition parameter."
+  [s]
   # RFC 6266's quoted-string: a filename may carry a space, and a
   # backslash or a quote in one is escaped rather than refused —
   # the name comes from a caller who chose it, not from the wire
   (string "\"" (string/replace-all "\"" "\\\"" (string/replace-all "\\" "\\\\" (string s))) "\""))
 
 (defn part-head
+  {:params [{:name :string? :filename :string? :content-type :string?
+             :headers (or @{:any :any} :nil) & r}]
+   :ret :string :throws [:string]}
   ``The header block of one part, without the boundary line. `part` is
   the same table `parse` returns: `:name` (required), `:filename` and
   `:content-type` optional, plus any extra `:headers`.``
@@ -175,6 +201,13 @@
   (string out))
 
 (defn encode
+  {:params [(or @[{:name :string? :filename :string? :content-type :string?
+                   :value :any :headers (or @{:any :any} :nil) & r}]
+                [{:name :string? :filename :string? :content-type :string?
+                  :value :any :headers (or @{:any :any} :nil) & r}])
+            :string?]
+   :ret {:body :string :boundary :string :content-type :string}
+   :throws [:string]}
   ``Build a `multipart/form-data` body out of parts:
 
       (multipart/encode

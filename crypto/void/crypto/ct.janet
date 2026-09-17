@@ -17,6 +17,7 @@
 (import ./lib :as lib)
 
 (defn equal?
+  {:params [(or :string :buffer) (or :string :buffer)] :ret :boolean :throws [:string]}
   ``True when two byte sequences are equal, compared in time that does
   not depend on *where* they differ. Use it for every secret: tokens,
   signatures, one-time codes.``

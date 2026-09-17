@@ -11,18 +11,33 @@
 
 # -- a small app: hiccup pages, fragments, a temple view -----------------
 
-(defn base-layout [content context]
+(defn base-layout
+  {:params [:any (or {:title :any & r} :nil)] :ret @[:any]}
+  "The app's hiccup layout: a header link home, the content below."
+  [content context]
   (hiccup/html5
     [:head [:title (get context :title "void")]]
     [:body
      [:header [:a {:href "/"} "home"]]
      [:main content]]))
 
-(defn home [req]
+(defn home
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "The hiccup-engine page."
+  [req]
   (html/page [:h1 "orders"]
              {:layout base-layout :context {:title "orders"}}))
 
-(defn frag [req]
+(defn frag
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "A fragment response — no layout, for an htmx swap."
+  [req]
   (html/fragment [:span "just this"]))
 
 (def tmpl-view (temple/create "<h1>{{ (args :title) }}</h1>" "view"))
@@ -30,7 +45,13 @@
   (temple/create "<!DOCTYPE html><title>{{ (args :title) }}</title>{- (args :content) -}"
                  "layout"))
 
-(defn tmpl [req]
+(defn tmpl
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "The temple-engine page, per-response :engine override."
+  [req]
   (html/page tmpl-view
              {:engine :temple
               :layout tmpl-layout
@@ -46,7 +67,15 @@
             "<section>{- (html/render-string (args :field)) -}</section>")
     "form-view"))
 
-(defn tmpl-with-helper [req]
+(defn tmpl-with-helper
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "A temple view that renders a framework helper (form/field) as
+  hiccup and splices the result — the bridge ADR-0050 §8 keeps
+  instead of a second, string-building set of helpers."
+  [req]
   (html/page tmpl-form
              {:engine :temple
               :layout nil
@@ -55,7 +84,11 @@
                                  "<script>"
                                  [{:path [:email] :code :missing}])}}))
 
-(defn asset-url [req]
+(defn asset-url
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}} :throws [:string]}
+  "The resolved asset URL, as the response body — dev passthrough
+  until the composition builds a manifest."
+  [req]
   (ring/text 200 (html/asset "css/app.css")))
 
 (def app-routes
@@ -171,7 +204,10 @@ echo "body{color:red}" > "$out"
               :input (string tmp "/src/app.css")
               :output (string tmp "/assets/app.css")}})
 
-(defn- boot-with [assets]
+(defn- boot-with
+  {:params [(or {:any :any} :nil)] :ret :any :throws [:string]}
+  "Boot the test composition with this [:html :assets] slice."
+  [assets]
   (plugin/start! {:plugins ["void/http/init" "void/html/init" app-manifest]
                   :profile :test
                   :config {:env @{} :cli {:http {:port 0} :html {:assets assets}}}}))

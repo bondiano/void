@@ -33,7 +33,13 @@
 
 # -- ordinary responses --------------------------------------------------
 
-(defn- decorate [origin conf]
+(defn- decorate
+  {:params [:string {:enabled :boolean? :credentials :boolean? :origins (or [(or :string :function)] :nil)
+                     :expose (or [:string] :nil) & r}]
+   :ret @{:status :number :headers @{:string :string}}}
+  "Run `cors/decorate!` over a fake response for this Origin and
+  configuration, and hand back the response it produced."
+  [origin conf]
   (def resp @{:status 200 :headers @{}})
   (cors/decorate! @{:headers @{"origin" origin}} resp conf)
   resp)

@@ -29,10 +29,17 @@
 (def jobs-table "void_jobs")
 (def bus-table "void_bus")
 
-(defn- dialect []
+(defn- dialect
+  {:params [] :ret :keyword}
+  "The dialect of the driver this process is running against."
+  []
   ((db/current-driver) :dialect))
 
-(defn up []
+(defn up
+  {:params [] :ret [:string]}
+  "Create the tables void/jobs-db and void/bus-db keep their records
+  in, as SQL spelled for the running dialect."
+  []
   # SQL strings rather than statement maps: each plugin's schema is one
   # declaration through the builder, spelled per dialect (a text key
   # is a varchar on MySQL, the log's sequence column is one thing on
@@ -41,7 +48,11 @@
   [;(jobs-db/ddl (dialect) jobs-table)
    ;(bus-db/ddl (dialect) bus-table)])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop the jobs and bus tables and their satellite tables (rates,
+  locks, outbox, leases, cursors)."
+  []
   [{:drop-table (string jobs-table "_rates")}
    {:drop-table (string jobs-table "_locks")}
    {:drop-table jobs-table}

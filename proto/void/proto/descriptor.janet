@@ -60,6 +60,7 @@
 # -- names ---------------------------------------------------------------
 
 (defn proto-name
+  {:params [:keyword] :ret :string :throws [:string]}
   ``The protobuf name of a registered keyword: `:example/Order` ->
   "example.Order", `:Order` -> "Order".``
   [name]
@@ -71,6 +72,7 @@
     s))
 
 (defn name-of
+  {:params [:string] :ret :keyword}
   ``The keyword a protobuf name registers under: "example.Order" ->
   `:example/Order`, "Order" -> `:Order`. The last dot becomes the
   slash, so a nested "example.Order.Item" is `:example.Order/Item`.``
@@ -83,6 +85,7 @@
       (keyword (string/slice s 0 i) "/" (string/slice s (inc i))))))
 
 (defn json-name
+  {:params [:keyword] :ret :string}
   ``The JSON name of a field: protobuf's lowerCamelCase of
   `some_field`. A field that carries its own `:json-name` keeps it —
   that is what `json_name = "..."` in a `.proto` file is for.``
@@ -97,7 +100,12 @@
 
 (def- labels {:singular true :repeated true :optional true :map true})
 
-(defn- type-entry [fname t]
+(defn- type-entry
+  {:params [:keyword :keyword] :ret {:type :keyword & r} :throws [:string]}
+  "The `:type` (and, for a reference, `:ref`) a field's written type
+  resolves to: a proto3 scalar keyword, or the name of a message or
+  enum."
+  [fname t]
   (cond
     (scalars t) {:type t}
     (keyword? t) {:type :ref :ref t}
@@ -105,7 +113,10 @@
                     "name of a message or an enum")
             fname t (string/join (map string (sorted (keys scalars))) " "))))
 
-(defn- field-doc [fname]
+(defn- field-doc
+  {:params [:keyword] :ret :string}
+  "The usage line a malformed field spec's error ends with."
+  [fname]
   (string/format
     (string "proto field %q: expected [number type], [number :repeated type], "
             "[number :optional type] or [number :map key-type value-type], "
@@ -113,6 +124,10 @@
     fname))
 
 (defn field
+  {:params [:keyword :tuple]
+   :ret {:name :keyword :number :number :label :keyword :type :keyword
+         :json-name :string :packed :boolean & r}
+   :throws [:string]}
   ``Normalize one field declaration. `spec` is `[number & form]`:
 
       [1 :string]                     singular
@@ -171,6 +186,7 @@
   (freeze entry))
 
 (defn wire-type
+  {:params [{:packed :boolean :type :keyword :name :keyword & r}] :ret :keyword :throws [:string]}
   ``The wire type a field's values travel as — the length-delimited
   form for a packed repeated field, a map or a message, and the
   scalar's own otherwise.``
@@ -184,7 +200,15 @@
 
 # -- messages, enums, services -------------------------------------------
 
-(defn- index-fields [name fields]
+(defn- index-fields
+  {:params [:keyword (or [{:number :number :name :keyword :json-name :string & r}]
+                         @[{:number :number :name :keyword :json-name :string & r}])]
+   :ret [@{:number :any} @{:keyword :any} @{:string :any}]
+   :throws [:string]}
+  "The by-number, by-name and by-json indices of a message's fields —
+  a decoder accepts either spelling of a field's name, so `by-json`
+  carries both."
+  [name fields]
   (def by-number @{})
   (def by-name @{})
   (def by-json @{})
@@ -201,6 +225,12 @@
   [by-number by-name by-json])
 
 (defn message
+  {:params [:keyword (or {:keyword :tuple} @{:keyword :tuple})
+            (or {:proto-name :string? :doc :string? :reserved (or [:string] :nil) & r} :nil)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :fields [:any]
+         :by-number @{:number :any} :by-name @{:keyword :any} :by-json @{:string :any}
+         :oneofs @{:keyword :any} :reserved [:string] :doc (or :string :nil)}
+   :throws [:string]}
   ``Build a message descriptor from a name and a table of field
   declarations (see `field`):
 
@@ -236,6 +266,12 @@
      :doc (opts :doc)}))
 
 (defn enum
+  {:params [:keyword (or {:keyword :number} @{:keyword :number})
+            (or {:proto-name :string? :allow-alias :boolean? :doc :string? & r} :nil)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :values {:keyword :number}
+         :by-number @{:number :keyword} :zero :keyword :allow-alias :boolean
+         :doc (or :string :nil)}
+   :throws [:string]}
   ``Build an enum descriptor:
 
       (enum :example/Status {:unknown 0 :active 1 :closed 2})
@@ -274,6 +310,10 @@
      :doc (opts :doc)}))
 
 (defn method
+  {:params [{:name :keyword :input :any :output :any & r}]
+   :ret {:name :keyword :input :keyword :output :keyword :proto-name :string
+         :client-streaming :boolean :server-streaming :boolean :idempotent :boolean}
+   :throws [:string]}
   ``Normalize one RPC method: {:name :GetOrder :input
   :orders/GetOrderRequest :output :orders/Order}, plus whatever the
   `.proto` said about streaming and idempotency.``
@@ -289,6 +329,12 @@
            {:proto-name (get spec :proto-name (string (spec :name)))})))
 
 (defn service
+  {:params [:keyword (or [{:name :keyword :input :any :output :any & r}]
+                         @[{:name :keyword :input :any :output :any & r}])
+            (or {:proto-name :string? :doc :string? & r} :nil)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :methods [:any]
+         :by-name @{:keyword :any} :doc (or :string :nil)}
+   :throws [:string]}
   ``Build a service descriptor — the value void/grpc projects into
   routes:
 
@@ -322,6 +368,7 @@
 (var- pending @[])
 
 (defn watch!
+  {:params [(fn [:any] :any)] :ret (fn [:any] :any)}
   ``Be told about descriptors as they are registered. `f` is called
   once per descriptor at the next `flush!` — which is a batch and not
   a callback per `register!` on purpose: a message may name a type the
@@ -334,6 +381,8 @@
   f)
 
 (defn register!
+  {:params [{:kind :keyword :name :keyword & r}] :ret {:kind :keyword :name :keyword & r}
+   :throws [:string]}
   "Register a descriptor under its name. Re-registering replaces —
   REPL-friendly, like the schema registry. Returns the descriptor."
   [desc]
@@ -345,6 +394,7 @@
   desc)
 
 (defn flush!
+  {:params [] :ret @[{:kind :keyword :name :keyword & r}]}
   ``Hand every descriptor registered since the last flush to the
   watchers, and return them. Called at the end of each public way in —
   a parsed file, a `defmessage`, `proto/register!` — so that by the
@@ -357,6 +407,7 @@
   batch)
 
 (defn deregister!
+  {:params [:keyword] :ret :nil}
   "Forget a descriptor by name — the other half of `register!`, for a
   test that registered its own and a REPL that renamed something."
   [name]
@@ -366,6 +417,7 @@
   nil)
 
 (defn lookup
+  {:params [(or :keyword :string :buffer)] :ret (or {:kind :keyword :name :keyword & r} :nil)}
   "A descriptor by keyword name or by protobuf name, or nil."
   [name]
   (or (registry name)
@@ -374,6 +426,7 @@
         (when (keyword? name) (by-proto-name (proto-name name))))))
 
 (defn registered
+  {:params [:keyword?] :ret @[:keyword]}
   "Names of every registered descriptor, optionally of one kind."
   [&opt kind]
   (sorted (seq [[k d] :pairs registry
@@ -381,6 +434,8 @@
             k)))
 
 (defn resolve
+  {:params [(or :keyword :string :buffer) :any] :ret {:kind :keyword :name :keyword & r}
+   :throws [:string]}
   ``The descriptor a field's `:ref` names, or an error saying who
   wanted it. Late by design: messages are recursive, and a `.proto`
   mentions a type before it defines one.``
@@ -390,6 +445,11 @@
               name (if whose (string/format " (wanted by %q)" whose) ""))))
 
 (defn message!
+  {:params [(or :keyword :string :buffer)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :fields [:any]
+         :by-number @{:number :any} :by-name @{:keyword :any} :by-json @{:string :any}
+         :oneofs @{:keyword :any} :reserved [:string] :doc (or :string :nil)}
+   :throws [:string]}
   "A registered *message* descriptor, or an error."
   [name]
   (def d (resolve name))
@@ -398,6 +458,11 @@
   d)
 
 (defn enum!
+  {:params [(or :keyword :string :buffer)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :values {:keyword :number}
+         :by-number @{:number :keyword} :zero :keyword :allow-alias :boolean
+         :doc (or :string :nil)}
+   :throws [:string]}
   "A registered *enum* descriptor, or an error."
   [name]
   (def d (resolve name))
@@ -406,6 +471,10 @@
   d)
 
 (defn service!
+  {:params [(or :keyword :string :buffer)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :methods [:any]
+         :by-name @{:keyword :any} :doc (or :string :nil)}
+   :throws [:string]}
   "A registered *service* descriptor, or an error."
   [name]
   (def d (resolve name))
@@ -414,6 +483,10 @@
   d)
 
 (defn field!
+  {:params [{:by-name @{:keyword :any} :name :keyword & r} :keyword]
+   :ret {:name :keyword :number :number :label :keyword :type :keyword
+         :json-name :string :packed :boolean & r}
+   :throws [:string]}
   "One field of a message by name, or an error naming what is there."
   [desc fname]
   (or (get-in desc [:by-name fname])
@@ -430,6 +503,7 @@
 # thing in proto3 that can be *absent*.
 
 (defn message-field?
+  {:params [{:type :keyword :ref :keyword? & r}] :ret :boolean :narrows :any}
   ``Does this field hold a message, rather than an enum or a scalar? A
   reference nobody has registered *yet* counts as one: two messages
   that name each other are declared in two forms, and the first of
@@ -442,6 +516,7 @@
          (or (nil? d) (= :message (d :kind))))))
 
 (defn explicit-presence?
+  {:params [{:label :keyword :oneof :keyword? :type :keyword & r}] :ret :boolean :narrows :any}
   ``Can this field tell "unset" from "the default"? A singular message
   field, an `optional` one and a oneof member can — everything else
   has proto3's implicit presence, where the default and the absence
@@ -452,6 +527,9 @@
       (and (= :singular (f :label)) (message-field? f))))
 
 (defn default-value
+  {:params [{:label :keyword :type :keyword :ref :keyword? :name :keyword & r}]
+   :ret (or @[:any] @{:any :any} :keyword :number :string :boolean :nil)
+   :throws [:string]}
   ``The proto3 default of a field: the type's zero for a scalar, the
   zero-numbered name for an enum, a fresh empty array for a repeated
   field, a fresh empty table for a map, and nil for a message —
@@ -467,16 +545,25 @@
 
 # -- rendering -----------------------------------------------------------
 
-(defn- simple-name [pname]
+(defn- simple-name
+  {:params [:string] :ret :string}
+  "The last dotted segment of a protobuf name — a message's own name
+  without its package."
+  [pname]
   (last (string/split "." pname)))
 
-(defn- render-type [f]
+(defn- render-type
+  {:params [{:type :keyword & r}] :ret :string}
+  "The `.proto` spelling of a field's type: a scalar keyword, the
+  simple name of a reference, or a `map<key, value>`."
+  [f]
   (case (f :type)
     :ref (proto-name (f :ref))
     :map (string "map<" (render-type (f :key)) ", " (render-type (f :value)) ">")
     (string (f :type))))
 
 (defn render
+  {:params [{:kind :keyword & r}] :ret :string}
   ``A descriptor as `.proto` source — what `void proto describe`
   prints. A projection rather than the original text: comments and
   option order are gone, and what is left is exactly what this package

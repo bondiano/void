@@ -7,7 +7,12 @@
 (def sandbox (string (os/cwd) "/.tmp-driver-test-" (os/time)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove a file or directory, quietly doing nothing when
+  the path is already gone — the sandbox cleanup every fixture defers
+  to."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))
@@ -94,9 +99,18 @@
 
   (def c ((drv :connect)))
   (defer ((drv :close) c)
-    (defn exec [sql &opt params kind]
+    (defn exec
+      {:params [:string (or @[:any] :nil) :keyword?]
+       :ret {:rows @[:table] :count :number}}
+      "Run one write (or the given `kind`) against the shared connection
+      `c`, returning the driver's {:rows :count} answer."
+      [sql &opt params kind]
       ((drv :execute) c sql (or params []) {:kind (or kind :write)}))
-    (defn rows [sql &opt params]
+    (defn rows
+      {:params [:string (or @[:any] :nil)] :ret @[:table]}
+      "Run one SELECT against the shared connection `c`, returning its
+      rows."
+      [sql &opt params]
       (((drv :execute) c sql (or params []) {:kind :select}) :rows))
 
     (exec "CREATE TABLE users (id integer primary key, email text not null unique, admin int, note text)")

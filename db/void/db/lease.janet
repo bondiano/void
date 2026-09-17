@@ -66,17 +66,20 @@
    [:until :double {:null false}]])
 
 (defn statement
+  {:params [:string] :ret {:create-table :string :if-not-exists :boolean :columns [:tuple]}}
   "The `CREATE TABLE IF NOT EXISTS` of a lease table, as a builder map."
   [table]
   {:create-table table :if-not-exists true :columns columns})
 
 (defn ddl
+  {:params [:keyword :string] :ret :string}
   ``The DDL of a lease table as one SQL string, spelled for `dialect` —
   what `void jobs-db ddl` and `void bus-db ddl` print.``
   [dialect table]
   (first (builder/format (statement table) dialect)))
 
 (defn create-table!
+  {:params [:string] :ret :nil}
   "Create the lease table on the active pool — idempotent, safe at every boot."
   [table]
   (state/run (statement table) {:kind :write :prepared false})
@@ -85,6 +88,7 @@
 # -- the three operations ------------------------------------------------
 
 (defn- renew-or-steal!
+  {:params [:string :string :string :number :number] :ret :boolean}
   ``The fence: one row changes when the lease is free, expired or
   already held under `token`; none when somebody else holds it.``
   [table name token now until]
@@ -96,11 +100,14 @@
                     [:= :token [:val token]]]]})))
 
 (defn- taken?
+  {:params [:string :string] :ret :boolean}
   "Is there a row for `name` at all — whoever holds it?"
   [table name]
   (truthy? (state/one {:select [:name] :from table :where {:name name}})))
 
 (defn- insert-first!
+  {:params [:string :string :string :number] :ret :boolean
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``The first taker's INSERT, in its own transaction scope so a lost
   race on the primary key stays a `false` and never poisons a
   transaction the caller is in.``
@@ -120,6 +127,8 @@
     (error e)))
 
 (defn acquire!
+  {:params [:string :string :string :number :number] :ret :boolean
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Take or renew the lease `name` under `token` until `now + ttl`.
   True when this caller holds it on return — it was free, it had
   expired, or it was already this token's; false when another token
@@ -135,6 +144,7 @@
         (insert-first! table name token until)))))
 
 (defn release!
+  {:params [:string :string :string] :ret :boolean}
   ``Give the lease back: the row is deleted when `token` holds it. True
   when it was this token's to release; false when it was not — an
   expired lease somebody else has since taken is theirs, and a release
@@ -143,6 +153,7 @@
   (pos? (state/execute! {:delete table :where {:name name :token token}})))
 
 (defn prune!
+  {:params [:string :number] :ret :number}
   ``Delete every lease whose deadline passed before `horizon`. For the
   owner's periodic pass: a lease that is taken and never released — a
   schedule slot that fired — is otherwise a row forever. Returns how
@@ -151,6 +162,7 @@
   (state/execute! {:delete table :where [:< :until [:val horizon]]}))
 
 (defn holder
+  {:params [:string :string] :ret (or {:token :string :until :number} :nil)}
   "Who holds `name`: {:token :until}, or nil when nobody has taken it."
   [table name]
   (state/one {:select [:token :until] :from table :where {:name name}}))

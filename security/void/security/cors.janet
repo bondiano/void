@@ -24,6 +24,9 @@
    :max-age 600})
 
 (defn validate
+  {:params [{:credentials :boolean? :origins (or [(or :string :function)] :nil) & r}]
+   :ret {:credentials :boolean? :origins (or [(or :string :function)] :nil) & r}
+   :throws [:string]}
   "Check a CORS configuration; throws on the combination browsers
   refuse."
   [cfg]
@@ -35,6 +38,7 @@
   cfg)
 
 (defn origin-allowed?
+  {:params [:string? {:origins (or [(or :string :function)] :nil) & r}] :ret :boolean}
   "Is this Origin in the allowlist? `:origins` may hold exact strings,
   \"*\", or a predicate function."
   [origin cfg]
@@ -47,10 +51,14 @@
                    (= (string entry) origin)))
                (get cfg :origins [])))))
 
-(defn- methods-str [cfg]
+(defn- methods-str
+  {:params [{:methods (or [:keyword] :nil) & r}] :ret :string}
+  "The configured methods, joined for `Access-Control-Allow-Methods`."
+  [cfg]
   (string/join (map |(string/ascii-upper (string $)) (get cfg :methods [])) ", "))
 
 (defn preflight?
+  {:params [@{:method :keyword :headers {:string (or :string @[:string])} & r}] :ret :boolean}
   "Is this the OPTIONS request a browser sends before a cross-origin
   call?"
   [req]
@@ -58,13 +66,21 @@
        (truthy? (get-in req [:headers "origin"]))
        (truthy? (get-in req [:headers "access-control-request-method"]))))
 
-(defn- allow-headers [req cfg]
+(defn- allow-headers
+  {:params [@{:headers {:string (or :string @[:string])} & r} {:headers (or [:string] :nil) & r}] :ret :string}
+  "The headers to echo back: what the browser asked for when the
+  configuration names none, else the configured list."
+  [req cfg]
   (def asked (get-in req [:headers "access-control-request-headers"]))
   (if (and asked (empty? (get cfg :headers [])))
     (string asked)
     (string/join (map string (get cfg :headers [])) ", ")))
 
 (defn decorate!
+  {:params [@{:headers {:string (or :string @[:string])} & r} a
+            {:enabled :boolean? :credentials :boolean? :origins (or [(or :string :function)] :nil)
+             :expose (or [:string] :nil) & r}]
+   :ret a}
   ``Add the response half of CORS to an ordinary (non-preflight)
   response, when the Origin is allowed. `Vary: Origin` goes on
   whatever the answer is — without it a cache hands one origin's
@@ -89,6 +105,10 @@
   resp)
 
 (defn preflight-response
+  {:params [@{:headers {:string (or :string @[:string])} & r}
+            {:credentials :boolean? :origins (or [(or :string :function)] :nil) :max-age :number?
+             :methods (or [:keyword] :nil) :headers (or [:string] :nil) & r}]
+   :ret @{:status :number :body :string? :headers @{:string :string}}}
   ``The answer to a preflight: 204 with the negotiated headers, or 403
   when the origin is not allowed. Either way it is produced without
   touching the router — the path may have no OPTIONS route, and

@@ -9,6 +9,27 @@
 # driver/normalize freezes it.
 
 (defn make
+  {:params [(or {:dialect :keyword?
+                 :returning :boolean?
+                 :insert-id :any
+                 :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+                 :stream :boolean?
+                 :gate :any
+                 :connect-hook (or (fn [:any] :any) :nil)
+                 & r} :nil)]
+   :ret [{:name :keyword :dialect :keyword :returning :boolean
+          :connect (fn [] @{:id :number :in-exchange :boolean})
+          :close (fn [@{:id :number :in-exchange :boolean & r}] :any)
+          :reusable? (fn [@{:id :number :in-exchange :boolean & r}] :boolean)
+          :ping (fn [@{:dead :boolean? & r}] :boolean)
+          :execute (fn [@{:id :number :in-exchange :boolean & r} :string [:any] :any]
+                     {:rows @[{:keyword :any}] :count :number})
+          & r}
+         @{:log @[{:sql :string :params [:any] :conn :number}]
+           :conns :number :closed :number
+           :open @[@{:id :number :in-exchange :boolean & r}]
+           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           & r}]}
   ``[driver state]. opts:
     :dialect    builder dialect (default :ansi)
     :returning  does INSERT ... RETURNING give the row back
@@ -69,25 +90,37 @@
   [drv st])
 
 (defn log
+  {:params [@{:log @[{:sql :string :params [:any] :conn :number}] & r}]
+   :ret @[{:sql :string :params [:any] :conn :number}]}
   "Every statement the driver saw, as {:sql :params :conn}."
   [st]
   (st :log))
 
 (defn sqls
+  {:params [@{:log @[{:sql :string :params [:any] :conn :number}] & r}]
+   :ret @[:string]}
   "Just the SQL strings, in order."
   [st]
   (map |($ :sql) (st :log)))
 
-(defn clear! [st]
+(defn clear!
+  {:params [@{:log @[{:sql :string :params [:any] :conn :number}] & r}]
+   :ret @{:log @[{:sql :string :params [:any] :conn :number}] & r}}
+  "Empty the log, for a test that wants a clean slate mid-way through."
+  [st]
   (array/clear (st :log))
   st)
 
 (defn matching
+  {:params [@{:log @[{:sql :string :params [:any] :conn :number}] & r} :string]
+   :ret @[{:sql :string :params [:any] :conn :number}]}
   "Statements whose SQL contains a substring."
   [st needle]
   (filter |(string/find needle ($ :sql)) (st :log)))
 
 (defn rows-responder
+  {:params [{:string @[{:keyword :any}]}]
+   :ret (fn [:string :any] (or {:rows @[{:keyword :any}] :count :number} :nil))}
   ``A responder from a table of {sql-substring [rows...]} — the first
   matching entry answers, everything else comes back empty.``
   [spec]

@@ -40,6 +40,7 @@
   (table/to-struct (tabseq [[k v] :pairs opcodes] v k)))
 
 (defn control?
+  {:params [:keyword] :ret :boolean}
   "Is this a control opcode (close/ping/pong)? Control frames may not
   be fragmented and carry at most 125 bytes."
   [opcode]
@@ -67,10 +68,17 @@
   "Number -> close-code name, for a log line that reads."
   (table/to-struct (tabseq [[k v] :pairs close-codes] v k)))
 
-(defn- refuse [code message]
+(defn- refuse
+  {:params [(or :keyword :number) :string]
+   :ret :never
+   :throws [{:ws/close :number :message :string}]}
+  "Raise a protocol error, as the `{:ws/close code :message ...}` the
+  connection loop reads to answer with the right close code."
+  [code message]
   (error {:ws/close (get close-codes code code) :message message}))
 
 (defn sendable-close-code?
+  {:params [:any] :ret :boolean :narrows :number}
   ``May this code go out on the wire? 1005/1006/1015 are reserved for
   what a *local* endpoint reports and must never be sent, the range below
   1000 does not exist, and 1016-2999 is unassigned.``
@@ -83,6 +91,7 @@
 # -- utf-8 ---------------------------------------------------------------
 
 (defn utf8-valid?
+  {:params [:string] :ret :boolean}
   ``Is this byte sequence well-formed UTF-8 (RFC 3629)? Strict:
   overlong encodings, surrogate halves and anything past U+10FFFF are
   rejected, because they are exactly what §8.1 asks a websocket
@@ -121,6 +130,7 @@
 # -- masking -------------------------------------------------------------
 
 (defn mask!
+  {:params [:buffer (or :string :buffer)] :ret :buffer}
   "XOR `buf` in place with a 4-byte key. Its own inverse."
   [buf key]
   (def n (length buf))
@@ -132,12 +142,19 @@
 
 # -- parsing -------------------------------------------------------------
 
-(defn- be-length [buf start n]
+(defn- be-length
+  {:params [(or :string :buffer) :number :number] :ret :number}
+  "Read an `n`-byte big-endian length out of `buf` at `start`."
+  [buf start n]
   (var v 0)
   (for i 0 n (set v (+ (* v 256) (in buf (+ start i)))))
   v)
 
 (defn parse
+  {:params [(or :string :buffer) :number?
+            (or {:expect-mask :boolean? :max-frame :number? & r} :nil)]
+   :ret (or {:fin :boolean :opcode :keyword :payload :string :size :number} :nil)
+   :throws [{:ws/close :number :message :string}]}
   ``Parse one frame from `buf` at `start`. Returns nil while the frame
   is incomplete, otherwise
 
@@ -213,6 +230,10 @@
 # -- encoding ------------------------------------------------------------
 
 (defn encode
+  {:params [:keyword (or :string :buffer :nil)
+            (or {:fin :boolean? :mask (or :string :buffer :nil) & r} :nil)]
+   :ret :string
+   :throws [:string]}
   ``One frame as bytes. `opcode` is a keyword from `opcodes`, `payload`
   bytes (nil for none). Options:
     :fin   false for a fragment that continues (default true)
@@ -256,6 +277,7 @@
 # -- close payloads ------------------------------------------------------
 
 (defn close-payload
+  {:params [(or :keyword :number :nil) :string?] :ret :string :throws [:string]}
   ``The body of a close frame: a big-endian code and an optional UTF-8
   reason. A close with no code at all is an empty payload — legal, and
   what `nil` here means.``
@@ -276,6 +298,9 @@
       (string out))))
 
 (defn parse-close
+  {:params [:string]
+   :ret {:code :number :name :keyword? :reason :string}
+   :throws [{:ws/close :number :message :string}]}
   ``A close frame's payload -> {:code <int> :name <keyword or nil>
   :reason <string>}. An empty payload is 1005 ("no status received"),
   which is a code no one sent — it is what a local endpoint reports.``

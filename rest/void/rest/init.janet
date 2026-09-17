@@ -37,13 +37,21 @@
   not a component, so it is a var rather than a `system/ambient`."
   nil)
 
-(defn- context []
+(defn- context
+  {:params [] :ret @{:config :any :validate-responses :boolean} :throws [:string]}
+  "The running rest context, or an error when :before-start has not
+  built it yet."
+  []
   (or current-context
       (error "void/rest is not booted — plugin/start! builds the rest context at :before-start")))
 
 # -- metadata keys (frozen v1 rows) --------------------------------------
 
-(defn- schema-form? [x]
+(defn- schema-form?
+  {:params [:any] :ret :boolean :narrows :any}
+  "True when `x` is anything void/core/schema can normalize — the
+  predicate every :void.schema/* route metadata key is declared with."
+  [x]
   (def [ok _] (protect (schema/normalize x)))
   ok)
 
@@ -90,7 +98,11 @@
 
 # -- validation middleware (phase 6000) ----------------------------------
 
-(defn- keywordize [t]
+(defn- keywordize
+  {:params [(or {:any :any} :nil)] :ret @{:any :any}}
+  "A shallow copy of `t` with every bytes key turned into a keyword —
+  form fields arrive string-keyed, schemas are written keyword-keyed."
+  [t]
   (tabseq [[k v] :pairs (or t {})]
     (if (bytes? k) (keyword k) k) v))
 
@@ -99,13 +111,22 @@
 # distinct schema, not per request
 (def- norm-cache @{})
 
-(defn- normalized [form]
+(defn- normalized
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]}}
+  "normalize, memoized by the (immutable, so cacheable) schema form —
+  a route's :void.schema/* forms are normalized once, not per request."
+  [form]
   (or (get norm-cache form)
       (let [n (schema/normalize form)]
         (put norm-cache form n)
         n)))
 
-(defn- body-value [req]
+(defn- body-value
+  {:params [{:parsed-body :any :form :any & r}] :ret [:any :boolean]}
+  "The request body to validate and whether it needs coercion: an
+  already-decoded JSON body wins, a form falls back keywordized and
+  flagged for coercion, absent either answers [nil false]."
+  [req]
   (cond
     (not (nil? (req :parsed-body))) [(req :parsed-body) false]
     (req :form) [(keywordize (req :form)) true]
@@ -158,6 +179,8 @@
 # -- lazy JSON responses and the serialization middleware ----------------
 
 (defn json
+  {:params [:any (or {:status :any :headers :any & r} :nil)]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
   ``A lazy JSON response — data as data, encoded by the serialization
   middleware on the way out (and checked against the route's
   :void.schema/response schema in dev):
@@ -174,6 +197,8 @@
     :void.rest/data data})
 
 (defn created
+  {:params [:any :string?]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
   "The 201 response for a newly created representation; location adds
   the Location header."
   [data &opt location]
@@ -181,11 +206,13 @@
   (if location (ring/header resp "location" location) resp))
 
 (defn no-content
+  {:params [] :ret @{:status :number :body :any :headers :any}}
   "The bare 204."
   []
   (ring/response 204))
 
 (defn rest-response?
+  {:params [:any] :ret :boolean :narrows {:void.rest/data :any & r}}
   "Is this response a lazy JSON response the serialization middleware
   will encode?"
   [resp]
@@ -193,6 +220,8 @@
        (not (nil? (get resp :void.rest/data)))))
 
 (defn- check-response-schema
+  {:params [:keyword {:number :any} {:status :number & r} :any]
+   :ret :nil :throws [:string]}
   "Check one payload against the route's response schemas by status
   (`rs`, the route's :void.schema/response); a violation is a panic,
   because it is the handler's bug and not the client's."
@@ -237,7 +266,12 @@
 
 # -- problem+json error rendering ----------------------------------------
 
-(defn- problem-request? [req]
+(defn- problem-request?
+  {:params [{:keyword :any}] :ret (or :boolean :nil)}
+  "Should this request's failure render as problem+json? An explicit
+  :void.rest/problems flag on the route wins; otherwise any schema'd
+  route metadata says yes, and failing that the Accept header decides."
+  [req]
   (def rmeta (keys/route-meta req))
   (def flag (get (or rmeta {}) :void.rest/problems))
   (cond
@@ -259,11 +293,17 @@
 # -- problem sugar -------------------------------------------------------
 
 (defn problem
+  {:params [:number (or {:string :any} :nil) (or {:string :any} :nil)]
+   :ret @{:status :number :body :any :headers :any}}
   "See problem/response — the RFC 7807 response builder."
   [status &opt ext headers]
   (problem/response status ext headers))
 
 (defn abort
+  {:params [:number :string? (or {:string :any} :nil)]
+   :ret :never
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+             :status :number :http/status :number}]}
   ``Throw a problem the renderer keeps intact:
 
       (rest/abort 404)
@@ -281,6 +321,8 @@
 # -- context build (:before-start hook) ----------------------------------
 
 (defn build-context
+  {:params [{:config {:values {:rest :any & r} & r} :profile :keyword & r}]
+   :ret @{:config :any :validate-responses :boolean}}
   "Assemble the rest context from a boot value. Normally called by the
   :before-start hook."
   [boot]

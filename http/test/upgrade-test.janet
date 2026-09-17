@@ -11,7 +11,12 @@
 
 (def taken @[])
 
-(defn- app [req]
+(defn- app
+  {:params [@{:path :string & r}] :ret @{:status :number & r}}
+  "The seam under test: /upgrade hands the socket to an echo loop,
+  /upgrade-boom hands it to a protocol that immediately panics, /plain
+  proves the server is still an ordinary HTTP server after either."
+  [req]
   (case (req :path)
     "/upgrade"
     (ring/upgrade @{"upgrade" "echo" "connection" "Upgrade"}
@@ -35,7 +40,12 @@
 (def inst (server/start {:handler app :port "0" :idle-timeout 1}))
 (def port (string (inst :port)))
 
-(defn- read-until [conn buf want &opt timeout]
+(defn- read-until
+  {:params [:any :buffer :string :number?] :ret :string}
+  "Reads from `conn` into `buf` until `want` appears in it or
+  `timeout` seconds (default 2) pass, then returns `buf` as a
+  string."
+  [conn buf want &opt timeout]
   (default timeout 2)
   (def deadline (+ (os/clock :monotonic) timeout))
   (while (and (not (string/find want buf)) (< (os/clock :monotonic) deadline))

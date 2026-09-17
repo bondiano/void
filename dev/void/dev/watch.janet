@@ -23,6 +23,8 @@
   ["jpm_tree" "build" ".git" ".void"])
 
 (defn scan
+  {:params [(or @[:string] [:string]) (or @[:string] [:string] :nil)]
+   :ret @{:string :number}}
   "Walk files/directories and snapshot every .janet file:
   @{realpath modified-time}. Hidden directories and directories named
   in `excludes` (default `default-excludes`) are skipped; a path given
@@ -30,7 +32,11 @@
   [paths &opt excludes]
   (def skip (tabseq [n :in (or excludes default-excludes)] (string n) true))
   (def out @{})
-  (defn walk [p]
+  (defn walk
+    {:params [:string] :ret :nil}
+    "Recurse into `p` (skipping hidden and excluded directories),
+    recording the realpath and mtime of every .janet file found."
+    [p]
     (when-let [st (os/stat p)]
       (case (st :mode)
         :directory
@@ -44,12 +50,14 @@
   out)
 
 (defn changed
+  {:params [{:string :number} {:string :number}] :ret [:string]}
   "Files present in `new` whose mtime differs from `old` (new files
   count, deletions do not), sorted."
   [old new]
   (sorted (seq [[p t] :pairs new :when (not= t (get old p))] p)))
 
 (defn- module-env
+  {:params [:string] :ret :table?}
   "The module/cache env whose resolved path is `file` (compared by
   realpath), or nil when the file is not a loaded module."
   [file]
@@ -62,6 +70,7 @@
   found)
 
 (defn reload!
+  {:params [:string] :ret (enum :reloaded :skipped) :throws [:any]}
   "Re-evaluate `file` into its existing module env table. Returns
   :reloaded, or :skipped when the file is not a loaded module; eval
   errors propagate."
@@ -71,6 +80,12 @@
     :skipped))
 
 (defn affected-components
+  {:params [{:manifests {:any {:source :string? :components (or @[:any] [:any])}}
+             :system {:restart-pending {:any :boolean} :states {:any :keyword}
+                      :order (or @[:any] [:any])}
+             & r}
+            :string]
+   :ret @[:keyword]}
   "Component keys to restart after `file` changed: the components of
   every manifest in `boot` whose :source is this file, that hold state
   (they declare a :stop, or an :ambient the system fills for them) and
@@ -93,6 +108,13 @@
           (get-in boot [:system :order] [])))
 
 (defn apply-changes!
+  {:params [(or {:manifests {:any {:source :string? :components (or @[:any] [:any])}}
+                :system {:restart-pending {:any :boolean} :states {:any :keyword}
+                         :order (or @[:any] [:any])}
+                & r}
+               :nil)
+            (or @[:string] [:string])]
+   :ret @{:reloaded @[:string] :restarted @[:keyword] :skipped @[:string] :errors @[:string]}}
   "Reload every changed file, then restart the affected stateful
   components of `boot` (nil boot skips restarts). Returns a report
   {:reloaded :restarted :skipped :errors}."
@@ -119,12 +141,18 @@
 
 # -- the component -------------------------------------------------------
 
-(defn- report-print [report]
+(defn- report-print
+  {:params [@{:reloaded @[:string] :restarted @[:keyword] :errors @[:string] & r}] :ret :nil}
+  "Print one line per reloaded file, restarted component and reload
+  error — the watcher's own stderr narration."
+  [report]
   (each f (report :reloaded) (eprintf "void/dev reloaded %s" f))
   (each k (report :restarted) (eprintf "void/dev restarted %q" k))
   (each e (report :errors) (eprintf "void/dev reload error: %s" e)))
 
 (defn notify-reloaded!
+  {:params [(or @{:hooks :any & r} :nil) @{:reloaded @[:string] :errors @[:string] & r}]
+   :ret :nil}
   "Fire the :void.dev/reloaded hook on the boot's registry after files
   were reloaded — plugins rebuild what they precompute from module
   code (void/http re-swaps its route table here). Handlers run
@@ -135,6 +163,8 @@
       (array/push (report :errors) e))))
 
 (defn tick!
+  {:params [@{:paths (or @[:string] [:string]) :excludes (or @[:string] [:string]) :snapshot @{:string :number} & r}]
+   :ret (or @{:reloaded @[:string] :restarted @[:keyword] :skipped @[:string] :errors @[:string]} :nil)}
   "One watcher pass: rescan, reload what changed against the current
   boot (plugin/running-boot). Returns the report, or nil when nothing
   changed."
@@ -149,6 +179,14 @@
     report))
 
 (defn start
+  {:params [{:watch (or {:enabled :boolean? :paths (or @[:string] [:string] :nil)
+                        :interval :number? :exclude (or @[:string] [:string] :nil)}
+                       :nil)
+             & r}]
+   :ret (or {:disabled :boolean}
+           @{:paths (or @[:string] [:string]) :interval :number
+             :excludes :tuple :running :boolean :snapshot @{:string :number}
+             :fiber :fiber})}
   "Start the watch loop from the :watch slice of the :dev config
   ({:enabled :paths :interval :exclude}). :exclude adds directory
   names to `default-excludes` rather than replacing them. Returns the
@@ -177,6 +215,7 @@
       inst)))
 
 (defn stop
+  {:params [(or {:disabled :boolean} @{:running :boolean & r})] :ret :nil}
   "Ask the watch loop to exit (it wakes from its sleep within one
   :interval)."
   [inst]

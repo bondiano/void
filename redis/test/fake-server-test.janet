@@ -166,11 +166,19 @@
 
 (def- sub-ok "*3\r\n$9\r\nsubscribe\r\n$2\r\nch\r\n:1\r\n")
 
-(defn- message [payload]
+(defn- message
+  {:params [:string] :ret :string}
+  "A scripted RESP pub/sub \"message\" frame on channel \"ch\" carrying
+  `payload`."
+  [payload]
   (string "*3\r\n$7\r\nmessage\r\n$2\r\nch\r\n"
           "$" (length payload) "\r\n" payload "\r\n"))
 
-(defn- await [pred what]
+(defn- await
+  {:params [(fn [] :any) :string] :ret :any}
+  "Poll `pred` for up to two seconds, letting the loop run, then assert
+  it eventually answered truthy."
+  [pred what]
   (var tries 0)
   (while (and (not (pred)) (< tries 200))
     (ev/sleep 0.01)

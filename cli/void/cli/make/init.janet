@@ -43,7 +43,11 @@
   "The declarations, for `void make --help` to list."
   (sorted-by |($ :name) (map |($ :command) (values kinds))))
 
-(defn- print-help []
+(defn- print-help
+  {:params [] :ret :nil}
+  "The `void make --help` listing: one line per kind, off the same
+  declarations `void make KIND --help` reads."
+  []
   (print "usage: void make KIND [args]")
   (print)
   (print "Kinds:")
@@ -56,6 +60,7 @@
   (print "  void make KIND --help  for the flags of one"))
 
 (defn create
+  {:params [:string] :ret :any :throws [:string]}
   ``The body of `void make KIND ...`: resolve the kind, answer `--help`
   off its declaration, parse the rest of the line against the same
   declaration, and hand the generator its options and positionals.``

@@ -13,6 +13,7 @@
 ### and plugin alike, so it must not need any of them.
 
 (defn callable?
+  {:params [:any] :ret :boolean :narrows (or :function :cfunction)}
   "Can `x` be called: a Janet function or a C function. Neither
   `function?` alone (a driver's `:execute` may be a cfunction) nor
   anything looser (a table with a `:call` key is not a handler)."
@@ -20,6 +21,7 @@
   (or (function? x) (cfunction? x)))
 
 (defn names-str
+  {:params [(or @[:any] [:any])] :ret :string}
   ``The names in `names`, sorted and `%q`-quoted, joined by one space —
   the tail of every "unknown X (known: ...)" message, so a typo is
   reported against a list a reader can scan:
@@ -29,6 +31,7 @@
   (string/join (map |(string/format "%q" $) (sorted names)) " "))
 
 (defn unique-by
+  {:params [:string (fn [:any] :any)] :ret (fn [(or @[:any] [:any])] :nil) :throws [:string]}
   ``A `:validate` for an extension point whose contributions must not
   repeat a key: `(unique-by "middleware name" |($ :name))` refuses the
   second contribution with the same `:name` and says which. `what`
@@ -43,6 +46,7 @@
       (put seen k true))))
 
 (defn err-str
+  {:params [:any] :ret :string}
   ``The text of a caught error for a message that quotes it: a string
   error as it is, anything else (an errors/ envelope, a schema
   struct, a fiber's value) through `describe`. What `protect`'s second
@@ -54,6 +58,7 @@
 # -- did-you-mean --------------------------------------------------------
 
 (defn levenshtein
+  {:params [:string :string] :ret :number}
   "The edit distance between two strings: insertions, deletions and
   substitutions, each costing one."
   [a b]
@@ -71,6 +76,7 @@
   (prev lb))
 
 (defn closest
+  {:params [:any (or @[a] [a])] :ret (or a :nil)}
   ``The candidate nearest to `name`, or nil when none is near enough
   to be what the writer meant: at most three edits away, and fewer
   edits than the name has characters (so a two-letter typo is not
@@ -88,6 +94,7 @@
     best))
 
 (defn suggest
+  {:params [:any (or @[:any] [:any])] :ret :string}
   ``The did-you-mean tail of an "unknown name" message: `" — did you
   mean :foo?"` when a candidate is close (see `closest`), and the
   empty string otherwise — so a message can always append it.``

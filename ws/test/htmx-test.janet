@@ -84,7 +84,15 @@
 
 # -- and now over the wire ------------------------------------------------
 
-(defn chat [req]
+(defn chat
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
+  "A room over a socket: every message everybody in :room hears, one
+  out-of-band swap of #messages at a time."
+  [req]
   (ws/accept req
     {:rooms [:room]
      :on-message

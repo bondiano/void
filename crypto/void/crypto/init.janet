@@ -76,7 +76,13 @@
    :kdf {:in-thread true}
    :require []})
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [(or {:libcrypto :string? :kdf :any? :require (or @[:keyword] :nil) & r} :nil)]
+   :ret {:libcrypto :string? :kdf {:in-thread :boolean?} :require @[:keyword] & r}}
+  "Merge a config table (or nil) over `defaults`, with the nested
+  `:kdf` slice merged on its own so a config setting only one of its
+  keys does not drop the rest."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   # the nested table has to be merged on its own — `merge` is shallow,
   # and a config that sets only [:kdf :in-thread] would otherwise drop
@@ -130,7 +136,11 @@
 
 # -- the component -------------------------------------------------------
 
-(defn- available-list [algos]
+(defn- available-list
+  {:params [@{:keyword :boolean}] :ret @[:keyword]}
+  "The algorithm names whose value is truthy, sorted — what `print-info`
+  and the health check show."
+  [algos]
   (sorted (seq [[k v] :pairs algos :when v] k)))
 
 (def lib-component
@@ -197,6 +207,8 @@
            {:status :down :reason "no libcrypto is open"}))})
 
 (defn print-info
+  {:params [{:path :string :version-text :string? :kdf-in-thread :boolean :algorithms @{:keyword :boolean} & r}]
+   :ret :nil}
   "Print what this process's libcrypto can do — the body of
   `void crypto info`."
   [inst]

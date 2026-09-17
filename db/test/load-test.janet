@@ -57,12 +57,18 @@
 
 # -- the app -------------------------------------------------------------
 
-(defn show [req]
+(defn show
+  {:params [{:void.db/row {:id :any & r} & r}] :ret {:status :number :body :string}}
+  "The loaded order, its id and its preloaded things count."
+  [req]
   (def row (req :void.db/row))
   {:status 200
    :body (string/format "%q %q" (row :id) (length (db/rel row :things)))})
 
-(defn plain [req]
+(defn plain
+  {:params [{:void.db/row {:id :any & r} & r}] :ret {:status :number :body :string}}
+  "The loaded order's id, with no preload — :param defaults to :id."
+  [req]
   {:status 200 :body (string ((req :void.db/row) :id))})
 
 (def app-routes

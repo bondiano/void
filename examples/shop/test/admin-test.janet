@@ -52,7 +52,11 @@
   directory, not the ./storage a `void dev` on this checkout uses."
   (string (or (os/getenv "TMPDIR") "/tmp") "/void-shop-admin-files-" (os/time)))
 
-(defn- rm-rf [path]
+(defn- rm-rf
+  {:params [:string] :ret :nil}
+  "Delete `path`, recursively if it is a directory; a no-op if it
+  does not exist."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each e (os/dir path) (rm-rf (string path "/" e)))
                    (os/rmdir path))
@@ -75,23 +79,41 @@
    "cart_items" "carts" "products" "customers"
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
-(defn- drop-tables! [names]
+(defn- drop-tables!
+  {:params [[:string]] :ret :nil}
+  "Drop every table named in `names`, if it exists."
+  [names]
   (each t names
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "A response's body as a string."
+  [resp] (test/text resp))
 
-(defn- token-of [client]
+(defn- token-of
+  {:params [:any] :ret :string?}
+  "This browser's CSRF token, off the `<meta>` tag every page carries."
+  [client]
   (first (peg/match ~(any (+ (* `content="` (<- (to `"`)) `" name="csrf-token"`) 1))
                     (text (test/inject client {:uri "/"})))))
 
-(defn- settle []
+(defn- settle
+  {:params [] :ret :nil}
+  "Forward whatever the outbox holds and let the consumers catch up."
+  []
   (busdb/forward-once! (bus-state/active-backend) 100)
   (ev/sleep 0.35))
 
-(defn run-suite [engine]
+(defn run-suite
+  {:params [{:label :string :database :keyword :config {:any :any} & r}] :ret :nil}
+  "Run the desk suite against one engine (sqlite or postgres)."
+  [engine]
   (def label (engine :label))
-  (defn note [msg] (print "  [" label "] " msg))
+  (defn note
+    {:params [:string] :ret :nil}
+    "Print a labelled progress line for this engine's pass."
+    [msg] (print "  [" label "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))

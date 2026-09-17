@@ -13,6 +13,7 @@
      :labels [:outcome]}))
 
 (defn attempt!
+  {:params [(enum :captured :declined :retryable)] :ret :nil}
   "One capture attempt: :captured, :declined or :retryable."
   [outcome]
   (obs/inc! payments-total [(string outcome)]))

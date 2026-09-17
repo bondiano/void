@@ -84,7 +84,10 @@
 # (a factor of five) so that a loaded CI machine does not fail the
 # suite, while a dummy verify that did nothing at all — the bug this
 # guards — would be a factor of a thousand.
-(defn- micros [thunk]
+(defn- micros
+  {:params [(fn [] :any)] :ret :number}
+  "The fastest of three runs of `thunk`, in microseconds."
+  [thunk]
   # the fastest of three: a GC pause or a busy machine inflates one
   # sample by an order of magnitude, and this assertion is about what
   # the work costs, not about what the scheduler did

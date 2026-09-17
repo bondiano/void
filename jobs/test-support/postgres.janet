@@ -32,6 +32,7 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
+  {:params [(or {:keyword :any} :nil)] :ret @{:keyword :any}}
   ``The [:db-postgres] config slice for the configured server: the
   conninfo goes in as :url when it is one and as :params otherwise,
   since the slice speaks keywords either way.``
@@ -47,6 +48,7 @@
   (merge base (or extra {})))
 
 (defn- fetch
+  {:params [:table :symbol] :ret :any :throws [:string]}
   "The value of one binding in a module loaded at runtime."
   [mod sym]
   (def entry (get mod sym))
@@ -55,6 +57,7 @@
   (get entry :value))
 
 (defn driver
+  {:params [(or {:keyword :any} :nil)] :ret :any :throws [:string]}
   ``The normalized void/db driver for the configured server, with
   libpq loaded. Resolved through `require` so that nothing native is
   touched unless there is a server to talk to.``

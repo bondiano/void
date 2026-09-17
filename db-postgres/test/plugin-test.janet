@@ -11,7 +11,13 @@
 
 (def plugins ["void/db/init" "void/db-postgres/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:env @{:keyword :any} :cli @{:db :any :log :any & r}}}
+  "The :cli config every dry-run/boot in this file shares — a small
+  pool and a quiet query log — with `extra` merged in for the
+  [:db-postgres] slice under test."
+  [extra]
   {:env @{}
    :cli (merge {:db {:pool {:size 2}}
                 :log {:level :error :levels {"void.db.query" :fatal}}}

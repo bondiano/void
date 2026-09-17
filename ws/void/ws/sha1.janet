@@ -26,33 +26,43 @@
 ### not offer for a negative word, and `wrap32` brings a sum back.
 
 (defn- s32
+  {:params [:number] :ret :number}
   "A 32-bit constant as the signed integer Janet's bit operators take."
   [n]
   (if (>= n 0x80000000) (- n 0x100000000) n))
 
 (defn- wrap32
+  {:params [:number] :ret :number}
   "A sum back into signed 32-bit."
   [n]
   (def m (mod n 0x100000000))
   (if (>= m 0x80000000) (- m 0x100000000) m))
 
 (defn- lshr
+  {:params [:number :number] :ret :number}
   ``Logical right shift of a signed 32-bit word: `brshift` sign-extends
   and `brushift` refuses a negative, so the sign bits are masked off
   afterwards.``
   [x n]
   (if (zero? n) x (band (brshift x n) (dec (blshift 1 (- 32 n))))))
 
-(defn- rotl [x n]
+(defn- rotl
+  {:params [:number :number] :ret :number}
+  "Rotate a 32-bit word left by `n` bits."
+  [x n]
   (bor (blshift x n) (lshr x (- 32 n))))
 
-(defn- u32 [bytes i]
+(defn- u32
+  {:params [:buffer :number] :ret :number}
+  "Read a big-endian 32-bit word out of `bytes` at `i`."
+  [bytes i]
   (bor (blshift (get bytes i) 24)
        (blshift (get bytes (+ i 1)) 16)
        (blshift (get bytes (+ i 2)) 8)
        (get bytes (+ i 3))))
 
 (defn- pad
+  {:params [(or :string :buffer)] :ret :buffer}
   ``The RFC 3174 §4 padding: a 0x80 byte, zeros up to 56 mod 64, then
   the original length in bits as a big-endian 64-bit integer.``
   [data]
@@ -71,6 +81,7 @@
   [(s32 0x5A827999) (s32 0x6ED9EBA1) (s32 0x8F1BBCDC) (s32 0xCA62C1D6)])
 
 (defn digest
+  {:params [(or :string :buffer)] :ret :string}
   "SHA-1 of bytes, raw (20 bytes)."
   [data]
   (def msg (pad data))

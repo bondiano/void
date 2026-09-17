@@ -1,9 +1,21 @@
 (import ../test-support/paths)
 (import void/proto/wire :as wire)
 
-(defn- hex [bs] (string/join (map |(string/format "%02x" $) bs) ""))
-(defn- varint [v] (hex (wire/encode-varint @"" v)))
-(defn- read-varint [s] (first (wire/decode-varint s 0)))
+(defn- hex
+  {:params [(or :string :buffer)] :ret :string}
+  "Bytes as a lowercase hex string."
+  [bs]
+  (string/join (map |(string/format "%02x" $) bs) ""))
+(defn- varint
+  {:params [(or :number :abstract)] :ret :string}
+  "`v` encoded as a varint, in hex."
+  [v]
+  (hex (wire/encode-varint @"" v)))
+(defn- read-varint
+  {:params [(or :string :buffer)] :ret (or :number :abstract)}
+  "The varint at the start of `s`."
+  [s]
+  (first (wire/decode-varint s 0)))
 
 # -- varint, against the numbers the specification prints ----------------
 

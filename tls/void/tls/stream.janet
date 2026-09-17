@@ -42,6 +42,12 @@
 # -- contexts ------------------------------------------------------------
 
 (defn context
+  {:params [(or @{:server? :boolean? :verify :boolean? :ca-file :string?
+                  :ca-path :string? :min-version :keyword? :cert :string?
+                  :key :string? & r}
+                :nil)]
+   :ret :pointer
+   :throws [:string]}
   ``Build an SSL_CTX.
 
     :server?      accept side (test-support; keeps inbound TLS at the proxy) — default false
@@ -102,6 +108,7 @@
   ctx)
 
 (defn close-context
+  {:params [(or :pointer :nil)] :ret :nil}
   "Free a context built by `context`."
   [ctx]
   (when ctx (lib/SSL_CTX_free ctx))
@@ -114,6 +121,7 @@
   nil)
 
 (defn default-context
+  {:params [] :ret :pointer :throws [:string]}
   "The shared client context, building the lazy default on first use."
   []
   (unless default-ctx (set default-ctx (context)))
@@ -122,6 +130,7 @@
 # -- the pump ------------------------------------------------------------
 
 (defn- flush-out!
+  {:params [@{:enc-buf :buffer :wbio :pointer :raw :any & r}] :ret :nil}
   "Move everything SSL put into its write BIO onto the raw stream —
   where the fiber may park, which is the point."
   [ts]
@@ -133,6 +142,8 @@
   nil)
 
 (defn- feed-in!
+  {:params [@{:raw-buf :buffer :raw :any :rbio :pointer & r} (or :number :nil)]
+   :ret :boolean}
   ``One raw read into SSL's read BIO. Returns false on EOF, true when
   bytes (or a spurious empty read) arrived; a timeout below propagates
   as the raw stream's own error.``
@@ -147,6 +158,7 @@
         true)))
 
 (defn- ssl-failure
+  {:params [@{:ssl :pointer :peer-name :string & r} :string] :ret :string}
   ``An SSL_ERROR_SSL as a message worth reading: when the cause is
   certificate verification, X509's own words come first ("hostname
   mismatch", "self-signed certificate"), the cipher-level error after.``
@@ -160,6 +172,14 @@
                    (lib/X509_verify_cert_error_string vr) detail)))
 
 (defn- handshake!
+  {:params [@{:ssl :pointer :enc-buf :buffer :wbio :pointer :raw :any
+              :raw-buf :buffer :rbio :pointer :peer-name :string & r}
+            (or :number :nil)]
+   :ret @{:ssl :pointer :enc-buf :buffer :wbio :pointer :raw :any
+          :raw-buf :buffer :rbio :pointer :peer-name :string & r}
+   :throws [:string]}
+  "Pump the BIOs through SSL_do_handshake until it reports success or
+  a failure that is not WANT_READ/WANT_WRITE."
   [ts timeout]
   (var done false)
   (while (not done)
@@ -182,6 +202,16 @@
 # -- the stream methods --------------------------------------------------
 
 (defn- tls-read
+  {:params [@{:plain-buf :buffer :len-buf :buffer :ssl :pointer :enc-buf :buffer
+              :wbio :pointer :raw :any :raw-buf :buffer :rbio :pointer
+              :peer-name :string & r}
+            :number :buffer? (or :number :nil)]
+   :ret (or :buffer :nil)
+   :throws [:string]}
+  "The stream's `:read` method: pull one SSL_read_ex's worth of
+  plaintext into `buf` (or a fresh buffer), pumping the BIOs through
+  WANT_READ/WANT_WRITE as the handshake or a mid-stream renegotiation
+  demands. Returns the buffer, or nil on EOF."
   [ts n &opt buf timeout]
   (def out (or buf @""))
   (def plain (ts :plain-buf))
@@ -220,6 +250,14 @@
   result)
 
 (defn- tls-write
+  {:params [@{:len-buf :buffer :ssl :pointer :enc-buf :buffer :wbio :pointer
+              :raw :any :raw-buf :buffer :rbio :pointer :peer-name :string & r}
+            (or :string :buffer) (or :number :nil)]
+   :ret :nil
+   :throws [:string]}
+  "The stream's `:write` method: push `data` through SSL_write_ex
+  until it is all consumed, pumping the BIOs the same way `tls-read`
+  does."
   [ts data &opt timeout]
   (def outlen (ts :len-buf))
   (var rest data)
@@ -244,6 +282,11 @@
   nil)
 
 (defn- tls-close
+  {:params [@{:closed :boolean :ssl (or :pointer :nil) :enc-buf :buffer
+              :wbio :pointer :raw :any & r}]
+   :ret :nil}
+  "The stream's `:close` method: best-effort close_notify, then closes
+  the underlying stream and frees the SSL object. Idempotent."
   [ts]
   (unless (ts :closed)
     (put ts :closed true)
@@ -260,6 +303,7 @@
 # -- public --------------------------------------------------------------
 
 (defn- ip-literal?
+  {:params [:string] :ret :boolean :narrows :any}
   "Is this peer name an address rather than a DNS name? IPv6 has
   colons; IPv4 is digits and dots and nothing else."
   [host]
@@ -268,6 +312,13 @@
       (all |(or (and (>= $ (chr "0")) (<= $ (chr "9"))) (= $ (chr "."))) s)))
 
 (defn wrap
+  {:params [:any
+            (or @{:ctx :pointer? :host :string? :accept? :boolean? :timeout :number? & r}
+                :nil)]
+   :ret @{:ssl :pointer :rbio :pointer :wbio :pointer :raw :any :peer-name :string
+          :closed :boolean :enc-buf :buffer :raw-buf :buffer :plain-buf :buffer
+          :len-buf :buffer :read :function :write :function :close :function}
+   :throws [:string]}
   ``A TLS session over an open stream — `raw` is a janet stream or
   anything with the same `:read`/`:write`/`:close` methods. Options:
 
@@ -341,11 +392,19 @@
   ts)
 
 (defn tls-version
+  {:params [@{:ssl (or :pointer :nil) & r}] :ret (or :string :nil)}
   "The negotiated protocol of a wrapped stream (\"TLSv1.3\"), or nil."
   [ts]
   (when (ts :ssl) (lib/SSL_get_version (ts :ssl))))
 
 (defn connect
+  {:params [:string (or :string :number)
+            (or @{:ctx :pointer? :host :string? :accept? :boolean? :timeout :number? & r}
+                :nil)]
+   :ret @{:ssl :pointer :rbio :pointer :wbio :pointer :raw :any :peer-name :string
+          :closed :boolean :enc-buf :buffer :raw-buf :buffer :plain-buf :buffer
+          :len-buf :buffer :read :function :write :function :close :function}
+   :throws [:string]}
   ``Open a socket and run the TLS handshake over it:
 
       (tls/connect "collector.example" "4318")

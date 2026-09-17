@@ -28,6 +28,7 @@
 (import void/redis/resp :as resp)
 
 (defn- read-frame
+  {:params [:abstract :buffer :number] :ret :number?}
   "The end index of one complete RESP frame at `pos`, reading more as
   needed; nil once the client hangs up."
   [stream buf pos]
@@ -43,6 +44,11 @@
   out)
 
 (defn- handle
+  {:params [@{:received @[[:number :string]] & r} :abstract (or @[:any] [:any]) :number]
+   :ret [:boolean :any]}
+  "Serve one accepted connection: read a frame, answer it with the next
+  scripted step, and repeat until the client hangs up or a step closes
+  the connection."
   [h stream steps n]
   (def buf @"")
   (var pos 0)
@@ -68,6 +74,9 @@
   (protect (:close stream)))
 
 (defn start
+  {:params [(fn [a] :any)]
+   :ret @{:connections :number :received @[:any] :streams @[:any]
+          :server :any :host :string :port :number}}
   ``A listening fake, as @{:host :port :connections :received ...}.
   `:connections` counts accepted connections; `:received` collects
   [connection-index command-bytes] pairs as they arrive.``
@@ -87,6 +96,7 @@
   h)
 
 (defn stop
+  {:params [@{:server :any :streams @[:any] & r}] :ret :nil}
   "Close the listener and every connection it accepted."
   [h]
   (protect (:close (h :server)))
@@ -94,6 +104,10 @@
   nil)
 
 (defn opts
+  {:params [@{:host :string :port :number & r}
+            (or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:host :string :port :number :protocol :number
+          :connect-timeout :number :timeout :number & r}}
   ``Connection options against this fake: RESP2 (so the handshake is
   silent) and short timeouts (so a scripted non-answer fails the test
   in seconds, not minutes).``
@@ -103,11 +117,18 @@
          (or extra {})))
 
 (defn commands
+  {:params [@{:received @[[:number :string]] & r} :number] :ret @[:string]}
   "The commands connection `n` received, as raw RESP bytes."
   [h n]
   (map |(in $ 1) (filter |(= n (in $ 0)) (h :received))))
 
 (defn client
+  {:params [@{:host :string :port :number & r}
+            (or {:keyword :any} @{:keyword :any} :nil)
+            (or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:pool :any
+          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :prefix :string :retry :boolean :conn-opts :any}}
   ``A client value over this fake — a pool, the raw codec, no prefix —
   for binding into state/client-dyn, the way test-support/server builds
   one over a real redis.``

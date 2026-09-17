@@ -9,7 +9,11 @@
 
 (log/set-level! nil :trace)
 
-(defn- rec [level &opt msg]
+(defn- rec
+  {:params [:keyword :string?]
+   :ret @{:ts :number :level :keyword :ns :string :msg :any}}
+  "A minimal log record at `level`, for the sink and sampling tests."
+  [level &opt msg]
   @{:ts (os/clock :realtime) :level level :ns "test" :msg (or msg "m")})
 
 # -- the counting sink ---------------------------------------------------

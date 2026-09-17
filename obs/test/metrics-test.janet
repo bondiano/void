@@ -8,7 +8,11 @@
 
 (log/set-level! "void.obs" :error)
 
-(defn- fresh []
+(defn- fresh
+  {:params [] :ret :nil}
+  "Clear the registry and reset the label-set cap to its default — a
+  clean slate between test sections."
+  []
   (metrics/clear-registry!)
   (metrics/set-max-label-sets! metrics/default-max-label-sets))
 

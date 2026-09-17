@@ -20,6 +20,10 @@
   "catalog:index")
 
 (defn listing
+  {:params []
+   :ret @[{:id :number :sku :string :name :string :description :string
+          :price-cents :number :stock :number}]
+   :throws [:string]}
   ``The storefront listing, through the cache.
 
   What goes in is **data**, not entities: a shared cache is another
@@ -38,6 +42,7 @@
            (repo/active)))))
 
 (defn forget-listing!
+  {:params [] :ret :number}
   ``Drop the cached listing. Called by whoever moved stock behind the
   storefront's back: the restock in orders/service, and `archive!`
   below.``
@@ -45,6 +50,9 @@
   (cache/forget listing-key))
 
 (defn archive!
+  {:params [@{:status :string :id :any & r}]
+   :ret :boolean?
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Take a product off the storefront, and say whether it happened.
 
   Two things have to travel together and neither is SQL, which is why
@@ -71,6 +79,7 @@
   5)
 
 (defn low-stock
+  {:params [:number?] :ret @[@{:any :any}] :throws [:string]}
   "The products on sale at or below `threshold` units — what `void shop
   stock` prints and, because that command is read-only, what an agent
   gets when it asks the same question."
@@ -78,17 +87,20 @@
   (repo/below-stock (or threshold low-stock-threshold)))
 
 (defn out-of-stock-count
+  {:params [] :ret :number :throws [:string]}
   "How many products are on sale with nothing left to sell — the number
   on the desk's front page."
   []
   (repo/count-out-of-stock))
 
 (defn by-id
+  {:params [:any] :ret (or @{:any :any} :nil) :throws [:string]}
   "One product, whatever its status — the row behind a product page."
   [id]
   (repo/find-by-id id))
 
 (defn on-sale
+  {:params [:any] :ret (or @{:any :any} :nil) :throws [:string]}
   ``One product a visitor is allowed to *buy*, or nil. An archived
   product is nil here rather than a row with a flag on it, so no caller
   can forget to look at `:status`.``
@@ -97,6 +109,9 @@
     (when (= "active" (product :status)) product)))
 
 (defn page
+  {:params [{:order-by :any :limit :number? :offset :number? & r}]
+   :ret {:rows @[@{:any :any}] :total :number}
+   :throws [:string]}
   ``One page of the catalog plus the total, which is what a paged
   response needs and a listing does not.``
   [paging]
@@ -104,6 +119,9 @@
    :total (repo/count-active)})
 
 (defn ensure-product!
+  {:params [{:sku :any & r}]
+   :ret [(enum :kept :created) @{:any :any}]
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Put a product on sale, or leave the one that is there alone.
   Returns `[:created row]` or `[:kept row]`.
 

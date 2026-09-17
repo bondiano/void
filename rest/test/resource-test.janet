@@ -2,7 +2,11 @@
 (import void/http/router :as router)
 (import void/rest/resource :as resource)
 
-(defn h [req] {:status 200})
+(defn h
+  {:params [:any] :ret {:status :number}}
+  "A handler that never runs; only its identity matters to the
+  route-table assertions below."
+  [req] {:status 200})
 
 # -- conventional actions ------------------------------------------------
 

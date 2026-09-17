@@ -36,6 +36,7 @@
   "text/plain; version=0.0.4; charset=utf-8")
 
 (defn metric-name
+  {:params [:keyword] :ret :string}
   ``A metric keyword as a Prometheus name: `:void.http/requests-total`
   -> `void_http_requests_total`.``
   [name]
@@ -55,7 +56,11 @@
     (string "_" str)
     str))
 
-(defn- escape-label [v]
+(defn- escape-label
+  {:params [:any] :ret :string}
+  "A label value with `\\`, `\"` and newline escaped the way the
+  exposition's quoted label values require."
+  [v]
   (def s (string v))
   (def out (buffer/new (length s)))
   (each c s
@@ -67,6 +72,7 @@
   (string out))
 
 (defn number-str
+  {:params [:any] :ret :string}
   ``A number as the exposition wants it: integers plainly (a counter of
   12345678901 must not come out as 1.23457e+10) and everything else at
   twelve significant digits, which is past any resolution a duration
@@ -78,7 +84,14 @@
     (string/format "%d" n)
     (string/format "%.12g" n)))
 
-(defn- labels-str [names values &opt extra]
+(defn- labels-str
+  {:params [:tuple :tuple (or @[[:string :any]] [[:string :any]] :nil)]
+   :ret :string}
+  "The `{k=\"v\",...}` label block for one series: `names` (a
+  metric's declared label names) paired positionally with `values` (a
+  series's label tuple), plus any `extra` [key value] pairs such as
+  the histogram bucket's `le`."
+  [names values &opt extra]
   (def parts @[])
   (var i 0)
   (each name names
@@ -89,7 +102,17 @@
     (array/push parts (string/format "%s=\"%s\"" k (escape-label v))))
   (if (empty? parts) "" (string "{" (string/join parts ",") "}")))
 
-(defn- render-metric [out m]
+(defn- render-metric
+  {:params [:buffer
+            {:name :keyword :doc :string :kind :keyword :labels :tuple
+             :series @[(or {:labels :tuple :value :number}
+                           {:labels :tuple :buckets :tuple :sum :number
+                            :count :number})]
+             & r}]
+   :ret :buffer}
+  "Append one metric's HELP/TYPE lines and every series line to
+  `out`, cumulatively for a histogram's buckets."
+  [out m]
   (def name (metric-name (m :name)))
   (def series (m :series))
   (when (not (empty? (m :doc)))
@@ -120,6 +143,12 @@
   out)
 
 (defn render
+  {:params [@[{:name :keyword :doc :string :kind :keyword :labels :tuple
+               :series @[(or {:labels :tuple :value :number}
+                             {:labels :tuple :buckets :tuple :sum :number
+                              :count :number})]
+               & r}]]
+   :ret :string}
   ``A `metrics/snapshot` as one exposition string. Metrics with no
   series at all are still announced (HELP/TYPE), so a scraper sees a
   metric that exists and has not fired rather than a metric that

@@ -39,7 +39,12 @@
 # -- build-table: happy path ---------------------------------------------
 
 (def trace @[])
-(defn- tracing [name]
+(defn- tracing
+  {:params [:keyword] :ret (fn [(fn [:any] :any)] (fn [:any] :any))}
+  "A middleware factory that records `name` to `trace` before calling
+  through — the whole observation mechanism the ordering assertions
+  below read."
+  [name]
   (fn [handler]
     (fn [req]
       (array/push trace name)
@@ -218,7 +223,12 @@
 (assert (= [:outermost :guard :obs :after-obs :chained] (freeze trace))
         "and the chain runs in the resolved order")
 
-(defn- build-error [mws]
+(defn- build-error
+  {:params [[:any]] :ret :string}
+  "Builds the route table with `mws` appended to the base middleware,
+  asserts the build fails, and returns the error text for the caller
+  to search."
+  [mws]
   (def [ok err] (protect (router/build-table {:sources [{:name :app :routes src}]
                                               :meta-keys meta-keys
                                               :middleware [;middleware ;mws]})))
@@ -336,7 +346,11 @@
 
 # bare symbol with env resolves
 (def benv (curenv))
-(defn my-local-handler [req] {:status 200 :body "local"})
+(defn my-local-handler
+  {:params [:any] :ret {:status :number :body :string}}
+  "A handler bound as a bare symbol with an explicit :env, to prove
+  that path resolves without going through a declaring module."
+  [req] {:status 200 :body "local"})
 (def btab (router/build-table
             {:sources [{:name :x :env benv
                         :routes (router/GET "/x" 'my-local-handler {:name :x})}]
@@ -346,9 +360,21 @@
 
 # -- defroutes sugar -----------------------------------------------------
 
-(defn dr-home [req] {:status 200 :body "home"})
-(defn dr-create [req] {:status 201 :body "created"})
-(defn dr-users [req] {:status 200 :body "users"})
+(defn dr-home
+  {:params [:any] :ret {:status :number :body :string}}
+  "The defroutes-sugar app's root handler, named only by its own
+  symbol — proves a bare handler names its route."
+  [req] {:status 200 :body "home"})
+(defn dr-create
+  {:params [:any] :ret {:status :number :body :string}}
+  "Answers creation with 201 — its route gives an explicit :name, to
+  prove that wins over the symbol-derived default."
+  [req] {:status 201 :body "created"})
+(defn dr-users
+  {:params [:any] :ret {:status :number :body :string}}
+  "A handler nested under the sugar's admin group, to prove group
+  children expand and inherit the group's metadata."
+  [req] {:status 200 :body "users"})
 
 (router/defroutes :sugar/app {:void.http/timeout 30}
   (GET "/" dr-home)

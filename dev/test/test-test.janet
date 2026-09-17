@@ -4,7 +4,10 @@
 (import void/core/schema :as schema)
 (import void/test :as test)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :nil}
+  "Assert that `thunk` throws, and that the error mentions `pat`."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
@@ -12,7 +15,11 @@
 
 # a small app: db <- repo <- web, plus an unrelated mailer
 (def log @[])
-(defn- track [key inst]
+(defn- track
+  {:params [:keyword :any] :ret (fn [:any :any] :any)}
+  "A component :start that records `[:start key]` in `log` and
+  answers with the fixed `inst`."
+  [key inst]
   (fn [d c] (array/push log [:start key]) inst))
 (def app
   (plugin/manifest 'test/app
@@ -101,7 +108,10 @@
 # -- snapshots -----------------------------------------------------------
 
 (def snap-dir "test/tmp-snapshots")
-(defn- rm-rf [dir]
+(defn- rm-rf
+  {:params [:string] :ret :nil}
+  "Remove `dir` and its (flat) contents, if it exists."
+  [dir]
   (when (os/stat dir)
     (each f (os/dir dir) (os/rm (string dir "/" f)))
     (os/rmdir dir)))

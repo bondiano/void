@@ -28,6 +28,7 @@
 (def- allowed-handler-opts {:phase true :name true :plugin true :doc true})
 
 (defn namespace-of
+  {:params [:keyword] :ret :string?}
   "The namespace of a hook name: :void.http/listening -> \"void.http\";
   a bare :after-start -> nil."
   [hook]
@@ -36,12 +37,14 @@
     (string/slice s 0 slash)))
 
 (defn owner-namespace
+  {:params [:keyword] :ret :string}
   "The hook namespace a plugin name owns: :void/http -> \"void.http\",
   :shop/app -> \"shop.app\"."
   [plugin]
   (string/replace-all "/" "." (string plugin)))
 
 (defn registry
+  {:params [(or @[:keyword] :nil) (or @[:keyword] :nil)] :ret @{:keyword :any}}
   ``Create an empty hook registry: hook name -> handler name -> entry.
 
   Bootstrap builds one with two sets, and a test's bare
@@ -68,6 +71,7 @@
                           :hooks/warned @{}})))
 
 (defn declared?
+  {:params [@{:keyword :any} :keyword] :ret :boolean :narrows :any}
   "Is `hook` declared on this registry — or is the registry undeclared,
   in which case every name is. Lifecycle hooks always are."
   [reg hook]
@@ -75,6 +79,7 @@
   (or (nil? d) (in d hook) (not (nil? (index-of hook lifecycle-hooks)))))
 
 (defn suspect?
+  {:params [@{:keyword :any} :keyword] :ret :boolean :narrows :any}
   "An undeclared hook in a namespace an active plugin owns — the
   shape of a typo, or of a plugin firing what it never declared."
   [reg hook]
@@ -83,6 +88,7 @@
          (and ns (in (get reg :hooks/owned {}) ns)))))
 
 (defn- warn-undeclared!
+  {:params [@{:keyword :any} :keyword] :ret :nil}
   "Warn once per name (the registry remembers) when a fired hook is one
   no active plugin declares: the handlers still run, but a typo in a
   handler's hook name would silently never run, and this is where a
@@ -96,6 +102,10 @@
                hook))))
 
 (defn add!
+  {:params [@{:keyword :any} :keyword (or :function :cfunction) :any]
+   :ret {:hook :keyword :name :keyword :fn (or :function :cfunction)
+         :phase :number :plugin :any :doc :string?}
+   :throws [:string]}
   ``Register a synchronous handler for a hook:
 
       (hooks/add! reg :after-start
@@ -134,6 +144,10 @@
   entry)
 
 (defn remove!
+  {:params [@{:keyword :any} :keyword :keyword]
+   :ret (or {:hook :keyword :name :keyword :fn (or :function :cfunction)
+             :phase :number :plugin :any :doc :string?}
+            :nil)}
   "Remove the handler registered under `name` for `hook`; returns the
   removed entry or nil."
   [reg hook name]
@@ -142,6 +156,9 @@
     entry))
 
 (defn handlers
+  {:params [@{:keyword :any} :keyword?]
+   :ret @[{:hook :keyword :name :keyword :fn (or :function :cfunction)
+           :phase :number :plugin :any :doc :string?}]}
   "Handlers for one hook (or, without `hook`, for every hook), in
   execution order: sorted by :phase, ties broken by :name."
   [reg &opt hook]
@@ -153,6 +170,10 @@
              entries))
 
 (defn- fail
+  {:params [{:hook :keyword :name :keyword :fn (or :function :cfunction)
+             :phase :number :plugin :any :doc :string? & r}
+            :any]
+   :ret :never :throws [:string]}
   "The error for a handler that threw: the hook, the handler's name,
   its plugin when known, and the throw's text."
   [entry e]
@@ -162,6 +183,7 @@
           (if (string? e) e (describe e))))
 
 (defn run!
+  {:params [@{:keyword :any} :keyword :any] :ret :number :throws [:string]}
   "Run every handler of `hook` in order on the current fiber, passing
   `args` to each. Fail-fast: the first handler error aborts the run
   with the handler and plugin named. Returns the number of handlers
@@ -176,6 +198,7 @@
   n)
 
 (defn run-protected!
+  {:params [@{:keyword :any} :keyword :any] :ret [:string]}
   "Like `run!`, but a handler error never stops the remaining handlers
   — for teardown paths (:before-stop/:after-stop must not block a
   shutdown). Returns the tuple of error messages (empty on success)."

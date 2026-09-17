@@ -58,6 +58,7 @@
    "schema_migrations"])
 
 (defn- empty-backlog!
+  {:params [:string] :ret :nil}
   "The bus's log, cursors and outbox, and this suite's job queue, back
   to empty before the application's tables are dropped — so nothing
   left over from the last run on a shared database (a pending job, a
@@ -69,17 +70,29 @@
   (each t ["void_bus" "void_bus_cursors" "void_bus_outbox" jobs-table]
     (db/execute-sql (string "DELETE FROM " t) [] {:kind :write :prepared false})))
 
-(defn- drop-app-tables! []
+(defn- drop-app-tables!
+  {:params [] :ret :nil}
+  "Drop every table this suite owns, so a pass starts from nothing."
+  []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
 # -- the suite -----------------------------------------------------------
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "The response body as a string."
+  [resp] (test/text resp))
 
-(defn run-suite [engine]
+(defn run-suite
+  {:params [{:label :string :database :keyword :config :any & r}] :ret :nil}
+  "Run the whole CRUD suite against one engine's composition."
+  [engine]
   (def label (engine :label))
-  (defn note [msg] (print "  [" label "] " msg))
+  (defn note
+    {:params [:string] :ret :nil}
+    "Print one progress line, tagged with the engine under test."
+    [msg] (print "  [" label "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
@@ -163,7 +176,10 @@
       (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`)))
                         (text signed-in))))
     (assert token "the form carries a CSRF token")
-    (defn- post [uri &opt spec]
+    (defn- post
+      {:params [:string (or {:any :any} :nil)] :ret @{:raw :string & r}}
+      "Inject a request carrying the CSRF token every non-GET route needs."
+      [uri &opt spec]
       (test/inject c (merge {:uri uri :headers {"x-csrf-token" token}} (or spec {}))))
     (note "sign-in ok")
 

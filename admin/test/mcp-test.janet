@@ -75,7 +75,12 @@
    :db {:n1-guard :off}
    :admin {:access :staff}})
 
-(defn- boot [&opt mcp-config]
+(defn- boot
+  {:params [(or {:any :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}}
+  "Boot the composition, opening [:mcp :tools] by name when
+  `mcp-config` says so — the writing half stays shut otherwise."
+  [&opt mcp-config]
   (test/start!
     {:plugins ["void/http/init" "void/html/init" "void/htmx/init"
                "void/db/init" "void/db-sqlite/init" "void/db/http"
@@ -86,7 +91,12 @@
               :cli (merge base-config (if mcp-config {:mcp mcp-config} {}))}
      :only [:http/kernel :db/pool :authz/registry]}))
 
-(defn- seed! []
+(defn- seed!
+  {:params [] :ret {:rows @[{:keyword :any}] :count :number}}
+  "Recreate both tables fresh and load their fixture rows: notes
+  split across two owners so :scope has something to narrow, and one
+  doc the version-column suite races against."
+  []
   (db/execute-sql "DROP TABLE IF EXISTS notes" [] {:kind :write :prepared false})
   (db/execute-sql
     (string "CREATE TABLE notes (id integer primary key autoincrement, "

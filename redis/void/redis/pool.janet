@@ -37,6 +37,20 @@
   {:status 503 :doc "no connection became free within [:redis :pool :checkout-timeout]"})
 
 (defn- open-conn
+  {:params [(or {:keyword :any} @{:keyword :any})]
+   :ret @{:stream :abstract
+          :opts (or {:keyword :any} @{:keyword :any})
+          :buf :buffer :pos :number :lock :abstract :id :number
+          :generation :number :commands :number :pending :number
+          :in-multi :boolean :watching :boolean :protocol :number
+          :server :any :server-id :any :database :number
+          :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
+          :fresh :boolean & r}
+   :throws [:string
+            {:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   "Open a connection for a checkout. `:fresh` marks it as opened for
   this very checkout: a failure on it is the server being unreachable,
   not a socket that went stale in the idle stack, and ./state tells the
@@ -47,6 +61,28 @@
   c)
 
 (defn- revive
+  {:params [:any
+            @{:stream :abstract
+             :opts (or {:keyword :any} @{:keyword :any})
+             :buf :buffer :pos :number :lock :abstract :id :number
+             :generation :number :commands :number :pending :number
+             :in-multi :boolean :watching :boolean :protocol :number
+             :server :any :server-id :any :database :number
+             :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
+             :fresh :boolean & r}]
+   :ret @{:stream :abstract
+          :opts (or {:keyword :any} @{:keyword :any})
+          :buf :buffer :pos :number :lock :abstract :id :number
+          :generation :number :commands :number :pending :number
+          :in-multi :boolean :watching :boolean :protocol :number
+          :server :any :server-id :any :database :number
+          :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
+          :fresh :boolean & r}
+   :throws [:string
+            {:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   ``An idle connection, checked before it is handed over. A server-side
   idle timeout or a restart leaves a socket that looks fine until the
   first command fails on it, and a client that noticed only then would
@@ -63,12 +99,19 @@
   c)
 
 (defn- reusable?
+  {:params [@{:discard :boolean? :closed :boolean :broken :boolean :pending :number
+             :in-multi :boolean :watching :boolean & r}]
+   :ret :boolean :narrows :any}
   "May this connection serve the next owner: not discarded, open, and
   with its protocol state known-good (`conn/clean?`)?"
   [c]
   (and (not (c :discard)) (conn/open? c) (conn/clean? c)))
 
 (defn make
+  {:params [(or {:keyword :any} @{:keyword :any})
+            (or {:size :number? :checkout-timeout :number? & r}
+                @{:size :number? :checkout-timeout :number? & r} :nil)]
+   :ret :any}
   ``Build a pool over connection options: opts {:size 8
   :checkout-timeout 5}, `conn-opts` as ./conn takes them.``
   [conn-opts &opt opts]
@@ -90,6 +133,7 @@
   pool)
 
 (defn note-command!
+  {:params [:any :number] :ret :nil}
   "Record one executed command (called by the instrumented execution
   path in ./state)."
   [pool us]
@@ -108,6 +152,7 @@
   cpool/release)
 
 (defn discard!
+  {:params [@{:discard :boolean & r}] :ret :nil}
   "Mark a connection broken: the next checkin closes it instead of
   reusing it. A connection whose reply stream desynchronised is worse
   than no connection at all."

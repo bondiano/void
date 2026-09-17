@@ -58,20 +58,34 @@
    "void/authz/init" "void/authz/http" "void/admin/init"
    "void/jobs/init" "void/admin/jobs"])
 
-(defn- config [&opt admin-extra]
+(defn- config
+  {:params [(or {:any :any} :nil)]
+   :ret {:env @{:any :any}
+         :cli {:http {:port :number}
+               :db-sqlite {:path :string}
+               :jobs {:queues @{:keyword {:concurrency :number}}}
+               :admin {:access :keyword & r}}}}
+  "The boot config for one composition, with `admin-extra` folded
+  into [:admin] — the prefix override the last suite below needs."
+  [&opt admin-extra]
   {:env @{}
    :cli {:http {:port 0}
          :db-sqlite {:path ":memory:"}
          :jobs {:queues {:mail {:concurrency 1}}}
          :admin (merge {:access :staff} (or admin-extra {}))}})
 
-(defn- start [&opt admin-extra]
+(defn- start
+  {:params [(or {:any :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}}
+  "Boot the composition, [:admin] extras and all."
+  [&opt admin-extra]
   (test/start! {:plugins core-plugins
                 :profile :test
                 :config (config admin-extra)
                 :only [:http/kernel :authz/registry :jobs/queue]}))
 
 (defn- dead-id
+  {:params [] :ret :string}
   "Run the failing job into the dead letter queue and hand back its
   id — a real record, settled by the real runtime."
   []
@@ -85,8 +99,14 @@
 
 (defer (test/stop! boot)
   (def c (test/client boot))
-  (defn GET [uri] (test/inject c {:uri uri}))
-  (defn POST [uri &opt form]
+  (defn GET
+    {:params [:string] :ret @{:raw :string & r}}
+    "A GET through the client."
+    [uri] (test/inject c {:uri uri}))
+  (defn POST
+    {:params [:string (or {:any :any} :nil)] :ret @{:raw :string & r}}
+    "A POST through the client, with an empty form when none is given."
+    [uri &opt form]
     (test/inject c {:method :post :uri uri :form (or form {})}))
 
   (jobs/enqueue :quiet)

@@ -3,8 +3,16 @@
 (import void/proto/codec :as codec)
 (import void/proto/descriptor :as desc)
 
-(defn- hex [bs] (string/join (map |(string/format "%02x" $) bs) ""))
-(defn- unhex [s]
+(defn- hex
+  {:params [(or :string :buffer)] :ret :string}
+  "Bytes as a lowercase hex string, for comparing against protoc's
+  golden output."
+  [bs]
+  (string/join (map |(string/format "%02x" $) bs) ""))
+(defn- unhex
+  {:params [:string] :ret :string}
+  "A hex string back into the bytes it spells."
+  [s]
   (string/from-bytes
     ;(seq [i :range [0 (length s) 2]]
        (scan-number (string "0x" (string/slice s i (+ i 2)))))))
@@ -121,7 +129,10 @@
 
 # -- what the encoder refuses --------------------------------------------
 
-(defn- refused [f why]
+(defn- refused
+  {:params [(fn [] :any) :string] :ret :any}
+  "Assert that calling `f` fails, and return what it raised."
+  [f why]
   (def [ok err] (protect (f)))
   (assert (not ok) why)
   err)

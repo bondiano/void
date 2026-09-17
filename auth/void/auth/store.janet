@@ -48,7 +48,11 @@
 
 (import void/core/util :as util)
 
-(defn- require-fns [kind st name required]
+(defn- require-fns
+  {:params [:string :any :any [:keyword]] :ret :nil :throws [:string]}
+  "Raise unless every key in `required` names a callable in `st` — the
+  shared arity check the three store validators lean on."
+  [kind st name required]
   (each k required
     (unless (util/callable? (get st k))
       (errorf "%s %q: %q must be a function, got %q" kind name k (get st k)))))
@@ -56,6 +60,10 @@
 # -- user store ----------------------------------------------------------
 
 (defn normalize-user-store
+  {:params [:any]
+   :ret {:name :any :secret :function :claims :function
+         :find :function :subject :function & r}
+   :throws [:string]}
   "Validate a user store and fill in its documented fallbacks."
   [st]
   (unless (dictionary? st)
@@ -74,6 +82,9 @@
       st)))
 
 (defn memory-user-store
+  {:params [(or {:any {:keyword :any}} :nil) (or [:keyword] :nil)]
+   :ret {:name :keyword :records {:any {:keyword :any}}
+         :find :function :secret :function :subject :function :claims :function}}
   ``An in-process user store over a table of records, for tests and
   for applications whose user list is configuration. `records` is
   subject -> `{:email :password-hash :claims}`; `index` names the
@@ -115,6 +126,10 @@
 # -- token store ---------------------------------------------------------
 
 (defn normalize-token-store
+  {:params [:any]
+   :ret {:name :any :shared? :boolean :touch :function :list :function
+         :find :function :put :function :delete :function & r}
+   :throws [:string]}
   ``Validate an API-token store. Records are {:id :digest :subject
   :name :scopes :expires :created :used}; the store never sees a
   token, only its digest.``
@@ -141,6 +156,9 @@
   # The inner functions are named `token-put` and friends rather than
   # `put` and `find`: those are core functions, and a named `(fn put
   # ...)` shadows the one its own body needs.
+  {:params [] :ret {:name :keyword :rows @{:any {:keyword :any}}
+                    :find :function :put :function :delete :function
+                    :touch :function :list :function}}
   "An in-process token store — tests, and single-process deployments
   where tokens may die with the process."
   []
@@ -164,6 +182,10 @@
 # -- challenge store -----------------------------------------------------
 
 (defn normalize-challenge-store
+  {:params [:any]
+   :ret {:name :any :shared? :boolean :sweep :function
+         :put :function :take :function & r}
+   :throws [:string]}
   ``Validate a store for magic links and one-time codes. `:take` must
   return the record **and remove it in the same step** — a code that
   can be read twice is not one-time.``
@@ -175,13 +197,15 @@
   (freeze (merge @{:name name :shared? false :sweep (fn [] nil)} st)))
 
 (defn memory-challenge-store
+  {:params [] :ret {:name :keyword :rows @{:any {:keyword :any}}
+                    :put :function :take :function :sweep :function}}
   "An in-process challenge store. Single-use by construction, and
   per-process — with prefork workers or a fleet, a code issued by one
   process cannot be redeemed at another, which is what void/auth-db is for
   and what `[:deploy :shape] :fleet` refuses to start without."
   []
   (def rows @{})
-  (defn now [] (os/time))
+  (defn now {:params [] :ret :number} "The current time, in seconds — what an expiry is measured against." [] (os/time))
   {:name :memory
    :rows rows
    :put (fn challenge-put [id record ttl]
@@ -200,6 +224,7 @@
             nil)})
 
 (defn shared?
+  {:params [{:keyword :any}] :ret :boolean :narrows :any}
   "True when several processes see the same rows — the question
   `[:deploy :shape] :fleet` asks of every store it can reach
 ."

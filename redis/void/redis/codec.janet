@@ -60,6 +60,7 @@
   [raw jdn json])
 
 (defn find-codec
+  {:params [{:any :any} :keyword] :ret :any :throws [:string]}
   ``The codec named by `name` among `codecs` (the resolved extension
   point), or an error listing what there is — a typo in
   [:redis :codec] should not fall back to storing something else.``
@@ -70,17 +71,21 @@
               (util/names-str (keys codecs)))))
 
 (defn encode
+  {:params [{:encode (fn [a] b) & r} :any] :ret :any}
   "Encode one value with a codec."
   [codec v]
   ((codec :encode) v))
 
 (defn decode
+  {:params [{:decode (fn [a] b) & r} :any] :ret :any}
   ``Decode one reply with a codec. A nil reply (the key does not
   exist) stays nil in every codec: absence is not a value to decode.``
   [codec v]
   (if (nil? v) nil ((codec :decode) v)))
 
 (defn decode-all
+  {:params [{:decode (fn [a] b) & r} (or @[:any] [:any] :nil)]
+   :ret (or @[:any] :nil)}
   "Decode an array of replies — what MGET and the list commands
   answer with."
   [codec vs]

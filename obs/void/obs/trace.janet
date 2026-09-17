@@ -56,7 +56,12 @@
 
 # -- ids -----------------------------------------------------------------
 
-(defn- hex-prefix [bytes]
+(defn- hex-prefix
+  {:params [:number] :ret :string}
+  "This process's fixed random prefix: `bytes` bytes of
+  `os/cryptorand` as lowercase hex — the part of an id that keeps two
+  workers from minting the same one."
+  [bytes]
   (string/join (seq [x :in (os/cryptorand bytes)] (string/format "%02x" x))))
 
 (def- trace-prefix (hex-prefix 8))
@@ -65,6 +70,7 @@
 (var- span-counter 0)
 
 (defn new-trace-id
+  {:params [] :ret :string}
   ``A 32-hex-character trace id: this process's random prefix and a
   counter (see the module docstring). One `string/format` and not a
   format plus a concatenation — two ids are minted per request, and
@@ -74,6 +80,7 @@
   (string/format "%s%016x" trace-prefix (++ trace-counter)))
 
 (defn new-span-id
+  {:params [] :ret :string}
   "A 16-hex-character span id."
   []
   (string/format "%s%012x" span-prefix (++ span-counter)))
@@ -96,10 +103,17 @@
     (each c "0123456789abcdefABCDEF" (put t c true))
     (table/to-struct t)))
 
-(defn- hex? [s n]
+(defn- hex?
+  {:params [:any :number] :ret :boolean :narrows :string}
+  "Is `s` a string of exactly `n` hex digits?"
+  [s n]
   (and (string? s) (= n (length s)) (all |(get hex-chars $) s)))
 
 (defn parse-traceparent
+  {:params [:any]
+   :ret (or {:version :string :trace-id :string :parent-id :string
+             :sampled :boolean}
+            :nil)}
   ``Parse a `traceparent` header value:
   `00-<32 hex trace id>-<16 hex parent id>-<2 hex flags>`. Returns
   {:trace-id :parent-id :sampled :version} or nil — a malformed header
@@ -123,6 +137,8 @@
          :sampled (odd? (scan-number (string "0x" flags)))}))))
 
 (defn traceparent
+  {:params [@{:trace-id :string :span-id :string :sampled :boolean & r}]
+   :ret :string}
   "The `traceparent` header value for a span."
   [span]
   (string "00-" (span :trace-id) "-" (span :span-id) "-"
@@ -137,6 +153,10 @@
   [])
 
 (defn set-exporters!
+  {:params [(or @[{:name :keyword :fn (fn [:any] :any) & r}]
+                [{:name :keyword :fn (fn [:any] :any) & r}]
+                :nil)]
+   :ret :nil}
   "Install the exporter list (void/obs's :start does this)."
   [contribs]
   (set exporters (tuple ;(or contribs []))))
@@ -186,11 +206,19 @@
   1.0)
 
 (defn current
+  {:params []
+   :ret (or @{:name :string :trace-id :string :span-id :string
+              :parent-id :string? :remote :boolean :kind :keyword
+              :sampled :boolean :start :number :started-at :number
+              :attrs @{:any :any} :status :keyword & r}
+            :nil)}
   "The span this fiber is inside, or nil."
   []
   (dyn span-dyn))
 
 (defn context
+  {:params [(or @{:trace-id :string :span-id :string & r} :nil)]
+   :ret {:trace-id :string? :span-id :string?}}
   ``The correlation ids of the current span, as the log context wants
   them: {:trace-id ... :span-id ...}, or {} outside a span. This is
   the seam the logs line asks for — void/core/log
@@ -203,6 +231,7 @@
     {}))
 
 (defn sample?
+  {:params [:number?] :ret :boolean}
   "Roll the head sampling decision at `rate` (nil = the configured
   default)."
   [&opt rate]
@@ -213,6 +242,7 @@
     (< (math/random) r)))
 
 (defn consuming?
+  {:params [] :ret :boolean :narrows :any}
   ``Is there anything that would read a span started here?
 
   The same question `void/obs-http` asks before building a request's
@@ -232,6 +262,23 @@
            (not (empty? exporters)))))
 
 (defn start
+  {:params [:string
+            (or {:parent (or @{:trace-id :string :span-id :string
+                               :sampled :boolean & r}
+                             :nil)
+                 :remote (or {:trace-id :string :parent-id :string
+                              :sampled :boolean & r}
+                            :nil)
+                 :kind (enum :server :client :internal :producer :consumer)
+                 :attrs @{:any :any}
+                 :sample-rate :number
+                 :sampled :boolean
+                 & r}
+                :nil)]
+   :ret @{:name :string :trace-id :string :span-id :string
+          :parent-id :string? :remote :boolean :kind :keyword
+          :sampled :boolean :start :number :started-at :number
+          :attrs @{:any :any} :status :keyword & r}}
   ``Start a span and return it. Options:
 
     :parent      an explicit parent span (default: the fiber's current)
@@ -280,6 +327,7 @@
     :status :ok})
 
 (defn attr!
+  {:params [:any :any (or @{:attrs @{:any :any} & r} :nil)] :ret :any}
   ``Add an attribute to a span (default: the current one). Attributes
   are what makes a trace searchable — the route, the SQL statement
   kind, the job queue.``
@@ -289,6 +337,8 @@
   value)
 
 (defn error!
+  {:params [:any (or @{:status :keyword :attrs @{:any :any} & r} :nil)]
+   :ret :any}
   "Mark a span failed, with the error value as an attribute."
   [err &opt span]
   (default span (current))
@@ -298,6 +348,13 @@
   err)
 
 (defn end!
+  {:params [(or @{:name :string :status :keyword :attrs @{:any :any}
+                  :start :number :sampled :boolean :ended :boolean? & r}
+                :nil)
+            (or {:status :keyword :attrs @{:any :any} & r} :nil)]
+   :ret (or @{:name :string :status :keyword :attrs @{:any :any}
+              :start :number :sampled :boolean :ended :boolean? & r}
+            :nil)}
   ``Finish a span: stamp its duration, count it, and hand it to the
   exporters when it was sampled. An exporter that throws is logged and
   the rest still run — a broken exporter may not fail the request it
@@ -325,6 +382,22 @@
   span)
 
 (defn with-span*
+  {:params [:string
+            (or {:parent (or @{:trace-id :string :span-id :string
+                               :sampled :boolean & r}
+                             :nil)
+                 :remote (or {:trace-id :string :parent-id :string
+                              :sampled :boolean & r}
+                            :nil)
+                 :kind (enum :server :client :internal :producer :consumer)
+                 :attrs @{:any :any}
+                 :sample-rate :number
+                 :sampled :boolean
+                 & r}
+                :nil)
+            (fn [] :any)]
+   :ret :any
+   :throws [:any]}
   ``The function behind `with-span` — a span around a thunk. The span
   ends when the thunk does, including when it throws: the span is
   marked failed and the error is re-raised with `propagate`, so the
@@ -345,6 +418,7 @@
           (propagate err fib))))))
 
 (defmacro with-span
+  {:params [:any :any :any] :ret :any}
   ``Run `body` inside a span, with the trace ids bound to the log
   context for its whole extent:
 
@@ -356,6 +430,7 @@
   ~(,with-span* ,name ,opts (fn with-span-body [] ,;body)))
 
 (defn carrying
+  {:params [(fn [& :any] :any)] :ret (fn [& :any] :any)}
   "Wrap `f` so it runs inside the span bound at wrap time — for work
   handed to `ev/go`, whose fibers do not inherit dyns (the same answer
   `log/carrying` gives for the log context)."
@@ -369,6 +444,11 @@
 # -- outbound propagation ------------------------------------------------
 
 (defn inject!
+  {:params [@{:string :any} (or @{:trace-id :string :span-id :string
+                                   :sampled :boolean :tracestate :string?
+                                   & r}
+                                :nil)]
+   :ret @{:string :any}}
   ``Write the current trace context into an outgoing request's header
   table and return it:
 
@@ -388,6 +468,10 @@
   headers)
 
 (defn headers
+  {:params [(or @{:trace-id :string :span-id :string :sampled :boolean
+                  :tracestate :string? & r}
+                :nil)]
+   :ret @{:string :any}}
   "The trace-context headers for the current span as a fresh table."
   [&opt span]
   (inject! @{} span))

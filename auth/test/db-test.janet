@@ -68,7 +68,10 @@
 
 (def boot (plugin/start! {:plugins plugins :profile :test :config config}))
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :any}
+  "Recursively delete the sandbox directory this suite made for itself."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))

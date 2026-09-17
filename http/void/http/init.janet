@@ -52,7 +52,10 @@
   is what the hook-firing and route-rebuilding paths read.``
   nil)
 
-(defn- context []
+(defn- context
+  {:params [] :ret :any :throws [:string]}
+  "The booted http context, or an error before :before-start has run."
+  []
   (or current-context
       (error "void/http is not booted — plugin/start! builds the route table at :before-start")))
 
@@ -306,6 +309,7 @@
 # -- the error path, without the throw -----------------------------------
 
 (defn render-error
+  {:params [:any :any :number?] :ret :any}
   ``The response the error path would produce for `err` on `req` —
   the :void.http/error-renderer contributions in priority order
   (problem+json once void/rest is in the composition, the dev page in
@@ -329,7 +333,22 @@
 
 # -- context build (:before-start hook) ----------------------------------
 
-(defn- build-session [cfg stores profile]
+(defn- build-session
+  {:params [{:session (or {:enabled :boolean? :store :keyword? :ttl :number?
+                            :cookie :string? :cookie-opts (or @{:any :any} :nil) & r}
+                           :nil)
+             & r}
+            @{:keyword {:make :function :shared? :boolean? :replacement :string? & r}}
+            :keyword]
+   :ret (or :nil
+            @{:store :any :store-name :keyword :shared? :boolean
+              :replacement (or :string :nil) :ttl :number :cookie :string
+              :cookie-opts @{:any :any}})
+   :throws [:string]}
+  "The session config resolved into a store instance and its cookie
+  settings, or nil when sessions are off — reads the :void.http/session-store
+  contribution named by [:http :session :store], memory by default."
+  [cfg stores profile]
   (def scfg (get cfg :session))
   (when (and scfg (not= false (scfg :enabled)))
     (def store-name (get scfg :store :memory))
@@ -355,7 +374,13 @@
      :cookie-opts (merge (if (= :prod profile) {:secure true} {})
                          (get scfg :cookie-opts {}))}))
 
-(defn- access-log! [req resp]
+(defn- access-log!
+  {:params [{:received :number? :method :keyword :path :string & r}
+            {:status :number & r}]
+   :ret :nil}
+  "Log one access-log line: method, path, status, elapsed microseconds
+  and the request id."
+  [req resp]
   (def us
     (when-let [t (req :received)]
       # integer microseconds: precise, and no float-repr noise in %j
@@ -366,6 +391,10 @@
             :request-id (req keys/request-id)))
 
 (defn- resolve-global-hooks
+  {:params [(or @[{:fn :any :env :any :stage :keyword :name :keyword}]
+                [{:fn :any :env :any :stage :keyword :name :keyword}]
+                :nil)]
+   :ret :struct}
   "The :void.http/hook contributions -> stage -> tuple of resolved
   callables (symbols resolve against the contribution's :env)."
   [contribs]
@@ -379,7 +408,16 @@
                 call))
   (freeze by-stage))
 
-(defn- make-handler [ctx static-cfg]
+(defn- make-handler
+  {:params [{:cell :any :renderers :any :dev :boolean :on-error-global :tuple
+             :edge :tuple & r}
+            (or {:root :string :prefix :string? :index :string? & r} :nil)]
+   :ret (fn [:any] :any)}
+  "The composed request handler: routing (404/405 rendered like any
+  other response), static files in front of it when configured, the
+  panic guard around all of that, then the :void.http/edge layer
+  outermost — every response this process emits passes through it."
+  [ctx static-cfg]
   (def cell (ctx :cell))
   (var h
     (fn route-or-404 [req]
@@ -418,6 +456,9 @@
   h)
 
 (defn- projected-routes
+  {:params [:keyword (or @{:any :any} (fn [:any] :any)) :any]
+   :ret @{:any :any}
+   :throws [:string]}
   ``The :routes of a source, with the function form applied to the boot
   value: a source that projects something bootstrap resolved (void/admin
   turns its resource registry into routes) cannot carry the value in a
@@ -433,13 +474,24 @@
     routes))
 
 (defn build-context
+  {:params [:any]
+   :ret @{:boot :any :config :any :workers :number :dev :boolean
+          :renderers :any :codecs :any :access-log :boolean :edge :tuple
+          :edge-info :tuple :on-error-global :tuple :on-timeout-global :tuple
+          :on-response-global :tuple :session (or :any :nil) :cell :any
+          :build-args :any :handler (fn [:any] :any) :limits-fn (fn [:any :any] :any)
+          :notify-response (fn [:any :any] :any) :notify-timeout (fn [:any] :any)}
+   :throws [:string]}
   "Assemble the http context from a boot value: resolve the extension
   points, build and validate the route table (fail fast, batched),
   compose the handler. Sets current-context (the built-in middleware
   reads it from table-build time on). Normally called by the
   :before-start hook."
   [boot]
-  (defn resolved [name] (get-in boot [:extensions name :resolved]))
+  (defn resolved
+    {:params [:keyword] :ret :any}
+    "One extension point's resolved contribution value off this boot."
+    [name] (get-in boot [:extensions name :resolved]))
   (def cfg (or (get-in boot [:config :values :http]) {}))
   (def workers (prefork/worker-count (get cfg :workers 1)))
   (def dev? (if (nil? (cfg :dev-errors))
@@ -520,6 +572,11 @@
    :fn (fn build! [boot] (build-context boot))})
 
 (defn- request-from-raw
+  {:params [:buffer]
+   :ret @{:method :keyword :path :string :raw-path :string :query-string :string?
+          :query @{:any :any} :headers @{:any :any} :http-version [:number :number]
+          :received :number :arrived :number :body :string?}
+   :throws [:string]}
   "A whole raw HTTP request (bytes) -> request table, through the same
   wire parser the server uses (:raw mode: limits, smuggling vectors,
   malformed input). The body is the bytes past the head — no chunked
@@ -544,6 +601,16 @@
     :body (if (empty? body-bytes) nil body-bytes)})
 
 (defn make-request
+  {:params [{:raw :buffer? :uri :string? :path :string? :headers (or @{:any :any} :nil)
+             :body :any :json :any? :form (or @{:any :any} :nil) :method :any
+             :remote-addr :string? & r}]
+   :ret (or @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query @{:any :any} :headers @{:any :any} :http-version [:number :number]
+              :received :number :arrived :number :body :string?}
+            @{:method :any :path :string :raw-path :string :query-string :string?
+              :query @{:any :any} :headers @{:any :any} :http-version [:number :number]
+              :remote-addr :string? :received :number :arrived :number :body :any})
+   :throws [:string]}
   ``An in-memory request table from an inject/with-request spec:
   :method (:get, or :post once a body sugar is present),
   :uri/:path, :headers, :body, :remote-addr (the peer's address as a
@@ -586,6 +653,7 @@
 # -- the kernel and server components ------------------------------------
 
 (defn- run-app-hook
+  {:params [:keyword :any] :ret :nil}
   ``Run an app-level http hook (:void.http/listening / :draining) on
   the registry of the boot this context was built from, protected —
   transport notifications never block start/stop.
@@ -668,11 +736,16 @@
 # -- REPL / tooling surface ----------------------------------------------
 
 (defn routes-table
+  {:params [] :ret :any}
   "The current route table."
   []
   (router/current ((context) :cell)))
 
 (defn with-request
+  {:params [{:raw :buffer? :uri :string? :path :string? :headers (or @{:any :any} :nil)
+             :body :any :json :any? :form (or @{:any :any} :nil) :method :any
+             :remote-addr :string? & r}]
+   :ret :any}
   ``Run a request through the full stack — routing, middleware,
   sessions, error rendering — without a socket:
 
@@ -688,6 +761,7 @@
   (((context) :handler) (make-request spec)))
 
 (defn explain-route
+  {:params [:string :keyword?] :ret (or :nil {:edge :tuple & r})}
   "The routing verdict and per-key metadata provenance for a path (see
   router/explain-route), plus :edge — the :void.http/edge layer every
   response passes through, [{:name :phase :plugin} ...] outermost
@@ -697,6 +771,7 @@
     (merge ex {:edge (get (context) :edge-info [])})))
 
 (defn url-for
+  {:params [:keyword (or @{:any :any} :nil) (or @{:any :any} :nil)] :ret :any}
   "Reverse routing by route name against the current table."
   [name &opt params query]
   (router/url-for (routes-table) name params query))
@@ -710,7 +785,11 @@
   [[:void.admin/widget-route (fn [v] (when v "widget"))]
    [:void.grpc/method (fn [v] (when v (string/format "rpc %q" v)))]])
 
-(defn- tags-of [e]
+(defn- tags-of
+  {:params [{:meta @{:any :any} & r}] :ret :string}
+  "The space-joined tag words other plugins' metadata keys earn a
+  route (`route-tags`) — \"widget\", \"rpc :name\", and so on."
+  [e]
   (string/join (seq [[k f] :in route-tags
                      :let [t (f (get-in e [:meta k]))]
                      :when t]
@@ -718,6 +797,13 @@
                " "))
 
 (defn print-routes
+  {:params [{:routes (or @[{:method :keyword :pattern :string :name :any
+                            :handler :any :source :any :meta @{:any :any} & r}]
+                         [{:method :keyword :pattern :string :name :any
+                           :handler :any :source :any :meta @{:any :any} & r}])
+             & r}
+            (or @{:keys :boolean? & r} :nil)]
+   :ret :nil}
   ``Print the route table (the `void routes` CLI command). With :keys
   each route also lists its merged metadata, one key per line — :name
   aside, since it is already a column. A widget route and an RPC
@@ -746,6 +832,10 @@
         (printf "  %q %q" k (get-in e [:meta k]))))))
 
 (defn chain-lines
+  {:params [{:method :keyword :pattern :string :name :any :handler :any :source :any
+             :edge (or @[:any] [:any]) :chain (or @[:any] [:any]) :hooks @{:any :any}
+             :declined (or @[:any] [:any]) :warnings (or @[:any] [:any]) & r}]
+   :ret @[:string]}
   ``The lines `void routes --chain <path>` prints for one explain-route
   verdict: the edge layer (every response passes it, outside routing),
   the chain outermost first as name@phase with the plugin — stage
@@ -754,8 +844,16 @@
   warnings.``
   [ex]
   (def out @[])
-  (defn line [& parts] (array/push out (string ;parts)))
-  (defn block [label items]
+  (defn line
+    {:params [:any] :ret :array}
+    "Push one already-formatted line (its parts concatenated as
+    strings) onto `out`."
+    [& parts] (array/push out (string ;parts)))
+  (defn block
+    {:params [:string (or @[:any] [:any])] :ret :nil}
+    "Push `label` (once, aligned) followed by each of `items`, indented
+    to line up under it."
+    [label items]
     (each [i s] (pairs items)
       (line "  " (if (zero? i) (string/format "%-9s" label) "         ") s)))
   (line (string/format "%s %s -> %q (handler %s, source %q%s)"
@@ -780,6 +878,7 @@
   out)
 
 (defn print-chain
+  {:params [:string :keyword?] :ret :nil}
   "Print what `chain-lines` says about one path, or that nothing matches."
   [path &opt method]
   (if-let [ex (explain-route path method)]
@@ -803,6 +902,10 @@
            (print-routes (routes-table) {:keys (opts :keys)})))})
 
 (defn- live-sources
+  {:params [:any (or @[{:name :keyword :routes :any :env :any & r}]
+                     [{:name :keyword :routes :any :env :any & r}])]
+   :ret @[{:name :keyword :routes :any :env :any}]
+   :throws [:string]}
   ``Route sources re-read from the live manifest registry: a dofile
   reload of an app module re-runs its `defplugin`, which re-registers
   the manifest — so the registry holds the *current* :void.http/route-source
@@ -831,6 +934,7 @@
   out)
 
 (defn rebuild!
+  {:params [] :ret :any :throws [:string]}
   "Rebuild the route table and swap it atomically — after code changes
   that add routes or edit patterns/metadata (handler redefinitions are
   live without this). Route sources are re-read from the live manifest

@@ -24,7 +24,12 @@
 (def cfg (server/config {:application-name "void-driver-test"}))
 (def drv (db/normalize-driver (postgres/from-config cfg)))
 
-(defn- exec [h sql &opt params]
+(defn- exec
+  {:params [:any :string (or @[:any] [:any] :nil)] :ret :any}
+  "Run one statement on a checked-out handle through the normalized
+  driver, the way the pool would — every assertion below reads its
+  {:rows :count}."
+  [h sql &opt params]
   ((drv :execute) h sql (or params []) {:kind :write}))
 
 (def h ((drv :connect)))

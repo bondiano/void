@@ -31,6 +31,7 @@
   :void.db/null)
 
 (defn snake
+  {:params [(or :keyword :string)] :ret :string}
   "Column/table spelling of an identifier: kebab and camel to snake —
   :brand-id -> \"brand_id\", :OrderItem -> \"order_item\"."
   [x]
@@ -51,10 +52,16 @@
 
 # -- dialects ------------------------------------------------------------
 
-(defn- quote-ansi [s]
+(defn- quote-ansi
+  {:params [:string] :ret :string}
+  "Double-quote an identifier the ANSI way, doubling any embedded quote."
+  [s]
   (string `"` (string/replace-all `"` `""` s) `"`))
 
-(defn- quote-backtick [s]
+(defn- quote-backtick
+  {:params [:string] :ret :string}
+  "Backtick-quote an identifier, doubling any embedded backtick."
+  [s]
   # MySQL's own quoting. `"` is an identifier quote there only under
   # the ANSI_QUOTES sql_mode and a string literal otherwise, so a
   # driver that quoted the ANSI way would compile differently
@@ -84,6 +91,21 @@
    :uuid "uuid" :blob "blob" :bytes "blob"})
 
 (defn register-dialect!
+  {:params [:keyword
+            {:placeholder :function
+             :quote (or (fn [:string] :string) :nil)
+             :types (or {:keyword :string} :nil)
+             :offset-needs-limit (or :string :boolean :nil)
+             :backslash-escapes :boolean?
+             :index-if-not-exists :boolean?
+             :partial-indexes :boolean?
+             :row-locks :boolean?
+             :skip-locked :boolean?
+             :share-lock :string?
+             :upsert :keyword?
+             :advisory-lock (or {:acquire :function :release :function :acquired? :function? & r} :nil)}]
+   :ret :keyword
+   :throws [:string]}
   ``Register a dialect: {:placeholder (fn [n] str) :quote (fn [name] str)?
   :types {type-keyword sql-string}?}. The types are merged over
   `ansi-types`. Drivers name their dialect through the :dialect key of
@@ -147,6 +169,21 @@
   name)
 
 (defn dialect
+  {:params [:keyword]
+   :ret {:name :keyword
+         :placeholder :function
+         :quote :function
+         :types {:keyword :string}
+         :offset-needs-limit (or :string :boolean :nil)
+         :backslash-escapes (or :boolean :nil)
+         :index-if-not-exists :boolean
+         :partial-indexes :boolean
+         :row-locks :boolean
+         :skip-locked :boolean
+         :share-lock :string
+         :upsert :keyword
+         :advisory-lock (or {:acquire :function :release :function :acquired? :function? & r} :nil)}
+   :throws [:string]}
   "Fetch a registered dialect by name."
   [name]
   (or (get dialect-registry name)
@@ -157,6 +194,7 @@
                            " "))))
 
 (defn capability
+  {:params [:keyword :keyword] :ret :any :throws [:string]}
   ``One flag of a dialect (see `register-dialect!`), by name: (sql/capability
   :mysql :partial-indexes) is false. What a plugin asks when the answer
   changes the statement it declares rather than the string that
@@ -181,6 +219,7 @@
            :json "text" :jsonb "text" :uuid "text"}})
 
 (defn- advisory-key
+  {:params [:string] :ret :number}
   ``A stable positive integer for a lock name: Postgres numbers its
   advisory locks rather than naming them. A polynomial hash in plain
   arithmetic (Janet's bit operations are 32-bit *signed*, and the
@@ -275,17 +314,32 @@
 # statement which cannot carry parameters
 (var- ddl-literal nil)
 
-(defn- param! [ctx v]
+(defn- param!
+  {:params [@{:d {:placeholder :function & r} :params @[:any] :literals :any & r} :any]
+   :ret :string}
+  "A value position, compiled: a DDL literal under :literals, else a
+  bound parameter pushed onto ctx and this dialect's placeholder for
+  its position."
+  [ctx v]
   (if (get ctx :literals)
     (ddl-literal (ctx :d) v)
     (do
       (array/push (ctx :params) (if (= null v) nil v))
       (((ctx :d) :placeholder) (length (ctx :params))))))
 
-(defn- quote-part [d s]
+(defn- quote-part
+  {:params [{:quote :function & r} :string] :ret :string}
+  "One dot-separated part of an identifier, quoted — `*` passes
+  through bare, since `\"*\"` would stop `select *` from meaning
+  every column."
+  [d s]
   (if (= s "*") "*" ((d :quote) s)))
 
-(defn- ident [d x]
+(defn- ident
+  {:params [{:quote :function & r} (or :string :keyword)] :ret :string :throws [:string]}
+  "A SQL identifier: a string quoted verbatim, a keyword snake_cased
+  and quoted part by part (so `:users.id` becomes `\"users\".\"id\"`)."
+  [d x]
   (cond
     (string? x) ((d :quote) x)
     (keyword? x)
@@ -293,10 +347,16 @@
                  ".")
     (errorf "sql identifier must be a keyword or string, got %q" x)))
 
-(defn- raw? [x]
+(defn- raw?
+  {:params [:any] :ret :boolean :narrows [:keyword :any]}
+  "Is x a `[:raw sql]` passthrough form?"
+  [x]
   (and (indexed? x) (= :raw (first x))))
 
-(defn- raw-sql [x]
+(defn- raw-sql
+  {:params [[:keyword :any]] :ret :string :throws [:string]}
+  "The SQL string inside a `[:raw sql]` form."
+  [x]
   (unless (= 2 (length x))
     (errorf "[:raw sql] takes exactly one SQL string, got %q" x))
   (def s (in x 1))
@@ -304,10 +364,16 @@
     (errorf "[:raw sql]: sql must be a string, got %q" s))
   s)
 
-(defn- sql? [x]
+(defn- sql?
+  {:params [:any] :ret :boolean :narrows [:keyword :any]}
+  "Is x a `[:sql sql params]` fragment form?"
+  [x]
   (and (indexed? x) (= :sql (first x)) (or (= 2 (length x)) (= 3 (length x)))))
 
 (defn- sql-fragment
+  {:params [@{:d {:placeholder :function & r} :params @[:any] :literals :any & r} [:keyword :any]]
+   :ret :string
+   :throws [:string]}
   ``[:sql "n + ?" [1]] — hand-written SQL that still carries values.
   `[:raw]` with parameters, and the reason three plugins used to keep
   their own placeholder function: a fragment written with `?` is not
@@ -337,9 +403,19 @@
     (array/push out (in pieces (inc i))))
   (string ;out))
 
-(defn- fragment? [x] (or (raw? x) (sql? x)))
+(defn- fragment?
+  {:params [:any] :ret :boolean :narrows [:keyword :any]}
+  "Is x a `[:raw ...]` or `[:sql ...]` passthrough form?"
+  [x]
+  (or (raw? x) (sql? x)))
 
-(defn- fragment-str [ctx x]
+(defn- fragment-str
+  {:params [@{:d {:placeholder :function & r} :params @[:any] :literals :any & r} [:keyword :any]]
+   :ret :string
+   :throws [:string]}
+  "Compile a passthrough fragment — raw SQL verbatim, or a `[:sql ...]`
+  with its own parameters."
+  [ctx x]
   (if (raw? x) (raw-sql x) (sql-fragment ctx x)))
 
 (def- statement-heads
@@ -347,6 +423,7 @@
    :create-table :drop-table :alter-table :create-index :drop-index])
 
 (defn- statement?
+  {:params [:any] :ret :boolean :narrows {:any :any}}
   ``Is this dictionary a statement — something with a head key — as
   opposed to a value that happens to be a map? The distinction is why
   a subquery is recognized in operand positions only: `{:set {:meta
@@ -360,19 +437,36 @@
 # statement in an operand position, and operands are compiled first
 (var- compile-stmt nil)
 
-(defn- subquery-str [ctx stmt]
+(defn- subquery-str
+  {:params [@{:d {:quote :function :placeholder :function & r} :params @[:any] & r} {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "A statement map compiled and parenthesized, for an operand position."
+  [ctx stmt]
   (string "(" (compile-stmt ctx stmt) ")"))
 
-(defn- val? [x]
+(defn- val?
+  {:params [:any] :ret :boolean :narrows [:keyword :any]}
+  "Is x a `[:val x]` — data that must not be read as a column?"
+  [x]
   (and (indexed? x) (= :val (first x)) (= 2 (length x))))
 
-(defn- col? [x]
+(defn- col?
+  {:params [:any] :ret :boolean :narrows [:keyword :any]}
+  "Is x a `[:col name]` — an exact, un-snake_cased column identifier?"
+  [x]
   (and (indexed? x) (= :col (first x)) (= 2 (length x))))
 
-(defn- excluded? [x]
+(defn- excluded?
+  {:params [:any] :ret :boolean :narrows [:keyword :any]}
+  "Is x a `[:excluded col]` — the value the losing INSERT of an upsert proposed?"
+  [x]
   (and (indexed? x) (= :excluded (first x)) (= 2 (length x))))
 
 (defn- excluded-str
+  {:params [@{:d {:upsert :keyword :quote :function & r} & r} (or :string :keyword)]
+   :ret :string
+   :throws [:string]}
   ``The value the conflicting INSERT proposed, inside an upsert's SET —
   `excluded.col` where the upsert is ON CONFLICT, `VALUES(col)` on
   MySQL. The deprecated `VALUES()` rather than 8.0.19's row alias,
@@ -384,6 +478,11 @@
     (string "excluded." (ident d c))))
 
 (defn- value-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any]
+   :ret :string
+   :throws [:string]}
   "A value position: always a parameter (or a SQL fragment) — keywords
   here are data, not columns, and so is a map (see `statement?`)."
   [ctx v]
@@ -394,6 +493,11 @@
     (param! ctx v)))
 
 (defn- operand
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any]
+   :ret :string
+   :throws [:string]}
   "An operand of a binary operator: keyword = column (snake-cased),
   [:col name] = an exact column identifier (quoted verbatim, no snake —
   how a caller names a column whose spelling is not snake_case), [:val x]
@@ -410,6 +514,9 @@
     (param! ctx x)))
 
 (defn- table-str
+  {:params [@{:d {:quote :function :placeholder :function & r} :params @[:any] & r} :any]
+   :ret :string
+   :throws [:string]}
   ``A table position: a name, [name :alias], or [statement :alias] —
   the derived table, which every engine wants a name for. [:raw ...]
   passes through, for the table-valued functions no two engines
@@ -434,15 +541,34 @@
 
 (var- clause nil)
 
-(defn- null-value? [v]
+(defn- null-value?
+  {:params [:any] :ret :boolean :narrows :any}
+  "Is v nil, or the explicit SQL NULL sentinel?"
+  [v]
   (or (nil? v) (= null v)))
 
-(defn- eq-str [ctx k v]
+(defn- eq-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any :any]
+   :ret :string
+   :throws [:string]}
+  "The dictionary where-sugar's `k v` pair — `IS NULL` for a nil/NULL
+  value, `= ` otherwise."
+  [ctx k v]
   (if (null-value? v)
     (string (operand ctx k) " IS NULL")
     (string (operand ctx k) " = " (value-str ctx v))))
 
-(defn- in-str [ctx c negated]
+(defn- in-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any :boolean]
+   :ret :string
+   :throws [:string]}
+  "`[:in column values]` / `[:not-in column values]`: values is a
+  tuple/array (an IN list) or a statement (a subquery)."
+  [ctx c negated]
   (unless (= 3 (length c))
     (errorf "sql %q expects [%q column values], got %q" (first c) (first c) c))
   (def [_ col vals] c)
@@ -462,7 +588,12 @@
             (string/join (map |(value-str ctx $) vals) ", ")
             ")")))
 
-(defn- exists-str [ctx c negated]
+(defn- exists-str
+  {:params [@{:d {:quote :function :placeholder :function & r} :params @[:any] & r} :any :boolean]
+   :ret :string
+   :throws [:string]}
+  "`[:exists stmt]` / `[:not-exists stmt]`: stmt must be a statement map."
+  [ctx c negated]
   (unless (= 2 (length c))
     (errorf "sql %q expects [%q statement], got %q" (first c) (first c) c))
   (def sub (in c 1))
@@ -470,14 +601,30 @@
     (errorf "sql %q: expects a statement map, got %q" (first c) sub))
   (string (if negated "NOT EXISTS " "EXISTS ") (subquery-str ctx sub)))
 
-(defn- logical-str [ctx word cs]
+(defn- logical-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :string (or @[:any] [:any])]
+   :ret :string
+   :throws [:string]}
+  "AND/OR a tuple of clauses: unwrapped when there is exactly one,
+  parenthesized otherwise."
+  [ctx word cs]
   (when (empty? cs)
     (errorf "sql %q needs at least one clause" word))
   (if (= 1 (length cs))
     (clause ctx (first cs))
     (string "(" (string/join (map |(clause ctx $) cs) (string " " word " ")) ")")))
 
-(defn- cmp-str [ctx c]
+(defn- cmp-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any]
+   :ret :string
+   :throws [:string]}
+  "`[op a b]` for a comparison operator: IS NULL / IS NOT NULL when
+  the right side is nil/NULL and op is = or <>, the operator otherwise."
+  [ctx c]
   (def [op a b] c)
   (unless (= 3 (length c))
     (errorf "sql %q expects [%q a b], got %q" op op c))
@@ -524,18 +671,37 @@
 
 # -- shared statement pieces ---------------------------------------------
 
-(defn- check-keys [stmt allowed what]
+(defn- check-keys
+  {:params [{:any :any} {:keyword :boolean} :string] :ret :nil :throws [:string]}
+  "Refuse a statement key `what` does not allow — the mistyped-clause
+  guard every statement compiler runs first."
+  [stmt allowed what]
   (eachk k stmt
     (unless (in allowed k)
       (errorf "sql %s: unknown key %q (allowed: %s)"
               what k
               (util/names-str (keys allowed))))))
 
-(defn- where-str [ctx stmt]
+(defn- where-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            {:where :any & r}]
+   :ret :string?
+   :throws [:string]}
+  "The WHERE clause of a statement, or nil when it has none."
+  [ctx stmt]
   (when-let [w (get stmt :where)]
     (string "WHERE " (clause ctx w))))
 
-(defn- returning-str [ctx r]
+(defn- returning-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any]
+   :ret :string?
+   :throws [:string]}
+  "The RETURNING clause: `*` for `true`, a column list for a tuple, or
+  nil when r is falsy."
+  [ctx r]
   (when r
     (def cols
       (cond
@@ -544,7 +710,10 @@
         (errorf "sql :returning must be true or a tuple of columns, got %q" r)))
     (string "RETURNING " cols)))
 
-(defn- order-str [ctx items]
+(defn- order-str
+  {:params [@{:d {:quote :function & r} & r} :any] :ret :string? :throws [:string]}
+  "The ORDER BY clause: a column, or [column :asc|:desc], comma-joined."
+  [ctx items]
   (when items
     (unless (indexed? items)
       (errorf "sql :order-by must be a tuple, got %q" items))
@@ -562,7 +731,16 @@
                   (errorf "sql :order-by entry must be a column or [column :asc|:desc], got %q" it)))
               ", "))))
 
-(defn- limit-str [ctx stmt]
+(defn- limit-str
+  {:params [@{:d {:placeholder :function :offset-needs-limit :any & r}
+              :params @[:any] :literals :any & r}
+            {:limit :any :offset :any & r}]
+   :ret @[:string]
+   :throws [:string]}
+  "The LIMIT/OFFSET clause pieces, as a (possibly empty) array of SQL
+  fragments — an OFFSET with no LIMIT borrows the dialect's own
+  largest-LIMIT literal where the engine needs one."
+  [ctx stmt]
   (def out @[])
   (defn count! [k]
     (when-let [n (get stmt k)]
@@ -594,6 +772,10 @@
 (def- lock-opts {:mode true :skip-locked true})
 
 (defn- lock-str
+  {:params [@{:d {:row-locks :any :share-lock :any :skip-locked :any & r} & r}
+            {:lock :any & r}]
+   :ret :string?
+   :throws [:string]}
   ``The row lock a claim takes: `:lock :update` (FOR UPDATE), or
   `:lock {:mode :update :skip-locked true}`. Both halves fall back
   rather than fail: an engine with no row locks drops the clause (its
@@ -622,7 +804,14 @@
                 " SKIP LOCKED"
                 "")))))
 
-(defn- join-strs [ctx word pairs]
+(defn- join-strs
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :string (or @[:any] [:any])]
+   :ret @[:string]
+   :throws [:string]}
+  "One `word` (JOIN / LEFT JOIN) line per `[table on-clause]` pair."
+  [ctx word pairs]
   (unless (indexed? pairs)
     (errorf "sql joins must be [[table on-clause] ...], got %q" pairs))
   (seq [p :in pairs]
@@ -631,6 +820,11 @@
     (string word " " (table-str ctx (first p)) " ON " (clause ctx (in p 1)))))
 
 (defn- selected-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any]
+   :ret :string
+   :throws [:string]}
   ``One entry of a select list: an operand, or `[:as <operand>
   :alias]`. The alias is only legal here — a name a result column is
   read back under, which is how a join's extra columns arrive with
@@ -643,7 +837,17 @@
       (string (operand ctx (in x 1)) " AS " (ident (ctx :d) (in x 2))))
     (operand ctx x)))
 
-(defn- compile-select [ctx stmt]
+(defn- compile-select
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
+                  :row-locks :any :share-lock :any :skip-locked :any
+                  :offset-needs-limit :any & r}
+              :params @[:any] :literals :any & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile a :select statement: SELECT, FROM, JOINs, WHERE, GROUP BY,
+  HAVING, ORDER BY, LIMIT/OFFSET, then the row lock."
+  [ctx stmt]
   (check-keys stmt select-keys ":select")
   (def from (or (get stmt :from)
                 (error "sql :select needs a :from table")))
@@ -673,6 +877,12 @@
 (def- on-conflict-keys {:on true :set true :where true})
 
 (defn- on-conflict-str
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
+                  :name :keyword & r}
+              :params @[:any] :literals :any & r}
+            :any @[:keyword]]
+   :ret :string
+   :throws [:string]}
   ``The upsert: `:on-conflict :nothing`, or a map — {:on [:id] :set
   {:n [:sql "n + ?" [1]]} :where [...]}. `:set` is what makes it a DO
   UPDATE; without it the row is dropped. `[:excluded :col]` is the
@@ -742,7 +952,16 @@
                         (if where (string " WHERE " (clause ctx where)) ""))
                 "DO NOTHING")))))
 
-(defn- compile-insert [ctx stmt]
+(defn- compile-insert
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
+                  :name :keyword & r}
+              :params @[:any] :literals :any & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile an :insert statement: one row or several (same columns
+  each), an optional upsert, an optional RETURNING."
+  [ctx stmt]
   (check-keys stmt insert-keys ":insert")
   (def rows
     (let [v (or (get stmt :values)
@@ -778,7 +997,15 @@
 
 (def- update-keys {:update true :set true :where true :returning true})
 
-(defn- compile-update [ctx stmt]
+(defn- compile-update
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile an :update statement: SET, an optional WHERE, an optional
+  RETURNING."
+  [ctx stmt]
   (check-keys stmt update-keys ":update")
   (def sets (or (get stmt :set)
                 (error "sql :update needs :set")))
@@ -797,7 +1024,14 @@
 
 (def- delete-keys {:delete true :where true :returning true})
 
-(defn- compile-delete [ctx stmt]
+(defn- compile-delete
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
+              :params @[:any] :literals :any & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile a :delete statement: an optional WHERE, an optional RETURNING."
+  [ctx stmt]
   (check-keys stmt delete-keys ":delete")
   (def parts @[(string "DELETE FROM " (ident (ctx :d) (stmt :delete)))])
   (when-let [w (where-str ctx stmt)] (array/push parts w))
@@ -822,6 +1056,7 @@
    :set-default "SET DEFAULT" :no-action "NO ACTION"})
 
 (defn- quote-string-literal
+  {:params [{:backslash-escapes :any & r} :string] :ret :string}
   ``A string as a DDL literal. `'` doubles everywhere; `\` doubles too
   on a dialect that treats it as an escape (MySQL) — otherwise a value
   like `a\'` closes the string one character early and the tail becomes
@@ -834,6 +1069,7 @@
   (string "'" escaped "'"))
 
 (defn- literal
+  {:params [{:backslash-escapes :any & r} :any] :ret :string :throws [:string]}
   "A DDL literal — a DEFAULT is part of the statement, not a parameter."
   [d v]
   (cond
@@ -847,7 +1083,11 @@
 
 (set ddl-literal literal)
 
-(defn- type-str [d t]
+(defn- type-str
+  {:params [{:types {:keyword :string} :name :keyword & r} :any] :ret :string :throws [:string]}
+  "The SQL spelling of a column type: a raw passthrough, a string
+  verbatim, or a keyword looked up in the dialect's type table."
+  [d t]
   (cond
     (raw? t) (raw-sql t)
     (string? t) t
@@ -862,7 +1102,13 @@
   {:primary-key true :null true :unique true :default true
    :refs true :on-delete true :on-update true})
 
-(defn- references-str [d opts]
+(defn- references-str
+  {:params [{:quote :function & r} {:refs :any :on-delete :any :on-update :any & r}]
+   :ret :string?
+   :throws [:string]}
+  "The REFERENCES clause of a column, with its optional ON DELETE / ON
+  UPDATE actions, or nil when the column has no :refs."
+  [d opts]
   (when-let [r (get opts :refs)]
     (def [table column]
       (cond
@@ -885,6 +1131,11 @@
     (string/join parts " ")))
 
 (defn- column-str
+  {:params [{:quote :function :types {:keyword :string} :name :keyword
+             :backslash-escapes :any & r}
+            :any]
+   :ret :string
+   :throws [:string]}
   ``One column of a :create-table (or the argument of an :add-column):
   [name type] or [name type {opts}].``
   [d col]
@@ -914,7 +1165,16 @@
 (def- create-table-keys
   {:create-table true :columns true :if-not-exists true :primary-key true})
 
-(defn- compile-create-table [ctx stmt]
+(defn- compile-create-table
+  {:params [@{:d {:quote :function :types {:keyword :string} :name :keyword
+                  :backslash-escapes :any & r}
+              & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile a :create-table statement: every column, plus an optional
+  composite :primary-key."
+  [ctx stmt]
   (check-keys stmt create-table-keys ":create-table")
   (def d (ctx :d))
   (def cols (get stmt :columns))
@@ -933,7 +1193,10 @@
 
 (def- drop-table-keys {:drop-table true :if-exists true :cascade true})
 
-(defn- compile-drop-table [ctx stmt]
+(defn- compile-drop-table
+  {:params [@{:d {:quote :function & r} & r} {:any :any}] :ret :string :throws [:string]}
+  "Compile a :drop-table statement."
+  [ctx stmt]
   (check-keys stmt drop-table-keys ":drop-table")
   (string "DROP TABLE "
           (if (get stmt :if-exists) "IF EXISTS " "")
@@ -944,7 +1207,16 @@
   {:alter-table true :add-column true :drop-column true
    :rename-column true :rename-to true})
 
-(defn- compile-alter-table [ctx stmt]
+(defn- compile-alter-table
+  {:params [@{:d {:quote :function :types {:keyword :string} :name :keyword
+                  :backslash-escapes :any & r}
+              & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile an :alter-table statement — exactly one of :add-column,
+  :drop-column, :rename-column or :rename-to."
+  [ctx stmt]
   (check-keys stmt alter-table-keys ":alter-table")
   (def d (ctx :d))
   (def head (string "ALTER TABLE " (ident d (stmt :alter-table)) " "))
@@ -971,7 +1243,17 @@
   {:create-index true :on true :columns true :unique true :if-not-exists true
    :where true})
 
-(defn- compile-create-index [ctx stmt]
+(defn- compile-create-index
+  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
+                  :partial-indexes :any :index-if-not-exists :any :name :keyword & r}
+              :params @[:any] :literals :any & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
+  "Compile a :create-index statement; a :where predicate compiles to a
+  literal (DDL carries no parameters) and is refused on a dialect with
+  no partial indexes."
+  [ctx stmt]
   (check-keys stmt create-index-keys ":create-index")
   (def d (ctx :d))
   (def cols (get stmt :columns))
@@ -1006,7 +1288,10 @@
 
 (def- drop-index-keys {:drop-index true :if-exists true :on true})
 
-(defn- compile-drop-index [ctx stmt]
+(defn- compile-drop-index
+  {:params [@{:d {:quote :function & r} & r} {:any :any}] :ret :string :throws [:string]}
+  "Compile a :drop-index statement."
+  [ctx stmt]
   (check-keys stmt drop-index-keys ":drop-index")
   (string "DROP INDEX "
           (if (get stmt :if-exists) "IF EXISTS " "")
@@ -1021,6 +1306,7 @@
 # whose :where is extended as the conditions are learned.
 
 (defn all-of
+  {:params [:any] :ret :any}
   ``The clauses that are there, ANDed: nil arguments are skipped, one
   clause is itself, none is nil (which is what `:where` reads as "no
   condition").``
@@ -1032,6 +1318,7 @@
     [:and ;cs]))
 
 (defn any-of
+  {:params [:any] :ret :any}
   "The clauses that are there, ORed — see `all-of`."
   [& clauses]
   (def cs (filter |(not (nil? $)) clauses))
@@ -1041,6 +1328,7 @@
     [:or ;cs]))
 
 (defn and-where
+  {:params [:any :any] :ret :any}
   ``A statement with `clause` ANDed onto its :where — the way a partial
   statement grows a condition. A nil clause leaves the statement
   alone, so a caller can hand the result of a `when` straight in.``
@@ -1052,6 +1340,15 @@
 # -- entry point ---------------------------------------------------------
 
 (defn- compile-statement
+  {:params [@{:d {:name :keyword :quote :function :placeholder :function
+                  :types {:keyword :string} :upsert :keyword
+                  :row-locks :any :share-lock :any :skip-locked :any
+                  :offset-needs-limit :any :partial-indexes :any
+                  :index-if-not-exists :any :backslash-escapes :any & r}
+              :params @[:any] :literals :any & r}
+            {:any :any}]
+   :ret :string
+   :throws [:string]}
   "The dispatch on a statement's head key — also what a subquery in an
   operand position is compiled with."
   [ctx stmt]
@@ -1077,6 +1374,24 @@
 (set compile-stmt compile-statement)
 
 (defn format
+  {:params [{:any :any}
+            (or :keyword
+                {:name :keyword
+                 :placeholder :function
+                 :quote :function
+                 :types {:keyword :string}
+                 :offset-needs-limit (or :string :boolean :nil)
+                 :backslash-escapes (or :boolean :nil)
+                 :index-if-not-exists :boolean
+                 :partial-indexes :boolean
+                 :row-locks :boolean
+                 :skip-locked :boolean
+                 :share-lock :string
+                 :upsert :keyword
+                 :advisory-lock (or {:acquire :function :release :function :acquired? :function? & r} :nil)}
+                :nil)]
+   :ret [:string [:any]]
+   :throws [:string]}
   ``Compile a statement map into [sql params] for a dialect (a name or
   a dialect value; default :ansi). The statement kind is the map's
   head key: :select/:insert/:update/:delete for data,

@@ -150,7 +150,13 @@
    :scheduler schedule/defaults
    :memory memory/defaults})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:enabled :boolean :priority :number :max-attempts :number :backoff :any
+          :claim-ttl :number :queues {:keyword :any}
+          :worker {:keyword :any} :scheduler {:keyword :any} :memory {:keyword :any}}}
+  "The [:jobs] config slice, with :worker/:scheduler/:memory merged over their own defaults."
+  [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (each k [:worker :scheduler :memory]
     (put cfg k (merge (defaults k) (get (or cfg0 {}) k {}))))
@@ -180,6 +186,7 @@
         {:queue :mail :max-attempts 5 :timeout 30 :unique :args}
         [user-id]
         (mail/send (users/find user-id) :welcome))``
+  {:params [:symbol :any] :ret :tuple}
   [name & more]
   (job/defjob-form name more))
 
@@ -252,6 +259,7 @@
       (jobs/defschedule nightly-report
         "0 3 * * *"
         :publish-report {:args ["yesterday"] :queue :reports})``
+  {:params [:symbol :any :any :any] :ret :tuple}
   [name spec job-name & opts]
   (schedule/defschedule-form name spec job-name opts))
 
@@ -395,7 +403,10 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- with-queue [q f]
+(defn- with-queue
+  {:params [:any (fn [] :any)] :ret :any}
+  "Run `f` with the active queue bound to `q` — what every CLI command needs."
+  [q f]
   (with-dyns [state/queue-dyn q] (f)))
 
 (plugin/contribute! :void.core/cli

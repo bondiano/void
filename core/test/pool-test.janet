@@ -5,6 +5,17 @@
 # many closed, and which ones are alive. Nothing here knows a database.
 
 (defn- fixture
+  {:params [(or {:size :number?
+                 :counters (or {:keyword :number} :nil)
+                 :checkout-timeout :number?
+                 :timeout-kind :keyword?
+                 :validate (fn [:any] :any)
+                 :reusable? (fn [:any] :any)
+                 :connect (fn [] :any)
+                 :close (fn [:any] :any)
+                 & r}
+                :nil)]
+   :ret [:any @{:opened :number :closed :number :fail-connect :boolean}]}
   "[pool state]. `opts` go to pool/make on top of the fixture's hooks;
   `:dead?` and `:stale?` are predicates the fixture's :reusable? and
   :validate consult, so a test can flip a resource's fate."
@@ -80,7 +91,11 @@
   (def held (pool/acquire p))
   (def order @[])
   (def done (ev/chan 2))
-  (defn waiter [name]
+  (defn waiter
+    {:params [:keyword] :ret :fiber}
+    "Acquire, record arrival as `name`, then release — a fiber
+    contending for the pool's one slot."
+    [name]
     (ev/go (fn []
              (def r (pool/acquire p))
              (array/push order name)

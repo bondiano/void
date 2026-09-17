@@ -81,6 +81,7 @@
   {:shape [:optional [:enum ;(sorted (keys shapes))]]})
 
 (defn default-shape
+  {:params [:keyword] :ret (enum :single :fleet)}
   "The shape a profile gets when the config does not say: `:fleet` in
   `:prod`, `:single` everywhere else."
   [profile]
@@ -91,23 +92,27 @@
   nil)
 
 (defn deployment
+  {:params [] :ret (or {:shape (enum :single :fleet) :reason :string} :nil)}
   "The resolved deployment of the most recent bootstrap: {:shape
   :reason}, or nil before one has run."
   []
   current)
 
 (defn shape
+  {:params [] :ret (enum :single :fleet)}
   "The deployment shape of the most recent bootstrap (`:single` until
   one has run)."
   []
   (get current :shape :single))
 
 (defn fleet?
+  {:params [] :ret :boolean}
   "Is this composition deployed as more than one process?"
   []
   (= :fleet (shape)))
 
 (defn resolve!
+  {:params [{:keyword :any} :keyword] :ret {:shape (enum :single :fleet) :reason :string}}
   ``Work out the deployment from the config `values` and the profile.
   Returns {:shape :reason} and installs it as the process' current
   deployment. `[:deploy :shape]` is validated by `Config` before this
@@ -141,6 +146,7 @@
   current)
 
 (defn reset!
+  {:params [] :ret :nil}
   "Forget the resolved deployment — for tests that bootstrap several
   compositions in one process."
   []
@@ -150,12 +156,16 @@
 # -- the survey ----------------------------------------------------------
 
 (defn- declarations
+  {:params [{:extensions :any & r}]
+   :ret @[{:name :keyword :what :string :ask (fn [:any] :any)
+           :needs (or @[:keyword] :nil) :doc :string?}]}
   "The :void.core/store declarations a boot resolved — none when it has
   no extensions."
   [boot]
   (or (get-in boot [:extensions :void.core/store :resolved]) []))
 
 (defn needs
+  {:params [{:extensions :any & r}] :ret @[:keyword]}
   ``The components every declaration wants running before it can
   answer, as one array of keys — what `void deploy check` starts, and
   nothing else. It is deliberately not "the whole system": a survey
@@ -169,6 +179,13 @@
   (distinct out))
 
 (defn- ask-one
+  {:params [{:name :keyword :what :string :ask (fn [:any] :any)
+             :needs (or @[:keyword] :nil) :doc :string?}
+            {:extensions :any & r}]
+   :ret (or {:name :keyword :what :string
+             :shared? (or :boolean (enum :by-design :unknown))
+             :store :keyword? :why :string? :replacement :string? :error :string?}
+            :nil)}
   "Ask one declaration's :ask about the boot: nil when the store is not
   composed (nothing to say), else its answer under the declaration's
   :name and :what. An :ask that throws is recorded as `:shared?
@@ -184,6 +201,10 @@
     (merge {:name (decl :name) :what (decl :what)} answer)))
 
 (defn survey
+  {:params [{:extensions :any & r}]
+   :ret @[{:name :keyword :what :string
+           :shared? (or :boolean (enum :by-design :unknown))
+           :store :keyword? :why :string? :replacement :string? :error :string?}]}
   ``Ask every `:void.core/store` declaration about the store this
   composition actually resolved. Returns an array of entries sorted by
   name, each `{:name :what :store :shared? :why :replacement}`; a
@@ -207,12 +228,22 @@
   {true true :by-design true :unknown true})
 
 (defn per-process
+  {:params [@[{:name :keyword :what :string
+               :shared? (or :boolean (enum :by-design :unknown))
+               :store :keyword? :why :string? :replacement :string? :error :string?}]]
+   :ret @[{:name :keyword :what :string
+           :shared? (or :boolean (enum :by-design :unknown))
+           :store :keyword? :why :string? :replacement :string? :error :string?}]}
   "The entries of a survey that are a defect under `:fleet` — the
   stores that live in one process's heap and are not there by design."
   [entries]
   (filter |(not (in not-a-defect (get $ :shared?))) entries))
 
 (defn- line
+  {:params [{:name :keyword :what :string
+             :shared? (or :boolean (enum :by-design :unknown))
+             :store :keyword? :why :string? :replacement :string? :error :string?}]
+   :ret :string}
   "One violation as a report line: what the store holds, which store it
   is, and what to compose instead."
   [e]
@@ -221,6 +252,11 @@
                  (get e :replacement "no shared replacement is declared")))
 
 (defn message
+  {:params [@[{:name :keyword :what :string
+               :shared? (or :boolean (enum :by-design :unknown))
+               :store :keyword? :why :string? :replacement :string? :error :string?}]
+            :string]
+   :ret :string}
   ``The one error a `:fleet` composition with per-process stores gets:
   every violation, each with what to use instead. One error rather
   than N because fixing them one boot at a time is the failure mode
@@ -237,6 +273,11 @@
     (string/join (map line bad) "\n")))
 
 (defn check!
+  {:params [{:extensions :any & r}]
+   :ret @[{:name :keyword :what :string
+           :shared? (or :boolean (enum :by-design :unknown))
+           :store :keyword? :why :string? :replacement :string? :error :string?}]
+   :throws [:string]}
   ``The gate: under `:fleet`, refuse to run with per-process stores.
   Returns the survey (so a caller can log it) when the composition is
   fit for the shape it declared.``
@@ -249,6 +290,10 @@
 # -- the report ----------------------------------------------------------
 
 (defn- verdict
+  {:params [{:name :keyword :what :string
+             :shared? (or :boolean (enum :by-design :unknown))
+             :store :keyword? :why :string? :replacement :string? :error :string?}]
+   :ret :string}
   "The one-word column of a survey row: what `:shared?` says."
   [e]
   (case (get e :shared?)
@@ -258,6 +303,10 @@
     "per-process"))
 
 (defn- note
+  {:params [{:name :keyword :what :string
+             :shared? (or :boolean (enum :by-design :unknown))
+             :store :keyword? :why :string? :replacement :string? :error :string?}]
+   :ret :string}
   "The tail of a survey row — the detail worth reading for its verdict:
   the replacement for a per-process store, the reason for a by-design
   one, the error for one that gave no answer."
@@ -269,6 +318,12 @@
     ""))
 
 (defn report
+  {:params [{:extensions :any & r}
+            (or @[{:name :keyword :what :string
+                   :shared? (or :boolean (enum :by-design :unknown))
+                   :store :keyword? :why :string? :replacement :string? :error :string?}]
+                :nil)]
+   :ret @[:string]}
   ``The lines `void deploy check` and the dev banner print: the shape,
   why it is that, and one row per store with its verdict and the note
   that matters (the replacement for a violation, the reason for a

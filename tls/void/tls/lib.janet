@@ -64,6 +64,7 @@
   @[])
 
 (defmacro- defssl
+  {:params [:symbol :any :keyword] :ret :array}
   "Declare one libssl function: a module-level `var`, nil until `load!`
   installs the call."
   [sym ret & args]
@@ -141,11 +142,13 @@
   nil)
 
 (defn available?
+  {:params [] :ret :boolean}
   "Has a libssl been loaded into these bindings?"
   []
   (not (nil? library-path)))
 
 (defn candidates
+  {:params [:string?] :ret [:string]}
   "The search order for a given configured path (nil = the defaults),
   environment override included."
   [&opt path]
@@ -154,17 +157,28 @@
     (os/getenv path-env) [(os/getenv path-env)]
     default-candidates))
 
-(defn- try-open [path]
+(defn- try-open
+  {:params [:string] :ret (or :abstract :nil)}
+  "Open one candidate path, nil (not an error) when it does not."
+  [path]
   (def [ok lib] (protect (ffi/native path)))
   (when ok lib))
 
-(defn- bind-off [lib symbol ret args install missing-fmt]
+(defn- bind-off
+  {:params [:abstract :string :keyword [:keyword] (fn [a] b) :string]
+   :ret :any
+   :throws [:string]}
+  "Look up one symbol in an open library and install the FFI call
+  under it, throwing `missing-fmt` (one %s, the symbol) when the
+  library does not carry it."
+  [lib symbol ret args install missing-fmt]
   (def ptr (ffi/lookup lib symbol))
   (unless ptr (errorf missing-fmt symbol))
   (def sig (ffi/signature :default ret ;args))
   (install (fn tls-call [& a] (ffi/call ptr sig ;a))))
 
 (defn load!
+  {:params [:string?] :ret :string :throws [:string]}
   ``Open libssl (and make sure void/crypto's libcrypto is open — the
   BIO and error-string symbols come off its handle) and install the
   bindings. Idempotent for the same path. Returns the path opened;
@@ -201,6 +215,7 @@
   found)
 
 (defn ensure!
+  {:params [] :ret :string :throws [:string]}
   "The library path, or a readable error naming the way in."
   []
   (unless (available?)
@@ -211,6 +226,7 @@
   library-path)
 
 (defn version
+  {:params [] :ret (or [:number :number :number] :nil)}
   "The loaded libssl's version as [major minor patch], or nil."
   []
   (when (available?)
@@ -220,6 +236,7 @@
      (band (brshift n 4) 0xffff)]))
 
 (defn last-error
+  {:params [] :ret (or :string :nil)}
   "The message OpenSSL left on its error queue (crypto-lib drains it),
   or nil."
   []

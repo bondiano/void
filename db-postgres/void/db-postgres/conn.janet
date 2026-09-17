@@ -41,13 +41,26 @@
 
 # -- errors --------------------------------------------------------------
 
-(defn- text [s]
+(defn- text
+  {:params [:string?] :ret :string?}
+  "Trim a string and treat an all-whitespace result — or a nil input
+  — as absent."
+  [s]
   (when s (let [t (string/trim s)] (unless (empty? t) t))))
 
-(defn- diag [res field]
+(defn- diag
+  {:params [:pointer :keyword] :ret :string?}
+  "One PG_DIAG_* field off a result, trimmed and nil when absent."
+  [res field]
   (text (pq/cstr (pq/PQresultErrorField res (get pq/diag-fields field)))))
 
 (defn result-error
+  {:params [:pointer :string?]
+   :ret {:db/error :keyword :message :string :sqlstate :string?
+         :severity :string? :detail :string? :hint :string?
+         :position :number? :schema :string? :table :string?
+         :column :string? :datatype :string? :constraint :string?
+         :where :string? :sql :string?}}
   ``The structured error behind a failed result. Postgres says far
   more than "it did not work" — the SQLSTATE is what a caller
   branches on (23505 is a duplicate key, 40001 a serialization
@@ -79,11 +92,15 @@
      :sql sql}))
 
 (defn sqlstate
+  {:params [:any] :ret :string?}
   "The SQLSTATE of an error raised by this driver, or nil."
   [e]
   (when (dictionary? e) (get e :sqlstate)))
 
 (defn- fail!
+  {:params [@{:pg (or :pointer :nil) :broken :boolean & r} :string :string?]
+   :ret :never
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``A connection-level failure: whatever libpq last complained about.
   The connection is marked broken — libpq's state after a protocol
   error is not something to keep using, and the driver replaces it
@@ -97,6 +114,10 @@
                   :sql sql})))
 
 (defn- readiness!
+  {:params [@{:fds :abstract :pg (or :pointer :nil) :broken :boolean & r}
+            (enum :read :write) :string?]
+   :ret (enum :read :write)
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   "Wait in one direction, turning a hangup into the connection error
   it is."
   [c dir &opt what]
@@ -108,6 +129,7 @@
 # -- connecting ----------------------------------------------------------
 
 (defn new-session
+  {:params [] :ret @{:stmts @{:string :string} :next :number}}
   ``A prepared-statement catalogue: name -> sql, plus the counter the
   names are minted from. It belongs to the *session* rather than to
   the PGconn, so a replacement connection can adopt it and re-prepare
@@ -116,6 +138,9 @@
   @{:stmts @{} :next 0})
 
 (defn- poll-connect
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :broken :boolean & r}]
+   :ret :nil
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``PQconnectPoll until the handshake is done. The first call is made
   as if the previous one had returned PGRES_POLLING_WRITING, which is
   what libpq's own documented loop does.``
@@ -134,6 +159,14 @@
       (fail! c "connect"))))
 
 (defn open
+  {:params [:string (or @{:connect-timeout :any :decode :any :session :any & r} :nil)]
+   :ret @{:pg (or :pointer :nil) :fds :abstract
+          :session @{:stmts @{:string :string} :next :number}
+          :broken :boolean :closed :boolean :in-tx :boolean
+          :conninfo :string :opts :any :decode :any
+          :notifications @[{:channel :string :pid :number :payload :string}]
+          :in-exchange :boolean}
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``Open one connection. `conninfo` is a libpq connection string (see
   ./config, which builds one); opts:
 
@@ -193,6 +226,8 @@
   c)
 
 (defn close
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :closed :boolean & r}]
+   :ret :nil}
   "Close a connection. Safe to call twice; safe on a broken one."
   [c]
   (unless (c :closed)
@@ -203,6 +238,8 @@
   nil)
 
 (defn live?
+  {:params [@{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r}]
+   :ret :boolean}
   "Is this connection usable — not closed, not broken, and libpq still
   calls it OK?"
   [c]
@@ -215,6 +252,9 @@
 # -- sending and receiving -----------------------------------------------
 
 (defn- flush!
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :broken :boolean & r} :string?]
+   :ret :nil
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``Push the outgoing buffer out. In non-blocking mode PQflush leaves
   what did not fit for next time, so this is a loop — and it waits on
   :both deliberately: were it to wait only for writability it would
@@ -232,7 +272,15 @@
           (unless (= 1 (pq/PQconsumeInput (c :pg)))
             (fail! c "sending" sql)))))))
 
-(defn- send! [c thunk &opt sql]
+(defn- send!
+  {:params [@{:pg (or :pointer :nil) :closed :boolean :broken :boolean
+              :in-exchange :boolean & r}
+            (fn [] :number) :string?]
+   :ret :nil
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
+  "Run one already-built send thunk, marking the connection mid-exchange
+  until its results are drained."
+  [c thunk &opt sql]
   (unless (live? c)
     (fail! c "sending on a closed connection" sql))
   # from here the connection carries an unfinished exchange until its
@@ -244,6 +292,9 @@
   nil)
 
 (defn reusable?
+  {:params [@{:pg (or :pointer :nil) :closed :boolean :broken :boolean
+              :in-exchange :boolean & r}]
+   :ret :boolean}
   ``Safe to return to the pool? A connection left mid-protocol — a
   cancelled query, a decoder or a `stream` callback that threw before
   the results were drained — is not: the next query on it would read
@@ -252,6 +303,9 @@
   (and (live? c) (not (c :in-exchange)) true))
 
 (defn- next-result
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :broken :boolean & r} :string?]
+   :ret (or :pointer :nil)
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   "Park this fiber (not the loop) until libpq has a whole result, or
   the stream ends. nil means: no more results for this statement."
   [c &opt sql]
@@ -262,6 +316,9 @@
   (pq/PQgetResult (c :pg)))
 
 (defn- drain-notifications!
+  {:params [@{:pg (or :pointer :nil)
+              :notifications @[{:channel :string :pid :number :payload :string}] & r}]
+   :ret @[{:channel :string :pid :number :payload :string}]}
   "Move whatever asynchronous notifications libpq has buffered onto
   the connection. Postgres delivers them alongside query results, so
   this belongs after every receive."
@@ -274,6 +331,8 @@
   (c :notifications))
 
 (defn take-notifications!
+  {:params [@{:notifications @[{:channel :string :pid :number :payload :string}] & r}]
+   :ret @[{:channel :string :pid :number :payload :string}]}
   "Take and clear the notifications this connection has collected."
   [c]
   (def out (c :notifications))
@@ -281,6 +340,10 @@
   out)
 
 (defn wait-for-input
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :broken :boolean
+              :notifications @[{:channel :string :pid :number :payload :string}] & r}]
+   :ret (or @[{:channel :string :pid :number :payload :string}] :nil)
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``Park this fiber until the server sends something on an otherwise
   idle connection, then return the asynchronous notifications that
   arrived — how a LISTENer waits (see ./listener). The array can be
@@ -304,6 +367,7 @@
         (take-notifications! c))))
 
 (defn interrupt!
+  {:params [@{:fds :abstract & r}] :ret :nil}
   ``Wake a fiber parked in `wait-for-input` on this connection, from
   another one. The watchers are dropped — which is what the parked
   fiber notices — and recreated on the next wait; the socket and the
@@ -318,6 +382,7 @@
 # -- results -------------------------------------------------------------
 
 (defn- row-count
+  {:params [:pointer :number] :ret :number}
   ``The number a write should report. PQcmdTuples is the affected-row
   count for INSERT/UPDATE/DELETE — including INSERT ... RETURNING,
   where the rows come back *and* the count is right — and empty for a
@@ -326,7 +391,11 @@
   (def tuples (text (pq/PQcmdTuples res)))
   (if tuples (or (scan-number tuples) 0) rows))
 
-(defn- result-rows [res decode]
+(defn- result-rows
+  {:params [:pointer (or {:json :boolean? :arrays :boolean? & r} :nil)]
+   :ret @[@{:keyword :any}]}
+  "Every row of a result, decoded column by column through ./types."
+  [res decode]
   (def ncols (pq/PQnfields res))
   (def nrows (pq/PQntuples res))
   # names and decoders once per result, not once per cell
@@ -342,7 +411,13 @@
         (put row (in names i) ((in decoders i) (pq/PQgetvalue res r i)))))
     row))
 
-(defn- unsupported [status sql]
+(defn- unsupported
+  {:params [:number :string?]
+   :ret {:db/error :keyword :message :string :aborted :boolean :sql :string?}}
+  "The structured error for a result status this driver has no
+  handling for — COPY, or a statement skipped after an earlier one
+  aborted the pipeline."
+  [status sql]
   (freeze {:db/error :postgres
            :message (cond
                       (or (= status pq/PGRES-COPY-IN)
@@ -362,6 +437,14 @@
            :sql sql}))
 
 (defn- collect
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            :string?]
+   :ret {:rows @[@{:keyword :any}] :count :number :insert-oid :number?}
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Read every result of the statement(s) just sent, down to the NULL
   that ends them. Draining is not optional: an unread result leaves
   the connection mid-protocol, and the next query on it would read
@@ -422,6 +505,11 @@
 # -- statements ----------------------------------------------------------
 
 (defn- send-params
+  {:params [@{:pg (or :pointer :nil) :closed :boolean :broken :boolean
+              :in-exchange :boolean & r}
+            :string (or @[:any] [:any] :nil) :boolean?]
+   :ret :nil
+   :throws [{:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``Send one statement. Without parameters that is the simple
   protocol — which is also what lets a migration pass several
   statements in one string — unless `extended?` says otherwise:
@@ -445,6 +533,14 @@
   nil)
 
 (defn execute
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            :string (or @[:any] [:any] :nil)]
+   :ret {:rows @[@{:keyword :any}] :count :number :insert-oid :number?}
+   :throws [{:db/error :keyword :message :string & r}]}
   "Run one statement (or, without parameters, several) and return
   {:rows [...] :count n}."
   [c sql &opt params]
@@ -453,6 +549,15 @@
   (collect c sql))
 
 (defn prepare
+  {:params [@{:pg (or :pointer :nil) :fds :abstract
+              :session @{:stmts @{:string :string} :next :number}
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            :string]
+   :ret :string
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Prepare `sql` on this connection and return the statement name.
   A prepared statement lives in the *session*, so the name is minted
   from the session catalogue and the SQL recorded beside it: a
@@ -474,6 +579,15 @@
 (def- invalid-statement-name "26000")
 
 (defn execute-prepared
+  {:params [@{:pg (or :pointer :nil) :fds :abstract
+              :session @{:stmts @{:string :string} :next :number}
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            :string (or @[:any] [:any] :nil)]
+   :ret {:rows @[@{:keyword :any}] :count :number :insert-oid :number?}
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Run a previously prepared statement. A statement name this session
   does not know (26000) is prepared again from the catalogue and
   retried once: the pool caches statement names per entry, and a
@@ -507,6 +621,14 @@
     (error res)))
 
 (defn stream
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            :string (or @[:any] [:any] :nil) (fn [a] b)]
+   :ret :number
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Run a statement in single-row mode, calling (f row) for each row as
   it arrives, and return how many there were. libpq normally buffers
   the whole result before handing any of it over; single-row mode is
@@ -552,6 +674,17 @@
 # -- pipeline mode -------------------------------------------------------
 
 (defn pipelined
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            @[[:string (or @[:any] [:any] :nil)]]]
+   :ret @[{:rows @[@{:keyword :any}] :count :number :insert-oid :number?}]
+   :throws [:string
+            {:index :number
+             :results [{:rows @[@{:keyword :any}] :count :number :insert-oid :number?}]
+             & r}]}
   ``Send several statements without waiting for each answer — one
   round trip instead of N. Postgres has had the protocol for it since
   forever; libpq exposed it in 14.
@@ -599,10 +732,19 @@
 
 # -- cancellation --------------------------------------------------------
 
-(defn- cancel-error [handle]
+(defn- cancel-error
+  {:params [:pointer] :ret :string}
+  "The message behind a failed cancel request, off the cancel handle
+  libpq gives back."
+  [handle]
   (or (text (pq/cstr (pq/PQcancelErrorMessage handle))) "unknown"))
 
-(defn- cancel-modern [c]
+(defn- cancel-modern
+  {:params [@{:pg (or :pointer :nil) & r}] :ret :boolean :throws [:string]}
+  "Cancel this connection's current statement through libpq's
+  non-blocking cancel API (17+), waiting on the cancel request's own
+  socket the way `poll-connect` waits on the query one."
+  [c]
   (def handle (pq/PQcancelCreate (c :pg)))
   (unless handle (error "postgres: PQcancelCreate returned NULL"))
   (defer (pq/PQcancelFinish handle)
@@ -623,7 +765,12 @@
           (errorf "postgres: cancel request failed: %s" (cancel-error handle))))))
   true)
 
-(defn- cancel-legacy [c]
+(defn- cancel-legacy
+  {:params [@{:pg (or :pointer :nil) & r}] :ret :boolean :throws [:string]}
+  "Cancel through the older, blocking PQcancel — the one libpq call in
+  this driver that can stall the loop, and only for as long as its own
+  TCP connect takes."
+  [c]
   # PQcancel opens a socket and writes the request synchronously. It is
   # one packet to a server we are already talking to, and it is the
   # only libpq call in this driver that can block the loop — for the
@@ -640,6 +787,7 @@
     true))
 
 (defn cancel!
+  {:params [@{:pg (or :pointer :nil) & r}] :ret :boolean :throws [:string]}
   ``Ask the server to abort whatever this connection is running. The
   request goes over a socket of its own, so this is the one thing that
   may be called from a fiber other than the one parked on the query —
@@ -657,6 +805,7 @@
 # -- session facts -------------------------------------------------------
 
 (defn server-version
+  {:params [@{:pg (or :pointer :nil) & r}] :ret [:number :number]}
   "The server's version as [major minor] — 160014 is 16.14; since
   Postgres 10 the second number is the minor release."
   [c]
@@ -664,18 +813,22 @@
   [(div n 10000) (mod (div n 100) 100)])
 
 (defn backend-pid
+  {:params [@{:pg (or :pointer :nil) & r}] :ret :number}
   "The server-side process id — what pg_stat_activity lists, and what
   a cancel from elsewhere would target."
   [c]
   (pq/PQbackendPID (c :pg)))
 
 (defn parameter
+  {:params [@{:pg (or :pointer :nil) & r} :string] :ret :string?}
   "A session parameter the server reported (server_version,
   standard_conforming_strings, TimeZone, ...)."
   [c name]
   (pq/cstr (pq/PQparameterStatus (c :pg) name)))
 
 (defn transaction-status
+  {:params [@{:pg (or :pointer :nil) & r}]
+   :ret (enum :idle :active :in-transaction :in-error :unknown)}
   ``Where this connection stands: :idle, :active, :in-transaction,
   :in-error (a failed statement inside a transaction — everything
   until ROLLBACK will fail too) or :unknown.``
@@ -689,6 +842,13 @@
     :unknown))
 
 (defn ping
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}]
+   :ret :boolean
+   :throws [{:db/error :keyword :message :string & r}]}
   "A round trip that proves the connection still works."
   [c]
   (execute c "SELECT 1")

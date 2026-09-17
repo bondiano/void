@@ -45,11 +45,15 @@
   (or (not (nil? (authz/attr ctx :subject/id)))
       "not signed in"))
 
-(defn- current-author-id []
+(defn- current-author-id
+  {:params [] :ret :number?}
+  "The signed-in author's id, or nil when nobody is signed in."
+  []
   (when-let [id (auth/current-user)]
     (scan-number (last (auth/subject-of (id :subject))))))
 
 (defn- own-articles
+  {:params [:any] :ret [:keyword :keyword :number]}
   "An author's list is their own articles — the same narrowing the
   edit routes have enforced since wave 3, applied to the query instead
   of to one row, so the count on the page counts what the page shows."
@@ -118,6 +122,10 @@
 # -- the trail takes the admin's changes, and gives back the history -----
 
 (defn- record-change!
+  {:params [{:action :any :subject :any :resource :any :id :any
+             :before :any :after :any & r}]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   ``Turn one `:void.admin/changed` announcement into a bus message.
   That is the entire integration: the admin does not know what a bus
   is, ./audit does not know what the admin is, and the trail gets the

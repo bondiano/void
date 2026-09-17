@@ -86,6 +86,7 @@
 (def inline-hash (kdf/scrypt "hunter2" "saltsaltsaltsalt" opts))
 
 (defn- ticks-during
+  {:params [(fn [] a)] :ret [a :number]}
   ``Run `thunk` with a 2 ms ticker on the loop and report how many
   times the loop got to run it. The ticker stops on a flag rather than
   on ev/cancel: cancelling a sleeping fiber unwinds it with an error

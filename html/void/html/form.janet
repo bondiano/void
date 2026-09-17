@@ -15,6 +15,7 @@
 (import void/core/text :as text)
 
 (defn params
+  {:params [(or {:any :any} :nil)] :ret @{:keyword :any}}
   ``Submitted form data (string keys, as void/http's parsing
   middleware leaves it in (req :form)) with the keys keywordized —
   the shape map schemas address.``
@@ -23,6 +24,10 @@
     (if (bytes? k) (keyword k) k) v))
 
 (defn check
+  {:params [:any (or {:any :any} :nil)
+            (or {:coerce :boolean? :registry (or {:any :any} :nil) & r} :nil)]
+   :ret {:value :any :errors [:any]}
+   :throws [:string]}
   ``schema/check over submitted form data: keywordize the string keys
   and validate in coercion mode ("42" -> 42, "true" -> true, "admin"
   -> :admin). Returns {:value coerced :errors [...]} — feed :errors
@@ -39,6 +44,13 @@
   (schema/check sch (params form) (merge {:coerce true} (or opts {}))))
 
 (defn submit
+  {:params [:any (or {:any :any} :nil)
+            {:check (or {:coerce :boolean? :registry (or {:any :any} :nil) & r} :nil)
+             :ok (or (fn [a] a) :nil)
+             :invalid (or (fn [a b] b) :nil)
+             & r}]
+   :ret :any
+   :throws [:string]}
   ``check, then one of two continuations — the shape of every handler
   that takes a form:
 
@@ -75,6 +87,7 @@
   {:email "email" :uri "url" :date "date" :password "password"})
 
 (defn- control-spec
+  {:params [{:type :keyword :props {:any :any} & r}] :ret {:control :keyword & r}}
   "Control kind and html attributes for one unwrapped schema node."
   [node]
   (def props (node :props))
@@ -101,6 +114,10 @@
     {:control :input :type "text"}))
 
 (defn field-specs
+  {:params [:any (or {:fields (or {:any :any} :nil) & r} :nil)]
+   :ret @[{:name :keyword :label :string :help :string? :required :boolean
+           :control :keyword & r}]
+   :throws [:string]}
   ``Project a map schema into field descriptions, in schema key order:
 
       [{:name :email :label "Email" :required true
@@ -142,15 +159,24 @@
             :help (let [h (spec :help)]
                     (if (keyword? h) (text/t? h) h))})))
 
-(defn- field-value [values k]
+(defn- field-value
+  {:params [(or {:any :any} :nil) :keyword] :ret :any}
+  "One field's value out of `values` — the keyword key, or its string
+  spelling when the keyword one is absent (a submitted form has string
+  keys, an entity's values keyword ones)."
+  [values k]
   (when values
     (def v (get values k))
     (if (nil? v) (get values (string k)) v)))
 
-(defn- field-id [spec]
+(defn- field-id
+  {:params [{:name :keyword & r}] :ret :string}
+  "The `id` a field's label and control share."
+  [spec]
   (string "field-" (spec :name)))
 
 (defn input
+  {:params [{:name :keyword :control :keyword & r} :any] :ret :tuple :throws [:string]}
   "Hiccup for one control (no label, no errors)."
   [spec &opt value]
   (def name (string (spec :name)))
@@ -193,6 +219,7 @@
     (errorf "unknown form control %q for field %q" (spec :control) (spec :name))))
 
 (defn errors-by-field
+  {:params [(or [{:path :any & r}] :nil)] :ret @{:keyword @[{:path :any & r}]}}
   "Group schema/check errors by their top-level path key; errors with
   an empty path land under :form."
   [errors]
@@ -203,6 +230,10 @@
   out)
 
 (defn field
+  {:params [{:name :keyword :control :keyword :label :string & r} :any
+            (or @[{:path :any & r}] :nil)]
+   :ret :tuple
+   :throws [:string]}
   ``Hiccup for one labeled field: label, control, help text, error
   list. A :hidden control is the input alone — a label for what nobody
   sees is an empty label. The control is `input` unless the spec
@@ -224,6 +255,12 @@
         (seq [e :in errs] [:li (schema/error-str e)])])]))
 
 (defn fields
+  {:params [:any (or {:values (or {:any :any} :nil)
+                      :errors (or [{:path :any & r}] :nil)
+                      :fields (or {:any :any} :nil) & r}
+                     :nil)]
+   :ret @[:tuple]
+   :throws [:string]}
   ``Labeled fields for every entry of a map schema.
 
   opts: :values (submitted or entity values, keyword or string keys),
@@ -237,6 +274,14 @@
            (get by-field (spec :name)))))
 
 (defn form
+  {:params [:any {:action :string? :method :keyword? :submit :string?
+                  :attrs (or {:any :any} :nil)
+                  :values (or {:any :any} :nil)
+                  :errors (or [{:path :any & r}] :nil)
+                  :fields (or {:any :any} :nil)
+                  & r}]
+   :ret :tuple
+   :throws [:string]}
   ``A complete form for a map schema:
 
       (form/form CreateUser

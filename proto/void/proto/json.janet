@@ -44,21 +44,32 @@
   hold all of them."
   {:int64 true :uint64 true :fixed64 true :sfixed64 true :sint64 true})
 
-(defn- fail [path msg & args]
+(defn- fail
+  {:params [@[:keyword] :string :any] :ret :never}
+  "Raise a proto-json error naming the field path a value went wrong
+  at."
+  [path msg & args]
   (errorf "proto json: %s: %s"
           (if (empty? path) "message" (string/join (map string path) "."))
           (string/format msg ;args)))
 
 # -- numbers -------------------------------------------------------------
 
-(defn- number-out [v]
+(defn- number-out
+  {:params [:number] :ret (or :string :number)}
+  "A double as the mapping's number: the finite value itself, or the
+  quoted spelling JSON has none of its own for."
+  [v]
   (cond
     (not= v v) "NaN"
     (= v math/inf) "Infinity"
     (= v (- math/inf)) "-Infinity"
     v))
 
-(defn- number-in [path v]
+(defn- number-in
+  {:params [@[:keyword] :any] :ret :number :throws [:string]}
+  "The mapping's number back into a double, quoted spelling included."
+  [path v]
   (cond
     (number? v) v
     (bytes? v) (case (string v)
@@ -69,7 +80,11 @@
                      (fail path "%q is not a number" v)))
     (fail path "%q is not a number" v)))
 
-(defn- integer-in [path v]
+(defn- integer-in
+  {:params [@[:keyword] :any] :ret (or :number :abstract) :throws [:string]}
+  "The mapping's number or quoted string back into a whole number,
+  widening to an int/s64 when a double cannot hold it exactly."
+  [path v]
   (cond
     (number? v) (do (unless (= v (math/trunc v)) (fail path "%q is not a whole number" v))
                     v)
@@ -87,11 +102,19 @@
 # two formats are small enough that a dependency would cost more than
 # the twenty lines.
 
-(defn- pad [n width]
+(defn- pad
+  {:params [:number :number] :ret :string}
+  "`n`, zero-padded on the left to `width` digits."
+  [n width]
   (def s (string n))
   (string (string/repeat "0" (max 0 (- width (length s)))) s))
 
-(defn- fraction [nanos]
+(defn- fraction
+  {:params [:number] :ret :string}
+  "A Timestamp or Duration's nanos as the mapping's fractional
+  seconds: nothing when they are zero, otherwise the shortest of 3, 6
+  or 9 digits that names them exactly."
+  [nanos]
   (cond
     (zero? nanos) ""
     (zero? (% nanos 1000000)) (string "." (pad (/ nanos 1000000) 3))
@@ -99,6 +122,7 @@
     (string "." (pad nanos 9))))
 
 (defn timestamp-out
+  {:params [@[:keyword] {:seconds :number? :nanos :number? & r}] :ret :string :throws [:string]}
   "A {:seconds :nanos} Timestamp as the RFC 3339 string the mapping
   asks for, always in UTC and always with a Z."
   [path v]
@@ -124,6 +148,7 @@
                (? :frac) :offset -1)}))
 
 (defn timestamp-in
+  {:params [@[:keyword] :any] :ret {:seconds :number :nanos :number} :throws [:string]}
   "An RFC 3339 string as {:seconds :nanos}. Anything else — a number,
   a date without a zone — is an error: a timestamp whose offset was
   guessed is worse than no timestamp."
@@ -141,6 +166,7 @@
   {:seconds (- base offset) :nanos (scan-number digits)})
 
 (defn duration-out
+  {:params [@[:keyword] {:seconds :number? :nanos :number? & r}] :ret :string :throws [:string]}
   "A {:seconds :nanos} Duration as the mapping's seconds-with-an-s."
   [path v]
   (def secs (get v :seconds 0))
@@ -151,6 +177,7 @@
           secs (fraction (math/abs nanos)) "s"))
 
 (defn duration-in
+  {:params [@[:keyword] :any] :ret {:seconds :number :nanos :number} :throws [:string]}
   "The mapping's seconds-with-an-s as {:seconds :nanos}."
   [path v]
   (unless (bytes? v) (fail path "a Duration is a string like \"1.5s\", got %q" v))
@@ -172,7 +199,13 @@
 (varfn message-out [d value opts path] nil)
 (varfn message-in [d value opts path] nil)
 
-(defn- scalar-out [path f t v opts]
+(defn- scalar-out
+  {:params [@[:keyword] :any :keyword :any
+            {:emit-defaults :boolean :proto-names :boolean :ignore-unknown :boolean
+             :enums-as-numbers :boolean & r}]
+   :ret (or :boolean :string :number)}
+  "One scalar value of wire type `t` in the mapping's spelling."
+  [path f t v opts]
   (case t
     :bool (truthy? v)
     :string (string v)
@@ -186,7 +219,14 @@
       (string v)
       (if (number? v) v (int/to-number v)))))
 
-(defn- value-out [path f v opts]
+(defn- value-out
+  {:params [@[:keyword] {:type :keyword :ref :keyword? & r} :any
+            {:emit-defaults :boolean :proto-names :boolean :ignore-unknown :boolean
+             :enums-as-numbers :boolean & r}]
+   :ret :any :throws [:string]}
+  "One field value in the mapping's spelling — a scalar, an enum's
+  name or number, or a nested message."
+  [path f v opts]
   (if (= :ref (f :type))
     (let [d (desc/resolve (f :ref) (f :name))]
       (if (= :enum (d :kind))
@@ -197,13 +237,20 @@
         (message-out d v opts path)))
     (scalar-out path f (f :type) v opts)))
 
-(defn- map-key-out [path f k]
+(defn- map-key-out
+  {:params [@[:keyword] {:key {:type :keyword & r} & r} :any] :ret :string}
+  "A map's key in the mapping's spelling — JSON object keys are
+  always strings, whatever the map's own key type."
+  [path f k]
   (case (get-in f [:key :type])
     :string (string k)
     :bool (if k "true" "false")
     (string k)))
 
-(defn- map-key-in [path f k]
+(defn- map-key-in
+  {:params [@[:keyword] {:key {:type :keyword & r} & r} :any] :ret :any :throws [:string]}
+  "The mapping's string key back into the map's own key type."
+  [path f k]
   (case (get-in f [:key :type])
     :string (string k)
     :bool (case (string k)
@@ -261,7 +308,11 @@
           (put out key (value-out fpath f v opts))))
       out)))
 
-(defn- scalar-in [path f t v]
+(defn- scalar-in
+  {:params [@[:keyword] :any :keyword :any] :ret :any :throws [:string]}
+  "One scalar value of wire type `t`, read back from the mapping's
+  spelling."
+  [path f t v]
   (case t
     :bool (cond
             (boolean? v) v
@@ -277,7 +328,14 @@
     :float (number-in path v)
     (integer-in path v)))
 
-(defn- value-in [path f v opts]
+(defn- value-in
+  {:params [@[:keyword] {:type :keyword :ref :keyword? & r} :any
+            {:emit-defaults :boolean :proto-names :boolean :ignore-unknown :boolean
+             :enums-as-numbers :boolean & r}]
+   :ret :any :throws [:string]}
+  "One field value read back from the mapping's spelling — a scalar,
+  an enum's name or number, or a nested message."
+  [path f v opts]
   (if (= :ref (f :type))
     (let [d (desc/resolve (f :ref) (f :name))]
       (if (= :enum (d :kind))
@@ -346,12 +404,21 @@
           (put out (f :name) (desc/default-value f))))
       out)))
 
-(defn- options [opts]
+(defn- options
+  {:params [(or {:keyword :any} :nil)]
+   :ret {:emit-defaults :boolean :proto-names :boolean :ignore-unknown :boolean
+         :enums-as-numbers :boolean & r}}
+  "The mapping's four flags, filled in with their defaults for
+  whatever the caller left unsaid."
+  [opts]
   (merge {:emit-defaults false :proto-names false
           :ignore-unknown false :enums-as-numbers false}
          (or opts {})))
 
 (defn to-json
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+            (or {:keyword :any} :nil)]
+   :ret :any :throws [:string]}
   ``A message value as plain data ready for `json/encode`: string
   keys, the mapping's spelling of every scalar.
 
@@ -363,6 +430,9 @@
   (message-out d value (options opts) []))
 
 (defn from-json
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :any
+            (or {:keyword :any} :nil)]
+   :ret (or @{:keyword :any} :nil) :throws [:string]}
   ``Plain data (as `json/decode` produces it, string keys) as a
   message value.
 
@@ -373,11 +443,17 @@
   (message-in d value (options opts) []))
 
 (defn encode
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+            (or {:keyword :any} :nil)]
+   :ret :string :throws [:string]}
   "A message value as a JSON string."
   [message value &opt opts]
   (json/encode (to-json message value opts)))
 
 (defn decode
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :string
+            (or {:keyword :any} :nil)]
+   :ret (or @{:keyword :any} :nil) :throws [:string]}
   "A JSON string as a message value."
   [message text &opt opts]
   (def [ok data] (protect (json/decode text)))

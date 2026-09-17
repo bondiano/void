@@ -6,7 +6,11 @@
 (import ../void/core/deploy :as deploy)
 (import ../void/core/config :as config)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :string}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error rendered as a string."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
@@ -59,7 +63,12 @@
 
 # -- a composition that declares stores ----------------------------------
 
-(defn- store-plugin [name what shared? &opt extra]
+(defn- store-plugin
+  {:params [:keyword :string :boolean (or {:any :any} :nil)] :ret :any}
+  "A minimal plugin contributing one `:void.core/store` declaration —
+  `shared?` picks whether its `:ask` answers a shared or a per-process
+  store, `extra` merges into that answer."
+  [name what shared? &opt extra]
   (default extra {})
   (plugin/manifest name
     :version "0.0.1"

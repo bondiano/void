@@ -26,7 +26,11 @@
 (def tbl (string "void_bus_my_" (os/getpid)))
 (def p (pool/make (server/driver) {:size 6}))
 
-(defn- drop-tables! []
+(defn- drop-tables!
+  {:params [] :ret :nil}
+  "Drop this run's message, cursor, lease and outbox tables — a clean
+  slate for the next run, and cleanup on the way out."
+  []
   (each t [tbl (string tbl "_cursors") (string tbl "_leases") (string tbl "_outbox")]
     (protect (db/execute-sql (string "DROP TABLE IF EXISTS " t) []
                              {:kind :write :prepared false}))))

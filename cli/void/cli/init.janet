@@ -53,6 +53,7 @@
   "main")
 
 (defn add-project-paths!
+  {:params [:string] :ret @[[:string :keyword]]}
   "Make the project tree importable: its root (main.janet, app.janet)
   goes on module/paths, like the generated project expects."
   [root]
@@ -60,6 +61,15 @@
   (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
 
 (defn load-app
+  {:params [:string?]
+   :ret {:plugins :any
+         :plugins-for (or (fn [:keyword] :any) :nil)
+         :profile :keyword?
+         :config :any
+         :signals (or @[:keyword] [:keyword] :nil)
+         :shutdown-timeout :number?
+         & r}
+   :throws [:string]}
   ``Load the application boot options: require `module` (default
   `main`) and read its `app` binding — a dictionary of plugin/bootstrap
   options ({:plugins [...] :profile ...}). Throws with a helpful
@@ -77,6 +87,16 @@
   app)
 
 (defn resolve-plugins
+  {:params [{:plugins :any
+             :plugins-for (or (fn [:keyword] :any) :nil)
+             :profile :keyword?
+             :config :any
+             :signals (or @[:keyword] [:keyword] :nil)
+             :shutdown-timeout :number?
+             & r}
+            :keyword]
+   :ret :any
+   :throws [:string]}
   ``The app's composition for a profile. An app that declares
   :plugins-for — (fn [profile] plugins), the explicit contract run!
   honors too — is asked; anything else keeps its :plugins list. This
@@ -98,6 +118,17 @@
   cmd/command-words)
 
 (defn find-command
+  {:params [[{:name :keyword
+              :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+              :args (or @[:string] :nil)
+              & r}]
+            (or @[:string] [:string])]
+   :ret (or [{:name :keyword
+              :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+              :args (or @[:string] :nil)
+              & r}
+             [:string]]
+            :nil)}
   ``Resolve leading argv words against the commands (longest match
   first). Returns [command remaining-args] or nil.``
   [commands words]
@@ -113,6 +144,15 @@
 # -- app command execution -----------------------------------------------
 
 (defn boot-opts
+  {:params [{:plugins :any
+             :plugins-for (or (fn [:keyword] :any) :nil)
+             :profile :keyword?
+             :config :any
+             :signals (or @[:keyword] [:keyword] :nil)
+             :shutdown-timeout :number?
+             & r}
+            :keyword?]
+   :ret @{:keyword :any}}
   "Boot options for plugin/bootstrap from the app binding: the
   bootstrap subset of keys (run! extras like :signals are dropped),
   profile overridable from the command line."
@@ -128,6 +168,15 @@
   opts)
 
 (defn bootstrap-app
+  {:params [{:plugins :any
+             :plugins-for (or (fn [:keyword] :any) :nil)
+             :profile :keyword?
+             :config :any
+             :signals (or @[:keyword] [:keyword] :nil)
+             :shutdown-timeout :number?
+             & r}
+            :keyword?]
+   :ret {:profile :any :system :any :hooks :any :config :any :extensions :any & r}}
   "Bootstrap phases 1-5 for the app, then run the :config-loaded and
   :before-start hooks — after this route tables and plugin contexts
   exist, but no component has started. Returns the boot value."
@@ -147,6 +196,8 @@
   boot)
 
 (defn teardown!
+  {:params [{:profile :any :system :any :hooks :any :config :any :extensions :any & r}]
+   :ret :nil}
   ``The other half of the lifecycle `bootstrap-app` opened, for a
   command that is done: the :before-stop and :after-stop hooks (a
   plugin that allocated something in :before-start gets them on the
@@ -166,6 +217,16 @@
   nil)
 
 (defn run-command
+  {:params [{:profile :any :system :any :hooks :any :config :any :extensions :any & r}
+            {:name :keyword
+             :fn :any
+             :needs (or @[:keyword] :nil)
+             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+             :args (or @[:string] :nil)
+             & r}
+            (or @[:string] [:string])]
+   :ret :any
+   :throws [:string]}
   ``Run one contributed command against a bootstrapped app: start the
   :needs components (plus transitive dependencies), call :fn with those
   instances and the arguments (`cmd/call`: parsed against the
@@ -194,6 +255,10 @@
 # -- deploy check --------------------------------------------------------
 
 (defn deploy-check
+  {:params [{:profile :any :system :any :hooks :any :config :any :extensions :any & r}]
+   :ret @[{:name :keyword :what :string
+           :shared? (or :boolean (enum :by-design :unknown))
+           :store :keyword? :why :string? :replacement :string? :error :string?}]}
   ``The body of `void deploy check` — is this composition fit for the
   shape it is about to be deployed in? Prints the shape, why it is
   that, and one row per store: shared, per-process (with what to
@@ -236,6 +301,17 @@
 # -- help ----------------------------------------------------------------
 
 (defn app-commands
+  {:params [{:profile :keyword?
+             :built-in [{:name :keyword
+                         :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+                         :args (or @[:string] :nil)
+                         & r}]
+             :app (fn [] :any)}]
+   :ret (or [{:name :keyword
+              :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+              :args (or @[:string] :nil)
+              & r}]
+             :nil)}
   ``The `:void.core/cli` commands this project's composition declares,
   or nil when there is no project here (or its main module will not
   load). Phase 1 of bootstrap and no more — `plugin/declared` reads the
@@ -248,6 +324,9 @@
   (when ok cmds))
 
 (defn- print-help
+  {:params [[{:name :keyword :args (or @[:string] :nil) :doc :string? & r}]
+            (or [{:name :keyword :args (or @[:string] :nil) :doc :string? & r}] :nil)]
+   :ret :nil}
   ``The listing `void` and `void help` print: two tables of the same
   declaration, rendered by the same `cmd/summary`. `contributed` is nil
   when there is no project here to ask, which is a different sentence
@@ -282,7 +361,25 @@
 # started components, because these four run before there is a
 # composition to start.
 
-(defn- run-builtin [ctx command args]
+(defn- run-builtin
+  {:params [{:profile :keyword?
+             :built-in [{:name :keyword
+                         :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+                         :args (or @[:string] :nil)
+                         & r}]
+             :app (fn [] :any)}
+            {:name :keyword
+             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+             :args (or @[:string] :nil)
+             :run (fn [:any :any :any] :any)
+             & r}
+            (or @[:string] [:string])]
+   :ret :any
+   :throws [:string]}
+  "Parse a built-in command's args against its own declaration, then
+  call its :run with the invocation context, the parsed flags and the
+  remaining positionals."
+  [ctx command args]
   (def [opts pos] (cmd/parse command args))
   ((command :run) ctx opts pos))
 
@@ -383,6 +480,9 @@
 # -- entrypoint ----------------------------------------------------------
 
 (defn- split-global
+  {:params [(or @[:string] [:string])]
+   :ret [@{:keyword :any} [:string]]
+   :throws [:string]}
   ``Split argv into the global flags — which are only recognized before
   the command word, so `void routes --profile x` is the command's
   business and not ours — and the words from the command on. The flags
@@ -394,12 +494,28 @@
   (def [opts _] (cmd/parse global-command (tuple ;(slice argv 0 (min i (length argv))))))
   [opts (tuple ;(drop i argv))])
 
-(defn- unknown-command [words names]
+(defn- unknown-command
+  {:params [[:string] @[:keyword]] :ret :never :throws [:string]}
+  "The error for a first word that names no built-in and no
+  contributed command, with a `did you mean` suggestion off the
+  known command names."
+  [words names]
   (errorf "unknown command %q — `void help` lists the available commands%s"
           (string/join words " ")
           (util/suggest (first words) (map |(first (cmd/command-words $)) names))))
 
 (defn dispatch
+  {:params [(or @[:string] [:string])
+            (or {:plugins :any
+                 :plugins-for (or (fn [:keyword] :any) :nil)
+                 :profile :keyword?
+                 :config :any
+                 :signals (or @[:keyword] [:keyword] :nil)
+                 :shutdown-timeout :number?
+                 & r}
+                :nil)]
+   :ret :any
+   :throws [:string]}
   ``Run one CLI invocation (argv without the program name). Returns the
   command's return value; throws on any failure — `main` turns that
   into exit code 1.
@@ -440,7 +556,12 @@
               (unknown-command words (map |($ :name) (array ;builtins ;declared))))
             (run-command boot (first live) (get live 1))))))))
 
-(defn- fail [err]
+(defn- fail
+  {:params [:any] :ret :never}
+  "Print a failed command's error and exit 1. `err` is whatever was
+  thrown — a string or a structured value — and `log/message-of` is
+  what turns either into a sentence."
+  [err]
   # log/message-of rather than `describe`: a command that failed on a
   # structured throw used to print `void: <struct 0xAAAA…>`, which is
   # the address of the sentence rather than the sentence
@@ -448,6 +569,7 @@
   (os/exit 1))
 
 (defn main
+  {:params [:string] :ret :nil}
   "Binscript entrypoint: `args` as janet passes them (program name
   first). Errors print to stderr and exit 1."
   [& args]
@@ -456,6 +578,7 @@
   (unless ok (fail err)))
 
 (defn app-main
+  {:params [:any :string] :ret :any :throws [:string]}
   ``Entrypoint for an application that carries its own CLI — what the
   `main` of a single binary calls (docs/DEPLOY.md).
 

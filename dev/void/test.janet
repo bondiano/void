@@ -19,9 +19,19 @@
 (def- allowed-opts
   {:plugins true :profile true :config true :only true :components true})
 
-(defn- deps-closure [sys ks]
+(defn- deps-closure
+  {:params [{:components {:any :any} :resolution {:any {:any :any}} & r} (or @[:any] [:any])]
+   :ret @{:any :boolean}
+   :throws [:string]}
+  "The transitive closure of `ks` over `sys`'s dependency resolution:
+  every component key reachable from `ks`, an error naming any that is
+  not a known component."
+  [sys ks]
   (def needed @{})
-  (defn visit [k]
+  (defn visit
+    {:params [:any] :ret :nil :throws [:string]}
+    "Add `k` and everything it resolves to to `needed`, once."
+    [k]
     (unless (in needed k)
       (unless (get-in sys [:components k])
         (errorf "test/start!: unknown component %q in :only (components: %s)"
@@ -33,6 +43,13 @@
   needed)
 
 (defn start!
+  {:params [{:plugins (or @[:any] [:any] :nil)
+            :profile :keyword?
+            :config (or {:any :any} :nil)
+            :only (or @[:any] [:any] :nil)
+            :components (or @[:any] [:any] :nil)}]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
   ``Bootstrap and start a test system.
 
   Options — plugin/bootstrap's :plugins/:profile/:config (the profile
@@ -85,6 +102,8 @@
   boot)
 
 (defn stop!
+  {:params [@{:system :any :hooks :any :profile :keyword :phase :keyword & r} (or :number :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}}
   "Stop a test system (reverse order, per-component timeout in
   seconds, default 5); the :before-stop/:after-stop hooks run
   protected, like plugin/shutdown!. Returns the boot value."
@@ -100,6 +119,7 @@
   boot)
 
 (defmacro with-system
+  {:params [:tuple :any] :ret :any}
   ``Run body with a started test system, always stopping it:
 
       (test/with-system [boot {:plugins [my/plugin] :only [:db/pool]}]
@@ -117,6 +137,9 @@
 # -- live services -------------------------------------------------------
 
 (defn service
+  {:params [:string :string]
+   :ret {:env-var :string :value (fn [] :string?) :available? (fn [] :boolean)
+         :skip (fn [:string] :nil)}}
   ``A live service a suite can be gated on — a database, a broker, a
   bucket — named by an environment variable, so the suite asks for it
   by name rather than guessing at one or starting one:
@@ -133,7 +156,10 @@
   driver, and a suite that cannot be run at all is a suite nobody
   runs.``
   [env-var hint]
-  (defn value []
+  (defn value
+    {:params [] :ret :string?}
+    "The variable's trimmed content, nil when unset or blank."
+    []
     (when-let [v (os/getenv env-var)]
       (unless (empty? (string/trim v)) (string/trim v))))
   {:env-var env-var
@@ -144,11 +170,13 @@
            nil)})
 
 (defn generate
+  {:params [:any (or {:any :any} :nil)] :ret :any :throws [:string]}
   "Generate a sample value for a schema — see void/dev/generate."
   [sch &opt opts]
   (gen/generate sch opts))
 
 (defn snapshot
+  {:params [:string :any :string?] :ret (enum :created :matched :updated) :throws [:string]}
   ``Compare the string rendering of `actual` against the stored
   snapshot `dir`/`name`.snap (dir defaults to "test/snapshots",
   relative to the package root jpm test runs from — hiccup snapshot
@@ -162,7 +190,11 @@
   (default dir "test/snapshots")
   (def path (string dir "/" name ".snap"))
   (def s (string actual))
-  (defn write! []
+  (defn write!
+    {:params [] :ret :nil}
+    "Create `dir` (component by component) and write the snapshot to
+    `path`."
+    []
     (var acc "")
     (each part (string/split "/" dir)
       (set acc (if (empty? acc) part (string acc "/" part)))
@@ -183,6 +215,7 @@
             name path (slurp path) s)))
 
 (defn factory
+  {:params [:any :any] :ret :any :throws [:string]}
   ``A sample value for a map schema with explicit overrides on top:
 
       (test/factory User :email "fixed@example.com")
@@ -211,11 +244,19 @@
 # void/http (wave 1). The client keeps a cookie jar and base headers;
 # request sugar (:json/:form/:raw) is the kernel's make-request.
 
-(defn- kernel-of [boot]
+(defn- kernel-of
+  {:params [{:system {:instances {:any :any} & r} & r}]
+   :ret {:handler :any :make-request :any :serialize :any :notify-response :any & r}
+   :throws [:string]}
+  "The running :http/kernel component instance, or an error naming
+  what to include in :plugins."
+  [boot]
   (or (get-in boot [:system :instances :http/kernel])
       (error "test/client: the :http/kernel component is not running — include :void/http in :plugins (test/with-http starts :only [:http/kernel])")))
 
 (defn client
+  {:params [:any (or {:headers (or @{:string :any} :nil)} :nil)]
+   :ret @{:boot :any :kernel :any :cookies @{:string :string} :headers @{:string :any}}}
   ``An inject client over a started boot (see with-http):
   {:boot :kernel :cookies <jar> :headers <base headers>}. Responses'
   set-cookie headers land in the jar and ride along on subsequent
@@ -227,7 +268,11 @@
     :cookies @{}
     :headers (merge @{} (get opts :headers @{}))})
 
-(defn- jar-update! [jar resp]
+(defn- jar-update!
+  {:params [@{:string :string} {:headers {:string :any} & r}] :ret :nil}
+  "Fold a response's Set-Cookie header(s) into `jar`: an emptied value
+  deletes the cookie."
+  [jar resp]
   (def sc (get-in resp [:headers "set-cookie"]))
   (each one (cond (nil? sc) [] (indexed? sc) sc [sc])
     (def pair (first (string/split ";" (string one))))
@@ -239,13 +284,20 @@
         (put jar name nil)
         (put jar name value)))))
 
-(defn- jar-header [jar]
+(defn- jar-header
+  {:params [@{:string :string}] :ret :string?}
+  "The jar as a `Cookie:` header value, or nil when it is empty."
+  [jar]
   (unless (empty? jar)
     (string/join (seq [k :in (sorted (keys jar))]
                    (string k "=" (jar k)))
                  "; ")))
 
 (defn inject
+  {:params [@{:kernel {:handler :any :make-request :any :serialize :any :notify-response :any & r}
+             :cookies @{:string :string} :headers @{:string :any} & r}
+            {:any :any}]
+   :ret @{:raw :string & r}}
   ``One in-memory request through the whole stack:
 
       (test/inject c {:uri "/orders"})
@@ -280,16 +332,19 @@
   resp)
 
 (defn text
+  {:params [{:body :any & r}] :ret :string}
   "The response body as a string."
   [resp]
   (string (or (resp :body) "")))
 
 (defn json
+  {:params [{:body :any & r}] :ret :any :throws [:any]}
   "Decode a JSON response body (keyword keys)."
   [resp]
   (json/decode (text resp) true))
 
 (defn sse-events
+  {:params [{:raw :string? & r}] :ret @[{:event :string? :data :string? :id :string?}] :throws [:string]}
   ``Parse the SSE frames out of an injected response's :raw bytes:
   [{:event "..." :data "..." :id "..."} ...] — :data joins multi-line
   data fields with newlines.``
@@ -329,6 +384,7 @@
   events)
 
 (defmacro with-http
+  {:params [:tuple :any] :ret :any}
   ``Start the app kernel-only (no port), hand the body an inject
   client, stop in defer:
 

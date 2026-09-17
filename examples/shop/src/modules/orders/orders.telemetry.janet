@@ -45,12 +45,14 @@
      :collect (fn collect-unpaid [] (repo/count-placed))}))
 
 (defn order-placed!
+  {:params [:number] :ret :nil}
   "One order, worth this many cents."
   [total-cents]
   (obs/inc! orders-placed)
   (obs/observe! order-value nil (/ total-cents 100)))
 
 (defn checkout-rejected!
+  {:params [:keyword] :ret :nil}
   "One checkout that did not become an order."
   [reason]
   (obs/inc! checkout-rejected [(string reason)]))

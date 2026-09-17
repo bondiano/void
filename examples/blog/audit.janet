@@ -50,6 +50,9 @@
 # -- what the application publishes --------------------------------------
 
 (defn record-tx!
+  {:params [:keyword :any {:keyword :any}]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   ``Announce a domain fact from inside the transaction that made it.
   Called by ./app on the routes that write; `actor` is the signed-in
   author, when there was one.``
@@ -59,6 +62,7 @@
 # -- what void/authz publishes -------------------------------------------
 
 (defn- field
+  {:params [{:any :any} :keyword] :ret :any}
   ``One field of a payload, whichever way the codec spelled its keys.
   This application runs `:codec :jdn` (config/default.janet), so they
   come back keywords; under the default `:json` they come back
@@ -70,6 +74,8 @@
   (if (nil? (get payload key)) (get payload (string key)) (get payload key)))
 
 (defn- on-decision
+  {:params [{:allow :boolean :policy :keyword? :reason :string? :subject :string? & r}]
+   :ret :nil}
   "Publish every refusal. Allows are not published: there are a
   hundred of them on a page with a list, and an audit trail nobody can
   read is not one."
@@ -88,6 +94,7 @@
                 :err (if (string? err) err (describe err))))))
 
 (defn install!
+  {:params [:any] :ret :function}
   "Subscribe to void/authz's decision hook. Called from the plugin's
   :after-start (see ./app)."
   [boot]
@@ -122,6 +129,9 @@
     (error err)))
 
 (defn trail
+  {:params [(or {:limit :any :correlation-id :any & r} :nil)]
+   :ret @[@{:any :any}]
+   :throws [:string]}
   ``The trail, newest first — what a test reads and what an admin page
   would. Filterable by correlation, which is how one request's whole
   causal fan-out is pulled out in one query.``

@@ -22,6 +22,9 @@
 (import ./driver :as driver)
 
 (defn- open-entry
+  {:params [{:connect (fn [] :any) & r} :number]
+   :ret @{:conn :any :stmts @{:string :any} :id :number}
+   :throws [{:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Open a driver connection into a pool entry {:conn :stmts :id}. A
   driver's connect failure becomes a :void.db/connection envelope."
   [drv id]
@@ -48,6 +51,12 @@
   30)
 
 (defn make
+  {:params [{:connect (fn [] :any) :close (fn [:any] :any)
+             :ping (or (fn [:any] :any) :nil) & r}
+            (or {:size :number? :checkout-timeout :number?
+                 :validate-after (or :number :boolean :nil) & r} :nil)]
+   :ret @{:driver {:connect (fn [] :any) :close (fn [:any] :any) & r} & r}
+   :throws [:string]}
   ``Build a pool over a driver: opts {:size 10 :checkout-timeout 5
   :validate-after 30}. `:validate-after` may be false, which is "never
   ask" — and is what a driver with no :ping gets anyway.``
@@ -85,11 +94,14 @@
   (put pool :driver driver))
 
 (defn driver-of
+  {:params [@{:driver {:connect (fn [] :any) :close (fn [:any] :any) & r} & r}]
+   :ret {:connect (fn [] :any) :close (fn [:any] :any) & r}}
   "The driver a pool runs on."
   [pool]
   (pool :driver))
 
 (defn note-query!
+  {:params [:table :number] :ret :nil}
   "Record one executed statement (called by the instrumented execution
   path in ./state)."
   [pool us]
@@ -101,6 +113,8 @@
   cpool/acquire)
 
 (defn checkin
+  {:params [:table @{:conn :any :stmts @{:string :any} :id :number & r}]
+   :ret :nil}
   ``Return an entry — see void/core/pool `release`. A discarded entry,
   or one whose connection the driver reports non-reusable, is closed.
   The idle stamp is written here, which is the only place that knows
@@ -110,6 +124,7 @@
   (cpool/release pool entry))
 
 (defn discard!
+  {:params [@{:conn :any :stmts @{:string :any} :id :number & r}] :ret :nil}
   "Mark an entry broken: the next checkin closes the raw connection
   instead of reusing it (a failed ROLLBACK leaves the connection in an
   unknown state)."

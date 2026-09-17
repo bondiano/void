@@ -54,7 +54,11 @@
 
 # -- rendering: values, errors, controls ---------------------------------
 
-(defn render [x] (hiccup/render-string x))
+(defn render
+  {:params [:any] :ret :string :throws [:string]}
+  "Render hiccup to a string, for the assertions below."
+  [x]
+  (hiccup/render-string x))
 
 (def email-html (render (form/input (by-name :email) "a@b.co")))
 (each part [`type="email"` `name="email"` `id="field-email"`

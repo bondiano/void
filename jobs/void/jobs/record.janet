@@ -52,12 +52,16 @@
 
 # -- ids -----------------------------------------------------------------
 
-(defn- hex [bytes]
+(defn- hex
+  {:params [:buffer] :ret :string}
+  "Bytes as a lowercase hex string, two characters each."
+  [bytes]
   (def b @"")
   (each byte bytes (buffer/push-string b (string/format "%02x" byte)))
   (string b))
 
 (defn new-id
+  {:params [:number?] :ret :string}
   ``A job id: the second it was created, then eight random bytes.
   Time first so that ids sort roughly in creation order — a backend
   breaking a priority tie by id then breaks it in favour of the job
@@ -69,6 +73,17 @@
 # -- construction --------------------------------------------------------
 
 (defn make
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:id :string :job :keyword :args [:any] :queue :keyword :priority :number
+          :state :keyword :attempt :number :max-attempts :number
+          :backoff (or {:strategy :keyword :base :number :max :number :jitter :number} :nil)
+          :timeout :number? :run-at :number :enqueued-at :number
+          :started-at :nil :finished-at :nil
+          :unique-key :string? :unique-until :number? :group :string?
+          :parent :string? :children-left :number?
+          :children (or @[{:id :string :job :keyword :result :any}] :nil)
+          :result :nil :error :nil :failures @[:any] :token :nil :traceparent :string?}
+   :throws [:string]}
   ``Build a pending record. Every policy field is expected to be
   resolved already — the definition's options merged over the [:jobs]
   defaults merged under the per-enqueue overrides — because a record
@@ -115,6 +130,7 @@
     :traceparent (get f :traceparent)})
 
 (defn copy
+  {:params [(or @{:keyword :any} :nil)] :ret (or @{:keyword :any} :nil)}
   "A shallow copy of a record — what a backend hands out so that a
   caller mutating what it got cannot mutate what is stored."
   [r]
@@ -128,17 +144,21 @@
 # -- predicates ----------------------------------------------------------
 
 (defn live?
+  {:params [{:state :keyword? & r}] :ret :boolean}
   "True while the record still owes work."
   [r]
   (truthy? (index-of (get r :state) live-states)))
 
 (defn runnable?
+  {:params [{:state :keyword? :run-at :number? & r} :number] :ret :boolean}
   "True when a pending record may be claimed at `now`."
   [r now]
   (and (= :pending (get r :state))
        (<= (get r :run-at 0) now)))
 
 (defn stalled?
+  {:params [{:state :keyword? :claimed-at :number? :started-at :number? & r} :number :number]
+   :ret :boolean}
   ``True when a claim has outlived `ttl` seconds — the worker holding
   it is gone (killed, crashed, or the machine went away) and the
   record has to go back into the queue. A running job whose handler is
@@ -156,6 +176,9 @@
 # backend's back.
 
 (defn start!
+  {:params [@{:attempt :number? & r} :string :number]
+   :ret @{:state :keyword :token :string :attempt :number
+          :started-at :number :claimed-at :number :error :nil & r}}
   "Mark a record claimed by `token` at `now`."
   [r token now]
   (put r :state :running)
@@ -167,6 +190,8 @@
   r)
 
 (defn complete!
+  {:params [@{:keyword :any} :any :number]
+   :ret @{:state :keyword :result :any :error :nil :token :nil :finished-at :number & r}}
   "Mark a record finished, carrying what the handler returned."
   [r result now]
   (put r :state :completed)
@@ -176,7 +201,12 @@
   (put r :finished-at now)
   r)
 
-(defn- note-failure! [r err now]
+(defn- note-failure!
+  {:params [@{:failures (or @[:any] :nil) :attempt :number? & r} :string? :number]
+   :ret @{:failures @[{:attempt :number :at :number :error :string?}] :error :string? & r}}
+  "Append a failure to the record's bounded history and set :error to
+  it — the shared tail behind `retry!` and `kill!`."
+  [r err now]
   (def fs (get r :failures @[]))
   (array/push fs {:attempt (get r :attempt 0) :at now :error err})
   # a positive start: Janet counts -1 as one past the last index, so a
@@ -189,6 +219,9 @@
   r)
 
 (defn retry!
+  {:params [@{:keyword :any} :string? :number :number]
+   :ret @{:state :keyword :token :nil :run-at :number :started-at :nil :claimed-at :nil
+          :failures @[:any] :error :string? & r}}
   "Send a failed record back to the queue, to be claimed again no
   earlier than `run-at`."
   [r err run-at now]
@@ -201,6 +234,9 @@
   r)
 
 (defn defer!
+  {:params [@{:attempt :number? & r} :number]
+   :ret @{:state :keyword :attempt :number :token :nil :run-at :number
+          :started-at :nil :claimed-at :nil & r}}
   ``Put a claimed record back in the queue without counting the claim
   as an attempt — what a worker does when a rate limit turns out to
   have closed between the claim and the run. It is not a failure and
@@ -215,6 +251,8 @@
   r)
 
 (defn kill!
+  {:params [@{:keyword :any} :string? :number]
+   :ret @{:state :keyword :token :nil :finished-at :number & r}}
   ``Move a record to the dead letter queue: out of attempts, or a
   failure the runtime will not retry. `err` may be nil when a human
   did it.``
@@ -226,6 +264,9 @@
   r)
 
 (defn revive!
+  {:params [@{:keyword :any} :number]
+   :ret @{:state :keyword :attempt :number :token :nil :error :nil :run-at :number
+          :started-at :nil :claimed-at :nil :finished-at :nil & r}}
   ``Put a dead record back at the front of the queue with its attempt
   count reset — what `void jobs retry` does. The failures stay: the
   history of why it died is the reason anyone is retrying it.``
@@ -243,6 +284,7 @@
 # -- serialization -------------------------------------------------------
 
 (defn encode
+  {:params [{:job :keyword & r}] :ret :string :throws [:string]}
   ``A record as one jdn string — what a backend without columns
   stores. Throws naming the job when an argument is not plain data,
   because "this cannot be queued" is a mistake to make at enqueue
@@ -256,6 +298,7 @@
   s)
 
 (defn decode
+  {:params [:string] :ret @{:keyword :any} :throws [:string]}
   "A record back from `encode`."
   [s]
   (def r (parse s))
@@ -264,6 +307,7 @@
   (copy r))
 
 (defn encode-value
+  {:params [:any :string?] :ret :string :throws [:string]}
   "One value (arguments, a result) as jdn — for a backend that keeps
   the scalars in columns and only these two out of them."
   [v &opt what]
@@ -274,6 +318,7 @@
   s)
 
 (defn decode-value
+  {:params [:string?] :ret :any}
   "The inverse of `encode-value`; nil for a nil column."
   [s]
   (when (and s (not= "" s)) (parse s)))
@@ -281,6 +326,7 @@
 # -- rendering -----------------------------------------------------------
 
 (defn ago
+  {:params [:number? :number] :ret :string}
   ``How long ago `t` was, in one column's worth of characters: "now",
   "42s", "9m", "3h", "5d". The age of a record is read in a terminal
   and in a back office, and two spellings of "3h" would drift.``
@@ -296,6 +342,10 @@
         (string/format "%dd" (math/round (/ d 86400)))))))
 
 (defn summary
+  {:params [{:id :any :state :any :queue :any :job :any :attempt :number? :max-attempts :number?
+             :finished-at :number? :started-at :number? :enqueued-at :number? :error :any & r}
+            :number?]
+   :ret :string}
   "One line for `void jobs list`: id, state, queue, job, attempts, age."
   [r &opt now]
   (def t (or now (os/clock :realtime)))

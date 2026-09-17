@@ -75,6 +75,10 @@
    :serializable "SERIALIZABLE"})
 
 (defn begin-sql
+  {:params [(or :keyword {:level :keyword? :read-only :boolean? :deferrable :boolean?} :nil)
+            :keyword?]
+   :ret :string
+   :throws [:string]}
   ``The BEGIN for an :isolation argument. A keyword names the level:
 
       (db/with-tx {:isolation :serializable} ...)
@@ -108,11 +112,34 @@
 
 # -- the handle ----------------------------------------------------------
 
-(defn- open-connection [h]
+(defn- open-connection
+  {:params [@{:conninfo :string :open-opts :any
+              :session @{:stmts @{:string :string} :next :number} & r}]
+   :ret @{:pg (or :pointer :nil) :fds :abstract
+          :session @{:stmts @{:string :string} :next :number}
+          :broken :boolean :closed :boolean :in-tx :boolean
+          :conninfo :string :opts :any :decode :any
+          :notifications @[{:channel :string :pid :number :payload :string}]
+          :in-exchange :boolean}
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
+  "Open the handle's connection from its own conninfo and session
+  catalogue — what both `handle` and `reconnect!` build on."
+  [h]
   (conn/open (h :conninfo)
              (merge (h :open-opts) {:session (h :session)})))
 
 (defn handle
+  {:params [:string (or @{:reconnect :any & r} :nil)]
+   :ret @{:conninfo :string :open-opts :any
+          :session @{:stmts @{:string :string} :next :number}
+          :conn @{:pg (or :pointer :nil) :fds :abstract
+                  :session @{:stmts @{:string :string} :next :number}
+                  :broken :boolean :closed :boolean :in-tx :boolean
+                  :conninfo :string :opts :any :decode :any
+                  :notifications @[{:channel :string :pid :number :payload :string}]
+                  :in-exchange :boolean}
+          :in-tx :boolean :generation :number :reconnect :boolean}
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``A pooled connection: the conninfo it is made of, the live PGconn,
   the prepared-statement catalogue that outlives it, and whether a
   transaction is open on it.``
@@ -129,11 +156,25 @@
   h)
 
 (defn live?
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
+              & r}]
+   :ret :boolean}
   "Is this handle's connection currently usable?"
   [h]
   (and (h :conn) (conn/live? (h :conn)) true))
 
 (defn reconnect!
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :closed :boolean & r} :nil)
+              :conninfo :string :open-opts :any
+              :session @{:stmts @{:string :string} :next :number}
+              :generation :number :in-tx :boolean & r}]
+   :ret @{:pg (or :pointer :nil) :fds :abstract
+          :session @{:stmts @{:string :string} :next :number}
+          :broken :boolean :closed :boolean :in-tx :boolean
+          :conninfo :string :opts :any :decode :any
+          :notifications @[{:channel :string :pid :number :payload :string}]
+          :in-exchange :boolean}
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``Replace the handle's connection, adopting its statement catalogue.
   Used by `ensure!`; exposed because a health check that finds a dead
   connection has the same repair to make.``
@@ -147,6 +188,20 @@
   (h :conn))
 
 (defn- ensure!
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract
+                          :closed :boolean :broken :boolean & r}
+                        :nil)
+              :in-tx :boolean :reconnect :boolean :conninfo :string
+              :open-opts :any :session @{:stmts @{:string :string} :next :number}
+              :generation :number & r}
+            :string?]
+   :ret @{:pg (or :pointer :nil) :fds :abstract
+          :session @{:stmts @{:string :string} :next :number}
+          :broken :boolean :closed :boolean :in-tx :boolean
+          :conninfo :string :opts :any :decode :any
+          :notifications @[{:channel :string :pid :number :payload :string}]
+          :in-exchange :boolean}
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   ``The connection to run the next statement on. A dead one is replaced
   outside a transaction and refused inside it — `what` says which
   statement was about to run, so the message names the casualty.``
@@ -165,6 +220,9 @@
     (reconnect! h)))
 
 (defn close-handle
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :closed :boolean & r} :nil)
+              & r}]
+   :ret :nil}
   "Close a handle's connection. Safe twice."
   [h]
   (when-let [c (h :conn)]
@@ -175,6 +233,16 @@
 # -- the driver value ----------------------------------------------------
 
 (defn make
+  {:params [(or @{:conninfo :any :connect-timeout :any :decode :any
+                  :prepared :any :reconnect :any :tx-mode :any & r}
+                :nil)]
+   :ret @{:name :keyword :dialect :keyword :returning :boolean :conninfo :string
+          :connect :function :close :function :execute :function :ping :function
+          :reusable? :function :begin :function :commit :function :rollback :function
+          :savepoint :function :release-savepoint :function
+          :rollback-to-savepoint :function :stream :function :pipelined :function
+          :cancel! :function :connection-info :function
+          :prepare :function? :execute-prepared :function?}}
   ``Build the :void/db-driver value. opts:
 
     :conninfo    what libpq opens (see ./config, which builds one)
@@ -299,6 +367,8 @@
 # -- what the plugin needs to know about the library ---------------------
 
 (defn capabilities
+  {:params []
+   :ret {:libpq (or [:number :number] :nil) :path :string? :pipeline :boolean :cancel :boolean}}
   ``What the loaded libpq can do, for the log line at boot and the
   component's health: {:libpq [major minor] :pipeline bool :cancel
   bool}. `pipeline` is libpq 14+, the non-blocking `cancel` poll loop
@@ -311,6 +381,24 @@
    :cancel (pq/supports? :cancel)})
 
 (defn from-config
+  {:params [(or {:url :string? :params (or {:keyword :any} :nil)
+                 :host :any :port :any :database :any :user :any
+                 :password :any :application-name :any :sslmode :any
+                 :sslrootcert :any :sslcert :any :sslkey :any
+                 :statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil)
+                 :connect-timeout :any :prepared :any :reconnect :any
+                 :tx-mode :any & r}
+                :nil)]
+   :ret @{:name :keyword :dialect :keyword :returning :boolean :conninfo :string
+          :connect :function :close :function :execute :function :ping :function
+          :reusable? :function :begin :function :commit :function :rollback :function
+          :savepoint :function :release-savepoint :function
+          :rollback-to-savepoint :function :stream :function :pipelined :function
+          :cancel! :function :connection-info :function
+          :prepare :function? :execute-prepared :function?}
+   :throws [:string]}
   ``The driver for a [:db-postgres] config slice — `config/conninfo`
   plus the behaviour keys, in one call.``
   [cfg0]

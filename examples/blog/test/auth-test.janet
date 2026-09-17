@@ -28,7 +28,13 @@
 
 # -- the policy, with no system anywhere ---------------------------------
 
-(defn- ctx-for [subject resource]
+(defn- ctx-for
+  {:params [(or :string :buffer :nil) {:author-id :number? & r}]
+   :ret @{:subject :any :action :any :resource :any :env {:any :any}
+          :attrs @{:any :any} :used @[:any]}}
+  "A decision context over a bare subject string and resource, with
+  no system behind either — what makes the policy testable alone."
+  [subject resource]
   (authz/make-context {:subject (when subject (auth/identity subject))
                        :resource resource}))
 
@@ -61,18 +67,34 @@
   ["audit_events" "comments" "articles" "authors"
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
-(defn- drop-app-tables! []
+(defn- drop-app-tables!
+  {:params [] :ret :nil}
+  "Drop every table this suite owns, so a pass starts from nothing."
+  []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "The response body as a string."
+  [resp] (test/text resp))
 
-(defn- token-of [resp]
+(defn- token-of
+  {:params [{:body :any & r}] :ret :string?}
+  "The CSRF token embedded in a rendered page, or nil."
+  [resp]
   (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
-(defn run-suite [engine]
+(defn run-suite
+  {:params [{:label :string :database :keyword :config :any & r}]
+   :ret @[{:version :string :name :string :path :string}]}
+  "Run the auth suite against one engine's composition."
+  [engine]
   (def label (engine :label))
-  (defn note [msg] (print "  [" label "] " msg))
+  (defn note
+    {:params [:string] :ret :nil}
+    "Print one progress line, tagged with the engine under test."
+    [msg] (print "  [" label "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
@@ -161,7 +183,10 @@
     # visitor still has a session cookie (an empty one), so the request
     # is cookie-borne and void/security checks it
     (def anon-token (token-of signed-out))
-    (defn- sign-in [email password]
+    (defn- sign-in
+      {:params [:string :string] :ret @{:raw :string & r}}
+      "Post the sign-in form with the anonymous session's CSRF token."
+      [email password]
       (test/inject c {:uri "/sign-in"
                       :headers {"x-csrf-token" anon-token}
                       :form {:email email :password password}}))
@@ -169,7 +194,10 @@
     (def wrong (sign-in "ada@example.com" "not it"))
     (assert (string/find "do not match" (text wrong)))
     (def unknown (sign-in "nobody@example.com" "not it"))
-    (defn- message-of [resp]
+    (defn- message-of
+      {:params [{:body :any & r}] :ret :string?}
+      "The one-line message a page renders in its .message class, or nil."
+      [resp]
       (first (peg/match ~(* (thru `class="message">`) (<- (to "<"))) (text resp))))
     (assert (= (message-of wrong) (message-of unknown))
             "a wrong password and an unknown address say exactly the same thing — telling them apart is a user-enumeration API, and check-password spends the same time on both")
@@ -271,7 +299,10 @@
     (def link-client (test/client (c :boot)))
     (def link-token (token-of (test/inject link-client {:uri "/"})))
 
-    (defn- ask-for-link [email]
+    (defn- ask-for-link
+      {:params [:string] :ret @{:raw :string & r}}
+      "Post the magic-link request form for `email`."
+      [email]
       (test/inject link-client {:uri "/sign-in/magic"
                                 :headers {"x-csrf-token" link-token}
                                 :form {:email email}}))

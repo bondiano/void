@@ -22,6 +22,7 @@
   [1 41 0])
 
 (defn parse-version
+  {:params [:string] :ret [:number]}
   "\"1.41.2-meta\" -> (1 41 2): the numeric dot-parts, pre-release
   suffix dropped."
   [s]
@@ -29,6 +30,7 @@
   (tuple ;(map |(or (scan-number $) 0) (string/split "." numeric))))
 
 (defn version<?
+  {:params [[:number] [:number]] :ret :boolean :narrows :any}
   "Numeric tuple comparison, missing parts read as 0."
   [a b]
   (var r false)
@@ -42,6 +44,7 @@
   r)
 
 (defn which
+  {:params [:string] :ret :string?}
   "First PATH entry holding `name`, or nil — presence, not a spawn."
   [name]
   (when-let [path-env (os/getenv "PATH")]
@@ -52,6 +55,7 @@
           (string/split ":" path-env))))
 
 (defn port-listening?
+  {:params [:string :number] :ret :boolean}
   "Does anything accept on host:port right now? A refused connection
   is the good answer here."
   [host port]
@@ -88,7 +92,11 @@
    "/usr/lib/x86_64-linux-gnu" "/usr/lib/aarch64-linux-gnu"
    "/opt/homebrew/lib" "/opt/local/lib"])
 
-(defn- search-dirs []
+(defn- search-dirs
+  {:params [] :ret [:string]}
+  "The library directories to stat, beyond the loader's fixed list:
+  whatever DYLD_LIBRARY_PATH or LD_LIBRARY_PATH names, non-empty."
+  []
   (def env @[])
   (each name ["DYLD_LIBRARY_PATH" "LD_LIBRARY_PATH"]
     (when-let [v (os/getenv name)]
@@ -96,6 +104,7 @@
   [;env ;loader-dirs])
 
 (defn find-library
+  {:params [[:string]] :ret :string?}
   "First candidate that exists on disk: absolute ones stat'ed as they
   are, bare names looked for in the loader's usual directories. Nil
   means only the loader itself can still find it."
@@ -110,11 +119,14 @@
         cands))
 
 (defn- path-str
+  {:params [[:keyword]] :ret :string}
   "A config path as a person writes it: [:db-postgres :libpq]."
   [path]
   (string "[" (string/join (map |(string/format "%q" $) path) " ") "]"))
 
 (defn- library-row
+  {:params [{:label :string :module :string :config-path [:keyword] :hint :string & r} :any]
+   :ret {:status (enum :ok :warn :fail) :name :string :note :string}}
   "One row per named library, degrading honestly: no module here means
   the plugin will speak for itself at :start."
   [{:label label :module module :config-path config-path :hint hint} values]
@@ -137,6 +149,7 @@
 # -- gathering ------------------------------------------------------------
 
 (defn- plugin-names
+  {:params [{:plugins [(or :keyword {:name :any & r})] & r}] :ret @[:keyword]}
   "The :plugins list as keywords: keyword entries as they are, inline
   manifests by their :name."
   [app]
@@ -146,7 +159,12 @@
       (dictionary? p) (keyword (get p :name))
       (keyword (string p)))))
 
-(defn- toolchain-rows []
+(defn- toolchain-rows
+  {:params [] :ret @[{:status (enum :ok :warn :fail) :name :string :note :string}]}
+  "The half that needs no project: janet's own version, jpm, a C
+  compiler, docker — each a row on its own, nothing protected because
+  none of it can throw."
+  []
   (def rows @[])
   (def jv (parse-version janet/version))
   (array/push rows
@@ -174,6 +192,8 @@
   rows)
 
 (defn- socket-row
+  {:params [:string]
+   :ret (or {:status (enum :ok :warn :fail) :name :string :note :string} :nil)}
   "The netrepl socket, when a file is at its path: it must be a
   socket, and it should be nobody's but the owner's — a netrepl is an
   unauthenticated eval in the process."
@@ -191,6 +211,8 @@
        :note (string/format "%s (%s) — a `void dev` may be running" path perms)})))
 
 (defn- project-rows
+  {:params [(fn [] :any)]
+   :ret @[{:status (enum :ok :warn :fail) :name :string :note :string}]}
   "The half that needs a project: the app, its config, its port, its
   libraries. Every step protected — a failing step is a row."
   [load-app]
@@ -235,6 +257,8 @@
   rows)
 
 (defn gather
+  {:params [(or (fn [] :any) :nil)]
+   :ret @[{:status (enum :ok :warn :fail) :name :string :note :string}]}
   "Every row `void doctor` prints. `load-app` is the CLI's own loader
   (init.janet passes it in); without one — or without a main.janet —
   the toolchain half is the whole of the answer."
@@ -252,6 +276,8 @@
 (def- status-word {:ok "ok" :warn "warn" :fail "FAIL"})
 
 (defn report
+  {:params [@[{:status (enum :ok :warn :fail) :name :string :note :string}]]
+   :ret @[:string]}
   "The rows as printed lines, verdict last."
   [rows]
   (def lines @[])
@@ -274,6 +300,8 @@
   lines)
 
 (defn run
+  {:params [(or (fn [] :any) :nil)]
+   :ret @[{:status (enum :ok :warn :fail) :name :string :note :string}]}
   "The command: gather, print, exit 1 when a row is a FAIL (CI reads
   exit codes; a person reads the phrases)."
   [&opt load-app]

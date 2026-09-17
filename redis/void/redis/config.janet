@@ -122,6 +122,7 @@
                    (? (* ":" (/ '(some (range "09")) ,scan-number))))}))
 
 (defn percent-decode
+  {:params [:string] :ret :string}
   "A URL component with its %XX escapes resolved."
   [s]
   (if (string/find "%" s)
@@ -132,6 +133,11 @@
     s))
 
 (defn parse-url
+  {:params [:string]
+   :ret @{:host :string? :port :number? :unix :string? :username :string?
+          :password :string? :database :number? :tls :boolean? :protocol :number?
+          :client-name :string? :timeout :number? :connect-timeout :number? & r}
+   :throws [:string]}
   ``A redis URL as the keywords the slice speaks:
 
       redis://user:pass@host:6379/2   -> {:host :port :username :password :database}
@@ -202,6 +208,12 @@
    :client-name :connect-timeout :timeout :max-bulk])
 
 (defn options
+  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:host :string? :port :number? :unix :string? :username :string?
+          :password :string? :database :number? :tls :boolean? :protocol :number?
+          :client-name :string? :connect-timeout :number? :timeout :number?
+          :max-bulk :number? & r}
+   :throws [:string]}
   ``The [:redis] slice as the option table ./conn opens with: the URL
   taken apart first, explicit keys on top, `fallbacks` underneath, and
   the connection keys alone (the pool, the prefix and the codec belong
@@ -225,6 +237,10 @@
   out)
 
 (defn describe
+  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+   :ret {:server :string :database :number :protocol :number
+         :prefix :string :codec :keyword}
+   :throws [:string]}
   ``What this configuration connects to, for logs and health — a
   password never appears, in either spelling.``
   [cfg0]
@@ -239,6 +255,8 @@
    :codec (get cfg :codec :raw)})
 
 (defn pool-options
+  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:size :number? :checkout-timeout :number? & r}}
   "The [:redis :pool] slice, defaults filled in."
   [cfg0]
   (merge (get defaults :pool) (get (or cfg0 {}) :pool {})))

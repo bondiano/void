@@ -20,6 +20,8 @@
   {:page 1 :per-page 25 :max-per-page 100})
 
 (defn query-schema
+  {:params [(or {:max-per-page :number & r} :nil)]
+   :ret {:page :any :per-page :any :sort :any}}
   ``The map-schema fragment for the paging keys — merge into a route's
   :void.schema/query (deep-merge does it from a group layer too):
 
@@ -35,17 +37,29 @@
                                                 (defaults :max-per-page))}]]
    :sort [:optional :string]})
 
-(defn- query-get [query k]
+(defn- query-get
+  {:params [{:any :any} :keyword] :ret :any}
+  "One query value by keyword or string key, first of a repeated
+  value when the wire sent an array."
+  [query k]
   (def v (or (get query k) (get query (string k))))
   (if (indexed? v) (first v) v))
 
-(defn- to-int [v]
+(defn- to-int
+  {:params [:any] :ret :number?}
+  "A query value read as an integer: a number truncates, bytes are
+  scanned, anything else (including an unparsable string) is nil."
+  [v]
   (cond
     (number? v) (math/trunc v)
     (bytes? v) (scan-number (string v))
     nil))
 
 (defn parse-sort
+  {:params [:string? (or @[:keyword] [:keyword] :nil)]
+   :ret @[[:keyword (enum :asc :desc)]]
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+            :status :number :http/status :number}]}
   ``Parse a sort expression into [[field dir] ...]:
 
       (parse-sort "-created-at,total")
@@ -68,6 +82,7 @@
       [field dir])))
 
 (defn filters
+  {:params [(or {:any :any} :nil)] :ret @{:keyword :any}}
   "The filter[...] query keys as a table: ?filter[status]=paid ->
   {:status \"paid\"}."
   [query]
@@ -82,6 +97,14 @@
   out)
 
 (defn params
+  {:params [{:query :any & r}
+            (or {:per-page :number :max-per-page :number
+                 :allowed-sort (or @[:keyword] [:keyword]) & r}
+                :nil)]
+   :ret {:page :number :per-page :number :offset :number :limit :number
+         :sort @[[:keyword (enum :asc :desc)]] :filters @{:keyword :any}}
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+            :status :number :http/status :number}]}
   ``Read the paging convention out of a request's query (validated or
   raw — string values are scanned):
 
@@ -108,11 +131,15 @@
    :filters (filters query)})
 
 (defn pages
+  {:params [:number :number] :ret :number}
   "Total page count for a total row count."
   [total per-page]
   (max 1 (math/ceil (/ total per-page))))
 
 (defn envelope
+  {:params [:any {:page :number :per-page :number :total :number? & r}]
+   :ret {:data :any
+         :page {:page :number :per-page :number :total :number? :pages :number?}}}
   ``The conventional list body: items under :data, paging under :page.
 
       (pagination/envelope items {:page 2 :per-page 50 :total 117})
@@ -126,6 +153,10 @@
           :pages (when total (pages total per-page))}})
 
 (defn link-headers
+  {:params [@{:headers @{:string :any} & r} :string
+            {:page :number :per-page :number :total :number? & r}
+            (or {:query :any & r} :nil)]
+   :ret @{:headers @{:string :any} & r}}
   ``Add the RFC 8288 Link header (rel first/prev/next/last) for a paged
   listing to a response:
 

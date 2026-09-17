@@ -53,6 +53,7 @@
 #   NULL       absent from the row, never present as nil
 
 (defn- bool-of
+  {:params [:any] :ret :boolean :throws [:string]}
   "The boolean a stored :bool column reads back as, whatever its spelling."
   [v]
   (case v true true false false 1 true 0 false
@@ -61,6 +62,7 @@
 (def- json-text "{\"a\":1,\"b\":[1,2,3],\"c\":\"x\"}")
 
 (defn- holds-json?
+  {:params [:any] :ret :boolean}
   ``Does a :json column hold the document — decoded by the driver
   (postgres, mysql), or as the text that went in (sqlite)?``
   [v]
@@ -71,10 +73,15 @@
          (deep= @[1 2 3] (get v "b"))
          (= "x" (get v "c")))))
 
-(defn- number-of [v]
+(defn- number-of
+  {:params [:any] :ret (or :number :nil)}
+  "The numeric value of a stored :numeric column, whether the engine
+  handed it back as a number or as the string it formatted."
+  [v]
   (if (number? v) v (scan-number (string v))))
 
 (defn- kind-of
+  {:params [(fn [] :any)] :ret [:keyword :any] :throws [:string]}
   "Run `f` expecting it to raise; the error's kind (and the envelope)."
   [f]
   (def [ok e] (protect (f)))
@@ -82,6 +89,7 @@
   [(errors/kind e) e])
 
 (defn propagate-visibly
+  {:params [:string :any :fiber] :ret :never :throws [:any]}
   ``A suite's uncaught envelope reaches `jpm test` as `error: <struct
   0x…>`: the runtime describes a frozen table, it does not read one.
   Say the kind and the message on stderr first, then propagate with
@@ -92,6 +100,12 @@
   (propagate e f))
 
 (defn run!
+  {:params [:string
+            {:dialect :keyword :connect (fn [] :any) :close (fn [:any] :any)
+             :execute (fn [:any :string [:any] {:any :any}] :any) & r}
+            (or {:sleep-sql :string? & r} :nil)]
+   :ret :boolean
+   :throws [:any]}
   ``Assert that `drv0` behaves like a `:void/db-driver` when plugged into
   the kernel. `name` names the engine in the failure messages, because
   "a duplicate key did not classify" is a different bug in each of

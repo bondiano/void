@@ -10,10 +10,20 @@
 # this suite is mostly about making jobs fail on purpose
 (each ns ["void.jobs" "void.jobs.worker"] (log/set-level! ns :fatal))
 
-(defn- queue [&opt cfg]
+(defn- queue
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:backend {:keyword :any} :config {:keyword :any} :queues {:keyword :any}
+          :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
+                    :timeout :number? :claim-ttl :number & r}
+          :stats @{:enqueued :number :duplicates :number}}}
+  "A fresh in-process queue value, for a test that needs its own."
+  [&opt cfg]
   (state/make (memory/store (memory/make)) (or cfg {})))
 
-(defmacro- with-queue [q & body]
+(defmacro- with-queue
+  {:params [:any :any] :ret :tuple}
+  "Run `body` with `q` bound as the active queue."
+  [q & body]
   ~(with-dyns [state/queue-dyn ,q] ,;body))
 
 # -- running -------------------------------------------------------------

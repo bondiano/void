@@ -26,6 +26,7 @@
 ### facade exports only what it always did.
 
 (defn- re-export
+  {:params [:string [:symbol]] :ret :nil :throws [:string]}
   "Bind `names` from the module at `path` in this module's env, sharing
   each owner binding through a prototype: the value, the docstring,
   the macro flag and a var's cell all stay the owner's. A name the

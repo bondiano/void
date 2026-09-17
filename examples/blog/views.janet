@@ -22,6 +22,7 @@
 (import ./entities :as e)
 
 (defn who-bar
+  {:params [] :ret :tuple}
   "Who is signed in, and the way out."
   []
   (if-let [id (auth/current-user)]
@@ -34,6 +35,7 @@
     [:p {:class "text-sm text-stone-400"} "Not signed in."]))
 
 (defn layout
+  {:params [:any (or {:request :any & r} :nil)] :ret @[:any]}
   ``The one page frame.
 
   The two `<meta>` tags and the `hx-headers:inherited` attribute are
@@ -74,6 +76,7 @@
 # -- the index -----------------------------------------------------------
 
 (defn article-row
+  {:params [@{:id :any :title :any :comment-count :any & r}] :ret :tuple}
   ``One line of the article list. `db/rel` is a table lookup when the
   relation was preloaded and an N+1 in the making when it was not —
   which is exactly why it is the accessor and not a plain key
@@ -88,6 +91,7 @@
     " · " (get article :comment-count 0) " comments"]])
 
 (defn article-list
+  {:params [@[@{:any :any}]] :ret :tuple}
   "The #articles fragment — the cached read of this application."
   [articles]
   [:ul {:id "articles" :class "m-0 list-none p-0"}
@@ -97,6 +101,7 @@
      (seq [a :in articles] (article-row a)))])
 
 (defn new-article-form
+  {:params [(or {:any :any} :nil) (or [{:path :any & r}] :nil)] :ret :tuple}
   ``The publish form. In wave 2 it carried the author's name and email
   as well; now the author is whoever is signed in, so the form is the
   article — and the hidden CSRF field void/security splices in.``
@@ -110,6 +115,7 @@
      :attrs (hx/post "/articles" :target "#index" :swap :outer-html)}))
 
 (defn sign-in-form
+  {:params [(or {:any :any} :nil)] :ret :tuple}
   "Two fields and a password."
   [&opt values]
   (form/form e/Credentials
@@ -119,6 +125,7 @@
      :submit "Sign in"}))
 
 (defn magic-link-form
+  {:params [(or {:any :any} :nil)] :ret :tuple}
   ``The other way in: an address, and a link arrives by mail
   (void/mail-auth). The visitor types nothing they have to remember,
   and the blog stores no password for them until they want one.``
@@ -129,6 +136,7 @@
      :submit "Mail me a sign-in link"}))
 
 (defn register-form
+  {:params [(or {:any :any} :nil) (or [{:path :any & r}] :nil)] :ret :tuple}
   "The same, plus a name — the account this blog knows an author by."
   [&opt values errors]
   (form/form e/Registration
@@ -139,6 +147,7 @@
      :submit "Create an account"}))
 
 (defn index-view
+  {:params [@[@{:any :any}] (or {:any :any} :nil)] :ret :tuple}
   ``GET / — the list, and then either the publish form or the way to
   get one. `state` carries whatever the handler wants re-rendered:
   :values/:errors for the article form, :register/:sign-in for the
@@ -170,18 +179,29 @@
        (register-form (get state :register) (get state :register-errors))]])])
 
 (defn render-index
+  {:params [@[@{:any :any}] (or {:any :any} :nil)]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "The index as a page — what three handlers answer with."
   [articles &opt state]
   (html/page (index-view articles state) {:layout layout}))
 
 # -- one article ---------------------------------------------------------
 
-(defn comment-item [c]
+(defn comment-item
+  {:params [{:author-name :any :body :any & r}] :ret :tuple}
+  "One comment, author and body."
+  [c]
   [:li {:class "border-l-2 border-stone-200 py-2 pl-4"}
    [:p {:class "m-0 text-sm font-medium text-stone-900"} (c :author-name)]
    [:p {:class "m-0 mt-0.5 leading-relaxed text-stone-700"} (c :body)]])
 
 (defn article-view
+  {:params [@{:id :any :title :any :body :any :created-at :any
+              :comment-count :any & r}
+            (or {:any :any} :nil) (or [{:path :any & r}] :nil)]
+   :ret :tuple}
   ``GET /articles/:id — the article with its author and comments, both
   preloaded, plus the comment form. `counted` is the counter column;
   it trails the comment list by however long the job takes, which is
@@ -228,6 +248,8 @@
                              :target "#article" :swap :outer-html))})])
 
 (defn edit-view
+  {:params [@{:id :any & r} (or {:any :any} :nil) (or [{:path :any & r}] :nil)]
+   :ret :tuple}
   "GET /articles/:id/edit — the two columns `save!` may change."
   [article &opt values errors]
   [:div {:id "edit"}

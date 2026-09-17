@@ -14,28 +14,35 @@
 (import ./catalog.model :as model)
 
 (defn find-by-id
+  {:params [:any] :ret (or @{:any :any} :nil) :throws [:string]}
   "One product by primary key, or nil."
   [id]
   (db/find model/Product id))
 
 (defn find-by-sku
+  {:params [:any] :ret (or @{:any :any} :nil) :throws [:string]}
   "One product by the code a human quotes, or nil."
   [sku]
   (db/one model/Product {:where [:= :sku sku]}))
 
 (defn active
+  {:params [] :ret @[@{:any :any}] :throws [:string]}
   "Every product on sale, in sku order — the storefront's whole list."
   []
   (db/query model/Product {:where [:= :status "active"]
                            :order-by [[:sku :asc]]}))
 
 (defn count-active
+  {:params [] :ret :number :throws [:string]}
   "How many products are on sale — the total the API's paging block
   needs."
   []
   (db/count model/Product {:where [:= :status "active"]}))
 
 (defn page-active
+  {:params [{:order-by :any :limit :number? :offset :number? & r}]
+   :ret @[@{:any :any}]
+   :throws [:string]}
   ``One page of the catalog: `{:order-by :limit :offset}` the way
   void/rest's pagination convention produced it.``
   [opts]
@@ -46,11 +53,17 @@
              :offset (get opts :offset 0)}))
 
 (defn create!
+  {:params [{:keyword :any}]
+   :ret @{:any :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Put a product on sale. Used by the seed, and by nobody else."
   [spec]
   (db/insert! model/Product (merge spec {:status "active"})))
 
 (defn archive!
+  {:params [:any]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Take one product off the shelf. The row stays — an order's lines
   point at it, and a shop that deleted a product would be a shop whose
   old invoices lost their links."
@@ -58,6 +71,7 @@
   (db/update! model/Product product-id {:status "archived"}))
 
 (defn below-stock
+  {:params [:number] :ret @[@{:any :any}] :throws [:string]}
   "Products on sale with `threshold` units or fewer — what `void shop
   stock` prints, and what an agent asks for through the same command."
   [threshold]
@@ -66,12 +80,16 @@
                            :order-by [[:stock :asc] [:sku :asc]]}))
 
 (defn count-out-of-stock
+  {:params [] :ret :number :throws [:string]}
   "Products on sale with nothing left to sell — the number the desk's
   front page shows."
   []
   (db/count model/Product {:where [:and [:= :status "active"] [:= :stock 0]]}))
 
 (defn reserve-stock!
+  {:params [:any :number]
+   :ret :boolean
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Take `quantity` off the shelf, or answer false.
 
   Not read-modify-write:
@@ -101,6 +119,9 @@
                [:>= :stock [:val quantity]]]})))
 
 (defn release-stock!
+  {:params [:any :number]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Put `quantity` back on the shelf. The mirror image of
   `reserve-stock!`, and the reason it needs no condition: giving stock
   back can always succeed.``

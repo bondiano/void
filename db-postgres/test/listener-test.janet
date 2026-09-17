@@ -17,6 +17,7 @@
 (def conninfo (config/conninfo (server/config {:application-name "void-listener-test"})))
 
 (defn- wait-for
+  {:params [(fn [] a) :number?] :ret a}
   "Spin the loop until (f) is true, or give up after `limit` seconds."
   [f &opt limit]
   (default limit 5)

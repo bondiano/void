@@ -54,6 +54,15 @@
   (tabseq [e :in jobs/events] e (keyword "jobs/" e)))
 
 (defn summary
+  {:params [:keyword
+            {:id :string :job :keyword :queue :keyword :state :keyword
+             :attempt :number :max-attempts :number :enqueued-at :number?
+             :started-at :number? :finished-at :number? :error :string? & r}
+            {:at :number? & r}]
+   :ret @{:event :string :id :string :job :string :queue :string :state :string
+          :attempt :number :max-attempts :number :enqueued-at :number?
+          :started-at :number? :finished-at :number? :duration :number?
+          :error :string? :at :number}}
   ``What a job event carries: enough to audit, chart and alert on, and
   nothing that would put a job's arguments on a topic the whole fleet
   can read (see the module docstring).``
@@ -75,6 +84,12 @@
     :at (get extra :at now)})
 
 (defn forward
+  {:params [{:event :keyword
+             :job (or :nil {:id :string :job :keyword :queue :keyword :state :keyword
+                            :attempt :number :max-attempts :number :enqueued-at :number?
+                            :started-at :number? :finished-at :number? :error :string? & r})
+             :at :number? & r}]
+   :ret :nil}
   "Publish one job lifecycle event. Never throws: see the module
   docstring."
   [payload]

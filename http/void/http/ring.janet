@@ -16,6 +16,8 @@
 # -- responses -----------------------------------------------------------
 
 (defn response
+  {:params [:number :any (or {:string :any} :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   "A response table: status, optional body and headers."
   [status &opt body headers]
   @{:status status
@@ -23,6 +25,8 @@
     :headers (if headers (merge-into @{} headers) @{})})
 
 (defn header
+  {:params [@{:headers @{:string :any} & r} :string :any]
+   :ret @{:headers @{:string :any} & r}}
   ``Set a response header (lowercase names by convention). Setting a
   header that is already present replaces it; `header-add` accumulates
   instead. Returns the response for threading.``
@@ -31,6 +35,8 @@
   resp)
 
 (defn header-add
+  {:params [@{:headers @{:string :any} & r} :string :any]
+   :ret @{:headers @{:string :any} & r}}
   "Add one more value to a response header (set-cookie and friends):
   the value becomes an array on the second addition."
   [resp name value]
@@ -44,32 +50,41 @@
   resp)
 
 (defn content-type
+  {:params [@{:headers @{:string :any} & r} :string]
+   :ret @{:headers @{:string :any} & r}}
   "Set the content-type response header."
   [resp mime]
   (header resp "content-type" mime))
 
 (defn text
+  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "A text/plain response."
   [status body]
   (response status body @{"content-type" "text/plain; charset=utf-8"}))
 
 (defn html
+  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "A text/html response."
   [status body]
   (response status body @{"content-type" "text/html; charset=utf-8"}))
 
 (defn redirect
+  {:params [:string :number?] :ret @{:status :number :body :any :headers @{:string :any}}}
   "A redirect response (302 by default)."
   [location &opt status]
   (default status 302)
   (response status nil @{"location" location}))
 
 (defn not-found
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "The default 404."
   [&opt body]
   (text 404 (or body "not found")))
 
 (defn upgrade
+  {:params [{:string :any} :function :number?]
+   :ret @{:status :number :body :any :headers @{:string :any} :void.http/upgrade :function}
+   :throws [:string]}
   ``A protocol-upgrade response: the head goes out as an ordinary
   response (101 by default, with `headers`), and then `take-over` —
   `(fn [connection leftover-bytes])` — owns the socket until it
@@ -102,6 +117,8 @@
 # -- request access ------------------------------------------------------
 
 (defn request-header
+  {:params [@{:headers {:string (or :string @[:string])} & r} :string]
+   :ret :string?}
   ``One request header value by lowercase name. Repeated headers arrive
   as arrays (see wire/parse-request-head); this returns the first value
   — reach into (req :headers) for the full array.``
@@ -110,6 +127,7 @@
   (if (indexed? v) (first v) v))
 
 (defn cookies
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret @{:string :string}}
   "The request cookies as a name -> value table, parsed once and
   memoized in (req :cookies)."
   [req]
@@ -123,6 +141,7 @@
 (def- same-site-values {:strict "Strict" :lax "Lax" :none "None"})
 
 (defn- cookie-token
+  {:params [:string :any] :ret :string :throws [:string]}
   "A cookie name or attribute value goes onto the wire unencoded, so a
   control byte or a ; in one injects attributes or splits the header."
   [what s]
@@ -132,6 +151,13 @@
   str)
 
 (defn cookie-str
+  {:params [:any :any
+            (or {:path :string? :domain :string? :max-age :number? :expires :string?
+                 :secure :boolean? :http-only :boolean?
+                 :same-site (or (enum :strict :lax :none) :nil) & r}
+                :nil)]
+   :ret :string
+   :throws [:string]}
   ``Format one set-cookie header value. Options:
     :path :domain :max-age :expires (an HTTP date string)
     :secure :http-only (booleans) :same-site (:strict :lax :none)``
@@ -153,11 +179,25 @@
   (string out))
 
 (defn set-cookie
+  {:params [@{:headers @{:string :any} & r} :any :any
+            (or {:path :string? :domain :string? :max-age :number? :expires :string?
+                 :secure :boolean? :http-only :boolean?
+                 :same-site (or (enum :strict :lax :none) :nil) & r}
+                :nil)]
+   :ret @{:headers @{:string :any} & r}
+   :throws [:string]}
   "Add a set-cookie header to a response (see cookie-str for options)."
   [resp name value &opt opts]
   (header-add resp "set-cookie" (cookie-str name value opts)))
 
 (defn delete-cookie
+  {:params [@{:headers @{:string :any} & r} :any
+            (or {:path :string? :domain :string? :max-age :number? :expires :string?
+                 :secure :boolean? :http-only :boolean?
+                 :same-site (or (enum :strict :lax :none) :nil) & r}
+                :nil)]
+   :ret @{:headers @{:string :any} & r}
+   :throws [:string]}
   "Expire a cookie on the client."
   [resp name &opt opts]
   (set-cookie resp name ""
@@ -166,6 +206,7 @@
 # -- server-sent events (SSE is part of the contract) --------------------
 
 (defn sse-event
+  {:params [:any] :ret :string}
   ``Format one SSE event:
 
       (sse-event "tick")
@@ -186,6 +227,8 @@
   (string out))
 
 (defn sse
+  {:params [:any (or {:string :any} :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``An SSE response streaming a fiber (or any iterable) of events; each
   yielded value goes through sse-event, so both plain strings and
   {:event :data :id :retry} tables work:

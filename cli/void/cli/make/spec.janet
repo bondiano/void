@@ -13,6 +13,7 @@
 (def- vowels "aeiou")
 
 (defn plural
+  {:params [:string] :ret :string}
   ``The plural of an English noun, by the three rules that cover the
   cases a table name is usually in: "-s -x -z -ch -sh" take "es", a
   consonant plus "y" becomes "ies", everything else takes "s". It is
@@ -34,6 +35,7 @@
     (string w "s")))
 
 (defn kebab
+  {:params [:string] :ret :string}
   ``Kebab spelling of a name: "BlogPost" and "blog_post" both become
   "blog-post". The CLI accepts whichever spelling the user has in mind
   and normalizes once, here.``
@@ -52,6 +54,7 @@
   (string out))
 
 (defn pascal
+  {:params [:string] :ret :string}
   ``Entity spelling of a name: "blog-post" -> "BlogPost". This is the
   binding the generated module defines and the keyword the schema
   registry knows it by, so it has to round-trip with `kebab`.``
@@ -65,11 +68,15 @@
          (string/split "-" (kebab name)))))
 
 (defn snake
+  {:params [:string] :ret :string}
   "Column and table spelling: \"blog-post\" -> \"blog_post\"."
   [name]
   (string/replace-all "-" "_" (kebab name)))
 
-(defn title [name]
+(defn title
+  {:params [:string] :ret :string}
+  "Display spelling of a name: \"blog-post\" -> \"Blog post\"."
+  [name]
   (def w (kebab name))
   (string/join
     (map |(if (empty? $) $
@@ -131,12 +138,24 @@
 
 (def- type-by-value (tabseq [t :in field-types] (t :value) t))
 
-(defn field-type [name]
+(defn field-type
+  {:params [:keyword]
+   :ret {:label :string :value :keyword :doc :string :column :keyword
+         :sample :string :props :string? :type :keyword
+         :control :keyword? :unique :boolean?}
+   :throws [:string]}
+  "The type row `name:type` names, by its :value — the schema node,
+  the DDL column, the form control and a sample value it projects to."
+  [name]
   (or (in type-by-value name)
       (errorf "unknown field type %q — one of %s"
               name (string/join (map |(string ($ :label)) field-types) ", "))))
 
 (defn parse-field
+  {:params [:string]
+   :ret {:name :keyword :type :keyword :optional? :boolean
+         :entity :keyword? :rel :keyword? :table :string?}
+   :throws [:string]}
   ``Parse one `name[:type][?]` argument into a field declaration:
 
       title            -> {:name :title :type :string}
@@ -182,6 +201,7 @@
 # does not parse.
 
 (defn check-word
+  {:params [:string :string] :ret :string :throws [:string]}
   "A flag value that becomes an identifier — a table, a plural, a
   project name."
   [flag value]
@@ -192,6 +212,7 @@
   value)
 
 (defn check-subpath
+  {:params [:string :string] :ret :string :throws [:string]}
   "A flag value that becomes a directory — inside the project, always."
   [flag value]
   (def s (string value))
@@ -202,13 +223,24 @@
             flag s))
   s)
 
-(defn check-version [value]
+(defn check-version
+  {:params [:string] :ret :string :throws [:string]}
+  "A flag value that becomes a migration version: digits, like the
+  timestamp `timestamp` below generates."
+  [value]
   (unless (peg/match '(* (some (range "09")) -1) (string value))
     (errorf "--version %q must be digits — a migration timestamp like 20260101120000"
             value))
   value)
 
 (defn check-spec-opts
+  {:params [{:plural :string? :table :string? :project :string?
+             :version :string? :migrations-dir :string? :test-dir :string?
+             & r}]
+   :ret {:plural :string? :table :string? :project :string?
+         :version :string? :migrations-dir :string? :test-dir :string?
+         & r}
+   :throws [:string]}
   "The flag values common to both generators, checked by what each
   becomes. `:dir` is separate because auth allows an empty one (the
   module lands beside app.janet)."
@@ -222,7 +254,10 @@
   opts)
 
 
-(defn timestamp []
+(defn timestamp
+  {:params [] :ret :string}
+  "Now, as the fourteen digits a migration's filename sorts by."
+  []
   (def d (os/date (os/time) true))
   (string/format "%04d%02d%02d%02d%02d%02d"
                  (d :year) (inc (d :month)) (inc (d :month-day))
@@ -231,6 +266,10 @@
 # -- rendering helpers ---------------------------------------------------
 
 (defn node-source
+  {:params [{:name :keyword :type :keyword :optional? :boolean
+             :entity :keyword? :rel :keyword? :table :string?}]
+   :ret :string
+   :throws [:string]}
   "The schema node one field declares, as source text."
   [f]
   (def spec (field-type (f :type)))
@@ -245,6 +284,10 @@
   (if (f :optional?) (string/format "[:optional %s]" core) core))
 
 (defn column-source
+  {:params [{:name :keyword :type :keyword :optional? :boolean
+             :entity :keyword? :rel :keyword? :table :string?}]
+   :ret :string
+   :throws [:string]}
   "The DDL column one field creates, as source text."
   [f]
   (def spec (field-type (f :type)))
@@ -256,32 +299,76 @@
   (string/format "[%q %q {%s}]" (f :name) (spec :column) (string/join opts " ")))
 
 (defn form-field-source
+  {:params [{:name :keyword :type :keyword :optional? :boolean
+             :entity :keyword? :rel :keyword? :table :string?}]
+   :ret :string?
+   :throws [:string]}
   "The `:fields` override of one field in the form declaration, or nil
   when the control the schema implies is already right."
   [f]
   (when-let [c (get (field-type (f :type)) :control)]
     (string/format "%q {:control %q}" (f :name) c)))
 
-(defn indent [n lines]
+(defn indent
+  {:params [:number (or @[:string] [:string])] :ret :string}
+  "Join `lines` with a newline and `n` spaces, so a block pasted into a
+  template lines up under whatever indents it."
+  [n lines]
   (def pad (string/repeat " " n))
   (string/join lines (string "\n" pad)))
 
-(defn field-keys [spec]
+(defn field-keys
+  {:params [{:fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret :string}
+  "Every field's name, quoted and space-joined — the schema's own key
+  order, as source text."
+  [spec]
   (string/join (map |(string/format "%q" ($ :name)) (spec :fields)) " "))
 
-(defn form-fields [spec]
+(defn form-fields
+  {:params [{:fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret @[:string]
+   :throws [:string]}
+  "The `:fields` overrides the form declaration needs, one per field
+  whose control the schema would get wrong."
+  [spec]
   (filter identity (map form-field-source (spec :fields))))
 
-(defn rels [spec]
+(defn rels
+  {:params [{:fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret @[{:name :keyword :type :keyword :optional? :boolean
+           :entity :keyword? :rel :keyword? :table :string?}]}
+  "The fields that are a belongs-to relation (name:ref:Entity)."
+  [spec]
   (filter |(= :ref ($ :type)) (spec :fields)))
 
-(defn sample-source [spec]
+(defn sample-source
+  {:params [{:fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret :string
+   :throws [:string]}
+  "Every field's name and a sample value, space-joined — a valid
+  argument list a generated suite can call the entity with."
+  [spec]
   (string/join
     (map (fn [f] (string/format "%q %s" (f :name) (get (field-type (f :type)) :sample)))
          (spec :fields))
     " "))
 
 (defn display-field
+  {:params [{:fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret (or {:name :keyword :type :keyword :optional? :boolean
+             :entity :keyword? :rel :keyword? :table :string?}
+            :nil)}
   "The field a list row shows. The first string-ish one, because a row
   of integers is a row nobody can read; the primary key when there is
   no such field."
@@ -292,6 +379,7 @@
 # -- the project -----------------------------------------------------------
 
 (defn project-name
+  {:params [:string?] :ret :string :throws [:string]}
   ``The application's name — the first half of the plugin keyword this
   resource contributes under. Read from `project.janet`, because that
   is where `void new` wrote it and where a renamed project changes it;

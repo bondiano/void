@@ -8,7 +8,11 @@
 (import void/core/bind :as bind)
 (import void/core/errors :as errors)
 
-(defn expect-unresolvable [name needle thunk]
+(defn expect-unresolvable
+  {:params [:string :string (fn [] :any)] :ret :number}
+  "Run `thunk`, asserting it throws bind's :void.bind/unresolvable
+  kind with a message mentioning `needle`."
+  [name needle thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (= :void.bind/unresolvable (errors/kind err))
@@ -19,7 +23,12 @@
 
 # -- a bare symbol is read through the declaring env, per call ---------
 
-(defn greet [who] (string "hello " who))
+(defn greet
+  {:params [:string] :ret :string}
+  "A handler bind/resolve names by symbol, for testing per-call
+  re-resolution through the declaring env."
+  [who]
+  (string "hello " who))
 (def env (curenv))
 
 (def b (bind/resolve 'greet env "handler"))
@@ -28,7 +37,11 @@
 (assert (= 'greet (b :symbol)))
 (assert (= greet (bind/current b)) "current is the module binding")
 
-(defn greet [who] (string "hi " who))
+(defn greet
+  {:params [:string] :ret :string}
+  "The redefinition of `greet` — what a reload does to the env."
+  [who]
+  (string "hi " who))
 (assert (= "hi x" ((b :call) "x"))
         "a redefinition — what a reload does to the env — is live without re-resolving")
 (assert (= greet (bind/current b)))
@@ -78,7 +91,11 @@
 
 # -- a binding that stops naming a function says so at the call ----------
 
-(defn doomed [x] x)
+(defn doomed
+  {:params [a] :ret a}
+  "A binding whose module rebinds the name away from a function, so
+  bind's error surfaces at the call rather than at resolve time."
+  [x] x)
 (def d (bind/resolve 'doomed env "job :doomed"))
 (def doomed 5)
 (expect-unresolvable "renamed away" "no longer names a function in its module — was it renamed?"
@@ -87,14 +104,31 @@
 
 # -- declared: both halves of a defjob/defhandler declaration ------------
 
-(defn work [x] (+ x 1))
+(defn work
+  {:params [:number] :ret :number}
+  "A job's declared binding, for asserting that `bind/declared`
+  reaches a reload the same way a bare symbol does."
+  [x]
+  (+ x 1))
 (def decl (bind/declared {:binding 'work :env env :fn work} "job :work"))
 (assert (not (decl :no-reload)) "a module-level binding wins over the captured value")
-(defn work [x] (+ x 100))
+(defn work
+  {:params [:number] :ret :number}
+  "The redefinition of `work` — what a reload does to the env."
+  [x]
+  (+ x 100))
 (assert (= 101 ((decl :call) 1)) "so a reload reaches it")
 
-(defn- declare-nested []
-  (defn nested [x] (* 10 x))
+(defn- declare-nested
+  {:params [] :ret :any}
+  "A declaration made inside a function body, so its binding has no
+  module env — `bind/declared` falls back to the captured value."
+  []
+  (defn nested
+    {:params [:number] :ret :number}
+    "The value `declare-nested` declares, local to its call."
+    [x]
+    (* 10 x))
   (bind/declared {:binding 'nested :env env :fn nested} "job :nested"))
 (def nested-decl (declare-nested))
 (assert (nested-decl :no-reload)

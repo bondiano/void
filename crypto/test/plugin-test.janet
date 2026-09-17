@@ -9,7 +9,11 @@
 
 (def plugins ["void/crypto/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [(or :struct :table)] :ret {:env :table :cli :table}}
+  "The dry-run config for these tests: a quiet logger plus whatever
+  `extra` the test wants to layer on top."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}} extra)})
 
 # -- phases 1-5 ----------------------------------------------------------

@@ -16,17 +16,32 @@
 
 (var- default-rng (math/rng (% (math/floor (* 1000 (os/clock))) 0x7fffffff)))
 
-(defn- rand-int [rng lo hi]
+(defn- rand-int
+  {:params [:abstract :number :number] :ret :number}
+  "A uniform random integer in [lo hi], inclusive."
+  [rng lo hi]
   (+ lo (math/rng-int rng (inc (- hi lo)))))
 
-(defn- rand-chars [rng source n]
+(defn- rand-chars
+  {:params [:abstract :string :number] :ret :string}
+  "`n` random bytes drawn from `source` (an alphabet string), as a
+  string."
+  [rng source n]
   (string/from-bytes
     ;(seq [_ :range [0 n]] (source (math/rng-int rng (length source))))))
 
-(defn- pick [rng xs]
+(defn- pick
+  {:params [:abstract (or @[:any] [:any])] :ret :any}
+  "A uniformly random element of `xs`."
+  [rng xs]
   (xs (math/rng-int rng (length xs))))
 
-(defn- gen-format [rng fmt]
+(defn- gen-format
+  {:params [:abstract :keyword] :ret :string :throws [:string]}
+  "A sample string for a known :format keyword (:email :uuid :date
+  :uri); an unknown format is an error naming it, since there is no
+  honest way to invent one."
+  [rng fmt]
   (case fmt
     :email (string (rand-chars rng alnum 8) "@example.com")
     :uuid (string/format "%s-%s-%s-%s-%s"
@@ -40,7 +55,13 @@
     :uri (string "https://example.com/" (rand-chars rng alnum 6))
     (errorf "cannot generate a value for string format %q — pass it explicitly" fmt)))
 
-(defn- gen-bytes [rng props to]
+(defn- gen-bytes
+  {:params [:abstract {:keyword :any} (fn [:string] a)] :ret a :throws [:string]}
+  "A sample bytes value honoring :format (delegates to gen-format) or
+  :min/:max length over the alphanumeric alphabet, passed through `to`
+  (identity for a string, `buffer` for a buffer). A :pattern schema has
+  no honest way to invent a matching value, so it errors instead."
+  [rng props to]
   (when (props :pattern)
     (error "cannot generate a value for a :pattern schema — pass it explicitly"))
   (if-let [fmt (props :format)]
@@ -50,7 +71,11 @@
       (def hi (max lo (get props :max (+ lo 11))))
       (to (rand-chars rng alnum (rand-int rng (min lo hi) hi))))))
 
-(defn- gen-number [rng props int?]
+(defn- gen-number
+  {:params [:abstract {:keyword :any} :boolean] :ret :number}
+  "A sample number within :min/:max (default 0..100), an integer when
+  `int?` is true."
+  [rng props int?]
   (def lo (get props :min 0))
   (def hi (max lo (get props :max (+ lo 100))))
   (if int?
@@ -59,7 +84,13 @@
 
 (var- gen nil)
 
-(defn- gen-map [sch rng depth opts]
+(defn- gen-map
+  {:params [{:type :keyword :props {:keyword :any} :children [:any]} :abstract :number
+            (or {:keyword :any} :nil)]
+   :ret @{:any :any}}
+  "A sample table for a :map schema node: one generated value per
+  child key, omitting a key whose :optional child degraded to nil."
+  [sch rng depth opts]
   (def out @{})
   (each [k sub] (sch :children)
     (def v (gen sub rng (inc depth) opts))
@@ -67,7 +98,10 @@
       (put out k v)))
   out)
 
-(defn- shuffle [rng xs]
+(defn- shuffle
+  {:params [:abstract (or @[:any] [:any])] :ret @[:any]}
+  "A Fisher-Yates shuffle of `xs` into a fresh array."
+  [rng xs]
   (def out (array ;xs))
   (loop [i :down-to [(dec (length out)) 1]]
     (def j (math/rng-int rng (inc i)))
@@ -76,7 +110,14 @@
     (put out j tmp))
   out)
 
-(defn- gen-union [sch rng depth opts]
+(defn- gen-union
+  {:params [{:type :keyword :props {:keyword :any} :children [:any]} :abstract :number
+            (or {:keyword :any} :nil)]
+   :ret :any :throws [:string]}
+  "A sample value for a :union schema: branches are tried in a
+  shuffled order, and the first that generates without error wins —
+  every branch failing is itself an error naming the last one."
+  [sch rng depth opts]
   (def order (shuffle rng (sch :children)))
   (var result nil)
   (var done false)
@@ -91,7 +132,15 @@
     (errorf "cannot generate any :union branch: %s" (describe last-err)))
   result)
 
-(defn- gen-and [sch rng depth opts]
+(defn- gen-and
+  {:params [{:type :keyword :props {:keyword :any} :children [:any]} :abstract :number
+            (or {:keyword :any} :nil)]
+   :ret :any :throws [:string]}
+  "A sample value for an :and schema: retries the first branch (the
+  base shape) up to 25 times until one instance also satisfies the
+  whole schema, since there is no general way to generate the
+  intersection directly."
+  [sch rng depth opts]
   (def base (first (sch :children)))
   (var result nil)
   (var done false)
@@ -164,6 +213,9 @@
               (sch :type))))))
 
 (defn generate
+  {:params [:any (or {:seed :number? :rng :abstract? :max-depth :number? & r} :nil)]
+   :ret :any
+   :throws [:string]}
   ``Generate a sample value that validates against the schema:
 
       (generate {:email [:string {:format :email}] :age [:int {:min 18}]})
@@ -183,6 +235,9 @@
   (gen (schema/normalize sch) rng 0 opts))
 
 (defn projection
+  {:params [:any (or {:seed :number? :rng :abstract? :max-depth :number? & r} :nil)]
+   :ret :any
+   :throws [:string]}
   "The :generator projection body: (schema/project :generator User {:seed 7})."
   [sch &opt opts]
   (generate sch opts))

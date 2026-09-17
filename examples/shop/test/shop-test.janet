@@ -57,11 +57,15 @@
    "cart_items" "carts" "products" "customers"
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
-(defn- drop-tables! [names]
+(defn- drop-tables!
+  {:params [[:string]] :ret :nil}
+  "Drop every table named in `names`, if it exists."
+  [names]
   (each t names
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
 (defn- reset-bus!
+  {:params [] :ret :nil}
   ``Take the message log, the cursors and the outbox back to empty. A
   consumer group's cursor is *state*: left over from the last run it is
   a consumer that has already read everything this one publishes, and
@@ -71,9 +75,13 @@
                  (string bus-table "_leases") (string bus-table "_outbox")])
   (busdb/create-tables! bus-table))
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "A response's body as a string."
+  [resp] (test/text resp))
 
 (defn- token-of
+  {:params [:any] :ret :string?}
   ``This browser's CSRF token, off the `<meta>` tag every page carries
   (`security/htmx-meta` in views/layout). The token is signed over the
   cookie that identifies the browser, so it has to be read per client
@@ -84,6 +92,7 @@
                     (text (test/inject client {:uri "/"})))))
 
 (defn- settle
+  {:params [] :ret :nil}
   ``Forward whatever the outbox holds and let the consumers catch up.
   In a deployment this is the `:bus.db/forwarder` component and each
   consumer's own poll; in a test it is a call and a sleep, so that what
@@ -92,9 +101,16 @@
   (busdb/forward-once! (bus-state/active-backend) 100)
   (ev/sleep 0.35))
 
-(defn run-suite [engine]
+(defn run-suite
+  {:params [{:label :string :database :keyword :config {:any :any} & r}] :ret :nil}
+  "Run the storefront-to-checkout suite against one engine (sqlite or
+  postgres)."
+  [engine]
   (def label (engine :label))
-  (defn note [msg] (print "  [" label "] " msg))
+  (defn note
+    {:params [:string] :ret :nil}
+    "Print a labelled progress line for this engine's pass."
+    [msg] (print "  [" label "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
@@ -177,7 +193,11 @@
 
     # -- the cart, which belongs to a browser ----------------------------
 
-    (defn post [uri form &opt client]
+    (defn post
+      {:params [:string {:any :any} :any] :ret @{:raw :string & r}}
+      "POST `form` to `uri` as `client` (default the suite's own
+      browser), with a freshly minted CSRF token."
+      [uri form &opt client]
       (def browser (or client c))
       (test/inject browser
                    {:uri uri

@@ -49,17 +49,21 @@
   :void.db/tx)
 
 (defn active-pool
+  {:params [] :ret :any :throws [:string]}
   "The pool this fiber runs against: the `pool-dyn` override, else the
   started component's pool."
   []
   (system/active db-pool))
 
 (defn driver
+  {:params [] :ret {:connect (fn [] :any) :close (fn [:any] :any) & r}
+   :throws [:string]}
   "The driver behind the active pool."
   []
   (pool/driver-of (active-pool)))
 
 (defn in-transaction?
+  {:params [] :ret :boolean}
   "True inside a `with-tx` scope."
   []
   # a real tx-dyn is a {:depth n} table; `detached` binds it to false to
@@ -70,6 +74,9 @@
 # -- connection scope ----------------------------------------------------
 
 (defn with-conn*
+  {:params [(fn [@{:conn :any :stmts @{:string :any} :id :number & r}] :any)]
+   :ret :any
+   :throws [:any]}
   ``Run (f entry) with a connection checked out into `conn-dyn`.
   Re-entrant: an already-bound connection (an enclosing scope or a
   transaction) is reused and not returned early.
@@ -102,6 +109,7 @@
           (f entry))))))
 
 (defn detached*
+  {:params [(fn [] :any)] :ret :any :throws [:any]}
   ``Run (f) with this fiber's db bindings (the checked-out connection
   and the open transaction) cleared. A fiber started with `ev/go`
   inherits the dyns of the fiber that spawned it, so a child started
@@ -115,6 +123,7 @@
   (with-dyns [conn-dyn false tx-dyn false] (f)))
 
 (defmacro with-conn
+  {:params [:any] :ret :any}
   ``Run the body against one connection from the pool:
 
       (db/with-conn
@@ -128,6 +137,7 @@
   ~(,with-conn* (fn with-conn-body [_] ,;body)))
 
 (defmacro detached
+  {:params [:any] :ret :any}
   ``Run the body with the db bindings cleared — for a fiber spawned with
   `ev/go` from inside a connection or transaction scope:
 
@@ -160,13 +170,25 @@
   alike.``
   nil)
 
-(defn- prepared-for [drv entry sql]
+(defn- prepared-for
+  {:params [{:prepare (fn [:any :string] :any) & r}
+            @{:conn :any :stmts @{:string :any} :id :number & r}
+            :string]
+   :ret :any
+   :throws [:any]}
+  "The prepared handle for `sql` on this connection, preparing it once
+  and caching it on the entry (see ./pool for :stmts) after that."
+  [drv entry sql]
   (or (get-in entry [:stmts sql])
       (let [stmt ((drv :prepare) (entry :conn) sql)]
         (put-in entry [:stmts sql] stmt)
         stmt)))
 
 (defn- statement*
+  {:params [:string [:any] (fn [:any] :number)
+            (fn [@{:conn :any :stmts @{:string :any} :id :number & r} {:any :any}] :any)]
+   :ret :any
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``One statement on this fiber's connection, through the funnel every
   statement passes: the owner check, the pool's timing, the error
   envelope and the :debug line. `run` gets [entry drv] and answers
@@ -209,6 +231,9 @@
       res)))
 
 (defn execute-sql
+  {:params [:string [:any] (or {:prepared :boolean? & r} :nil)]
+   :ret {:rows @[{:keyword :any}] :count :number}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Run raw SQL with positional parameters on the current connection
   (checking one out when none is bound). Returns the driver result
   {:rows [...] :count n}.
@@ -232,6 +257,9 @@
         ((drv :execute) (entry :conn) sql params opts)))))
 
 (defn each-row-sql
+  {:params [:string [:any] (fn [{:keyword :any}] :any)]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Run a select and call (f row) for each row as it arrives; returns
   how many there were. The raw-SQL half of `each-row`.``
   [sql params f]
@@ -240,6 +268,9 @@
               (fn stream [entry drv] ((drv :stream) (entry :conn) sql params f))))
 
 (defn run
+  {:params [{:keyword :any} (or {:any :any} :nil)]
+   :ret {:rows @[{:keyword :any}] :count :number}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Compile a statement map (see void/db/builder) for the driver's
   dialect and execute it. Returns the driver result.``
   [stmt &opt opts]
@@ -251,6 +282,9 @@
     (errorf "db: expected a statement map, got %q" stmt)))
 
 (defn query
+  {:params [(or [:string [:any]] {:keyword :any}) (or {:any :any} :nil)]
+   :ret @[{:keyword :any}]
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Run a statement (or [sql params]) and return its rows."
   [stmt &opt opts]
   (def res
@@ -260,6 +294,9 @@
   (get res :rows []))
 
 (defn one
+  {:params [(or [:string [:any]] {:keyword :any}) (or {:any :any} :nil)]
+   :ret (or {:keyword :any} :nil)
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Run a statement and return its first row, or nil. A :select gets
   :limit 1 unless it already caps itself."
   [stmt &opt opts]
@@ -270,6 +307,9 @@
   (first (query capped opts)))
 
 (defn value
+  {:params [(or [:string [:any]] {:keyword :any}) (or {:any :any} :nil)]
+   :ret :any
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Run a single-column statement and return that column of the first
   row — for scalar selects like
   {:select [[:raw "count(*) AS n"]] :from "users"}.``
@@ -283,6 +323,10 @@
       (first row))))
 
 (defn each-row
+  {:params [(or [:string [:any]] {:keyword :any}) (fn [{:keyword :any}] :any)
+            (or {:any :any} :nil)]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Run a select and call (f row) for each row **as it arrives**,
   returning how many there were:
 
@@ -312,11 +356,17 @@
   (each-row-sql sql params f))
 
 (defn execute!
+  {:params [{:keyword :any} (or {:any :any} :nil)]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Run a write statement and return the affected-row count."
   [stmt &opt opts]
   (get (run stmt opts) :count 0))
 
 (defn ddl!
+  {:params [(or @[:string] [:string])]
+   :ret :nil
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Run schema statements (SQL strings) as an idempotent pass — what a
   plugin that creates its own tables at boot runs, and what it runs
   again at every boot after.
@@ -340,6 +390,7 @@
 (def- rollback-signal :void.db/rollback)
 
 (defn rollback!
+  {:params [:any] :ret :never :throws [:string :keyword [:keyword :any]]}
   ``Abort the innermost `with-tx` scope without an error: the
   transaction (or savepoint) rolls back and `with-tx` returns nil.
 
@@ -356,6 +407,7 @@
   (error (if (nil? reason) rollback-signal [rollback-signal reason])))
 
 (defn rollback-reason
+  {:params [:any] :ret :any}
   ``The reason a `with-tx` scope was rolled back with, or nil when the
   value is an ordinary result:
 
@@ -365,17 +417,30 @@
   (when (and (indexed? v) (= 2 (length v)) (= :rolled-back (first v)))
     (in v 1)))
 
-(defn- rollback-signal? [e]
+(defn- rollback-signal?
+  {:params [:any] :ret :boolean :narrows :any}
+  "Is `e` this module's rollback signal — the bare keyword, or the
+  [signal reason] tuple `rollback!` raises with one?"
+  [e]
   (or (= rollback-signal e)
       (and (indexed? e) (= 2 (length e)) (= rollback-signal (first e)))))
 
 (defn- rollback-answer
+  {:params [(or :keyword [:keyword :any])] :ret (or :nil [:keyword :any])}
   "What `with-tx` returns for a rollback: nil when no reason was
   given, [:rolled-back reason] when one was."
   [e]
   (unless (= rollback-signal e) [:rolled-back (in e 1)]))
 
-(defn- tx-error [entry what e]
+(defn- tx-error
+  {:params [@{:conn :any :stmts @{:string :any} :id :number & r} :string :any]
+   :ret :never
+   :throws [{:void/error :keyword :message :string? :data {:any :any} & r}]}
+  "Raise :void.db/transaction for a failed BEGIN/COMMIT/ROLLBACK, after
+  discarding the connection — a transaction control statement that
+  itself failed leaves the connection in a state no protocol says how
+  to read, so it must never go back to the pool."
+  [entry what e]
   # a failed COMMIT/ROLLBACK leaves the connection in an unknown state:
   # never hand it back to the pool
   (pool/discard! entry)
@@ -384,7 +449,17 @@
                 (string/format "db transaction %s failed: %s" what (errors/message cause))
                 {:what what :cause cause}))
 
-(defn- run-tx [entry depth opts f]
+(defn- run-tx
+  {:params [@{:conn :any :stmts @{:string :any} :id :number & r}
+            :number
+            (or {:isolation :string? & r} :nil)
+            (fn [] :any)]
+   :ret :any
+   :throws [:any]}
+  "Run `f` between the driver's BEGIN/COMMIT/ROLLBACK (or, nested, a
+  SAVEPOINT), and turn a caught `rollback!` signal into `with-tx`'s
+  documented return instead of letting it escape as an error."
+  [entry depth opts f]
   (def drv (driver))
   (def sp (when (pos? depth) (string "void_sp_" depth)))
   (if sp
@@ -411,6 +486,9 @@
       (if (rollback-signal? res) (rollback-answer res) (error res)))))
 
 (defn with-tx*
+  {:params [(or {:isolation :string? & r} :nil) (fn [] :any)]
+   :ret :any
+   :throws [:any]}
   ``Run (f) inside a transaction on one connection. Nested scopes take
   a savepoint. opts: :isolation (passed to the driver's :begin).``
   [opts f]
@@ -420,6 +498,7 @@
       (run-tx entry depth opts f))))
 
 (defmacro with-tx
+  {:params [:any] :ret :any}
   ``Run the body in a transaction — the only transaction boundary in
   void/db — no Unit of Work, nothing flushes implicitly:
 

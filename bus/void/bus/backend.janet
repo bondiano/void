@@ -93,7 +93,12 @@
    :durable false
    :shared false})
 
-(defn- check-guarantees [name g0]
+(defn- check-guarantees
+  {:params [:keyword :any] :ret :struct :throws [:string]}
+  "Fill in `default-guarantees` for whatever the backend declared and
+  check the result: a known delivery guarantee, a known ordering, and
+  booleans for :durable and :shared."
+  [name g0]
   (def g (merge @{} default-guarantees (or g0 {})))
   (unless (index-of (g :delivery) deliveries)
     (errorf "bus backend %q: :delivery must be one of %s, got %q"
@@ -107,6 +112,12 @@
   (table/to-struct g))
 
 (defn normalize
+  {:params [:any]
+   :ret {:name :keyword :encoded? :boolean :stats :function :health (or :nil :function)
+         :close :function :publish! :function :consume! :function :stop! :function
+         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean :shared :boolean}
+         & r}
+   :throws [:string]}
   ``Validate a backend dictionary and fill in the documented
   fallbacks, so the router can call every key unconditionally — the
   shape void/db/driver and void/jobs/backend have, for the same
@@ -133,6 +144,7 @@
       @{:guarantees (check-guarantees name (get b :guarantees))})))
 
 (defn normalize-factory
+  {:params [:any] :ret :struct :throws [:string]}
   "Validate a `:void.bus/backend` contribution — the factory, not the
   backend it makes."
   [c]
@@ -146,6 +158,7 @@
   (table/to-struct (merge @{:doc nil} c)))
 
 (defn find-factory
+  {:params [{:keyword :any} :keyword] :ret :any :throws [:string]}
   "The backend factory named by `name`, or an error listing what this
   composition actually has."
   [factories name]
@@ -155,21 +168,27 @@
               (util/names-str (keys factories)))))
 
 (defn at-least-once?
+  {:params [{:guarantees :any & r}] :ret :boolean :narrows :any}
   "Does the backend redeliver a message whose handler threw?"
   [b]
   (= :at-least-once (get-in b [:guarantees :delivery])))
 
 (defn durable?
+  {:params [{:guarantees :any & r}] :ret :boolean :narrows :any}
   "Does a published message survive this process dying?"
   [b]
   (truthy? (get-in b [:guarantees :durable])))
 
 (defn shared?
+  {:params [{:guarantees :any & r}] :ret :boolean :narrows :any}
   "Do several processes see the same messages?"
   [b]
   (truthy? (get-in b [:guarantees :shared])))
 
 (defn capabilities
+  {:params [{:name :any :encoded? :any :guarantees :any & r}]
+   :ret @{:name :any :encoded :boolean :delivery :keyword
+          :ordering :keyword :durable :boolean :shared :boolean}}
   ``What this backend actually promises, as data — what `void bus
   stats` prints and what the broker logs at boot, so that "these
   messages do not survive a restart" is something an operator reads
@@ -179,6 +198,7 @@
          (b :guarantees)))
 
 (defn require-durable!
+  {:params [{:name :any :guarantees :any & r} :string] :ret :boolean :throws [:string]}
   "Throw unless the backend keeps a published message across a
   restart — what the transactional outbox demands of whatever it
   forwards into."

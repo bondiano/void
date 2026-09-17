@@ -12,7 +12,10 @@
    "shipped" "border-sky-200 bg-sky-50 text-sky-700"
    "cancelled" "border-red-200 bg-red-50 text-red-700"})
 
-(defn status-pill [order]
+(defn status-pill
+  {:params [{:status :string & r}] :ret :tuple}
+  "The badge for one order's status."
+  [order]
   [:span {:class (string "inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider "
                          (get status-tones (order :status)
                               "border-indigo-200 bg-indigo-50 text-indigo-700"))}
@@ -23,8 +26,10 @@
 (def- td "px-5 py-4")
 (def- td-num "px-5 py-4 text-right tabular-nums")
 
-(defn- table [head body &opt foot]
+(defn- table
+  {:params [:any :any :any?] :ret :tuple}
   "The one table this module draws, twice."
+  [head body &opt foot]
   [:div {:class "mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"}
    [:table {:class "w-full border-collapse text-left"}
     [:thead {:class "border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-widest text-slate-500"}
@@ -32,7 +37,12 @@
     [:tbody body]
     foot]])
 
-(defn orders-view [orders]
+(defn orders-view
+  {:params [@[{:number :string :placed-at :string :status :string
+               :total-cents :number & r}]]
+   :ret :tuple}
+  "The caller's orders, newest first, or an empty-state message."
+  [orders]
   [:div {:id "orders"}
    [:h1 {:class "text-3xl font-bold tracking-tight"} "Your orders"]
    (if (empty? orders)
@@ -51,7 +61,13 @@
           [:td {:class td} (status-pill o)]
           [:td {:class td-num} (values/format-price (o :total-cents))]])))])
 
-(defn order-view [order items]
+(defn order-view
+  {:params [{:number :string :placed-at :string :status :string
+             :total-cents :number & r}
+            @[{:name :string :unit-price-cents :number :quantity :number & r}]]
+   :ret :tuple}
+  "One order, with its lines and their running total."
+  [order items]
   [:div {:id "order"}
    [:h1 {:class "text-3xl font-bold tracking-tight"}
     "Order " [:span {:class "font-mono"} (order :number)]]

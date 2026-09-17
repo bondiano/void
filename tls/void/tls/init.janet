@@ -74,6 +74,7 @@
 # -- the seams -----------------------------------------------------------
 
 (defn install!
+  {:params [] :ret :nil}
   ``Put this package's connector into every consumer seam:
   `void/http/client` and `void/redis` get `connect`, `void/mail` gets
   `wrap` (STARTTLS upgrades a socket that has already spoken). The
@@ -87,7 +88,14 @@
 
 # -- the component -------------------------------------------------------
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [(or @{:libssl :string? :verify :boolean? :ca-file :string?
+                  :ca-path :string? :min-version :keyword? & r}
+                :nil)]
+   :ret @{:libssl (or :string :nil) :verify :boolean :ca-file (or :string :nil)
+          :ca-path (or :string :nil) :min-version :keyword}}
+  "The [:tls] config slice, defaults filled in."
+  [cfg]
   (merge defaults (or cfg {})))
 
 (def lib-component
@@ -163,6 +171,10 @@
              :ctx "the shared client SSL_CTX"}})
 
 (defn print-info
+  {:params [@{:path :string :version (or [:number :number :number] :nil)
+              :verify :boolean :ca-file :string? :ca-path :string?
+              :min-version :keyword & r}]
+   :ret :nil}
   "Print what this process's libssl does — the body of `void tls info`."
   [inst]
   (printf "library      %s" (inst :path))

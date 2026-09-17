@@ -34,7 +34,12 @@
 
 # -- a function where a leaf should be -------------------------------------
 
-(defn who-bar [] [:nav "who"])
+(defn who-bar
+  {:params [] :ret :tuple}
+  "A component named without its brackets below, on purpose — the
+  regression test for the bare-function-leaf error."
+  []
+  [:nav "who"])
 (assert (= "<div><nav>who</nav></div>" (hiccup/render-string [:div [who-bar]])))
 (def [ok err] (protect (hiccup/render-string [:div who-bar])))
 (assert (and (not ok) (string/find "function leaf" err))
@@ -50,7 +55,11 @@
 
 # -- components as functions ---------------------------------------------
 
-(defn card [attrs & children]
+(defn card
+  {:params [{:variant :any & r} :any] :ret :tuple}
+  "A component taking attrs and a rest of children, the shape every
+  hiccup component call passes through."
+  [attrs & children]
   [:div {:class (hiccup/classes "card" (attrs :variant))}
    [:div {:class "card-body"} children]])
 
@@ -58,13 +67,22 @@
            (hiccup/render-string [card {:variant "danger"} "boom"]))
         "a tuple with a function head is a component call")
 
-(defn item [text] [:li text])
+(defn item
+  {:params [:string] :ret :tuple}
+  "One list item, nested into a fragment through `map` below."
+  [text]
+  [:li text])
 
 (assert (= "<ul><li>a</li><li>b</li></ul>"
            (hiccup/render-string [:ul (map |[item $] ["a" "b"])]))
         "components nest through fragments")
 
-(defn wrapper [& children] @[[:hr] children])
+(defn wrapper
+  {:params [:any] :ret @[:any]}
+  "A component that returns a fragment — its own element plus its
+  children, spliced as one."
+  [& children]
+  @[[:hr] children])
 
 (assert (= "<hr/><p>x</p>"
            (hiccup/render-string [wrapper [:p "x"]]))
@@ -82,7 +100,11 @@
 
 # -- html5 / layouts as functions ----------------------------------------
 
-(defn base-layout [content context]
+(defn base-layout
+  {:params [:any (or {:title :any & r} :nil)] :ret @[:any]}
+  "A layout as a plain function: the document shell around `content`,
+  titled from the render context."
+  [content context]
   (hiccup/html5 {:lang "en"}
     [:head [:title (get context :title "void")]]
     [:body content]))
@@ -98,7 +120,10 @@
 (assert (test/snapshot "hiccup-layout"
                        (hiccup/render-string (base-layout [:h1 "hello"] {:title "home"}))))
 
-(defn order-row [order]
+(defn order-row
+  {:params [{:id :any :title :any & r}] :ret :tuple}
+  "One table row for the snapshot below."
+  [order]
   [:tr [:td (order :id)] [:td (order :title)]])
 
 (assert (test/snapshot "hiccup-orders-table"

@@ -30,6 +30,7 @@
 (import ./ring :as ring)
 
 (defn sid
+  {:params [] :ret :string}
   "A fresh session id: 32 hex chars of OS randomness."
   []
   (def bytes (os/cryptorand 16))
@@ -40,6 +41,13 @@
 # -- memory store --------------------------------------------------------
 
 (defn memory-store
+  {:params [(or {:sweep-every :number? & r} :nil)]
+   :ret @{:name :keyword
+          :entries @{:string @{:data :any :expires :number}}
+          :load (fn [:string] :any)
+          :save (fn [:string :any :number] :string)
+          :delete (fn [:string] @{:string @{:data :any :expires :number}})
+          :sweep (fn [] :nil)}}
   ``An in-process session store: sid -> {:data :expires}. Expired
   entries die lazily on load and in bulk on :sweep, which also runs
   every :sweep-every saves (default 256).``
@@ -47,8 +55,14 @@
   (default opts {})
   (def entries @{})
   (var saves 0)
-  (defn now [] (os/clock :monotonic))
-  (defn sweep []
+  (defn now
+    {:params [] :ret :number}
+    "The monotonic clock the store measures expiry against."
+    [] (os/clock :monotonic))
+  (defn sweep
+    {:params [] :ret :nil}
+    "Drop every entry whose ttl has passed."
+    []
     (def t (now))
     (each k (seq [[k v] :pairs entries :when (< (v :expires) t)] k)
       (put entries k nil))
@@ -76,6 +90,7 @@
   :void.http/session-rotate)
 
 (defn rotate!
+  {:params [@{:method :keyword :path :string & r}] :ret :nil}
   ``Ask for a fresh session id on this request, keeping the data. Call
   it whenever the identity behind a session changes — a login, a
   privilege escalation, a password change — because an id that
@@ -89,6 +104,19 @@
 # -- middleware ----------------------------------------------------------
 
 (defn wrap-session
+  {:params [(or :function :cfunction)
+            {:store (or @{:load (or :function :cfunction) :save (or :function :cfunction)
+                          :delete (or :function :cfunction) :sweep (or :function :cfunction) & r}
+                        :nil)
+             :cookie :string?
+             :ttl :number?
+             :cookie-opts (or {:path :string? :domain :string? :max-age :number? :expires :string?
+                               :secure :boolean? :http-only :boolean?
+                               :same-site (or (enum :strict :lax :none) :nil) & r}
+                              :nil)
+             & r}]
+   :ret :function
+   :throws [:string]}
   ``Session middleware over a store. Options:
     :store        the store table (required)
     :cookie       cookie name (default "void-session")

@@ -21,30 +21,57 @@
 (def db @{1 @{:id 1 :title "widget" :total 9.5}})
 (var next-id 2)
 
-(defn index [req]
+(defn index
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
+  "The fixture's list handler: every order, paged and sorted by the
+  pagination convention."
+  [req]
   (def paging (pagination/params req {:allowed-sort [:id :total]}))
   (def items (sorted-by |($ :id) (values db)))
   (def page-items (take (paging :limit) (drop (paging :offset) items)))
   (rest/json (pagination/envelope page-items
                                   (merge paging {:total (length items)}))))
 
-(defn show [req]
+(defn show
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+            :status :number :http/status :number}]}
+  "The fixture's fetch handler: the order by path id, or a 404
+  problem when it does not exist."
+  [req]
   (def order (get db (get-in req [:params :id])))
   (unless order (rest/abort 404 "no such order"))
   (rest/json order))
 
-(defn create [req]
+(defn create
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
+  "The fixture's create handler: appends the decoded body as a new
+  order and answers 201 with a Location."
+  [req]
   (def body (req :parsed-body))
   (def order (merge body {:id next-id}))
   (put db next-id (merge-into @{} order))
   (++ next-id)
   (rest/created order (string "/orders/" (order :id))))
 
-(defn broken [req]
+(defn broken
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
+  "A handler that answers 200 with a payload violating its own
+  :void.schema/response contract, to prove response validation catches
+  the drift."
+  [req]
   # violates its own :void.schema/response contract
   (rest/json {:id "not-an-int" :title 1 :total -1}))
 
-(defn haywire [req]
+(defn haywire
+  {:params [:any] :ret :any :throws [:string]}
+  "A handler that panics unconditionally, to exercise the problem+json
+  path for a route with no schema metadata of its own."
+  [req]
   (error "wires crossed"))
 
 (rest/defresource orders "/orders"

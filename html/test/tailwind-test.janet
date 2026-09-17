@@ -80,7 +80,11 @@
 
 # -- a compiler that is not the real one ---------------------------------
 
-(defn- fake-compiler [path body]
+(defn- fake-compiler
+  {:params [:string :string] :ret :string}
+  "Write a shell script standing in for the real compiler at `path`,
+  executable, and return `path`."
+  [path body]
   (spit path (string "#!/bin/sh\n" body))
   (os/chmod path 8r755)
   path)

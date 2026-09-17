@@ -16,6 +16,18 @@
 (import ./scaffold)
 
 (defn resource-spec
+  {:params [:string
+            @[{:name :keyword :type :keyword :optional? :boolean
+               :entity :keyword? :rel :keyword? :table :string?}]
+            (or {:dir :string? :table :string? :plural :string? :project :string?
+                 :migrations-dir :string? :test-dir :string? :version :string? & r}
+                :nil)]
+   :ret {:name :string :entity :string :plural :string :table :string
+         :title :string :project :string :plugin :string :dir :string
+         :migrations-dir :string :test-dir :string :version :string
+         :fields [{:name :keyword :type :keyword :optional? :boolean
+                   :entity :keyword? :rel :keyword? :table :string?}]}
+   :throws [:string]}
   ``The value every template is a pure function of:
 
       {:name "user" :entity "User" :plural "users" :table "users"
@@ -322,11 +334,28 @@
 
 ```)
 
-(defn- migration-path [spec]
+(defn- migration-path
+  {:params [{:migrations-dir :string :version :string :table :string & r}]
+   :ret :string}
+  "Where the migration this spec describes lives, built the same way
+  from a fresh spec or one read back off disk."
+  [spec]
   (string (spec :migrations-dir) "/" (spec :version)
           "_create_" (spec :table) ".janet"))
 
 (defn- substitutions
+  {:params [{:name :string :entity :string :plural :string :table :string
+             :title :string :project :string :plugin :string :dir :string
+             :migrations-dir :string :test-dir :string :version :string
+             :fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret {:name :string :entity :string :plural :string :table :string
+         :title :string :plural-title :string :plugin :string :project :string
+         :dir :string :version :string :migration-path :string :field-keys :string
+         :display :string :sample :string :schema-fields :string :columns :string
+         :rels :string :form-fields :string :detail-rows :string :route-names :string}
+   :throws [:string]}
   "Every hole the built-in templates have, filled from the spec. An
   override that wants one of them gets it by calling this."
   [spec]
@@ -369,13 +398,45 @@
                      ["index" "new" "create" "show" "edit" "update" "destroy"])
                 "\n            ")})
 
-(defn- render-resource [spec]
+(defn- render-resource
+  {:params [{:name :string :entity :string :plural :string :table :string
+             :title :string :project :string :plugin :string :dir :string
+             :migrations-dir :string :test-dir :string :version :string
+             :fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret :string
+   :throws [:string]}
+  "The resource module, rendered for this spec."
+  [spec]
   (template/render resource-template (substitutions spec)))
 
-(defn- render-migration [spec]
+(defn- render-migration
+  {:params [{:name :string :entity :string :plural :string :table :string
+             :title :string :project :string :plugin :string :dir :string
+             :migrations-dir :string :test-dir :string :version :string
+             :fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret :string
+   :throws [:string]}
+  "The migration that creates the table this spec's entity names,
+  rendered for this spec."
+  [spec]
   (template/render migration-template (substitutions spec)))
 
-(defn- render-test [spec]
+(defn- render-test
+  {:params [{:name :string :entity :string :plural :string :table :string
+             :title :string :project :string :plugin :string :dir :string
+             :migrations-dir :string :test-dir :string :version :string
+             :fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret :string
+   :throws [:string]}
+  "The suite that checks the entity, the form and the migration still
+  agree, rendered for this spec."
+  [spec]
   (def subs (substitutions spec))
   (template/render
     test-template
@@ -407,6 +468,10 @@
 # -- interactive ---------------------------------------------------------
 
 (defn- ask-fields
+  {:params []
+   :ret @[{:name :keyword :type :keyword :optional? :boolean
+           :entity :keyword? :rel :keyword? :table :string?}]
+   :throws [:string]}
   ``The interactive pass: fields, one at a time, until an empty name.
   It only runs when no field was given on the command line and there is
   a terminal to run it on — `void make resource User name:string` is
@@ -452,6 +517,13 @@
            "--no-input" {:key :no-input :type :bool :doc "never ask, even on a terminal"}}})
 
 (defn create
+  {:params [{:no-input :boolean? :dir :string? :table :string? :plural :string?
+             :project :string? :migrations-dir :string? :test-dir :string?
+             :version :string? :dry-run :boolean? :force :boolean? & r}
+            :string
+            :string]
+   :ret [:string]
+   :throws [:string]}
   ``The body of `void make resource NAME [field:type ...]`: the fields
   from the command line or, when there are none and there is a terminal
   to ask on, from the interactive pass.

@@ -11,9 +11,23 @@
 
 (log/set-level! "void" :fatal)
 
-(defn- settle [&opt n] (ev/sleep (or n 0.03)))
+(defn- settle
+  {:params [:number?] :ret :nil}
+  "A pause of `n` seconds (default 0.03) for the async paths this
+  suite exercises."
+  [&opt n] (ev/sleep (or n 0.03)))
 
-(defn- bus-over [cfg]
+(defn- bus-over
+  {:params [{:keyword :any}]
+   :ret @{:backend :any :codec :any :config :any :group :keyword
+          :middleware :tuple :tracer :any :consumers @{:keyword :any}
+          :outbox (or :nil (fn [:any] :any))
+          :stats @{:published :number :delivered :number :outboxed :number}}
+   :throws [:string]}
+  "A broker over a fresh in-process backend, with the built-in retry,
+  poison and dedup middleware turned off so what runs is the router's
+  own dispatch."
+  [cfg]
   (def m (memory/make {}))
   (def b (backend/normalize (memory/store m)))
   (state/make b (codec/normalize codec/jdn)

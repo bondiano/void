@@ -48,6 +48,7 @@
 # -- hex ids -------------------------------------------------------------
 
 (defn hex->base64
+  {:params [:string] :ret :string :throws [:string]}
   ``A hex string as the base64 the proto3 JSON mapping reads for a
   `bytes` field. OTLP/JSON spells trace and span ids in hex — its one
   named deviation from the mapping — and void's tracer holds them that
@@ -63,14 +64,22 @@
     (buffer/push-byte raw b))
   (base64/encode (string raw)))
 
-(defn- rekey-span [span]
+(defn- rekey-span
+  {:params [{:string :any}] :ret {:string :any}}
+  "Re-key one decoded span's traceId, spanId and parentSpanId from hex
+  to the base64 the proto3 JSON mapping expects."
+  [span]
   (def out (merge span))
   (each k ["traceId" "spanId" "parentSpanId"]
     (when-let [v (get span k)]
       (put out k (hex->base64 v))))
   out)
 
-(defn- rekey-ids [payload]
+(defn- rekey-ids
+  {:params [{:string :any}] :ret {:string :any}}
+  "Walk a traces payload's resourceSpans/scopeSpans/spans and rekey
+  every span's ids by `rekey-span`."
+  [payload]
   {"resourceSpans"
    (seq [rs :in (get payload "resourceSpans" [])]
      (merge rs
@@ -81,6 +90,7 @@
 # -- the projection ------------------------------------------------------
 
 (defn encode-payload
+  {:params [{:string :any}] :ret :buffer :throws [:string]}
   ``An export payload — the same data `json/encode` would send — as
   protobuf bytes. Which service request it is is read off the payload
   itself: `traces-request` and `metrics-request` each have exactly one

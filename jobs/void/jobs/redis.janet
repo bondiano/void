@@ -111,6 +111,7 @@
    [:traceparent "traceparent" :string]])
 
 (defn record->hash
+  {:params [{:keyword :any}] :ret @[:string]}
   "A record as HSET arguments: field, value, field, value. Absent
   fields are absent rather than empty, so `HGETALL` shows what a job
   has and not what it might have had."
@@ -128,6 +129,7 @@
   out)
 
 (defn hash->record
+  {:params [(or {:string :any} :nil)] :ret (or @{:keyword :any} :nil)}
   "A `HGETALL` reply back into a record. Redis answers in strings; the
   field table says which of them were numbers, keywords and jdn."
   [h]
@@ -326,6 +328,7 @@
 # -- the backend ---------------------------------------------------------
 
 (defn- fields->table
+  {:params [:any] :ret (or @{:string :string} :nil)}
   ``A HGETALL reply as a table of strings. It arrives in two shapes
   and both are correct: a RESP3 map from the command itself, and a
   flat [field value field value] array from a script (Lua has no map
@@ -354,6 +357,14 @@
   which database and which client prefix are read off the client at
   call time, so the backend outlives a restart of the client under
   it.``
+  {:params [(or {:keyword :any} :nil)]
+   :ret {:name :keyword :shared? :boolean
+         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any) :reap! (fn [& :any] :any)
+         :touch! (fn [& :any] :any) :release-parent! (fn [& :any] :any)
+         :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any) :rate-take! (fn [& :any] :any)
+         :stats (fn [] :any) :close (fn [] :any)}}
   [opts]
   (def p (get opts :prefix (defaults :prefix)))
   (def keep-completed (get opts :keep-completed (defaults :keep-completed)))

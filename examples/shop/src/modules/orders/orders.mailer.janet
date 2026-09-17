@@ -19,6 +19,7 @@
 (import ../../shared/values :as values)
 
 (defn layout
+  {:params [:tuple :any] :ret :tuple}
   ``The frame every letter shares. Inline styles, because a mail
   client is a browser from 2004 and a stylesheet is a thing it may or
   may not fetch.``
@@ -34,14 +35,21 @@
       "You are receiving this because you ordered from "
       [:a {:href (mail/url "/")} "void shop"] "."]]]])
 
-(defn- line-row [item]
+(defn- line-row
+  {:params [@{:name :string :quantity :number :unit-price-cents :number & r}] :ret :tuple}
+  "One row of the items table: what was bought, how many, and the line's total."
+  [item]
   [:tr
    [:td {:style "padding: 0.35rem 0"} (item :name)]
    [:td {:style "padding: 0.35rem 0; text-align: right"} (item :quantity)]
    [:td {:style "padding: 0.35rem 0; text-align: right"}
     (values/format-price (* (item :quantity) (item :unit-price-cents)))]])
 
-(defn- lines-table [items total-cents]
+(defn- lines-table
+  {:params [@[@{:name :string :quantity :number :unit-price-cents :number & r}] :number]
+   :ret :tuple}
+  "The items table, with a total row underneath."
+  [items total-cents]
   [:table {:style "width: 100%; border-collapse: collapse; margin: 1rem 0"}
    [:thead
     [:tr [:th {:style "text-align: left"} "Item"]
@@ -54,6 +62,9 @@
       (values/format-price total-cents)]]]])
 
 (defn receipt
+  {:params [@{:number :string :total-cents :number & r}
+            @[@{:name :string :quantity :number :unit-price-cents :number & r}]]
+   :ret {:subject :string :layout (fn [:tuple :any] :tuple) :view :tuple}}
   "What was ordered, and where to look at it."
   [order items]
   {:subject (string "Your order " (order :number))
@@ -67,6 +78,8 @@
                "Track this order"]]]})
 
 (defn cancelled
+  {:params [@{:number :string & r} :any]
+   :ret {:subject :string :layout (fn [:tuple :any] :tuple) :view :tuple}}
   ``The letter nobody wants to send, and the reason it exists: an order
   that was placed and then could not be paid for has to be *said*, or
   the customer finds out by the parcel never arriving.``
@@ -82,6 +95,8 @@
           [:p [:a {:href (mail/url "/")} "Back to the shop"]]]})
 
 (defn shipped
+  {:params [@{:number :string & r}]
+   :ret {:subject :string :layout (fn [:tuple :any] :tuple) :view :tuple}}
   "The one people actually open."
   [order]
   {:subject (string "Order " (order :number) " is on its way")

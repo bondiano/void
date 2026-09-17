@@ -73,6 +73,7 @@
   {:x64 "x64" :x86-64 "x64" :aarch64 "arm64" :arm64 "arm64"})
 
 (defn musl?
+  {:params [] :ret :boolean}
   ``Is this machine's libc musl? Alpine is the distribution that makes
   the difference matter and the file below is how it says so; anything
   else answers false and gets the glibc binary, which is the right
@@ -81,6 +82,7 @@
   (truthy? (os/stat "/etc/alpine-release")))
 
 (defn platform
+  {:params [:keyword? :keyword? :boolean?] :ret :string :throws [:string]}
   ``The `<os>-<arch>` this machine is in tailwind's release assets —
   "macos-arm64", "linux-x64-musl". Arguments are for tests and for the
   config's `:platform` override; left out they are read from the
@@ -98,23 +100,27 @@
   (string o "-" a (if (and musl (= "linux" o)) "-musl" "")))
 
 (defn windows?
+  {:params [:string] :ret :boolean :narrows :any}
   "Does this platform name a Windows machine? (Only its binaries carry
   an extension.)"
   [plat]
   (string/has-prefix? "windows-" plat))
 
 (defn asset-name
+  {:params [:string] :ret :string}
   "The release asset for a platform: tailwindcss-<platform>[.exe]."
   [plat]
   (string "tailwindcss-" plat (if (windows? plat) ".exe" "")))
 
 (defn version-string
+  {:params [:any] :ret :string}
   "A release as this module writes it: without the tag's leading v."
   [version]
   (def v (string version))
   (if (string/has-prefix? "v" v) (string/slice v 1) v))
 
 (defn cached-name
+  {:params [:string :any] :ret :string}
   ``What a downloaded compiler is called in the cache directory. The
   version is in the name, so moving a project to a new release gets it
   a new file instead of a stale binary at the right path.``
@@ -123,6 +129,7 @@
           (if (windows? plat) ".exe" "")))
 
 (defn release-url
+  {:params [:any :string] :ret :string}
   "Where a release's asset is downloaded from. \"latest\" goes through
   GitHub's own redirect rather than through an API call."
   [version plat]
@@ -136,6 +143,7 @@
   (peg/compile '(* (thru "/releases/download/v") (<- (some (if-not "/" 1))) "/")))
 
 (defn version-in-url
+  {:params [:any] :ret :string?}
   ``The release a download URL names — ".../releases/download/v4.1.11/
   tailwindcss-macos-arm64" -> "4.1.11" — or nil for a URL that carries
   no tag (the CDN URL the last redirect lands on is one).``
@@ -147,12 +155,17 @@
 # -- the configuration ---------------------------------------------------
 
 (defn setting
+  {:params [(or {:any :any} :nil) :keyword] :ret :any}
   "One `[:html :assets :tailwind]` value, with this module's default
   behind it."
   [cfg key]
   (get (or cfg {}) key (get defaults key)))
 
 (defn configured?
+  {:params [(or {:input :string? :output :string? :enabled :boolean? & r} :nil)]
+   :ret :boolean
+   :narrows :any
+   :throws [:string]}
   ``Does this composition compile a stylesheet? Yes when the slice
   names both ends of the compile — `:input` (the source, which names
   its own template sources) and `:output` (where the compiled CSS
@@ -178,6 +191,7 @@
     false))
 
 (defn watching?
+  {:params [(or {:watch :any & r} :nil) :keyword] :ret :boolean :narrows :any}
   ``Should this process run the compiler in `--watch`? `:watch` says so
   outright; left out, the profile answers, and only `:dev` says yes —
   a dev process recompiles as you type, a production one serves what
@@ -189,7 +203,10 @@
 
 # -- finding the compiler ------------------------------------------------
 
-(defn- executable? [path]
+(defn- executable?
+  {:params [:string] :ret :boolean :narrows :any}
+  "Is there an executable file at `path`?"
+  [path]
   (def st (os/stat path))
   (and st
        (= :file (st :mode))
@@ -197,6 +214,7 @@
        true))
 
 (defn on-path
+  {:params [:string :string? :keyword?] :ret :string?}
   ``The first executable called `name` on PATH, or nil. Resolved here
   rather than by a shell: asking `sh` where a binary is means a
   subprocess and a quoting question, and PATH is a string with
@@ -214,10 +232,18 @@
           (set found candidate))))
     found))
 
-(defn- version-key [v]
+(defn- version-key
+  {:params [:string] :ret @[:number]}
+  "A version string as an array of numbers, dot-separated, for
+  comparing releases numerically instead of as text."
+  [v]
   (map |(or (scan-number $) 0) (string/split "." v)))
 
-(defn- newer? [a b]
+(defn- newer?
+  {:params [:string :string] :ret :boolean :narrows :any}
+  "Is release `a` newer than release `b`, compared component by
+  component as numbers?"
+  [a b]
   (def ka (version-key a))
   (def kb (version-key b))
   (var out nil)
@@ -229,6 +255,7 @@
   (if (nil? out) false out))
 
 (defn cached
+  {:params [:string? :string] :ret @[{:path :string :version :string}]}
   ``The compilers already in the cache directory for this platform,
   newest release first: [{:path :version} ...].
 
@@ -254,6 +281,10 @@
   out)
 
 (defn places
+  {:params [(or {:bin :string? :dir :string? :version :any :platform :string? & r} :nil)
+            :string?]
+   :ret [:string]
+   :throws [:string]}
   ``The three places a compiler is looked for, in order, as text — what
   an error message and `void assets info` both need to say.``
   [cfg &opt plat]
@@ -269,6 +300,9 @@
    (string "PATH (" (asset-name plat) " or tailwindcss)")])
 
 (defn locate
+  {:params [(or {:bin :string? :dir :string? :version :any :platform :string? & r} :nil)]
+   :ret (or {:path :string :source :keyword :version :string?} :nil)
+   :throws [:string]}
   ``Where this composition's compiler is: {:path :source :version} or
   nil. `:source` is `:config` (the configured `:bin`), `:cache` (this
   project's download) or `:path`.
@@ -294,6 +328,9 @@
           {:path p :source :path}))))
 
 (defn need
+  {:params [(or {:bin :string? :dir :string? :version :any :platform :string? & r} :nil)]
+   :ret {:path :string :source :keyword :version :string?}
+   :throws [:string]}
   "The compiler, or an error naming every place that was looked in and
   the command that would end the search."
   [cfg]
@@ -304,7 +341,11 @@
 
 # -- installing it -------------------------------------------------------
 
-(defn- ensure-dir [dir]
+(defn- ensure-dir
+  {:params [:string] :ret :string :throws [:string]}
+  "mkdir -p `dir`, and error if it still is not a directory afterward.
+  Returns `dir`."
+  [dir]
   (var acc "")
   (each part (string/split "/" dir)
     (set acc (if (empty? acc) part (string acc "/" part)))
@@ -319,10 +360,16 @@
           "add :void/tls to :plugins, or download the "
           "compiler yourself and point [:html :assets :tailwind :bin] at it"))
 
-(defn- urls-of [resp]
+(defn- urls-of
+  {:params [{:redirects (or @[:string] :nil) :url :string? & r}] :ret @[:string]}
+  "Every URL a response passed through, redirects first, then the one
+  it landed on — the chain `resolve-release` and `install!` read the
+  release tag out of."
+  [resp]
   (array ;(get resp :redirects []) (get resp :url "")))
 
 (defn resolve-release
+  {:params [:any :string :number?] :ret :string?}
   ``Which release "latest" is: a HEAD that follows GitHub's redirect and
   reads the tag out of a URL on the way. Returns the version, or nil
   when no URL in the chain carried one — then the download itself is
@@ -340,6 +387,12 @@
         found))))
 
 (defn install!
+  {:params [(or {:platform :string? :dir :string? :timeout :number?
+                :version :any :max-bytes :number? & r}
+               :nil)
+            (or {:force :any & r} :nil)]
+   :ret {:path :string :version :string :bytes :number :url :string :cached :boolean}
+   :throws [:string]}
   ``Download the standalone compiler into the cache directory and make
   it executable. Returns {:path :version :bytes :url :cached}.
 
@@ -395,6 +448,9 @@
 # -- running it ----------------------------------------------------------
 
 (defn command
+  {:params [:string (or {:input :string? :output :string? :args (or @[:string] :nil) & r} :nil)
+            (or {:minify :any :watch :any & r} :nil)]
+   :ret @[:string]}
   ``The argv for one compile: the binary, the two ends of the compile,
   and whatever the project added in `:args` (a `-c` for a tailwind 3
   config, a `--cwd`). `:minify` and `:watch` come from `opts` rather
@@ -411,10 +467,21 @@
   (each a (get cfg :args []) (array/push argv a))
   argv)
 
-(defn- describe-exit [code argv]
+(defn- describe-exit
+  {:params [:number (or @[:string] [:string])] :ret :string}
+  "The message for a compiler that exited with `code`, naming the
+  command that was run."
+  [code argv]
   (string/format "tailwind: %s exited with %d" (string/join argv " ") code))
 
 (defn compile!
+  {:params [(or {:bin :string? :dir :string? :version :any :platform :string?
+                :input :string? :output :string? :args (or @[:string] :nil)
+                :minify :any & r}
+               :nil)
+            (or {:minify :any :watch :any & r} :nil)]
+   :ret {:bin :string :output :string? :argv :tuple}
+   :throws [:string]}
   ``Compile the stylesheet once, and error when the compiler does. The
   compiler's own output goes to this process's stdout and stderr —
   tailwind explains a bad `@apply` better than any wrapper would.
@@ -431,6 +498,13 @@
   {:bin bin :output (cfg :output) :argv (tuple ;argv)})
 
 (defn step
+  {:params [(or {:bin :string? :dir :string? :version :any :platform :string?
+                :input :string? :output :string? :enabled :boolean?
+                :args (or @[:string] :nil) :minify :any & r}
+               :nil)
+            (or {:minify :any :watch :any & r} :nil)]
+   :ret (or (fn [] {:bin :string :output :string? :argv :tuple}) :nil)
+   :throws [:string]}
   "The `assets/build!` step for a composition, or nil when it compiles
   no stylesheet."
   [cfg &opt opts]
@@ -463,6 +537,12 @@
 # rather than quietly stop rebuilding.
 
 (defn start
+  {:params [(or {:assets (or {:tailwind (or {:any :any} :nil) & r} :nil) & r} :nil)
+            :keyword?]
+   :ret (or {:disabled :keyword}
+            @{:bin :string :proc :any :argv :tuple :output :string?
+              :running :boolean :exited :any})
+   :throws [:string]}
   ``Start the compiler in `--watch` from the `:html` config slice.
   Returns the instance table, or {:disabled ...} when this composition
   compiles nothing or this profile does not watch.``
@@ -489,6 +569,8 @@
       inst)))
 
 (defn stop
+  {:params [(or {:disabled :keyword} @{:proc :any :running :boolean :exited :any & r})]
+   :ret :nil}
   "Signal the compiler and wait for it to go, so a restarted dev
   process does not leave a second one writing the same file."
   [inst]
@@ -503,6 +585,8 @@
     nil))
 
 (defn health
+  {:params [(or {:disabled :keyword} @{:running :boolean :output :string? & r})]
+   :ret {:status :keyword :watching :boolean & r}}
   "What the watcher reports: :up while the compiler is running, :down
   once it has exited on its own."
   [inst]

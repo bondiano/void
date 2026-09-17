@@ -67,16 +67,23 @@
 # -- lookup and rendering ------------------------------------------------
 
 (defn current-locale
+  {:params [] :ret :keyword}
   "The bound locale, or the configured default, or :en."
   []
   (or (dyn locale-dyn) (get (or settings {}) :default) :en))
 
-(defn- chain [loc]
+(defn- chain
+  {:params [:keyword] :ret @[:keyword]}
+  "The locale's fallback chain: itself, its primary language, the
+  default locale and its primary — deduplicated, in that preference
+  order."
+  [loc]
   (def d (get (or settings {}) :default))
   (distinct (filter |(not (nil? $))
                     [loc (locale/primary loc) d (when d (locale/primary d))])))
 
 (defn lookup
+  {:params [:keyword :keyword] :ret (or :string {:keyword :string} :nil)}
   "The message for a key along locale -> primary -> default, or nil."
   [key loc]
   (when index
@@ -86,13 +93,21 @@
         (set found (get-in index [l key]))))
     found))
 
-(defn- category-of [loc]
+(defn- category-of
+  {:params [:keyword] :ret (fn [:number] :keyword)}
+  "The plural rule for a locale's primary language, or
+  `plural/one-other` when none is registered."
+  [loc]
   (def rule (or (get plural-rules (locale/primary loc)) plural/one-other))
   rule)
 
 (def- warned @{})
 
-(defn- missing! [key loc]
+(defn- missing!
+  {:params [:keyword :keyword] :ret :string}
+  "Warn once per (key, locale) pair that a translation is missing,
+  and answer the key's own name as the visible fallback."
+  [key loc]
   (def wk [key loc])
   (unless (warned wk)
     (put warned wk true)
@@ -100,6 +115,7 @@
   (string key))
 
 (defn t
+  {:params [:keyword (or {:count :number? & r} :nil)] :ret :string}
   ``Translate a key in the current locale: (t :shop.cart/empty),
   (t :shop.cart/items {:count n}). A key found nowhere along the
   fallback chain renders as its own name and warns once — visible,
@@ -112,6 +128,7 @@
     (message/render msg params (category-of loc))))
 
 (defn t?
+  {:params [:keyword (or {:count :number? & r} :nil)] :ret :string?}
   "Like `t`, but nil for a missing key — a label whose fallback lives
   in the markup."
   [key &opt params]
@@ -125,9 +142,16 @@
   [:type :literal :enum :union :missing :unknown :key :min :max
    :min-length :max-length :pattern :format :pred :peg])
 
-(defn- q-str [v] (string/format "%q" v))
+(defn- q-str
+  {:params [:any] :ret :string}
+  "The %q-quoted rendering of any value."
+  [v] (string/format "%q" v))
 
 (defn- err-params
+  {:params [{:keyword :any}] :ret @{:keyword :string}}
+  "Every error field becomes a %q-formatted {param}; :values matches
+  core's names-str byte for byte, so the :en dictionary reproduces
+  default-messages output exactly."
   # every error field becomes a %q-formatted {param}; :values matches
   # core's names-str byte for byte, so the :en dictionary reproduces
   # default-messages output exactly
@@ -143,9 +167,17 @@
       (put p k (q-str v))))
   p)
 
-(defn- schema-key [code] (keyword "void.schema/" code))
+(defn- schema-key
+  {:params [:keyword] :ret :keyword}
+  "The dictionary key a schema error code translates through,
+  namespaced under :void.schema."
+  [code] (keyword "void.schema/" code))
 
-(defn- schema-table [loc]
+(defn- schema-table
+  {:params [:keyword] :ret {:keyword (fn [:any] :string)}}
+  "Prebuild the {code (fn [err] string)} table for one locale, one
+  render closure per schema-error code the catalog carries."
+  [loc]
   (def tbl @{})
   (each code schema-codes
     (when-let [msg (lookup (schema-key code) loc)]
@@ -154,6 +186,7 @@
   tbl)
 
 (defn schema-messages
+  {:params [:keyword] :ret {:keyword (fn [:any] :string)}}
   "The prebuilt :void.schema/messages table for a locale; a code the
   catalog does not carry falls through to the core defaults per code,
   the way error-str always worked."
@@ -167,17 +200,27 @@
 # dictionary that carries one translates every error of that kind —
 # the envelope's :data fields are the {params}, :message is {message}.
 
-(defn- env-params [env]
+(defn- env-params
+  {:params [{:message :any :data (or {:keyword :any} :nil) & r}] :ret @{:message :any & r}}
+  "The {message, ...params} for one error envelope: :message falls
+  back to empty, and every :data field renders as text (bytes
+  stringified, everything else %q-quoted)."
+  [env]
   (def p @{:message (or (get env :message) "")})
   (eachp [k v] (get env :data {})
     (put p k (if (bytes? v) (string v) (q-str v))))
   p)
 
-(defn- error-table [loc]
+(defn- error-table
+  {:params [:keyword] :ret {:keyword (fn [:any] :string)}}
+  "Prebuild the {kind (fn [envelope] string)} table for one locale:
+  every keyword key its fallback chain carries is a candidate error
+  kind."
   # every key the locale's fallback chain carries is a candidate kind:
   # a kind is declared by the package that raises it, which a catalog
   # built at boot need not have loaded — the dictionary's key is the
   # whole of the declaration this side needs
+  [loc]
   (def tbl @{})
   (def candidates @{})
   (each l (chain loc)
@@ -190,6 +233,7 @@
   tbl)
 
 (defn error-messages
+  {:params [:keyword] :ret {:keyword (fn [:any] :string)}}
   "The prebuilt :void.errors/messages table for a locale; a kind the
   catalog does not carry keeps the envelope's own message, the way
   errors/message always worked."
@@ -199,6 +243,7 @@
 # -- the locale scope ----------------------------------------------------
 
 (defn scope
+  {:params [:keyword (fn [] a)] :ret a}
   ``Run `thunk` in the scope of one locale: the locale itself, the
   translator the framework's own packages read through
   `void/core/text`, and the two prebuilt message tables
@@ -217,6 +262,7 @@
     (thunk)))
 
 (defn with-locale*
+  {:params [:any (fn [] a)] :ret a}
   "Run thunk with the locale bound — CLI, jobs and tests; the request
   path is the middleware's."
   [loc thunk]
@@ -224,7 +270,15 @@
 
 # -- install -------------------------------------------------------------
 
-(defn- merge-contributions [contribs]
+(defn- merge-contributions
+  {:params [@[{:name :keyword :locale :keyword :messages {:keyword :any}
+               :precedence :number? & r}]]
+   :ret {:keyword @{:keyword :any}}
+   :throws [:string]}
+  "Merge dictionary contributions into locale -> key -> message,
+  ascending by :precedence with ties breaking on resolution order —
+  the last write to a key wins."
+  [contribs]
   (def idx @{})
   # ascending :precedence, stable: the last write to a key wins, and a
   # tie falls back to the deterministic resolution order
@@ -241,6 +295,16 @@
   idx)
 
 (defn install!
+  {:params [{:locales (or @[:keyword] :nil) :default :keyword?
+             :cookie (or :string :boolean :nil) & r}
+            (or @[{:name :keyword :locale :keyword :messages {:keyword :any}
+                   :precedence :number? & r}]
+                :nil)
+            (or @[{:name :keyword? :language :keyword :categories :function & r}]
+                :nil)
+            (or {:name :keyword :fn :function & r} :nil)]
+   :ret :nil
+   :throws [:string]}
   ``Install the [:i18n] slice and the resolved contributions into the
   module state: normalize and gate the config ([:i18n :default] must
   be one of [:i18n :locales]), merge the dictionaries, extend the
@@ -268,6 +332,8 @@
   nil)
 
 (defn coverage
+  {:params []
+   :ret @{:keyword {:count :number :missing @[:keyword] :orphans @[:keyword]}}}
   ``Per configured locale: {:count n :missing [...] :orphans [...]} —
   :missing are default-locale keys the locale lacks (the `void i18n
   check` failure), :orphans are its keys the default locale never

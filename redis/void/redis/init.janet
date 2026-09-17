@@ -74,6 +74,7 @@
              :prefix "the string every key is prefixed with"}})
 
 (defn- duplicate-codecs
+  {:params [(or @[{:name :keyword & r}] [{:name :keyword & r}])] :ret @[:keyword]}
   "The codec names contributed more than once, sorted."
   [contribs]
   (sorted (seq [[name n] :pairs (frequencies (map |($ :name) contribs))
@@ -115,6 +116,7 @@
 (def active-client "See state/active-client." state/active-client)
 (def with-conn* "See state/with-conn*." state/with-conn*)
 (defmacro with-conn
+  {:params [:any] :ret :any}
   ``Run the body on one connection (see state/with-conn) — MULTI/EXEC,
   WATCH, or anything else that means "the same session".``
   [& body]
@@ -174,6 +176,8 @@
 # -- the client component ------------------------------------------------
 
 (defn contributed-codecs
+  {:params [:any]
+   :ret @{:keyword {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}}}
   ``The resolved :void.redis/codec point of `boot`: name -> codec.
 
   The boot is handed in rather than read off a global — this package
@@ -253,6 +257,16 @@
                   :from :void/redis :component :redis/pubsub))
 
 (defn pubsub-now
+  {:params []
+   :ret @{:running :boolean :epoch :number :conn-established :boolean
+          :conn :any :conn-opts :any :fiber :any
+          :channels @{:any @[:any]} :patterns @{:any @[:any]}
+          :backoff @{:min :number :max :number :factor :number}
+          :stats @{:messages :number :reconnects :number :errors :number
+                   :delivered :number}
+          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :enabled :boolean & r}
+   :throws [:string]}
   ``The running subscriber, or an error saying which of the two things
   is the matter: the component is not in this composition at all, or it
   is there and switched off. The component exists either way — a graph
@@ -265,6 +279,7 @@
   l)
 
 (defn subscribe!
+  {:params [:any (fn [a] :any)] :ret (fn [a] :any) :throws [:string]}
   ``Call `f` with every message published to `channel`
   ({:channel :payload}). Returns `f`, which `unsubscribe!` takes back.
 
@@ -278,21 +293,30 @@
   (pubsub/subscribe! (pubsub-now) channel f))
 
 (defn psubscribe!
+  {:params [:any (fn [a] :any)] :ret (fn [a] :any) :throws [:string]}
   "Like `subscribe!`, for a glob pattern (`user:*:events`)."
   [pattern f]
   (pubsub/psubscribe! (pubsub-now) pattern f))
 
 (defn unsubscribe!
+  {:params [:any (or (fn [a] :any) :nil)] :ret :nil :throws [:string]}
   "Remove one handler, or all of a channel's when `f` is omitted."
   [channel &opt f]
   (pubsub/unsubscribe! (pubsub-now) channel f))
 
 (defn punsubscribe!
+  {:params [:any (or (fn [a] :any) :nil)] :ret :nil :throws [:string]}
   "Remove one pattern handler, or all of a pattern's."
   [pattern &opt f]
   (pubsub/punsubscribe! (pubsub-now) pattern f))
 
 (defn publish!
+  {:params [:any :any]
+   :ret :any
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   ``Publish a message, through the pool. Returns how many subscribers
   the server handed it to — which is the only delivery signal redis
   pub/sub has, and it counts connections, not handlers, and not

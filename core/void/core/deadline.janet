@@ -50,11 +50,13 @@
 (import ./errors :as errors)
 
 (defn- deadline?
+  {:params [:any] :ret :boolean :narrows :number}
   "A positive number of seconds, i.e. a deadline that is actually set."
   [seconds]
   (and (number? seconds) (pos? seconds)))
 
 (defn- raise-timeout
+  {:params [:number] :ret :never :throws [:struct]}
   "The default `on-timeout`: the kernel's own kind, status 504."
   [seconds]
   (errors/raise :void/deadline
@@ -62,6 +64,7 @@
                 {:timeout seconds}))
 
 (defn run
+  {:params [:number? (fn [] :any)] :ret [:keyword :any]}
   ``Run `(f)` as its own supervised task, cancelled after `seconds`.
   Never throws; answers
 
@@ -89,6 +92,7 @@
         [:error value]))))
 
 (defn call
+  {:params [:number? (fn [] :any) (or (fn [] :any) :nil)] :ret :any :throws [:any]}
   ``Run `(f)` under `seconds` and return its value. On a timeout
   return `(on-timeout)` — or, when there is none, raise
   `:void/deadline`. An error `f` raised is re-raised as it was, so a

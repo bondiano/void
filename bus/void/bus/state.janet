@@ -46,6 +46,7 @@
 (def log-ns "void.bus")
 
 (defn boot
+  {:params [] :ret :any}
   ``The boot in force. This package used to capture its own in a
   :config-loaded hook, because the process's most recent bootstrap is
   not the one a fixture built — a test bootstrap is untracked on
@@ -59,11 +60,13 @@
   (plugin/running-boot))
 
 (defn config-slice
+  {:params [:keyword] :ret :any}
   "One slice of the resolved configuration, or {}."
   [key]
   (or (get-in (boot) [:config :values key]) {}))
 
 (defn extension
+  {:params [:keyword] :ret :any}
   "The reduced value of an extension point, or nil when this process
   was not bootstrapped at all (a REPL, a unit test)."
   [name]
@@ -81,12 +84,35 @@
   (broker :dyn))
 
 (defn active
+  {:params []
+   :ret @{:backend {:name :keyword :encoded? :boolean :stats :function
+                    :health (or :nil :function) :close :function :publish! :function
+                    :consume! :function :stop! :function
+                    :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
+                                 :shared :boolean} & r}
+          :codec {:name :keyword :bytes? :boolean :doc :any :encode :function
+                  :decode :function & r}
+          :config :any :group :keyword
+          :middleware [{:name :keyword :wrap (fn [:any :any] :any) :phase :number
+                        :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+          :tracer (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                            :traceparent (fn [] :any)})
+          :consumers @{:keyword :any}
+          :outbox (or :nil (fn [:any] :any))
+          :stats @{:published :number :delivered :number :outboxed :number}}
+   :throws [:string]}
   "The broker this fiber runs against: the `broker-dyn` override, else
   the started component."
   []
   (system/active broker))
 
 (defn active-backend
+  {:params []
+   :ret {:name :keyword :encoded? :boolean :stats :function :health (or :nil :function)
+         :close :function :publish! :function :consume! :function :stop! :function
+         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
+                      :shared :boolean} & r}
+   :throws [:string]}
   "The backend behind the active broker."
   []
   ((active) :backend))
@@ -94,6 +120,7 @@
 # -- the obs seam --------------------------------------------------------
 
 (defn- module-fn
+  {:params [:string :symbol] :ret :any}
   "The public binding `name` of module `path`, or nil when that
   package is not on this process's module path."
   [path name]
@@ -101,6 +128,9 @@
   (when ok (get-in env [name :value])))
 
 (defn resolve-tracer
+  {:params []
+   :ret (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                  :traceparent (fn [] :any)})}
   ``The three things bus needs from void/obs, resolved the public way,
   or nil when obs is not in this process. Never an error: "trace the
   messages if there is a tracer" is the whole point of an optional
@@ -128,6 +158,37 @@
 # -- the broker ----------------------------------------------------------
 
 (defn make
+  {:params [{:name :keyword :encoded? :boolean :stats :function
+             :health (or :nil :function) :close :function :publish! :function
+             :consume! :function :stop! :function
+             :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
+                          :shared :boolean} & r}
+            {:name :keyword :bytes? :boolean :doc :any :encode :function
+             :decode :function & r}
+            {:group :keyword? & r}
+            (or :nil
+                (or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number
+                       :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+                    [{:name :keyword :wrap (fn [:any :any] :any) :phase :number
+                      :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]))
+            (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                      :traceparent (fn [] :any)})]
+   :ret @{:backend {:name :keyword :encoded? :boolean :stats :function
+                    :health (or :nil :function) :close :function :publish! :function
+                    :consume! :function :stop! :function
+                    :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
+                                 :shared :boolean} & r}
+          :codec {:name :keyword :bytes? :boolean :doc :any :encode :function
+                  :decode :function & r}
+          :config {:group :keyword? & r} :group :keyword
+          :middleware [{:name :keyword :wrap (fn [:any :any] :any) :phase :number
+                        :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+          :tracer (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                            :traceparent (fn [] :any)})
+          :consumers @{:keyword :any}
+          :outbox (or :nil (fn [:any] :any))
+          :stats @{:published :number :delivered :number :outboxed :number}}
+   :throws [:string]}
   ``A broker value over a normalized backend and codec. Kept separate
   from the component so a test can stand one up without a bootstrap
   (`bus/make-broker`), the way `jobs/make-queue` can.``
@@ -151,6 +212,14 @@
     :stats @{:published 0 :delivered 0 :outboxed 0}})
 
 (defn outbox-writer
+  {:params [(or :nil
+                @{:backend {:name :keyword :encoded? :boolean :stats :function
+                            :health (or :nil :function) :close :function
+                            :publish! :function :consume! :function :stop! :function
+                            :guarantees {:delivery :keyword :ordering :keyword
+                                         :durable :boolean :shared :boolean} & r}
+                  :outbox (or :nil (fn [:any] :any)) & r})]
+   :ret (or :nil (fn [:any] :any))}
   ``The transactional-outbox writer in force: the broker's override,
   else the active backend's own. nil when this composition has no
   outbox at all, which is what makes `publish-tx!` an error naming the
@@ -159,10 +228,18 @@
   (default br (active))
   (or (br :outbox) (get-in br [:backend :outbox-write!])))
 
-(defn- bump! [br key]
+(defn- bump!
+  {:params [{:stats @{:keyword :number} & r} (enum :published :delivered :outboxed)]
+   :ret @{:stats @{:keyword :number} & r}}
+  "Increment one running total of the broker's stats table."
+  [br key]
   (put-in br [:stats key] (inc (get-in br [:stats key] 0))))
 
 (defn envelope
+  {:params [{:codec {:name :keyword :bytes? :boolean :doc :any :encode :function
+                     :decode :function & r} & r}
+            {:id :any :topic :any :payload :any :meta :any & r}]
+   :ret @{:id :any :topic :any :body :any :meta-body :any :meta :any :message :any}}
   ``A message through the codec: what the backend stores. The id, the
   topic and the meta stay readable — a correlation id that can only be
   found by decoding the payload is one no operator will ever put in a
@@ -177,6 +254,11 @@
     :message msg})
 
 (defn hydrate
+  {:params [{:codec {:name :keyword :bytes? :boolean :doc :any :encode :function
+                     :decode :function & r} & r}
+            {:message :any :id :any :topic :any :body :any :meta-body :any
+             :redelivery :any & r}]
+   :ret @{:id :any :topic :any :payload :any :meta @{:keyword :any}}}
   ``The message inside an envelope the backend handed back. An
   in-heap backend gives the live message straight back; a backend that
   stored bytes gets them decoded here, which is the one place the
@@ -210,6 +292,12 @@
   Options are `message/make`'s. The message reaches the backend
   encoded; what happens to it after that is the backend's declared
   guarantee, and `bus/capabilities` prints it.``
+  {:params [:any :any
+            (or :nil {:id :string? :meta (or :nil :table :struct)
+                      :correlation-id :string? :causation-id :string?
+                      :reply-to :keyword? :at :number? & r})]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   [topic payload &opt opts]
   (def br (active))
   (def msg (message/make topic payload opts))
@@ -241,6 +329,12 @@
   writer) and a transaction around the call; both are errors that name
   what is missing rather than a message that quietly went out
   un-transactionally.``
+  {:params [:any :any
+            (or :nil {:id :string? :meta (or :nil :table :struct)
+                      :correlation-id :string? :causation-id :string?
+                      :reply-to :keyword? :at :number? & r})]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   [topic payload &opt opts]
   (def br (active))
   (def write (outbox-writer br))
@@ -260,6 +354,17 @@
 # -- consuming -----------------------------------------------------------
 
 (defn- built-in-middleware
+  {:params [{:config (or :nil {:retry :any :poison :any :dedup :any :throttle :any & r})
+             :backend {:name :keyword :encoded? :boolean :stats :function
+                       :health (or :nil :function) :close :function :publish! :function
+                       :consume! :function :stop! :function
+                       :guarantees {:delivery :keyword :ordering :keyword
+                                    :durable :boolean :shared :boolean} & r}
+             :tracer (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                               :traceparent (fn [] :any)})
+             & r}]
+   :ret [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+          :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]}
   ``The chain every handler gets unless the [:bus] slice says
   otherwise. `retry` is the one whose default is *derived*: under an
   at-most-once backend nobody else will re-run the handler, so
@@ -294,12 +399,42 @@
   (tuple ;(map middleware/normalize out)))
 
 (defn chain-for
+  {:params [@{:backend {:name :keyword :encoded? :boolean :stats :function
+                        :health (or :nil :function) :close :function :publish! :function
+                        :consume! :function :stop! :function
+                        :guarantees {:delivery :keyword :ordering :keyword
+                                     :durable :boolean :shared :boolean} & r}
+             :config (or :nil {:retry :any :poison :any :dedup :any :throttle :any & r})
+             :tracer (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                               :traceparent (fn [] :any)})
+             :middleware [{:name :keyword :wrap (fn [:any :any] :any) :phase :number
+                           :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+             & r}]
+   :ret [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+          :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]}
   "Every middleware contribution in force: the built-ins, then what
   plugins contributed to `:void.bus/middleware`."
   [br]
   [;(built-in-middleware br) ;(br :middleware)])
 
 (defn start-consumers!
+  {:params [@{:backend {:name :keyword :encoded? :boolean :stats :function
+                        :health (or :nil :function) :close :function :publish! :function
+                        :consume! :function :stop! :function
+                        :guarantees {:delivery :keyword :ordering :keyword
+                                     :durable :boolean :shared :boolean} & r}
+             :codec {:name :keyword :bytes? :boolean :doc :any :encode :function
+                     :decode :function & r}
+             :config (or :nil {:retry :any :poison :any :dedup :any :throttle :any & r})
+             :group :keyword
+             :tracer (or :nil {:with-span (fn [:any :any :any] :any) :parse (fn [:any] :any)
+                               :traceparent (fn [] :any)})
+             :middleware [{:name :keyword :wrap (fn [:any :any] :any) :phase :number
+                           :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+             :consumers @{:keyword :any}
+             :stats @{:keyword :number}
+             & r}]
+   :ret [:keyword]}
   ``Start one consumer per group the declared handlers ask for. A
   process with no `defhandler` in it starts none — which is the
   ordinary case for a web process whose consumers live in a worker,
@@ -334,6 +469,8 @@
   (tuple ;started))
 
 (defn stop-consumers!
+  {:params [@{:backend {:stop! :function & r} :consumers @{:keyword :any} & r}]
+   :ret :nil}
   "Stop every consumer this broker started, in name order."
   [br]
   (each group (sorted (keys (br :consumers)))
@@ -345,11 +482,16 @@
 # -- inspection ----------------------------------------------------------
 
 (defn capabilities
+  {:params [] :ret @{:name :any :encoded :boolean :delivery :keyword :ordering :keyword
+                     :durable :boolean :shared :boolean}
+   :throws [:string]}
   "What the active backend promises, as data."
   []
   (backend/capabilities (active-backend)))
 
 (defn counters
+  {:params [(or :nil @{:stats @{:keyword :number} & r})]
+   :ret :struct :throws [:string]}
   ``The three running totals a broker keeps — published, delivered,
   outboxed. `stats` carries them under the shape of the whole
   composition (backend capabilities, handler list, consumer names);
@@ -359,6 +501,13 @@
   (table/to-struct ((or br (active)) :stats)))
 
 (defn stats
+  {:params []
+   :ret @{:published :any :delivered :any :outboxed :any
+          :backend @{:name :any :encoded :boolean :delivery :keyword :ordering :keyword
+                     :durable :boolean :shared :boolean}
+          :codec :any :group :keyword :consumers @[:keyword] :handlers @[:keyword]
+          :outbox :boolean :tracing :boolean :backend-stats :any}
+   :throws [:string]}
   "Everything `void bus stats` prints."
   []
   (def br (active))

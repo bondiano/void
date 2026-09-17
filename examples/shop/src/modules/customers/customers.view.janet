@@ -8,6 +8,17 @@
 (import ./customers.dto :as dto)
 
 (defn sign-in-view
+  {:params [(or {:sign-in (or {:any :any} :nil)
+                 :magic-link (or {:any :any} :nil)
+                 :register (or {:any :any} :nil)
+                 :register-errors (or [{:path :any & r}] :nil)
+                 :message :string?
+                 :tone :string?
+                 & r}
+                :nil)]
+   :ret :tuple}
+  "The sign-in page: password, magic-link and registration forms
+  side by side, plus whatever notice `state` carries back."
   [&opt state]
   (default state {})
   (def panel "rounded-2xl border border-slate-200 bg-white p-6 shadow-sm")

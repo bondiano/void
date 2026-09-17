@@ -63,7 +63,12 @@
 # scale — the same window otlp-test.janet allows the JSON spelling
 (def dur-ns (int/to-number (- (s :end_time_unix_nano) (s :start_time_unix_nano))))
 (assert (< 12000000 dur-ns 13000000))
-(defn- attr [as key]
+(defn- attr
+  {:params [(or @[{:key :string :value :any & r}] [{:key :string :value :any & r}])
+            :string]
+   :ret :any}
+  "The decoded attribute value keyed by `key`, or nil."
+  [as key]
   (get (find |(= key ($ :key)) as) :value))
 (assert (= "orders.show" (get (attr (s :attributes) "http.route") :string_value)))
 (assert (= (int/s64 500) (int/s64 (get (attr (s :attributes) "http.status-code") :int_value)))
@@ -80,7 +85,10 @@
 (def mpayload (otlp/metrics-request (metrics/snapshot) resource 1756400000 1756400060))
 (def mback (proto/decode otlp-proto/metrics-message (otlp/encode mpayload :protobuf)))
 (def ms (get-in mback [:resource_metrics 0 :scope_metrics 0 :metrics]))
-(defn- metric [name] (find |(= name ($ :name)) ms))
+(defn- metric
+  {:params [:string] :ret (or {:name :string & r} :nil)}
+  "The decoded metric object named `name`, or nil."
+  [name] (find |(= name ($ :name)) ms))
 
 (def counter (metric "void_test_otlp_proto_hits"))
 (assert counter "the metric keeps its Prometheus name — one series to everybody downstream")

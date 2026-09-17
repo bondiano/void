@@ -33,6 +33,7 @@
 (def- numeric {:port true :connect-timeout true})
 
 (defn config
+  {:params [(or {:keyword :any} :nil)] :ret @{:keyword :any} :throws [:string]}
   ``The [:db-mysql] config slice for the configured server: a URL goes
   in as :url, a key=value list as the keys it names — the slice speaks
   both, so a CI environment can pass either.``
@@ -51,6 +52,7 @@
   (merge base (or extra {})))
 
 (defn- fetch
+  {:params [:table :symbol] :ret :any :throws [:string]}
   "The value of one binding in a module loaded at runtime."
   [mod sym]
   (def entry (get mod sym))
@@ -59,6 +61,7 @@
   (get entry :value))
 
 (defn driver
+  {:params [(or {:keyword :any} :nil)] :ret :any :throws [:string]}
   ``The normalized void/db driver for the configured server. Resolved
   through `require`, so that nothing of void/db-mysql is touched
   unless there is a server to talk to.``

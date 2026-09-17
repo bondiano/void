@@ -35,6 +35,7 @@
 # type so that "1" and 1 cannot collide.
 
 (defn canonical
+  {:params [:any] :ret :string :throws [:string]}
   ``A deterministic string rendering of a value: dictionary pairs
   sorted by their own rendering, every scalar tagged with its type.
   The same value renders the same way in every process, which is what
@@ -73,6 +74,9 @@
   {:strategy :exponential :base 1 :max 3600 :jitter 0.5})
 
 (defn normalize-backoff
+  {:params [(or {:strategy :keyword? :base :number? :max :number? :jitter :number? & r} :nil) :string?]
+   :ret {:strategy :keyword :base :number :max :number :jitter :number}
+   :throws [:string]}
   "Validate and complete a backoff policy against `default-backoff`."
   [b0 &opt who]
   (default who "backoff")
@@ -90,6 +94,9 @@
   (freeze b))
 
 (defn retry-delay
+  {:params [(or {:strategy :keyword :base :number :max :number :jitter :number} :nil)
+            :number (or (fn [] :number) :nil)]
+   :ret :number}
   ``Seconds to wait before attempt `attempt` + 1, given that `attempt`
   has just failed (1-based). The undelayed delay is :base for :fixed,
   :base × attempt for :linear and :base × 2^(attempt-1) for
@@ -128,6 +135,13 @@
   [:args :job])
 
 (defn normalize-opts
+  {:params [:string (or {:keyword :any} :nil)]
+   :ret {:queue :keyword? :priority :number? :max-attempts :number? :timeout :number?
+         :unique (or :keyword :string :nil) :unique-ttl :number?
+         :group (or :string :keyword (fn [& :any] :any) :nil)
+         :needs (or @[:keyword] [:keyword] :nil)
+         :backoff (or {:strategy :keyword :base :number :max :number :jitter :number} :nil) & r}
+   :throws [:string]}
   ``Validate the policy of a job definition (or the per-enqueue
   overrides, which take the same keys). Values left out are decided by
   the [:jobs] config slice at enqueue time, so this fills nothing in —
@@ -183,6 +197,18 @@
   @{})
 
 (defn define!
+  {:params [:keyword (or {:keyword :any} :nil)
+            {:fn (or :function :nil) :binding :symbol? :env (or {:keyword :any} :nil) :doc :string? & r}]
+   :ret {:name :keyword
+         :opts {:queue :keyword? :priority :number? :max-attempts :number? :timeout :number?
+                :unique (or :keyword :string :nil) :unique-ttl :number?
+                :group (or :string :keyword (fn [& :any] :any) :nil)
+                :needs (or @[:keyword] [:keyword] :nil)
+                :backoff (or {:strategy :keyword :base :number :max :number :jitter :number} :nil) & r}
+         :fn (or :function :nil) :binding :symbol? :env (or {:keyword :any} :nil) :doc :string?
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}
+   :throws [:string]}
   ``Register a job definition (the runtime half of `defjob`).
 
     (job/define! :welcome-mail {:queue :mail}
@@ -226,11 +252,23 @@
   d)
 
 (defn lookup
+  {:params [:keyword]
+   :ret (or {:name :keyword :opts {:keyword :any} :fn (or :function :nil) :binding :symbol?
+             :env (or {:keyword :any} :nil) :doc :string?
+             :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string}}
+            :nil)}
   "The definition registered under `name`, or nil."
   [name]
   (get registry name))
 
 (defn lookup!
+  {:params [:keyword]
+   :ret {:name :keyword :opts {:keyword :any} :fn (or :function :nil) :binding :symbol?
+         :env (or {:keyword :any} :nil) :doc :string?
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}
+   :throws [:string]}
   "The definition registered under `name`; throws naming what is
   registered when there is none — a job whose module the worker never
   imported is the most common way a queue stalls."
@@ -240,11 +278,13 @@
               name (util/names-str (keys registry)))))
 
 (defn defined
+  {:params [] :ret @[:keyword]}
   "Names of every registered job definition."
   []
   (sorted (keys registry)))
 
 (defn forget!
+  {:params [:keyword] :ret :nil}
   "Drop a definition — for tests, and for a REPL that renamed one."
   [name]
   (put registry name nil))
@@ -267,6 +307,7 @@
 # channel opens is a fact about the channel.
 
 (defn needs!
+  {:params [:keyword (or @[:keyword] [:keyword])] :ret [:keyword] :throws [:string]}
   ``Add component keys to a definition's `:needs`, after the fact.
   Idempotent and order-preserving. Throws when the job is not defined
   — a plugin naming a job that does not exist is a boot error, not a
@@ -282,6 +323,7 @@
   (tuple ;out))
 
 (defn needs
+  {:params [(or @[:keyword] [:keyword] :nil) :keyword?] :ret [:keyword]}
   ``The components every definition on these queues declares, as one
   ordered list. `queues` is a list of queue names, or nil for every
   definition in the registry; `dflt` is the queue a definition that
@@ -298,6 +340,10 @@
   (tuple ;out))
 
 (defn handler
+  {:params [{:handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string} & r}]
+   :ret (or :function :cfunction)
+   :throws [{:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``The function behind a definition, resolved now rather than when it
   was declared: a `defjob` whose module has been reloaded runs the new
   body, and one whose binding has stopped being a function says so
@@ -312,6 +358,9 @@
   (bind/current (d :handler)))
 
 (defn unique-key
+  {:params [{:name :keyword :opts {:unique (or :keyword :string :nil) & r} & r}
+            (or @[:any] [:any]) {:unique (or :keyword :string :nil) & r}]
+   :ret :string?}
   ``The uniqueness key of a call, or nil when the job does not ask for
   one. :args keys by name and arguments, :job by name alone, and a
   literal string or keyword is used as written — after the name, so
@@ -325,6 +374,9 @@
     (string (d :name) "/" mode)))
 
 (defn group-key
+  {:params [{:opts {:group (or :string :keyword (fn [& :any] :any) :nil) & r} & r}
+            (or @[:any] [:any]) {:group (or :string :keyword (fn [& :any] :any) :nil) & r}]
+   :ret :string?}
   ``The fair-scheduling group of a call: what the enqueue named, else
   what the definition declares — a literal, or a function of the
   job's arguments, which is where a tenant id usually lives.``
@@ -338,6 +390,7 @@
 # -- the macro -----------------------------------------------------------
 
 (defn defjob-form
+  {:params [:symbol [:any]] :ret :tuple :throws [:string]}
   ``The expansion of `defjob`, as a function — so that the macro can
   exist both here and on `void/jobs` (which is what applications
   import) without being written twice. `more` is everything after the
@@ -367,6 +420,7 @@
                {:env (,curenv) :binding ',name :fn ,name :doc ,doc})))
 
 (defmacro defjob
+  {:params [:symbol :any] :ret :tuple :throws [:string]}
   ``Define a job — a function, plus the policy for running it in the
   background:
 

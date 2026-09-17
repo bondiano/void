@@ -45,7 +45,13 @@
    "void/db/init" "void/db-sqlite/init" "void/db/http"
    "void/authz/init" "void/authz/http" "void/admin/init"])
 
-(defn- config [&opt extra]
+(defn- config
+  {:params [(or {:any :any} :nil)]
+   :ret {:env @{:any :any} :cli {:http :any :db-sqlite :any :db :any :jobs :any :admin :any & r}}}
+  "The boot config for one composition, with `extra` merged over
+  [:cli] — the :deploy override the fleet suite below needs is a key
+  the base config never has."
+  [&opt extra]
   {:env @{}
    :cli (merge {:http {:port 0}
                 :db-sqlite {:path db-path}
@@ -57,6 +63,7 @@
                (or extra {}))})
 
 (defn- done?
+  {:params [:number] :ret :boolean}
   ``Is the row marked done? sqlite hands a boolean column back as 0 or
   1, and 0 is truthy in Janet — an assertion written as `(row :done)`
   would pass whatever the value was.``
@@ -64,7 +71,10 @@
   (def v (get (db/find Note id) :done))
   (or (true? v) (= 1 v)))
 
-(defn- seed! []
+(defn- seed!
+  {:params [] :ret :nil}
+  "Recreate the notes table fresh and seed four rows, none of them done."
+  []
   (db/execute-sql "DROP TABLE IF EXISTS notes" [] {:kind :write :prepared false})
   (db/execute-sql
     (string "CREATE TABLE notes (id integer primary key autoincrement, "
@@ -97,7 +107,11 @@
 (defer (test/stop! boot)
   (seed!)
   (def c (test/client boot))
-  (defn csrf [resp]
+  (defn csrf
+    {:params [{:body :any & r}] :ret :string?}
+    "Pull the CSRF token out of a rendered form's hidden field, or nil
+    when the page carried none."
+    [resp]
     (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`)))
                       (test/text resp))))
 

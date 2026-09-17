@@ -48,15 +48,23 @@
   defaults)
 
 (defn configure!
+  {:params [(or {:failure-rate :number? :decline-cents :number? & r} :nil)]
+   :ret @{:failure-rate :number :decline-cents :number}}
   "Read the slice out of the boot value (see src/app.janet's hook)."
   [cfg]
   (set settings (merge defaults (or cfg {})))
   settings)
 
-(defn- reference []
+(defn- reference
+  {:params [] :ret :string}
+  "A reference the gateway would hand back for a captured payment."
+  []
   (string "pay_" (values/token 8)))
 
 (defn capture!
+  {:params [:number]
+   :ret (or {:ok :boolean :reason :string} {:ok :boolean :reference :string})
+   :throws [:string]}
   ``Charge `amount-cents` for an order. Returns
 
       {:ok true  :reference "pay_…"}

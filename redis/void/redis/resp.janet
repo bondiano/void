@@ -59,6 +59,7 @@
   (peg/compile ~(* '(some (range "AZ" "09")) (+ (* " " '(any 1)) -1))))
 
 (defn error-value
+  {:params [:string] :ret {:redis/error :boolean :code :string :message :string :reply :string}}
   ``An error reply as a value: {:redis/error true :code :message
   :reply}. `code` is the leading upper-case word ("ERR", "WRONGTYPE",
   "NOSCRIPT", "MOVED"), which is the part a caller can branch on — the
@@ -75,21 +76,25 @@
    :reply (string line)})
 
 (defn error?
+  {:params [:any] :ret :boolean :narrows :any}
   "Is this value an error reply?"
   [v]
   (and (dictionary? v) (truthy? (get v :redis/error))))
 
 (defn error-message
+  {:params [(or {:reply :string & r} :nil)] :ret :string}
   "The human half of an error reply — the whole line, code included."
   [v]
   (get v :reply ""))
 
 (defn push-value
+  {:params [:any] :ret {:redis/push :any}}
   "A push frame as a value: {:redis/push [kind ...]}."
   [items]
   {:redis/push items})
 
 (defn push?
+  {:params [:any] :ret :boolean :narrows :any}
   ``Is this an out-of-band push frame? RESP3 delivers pub/sub messages,
   client-side-caching invalidations and monitor output this way, on the
   same connection as ordinary replies — which is why the reader has to
@@ -98,16 +103,19 @@
   (and (dictionary? v) (not (nil? (get v :redis/push)))))
 
 (defn push-items
+  {:params [{:redis/push :any & r}] :ret :any}
   "The elements of a push frame."
   [v]
   (get v :redis/push))
 
 (defn attribute-value
+  {:params [:any] :ret {:redis/attribute :any}}
   "An attribute frame as a value: {:redis/attribute <table>}."
   [table]
   {:redis/attribute table})
 
 (defn attribute?
+  {:params [:any] :ret :boolean :narrows :any}
   ``Is this an attribute frame? RESP3 attributes are metadata attached
   to the *next* reply (key popularity for client-side caching, and
   whatever a future release adds), and a client that does not use them
@@ -132,6 +140,7 @@
   {(chr "*") 1 (chr "~") 1 (chr ">") 1 (chr "%") 2 (chr "|") 2})
 
 (defn- count-at
+  {:params [(or :string :buffer) :number :number] :ret :number?}
   ``The count written between i and j: decimal digits only, with `-1`
   — the protocol's null marker (`$-1`, `*-1`) — as the one negative
   spelling allowed. nil for anything else (`1e3`, `0x10`, `-2`, a
@@ -159,6 +168,9 @@
       (when ok n))))
 
 (defn scan
+  {:params [(or :string :buffer) :number? :number?]
+   :ret [:keyword :number]
+   :throws [:string]}
   ``Find the end of the RESP frame starting at `start`. Returns
 
     [:done end]   `end` is the index just past the frame
@@ -234,6 +246,7 @@
   (go start))
 
 (defn frame-end
+  {:params [(or :string :buffer) :number?] :ret :number? :throws [:string]}
   "The index just past the first complete frame at `start`, or nil
   while it is incomplete. `scan` is the same answer with the missing
   byte count attached."
@@ -244,6 +257,7 @@
 # -- the PEG -------------------------------------------------------------
 
 (defn- blob-body
+  {:params [:string] :ret :string}
   ``The payload of a length-prefixed blob. `lenprefix` reads its count
   from a pattern it matches *itself*, so the capture spans the count
   line too — the first CRLF is where the payload starts.``
@@ -251,6 +265,7 @@
   (string/slice captured (+ 2 (string/find "\r\n" captured))))
 
 (defn- verbatim-body
+  {:params [:string] :ret :string}
   "A verbatim string without its `txt:` (or `mkd:`) format hint."
   [captured]
   (def s (blob-body captured))
@@ -259,6 +274,7 @@
     s))
 
 (defn- double-value
+  {:params [:string] :ret :number :throws [:string]}
   "A RESP3 double: a number, or one of the three names IEEE 754 has for
   values a decimal literal cannot spell."
   [line]
@@ -271,6 +287,7 @@
         (errorf "RESP double is not a number: %q" line))))
 
 (defn- to-table
+  {:params [@[:any]] :ret @{:any :any}}
   "The flat [k v k v ...] of a map frame as a table."
   [items]
   (def out @{})
@@ -279,6 +296,7 @@
   out)
 
 (defn- attribute-frame
+  {:params [@[:any]] :ret {:redis/attribute @{:any :any}}}
   "An attribute frame's flat [k v ...] as an attribute value."
   [items]
   (attribute-value (to-table items)))
@@ -321,6 +339,7 @@
   (peg/compile value-grammar))
 
 (defn parse
+  {:params [(or :string :buffer) :number?] :ret (or [:any :number] :nil)}
   ``Decode the frame at `start` into [value end]. Returns nil when the
   bytes there are not one complete frame — `scan` is what tells the
   two reasons for that apart, and the reader calls it first, so a nil
@@ -331,6 +350,7 @@
     [(in m 0) (in m 1)]))
 
 (defn parse-all
+  {:params [(or :string :buffer) :number?] :ret [@[:any] :number]}
   ``Every complete frame in `buf`, as [values end] — `end` is where the
   first incomplete frame begins, so a reader can keep the tail and
   carry on. What a pipeline of N commands answers with is N frames in
@@ -354,6 +374,7 @@
 # -- encoding ------------------------------------------------------------
 
 (defn argument
+  {:params [:any] :ret (or :string :buffer) :throws [:string]}
   ``One command argument as bytes. Strings and buffers go as they are,
   a keyword or symbol as its name (so commands can be written
   `[:set :key v]`), a number as the shortest text that reads back as
@@ -382,6 +403,7 @@
     (errorf "%q cannot be a redis argument (bytes, number, keyword or symbol)" v)))
 
 (defn encode
+  {:params [(or @[:any] [:any]) :buffer?] :ret :buffer :throws [:string]}
   ``A command as RESP bytes, appended to `into` when given.
 
       (resp/encode ["SET" "user:1" "alice" "EX" 60])
@@ -402,6 +424,7 @@
   out)
 
 (defn encode-all
+  {:params [(or @[:any] [:any]) :buffer?] :ret :buffer :throws [:string]}
   "Several commands into one buffer — the write half of pipelining."
   [commands &opt into]
   (def out (or into @""))

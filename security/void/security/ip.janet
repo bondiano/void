@@ -26,6 +26,7 @@
    :forwarded-header "x-forwarded-for"})
 
 (defn parse-cidr
+  {:params [(or :string :buffer)] :ret {:bytes [:number] :bits :number} :throws [:string]}
   ``Parse "10.0.0.0/8" (or a bare address) into {:bytes :bits}. IPv4
   and IPv6 both, because a deployment behind a v6 proxy is not
   exotic.``
@@ -72,6 +73,7 @@
    :bits (or bits width)})
 
 (defn in-cidr?
+  {:params [(or :string :buffer) {:bytes [:number] :bits :number}] :ret :boolean}
   "Is `address` inside `cidr` (as parsed by `parse-cidr`)?"
   [address cidr]
   (def [ok parsed] (protect (parse-cidr address)))
@@ -91,6 +93,7 @@
          same)))
 
 (defn peer-address
+  {:params [@{:remote-addr :string? :void.security/peer :string? & r}] :ret :string?}
   ``The peer of a request: `:remote-addr`, which the server reads off
   the socket once per connection and the inject path takes from its
   spec. A test may also plant `:void.security/peer` directly. nil when
@@ -102,6 +105,8 @@
     (get req :remote-addr)))
 
 (defn forwarded-chain
+  {:params [@{:headers {:string (or :string @[:string])} & r} (or {:forwarded-header :string? & r} :nil)]
+   :ret @[:string]}
   "The X-Forwarded-For chain of a request, left to right, trimmed."
   [req &opt cfg]
   (default cfg defaults)
@@ -112,6 +117,7 @@
     (map string/trim (string/split "," (string value)))))
 
 (defn trusted?
+  {:params [:string? {:trusted-proxies (or @[:string] :nil) & r}] :ret :boolean}
   "Is this address one of the configured proxies?"
   [address cfg]
   (truthy?
@@ -122,6 +128,9 @@
             (get cfg :trusted-proxies [])))))
 
 (defn client-ip
+  {:params [@{:headers {:string (or :string @[:string])} :remote-addr :string? & r}
+            (or {:trusted-proxies (or @[:string] :nil) :forwarded-header :string? & r} :nil)]
+   :ret :string?}
   ``The address to attribute this request to.
 
   Without trusted proxies: the socket peer, and the header is ignored

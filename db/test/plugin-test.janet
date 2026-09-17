@@ -38,15 +38,26 @@
    :title :string}
   :db/table "orders")
 
-(defn create [req]
+(defn create
+  {:params [:any] :ret {:status :number :body :string} :throws [:any]}
+  "Insert an order inside the route's :void.db/txn wrapper, and answer
+  201 once it commits."
+  [req]
   (db/insert! Order {:title "widget"})
   {:status 201 :body "created"})
 
-(defn boom [req]
+(defn boom
+  {:params [:any] :ret :never :throws [:string :any]}
+  "Insert an order, then fail — the transaction it ran in must still
+  roll the insert back."
+  [req]
   (db/insert! Order {:title "doomed"})
   (error "handler failed"))
 
-(defn plain [req]
+(defn plain
+  {:params [:any] :ret {:status :number :body :string} :throws [:any]}
+  "Insert an order with no :void.db/txn — no transaction wraps it."
+  [req]
   (db/insert! Order {:title "no transaction"})
   {:status 200 :body "ok"})
 

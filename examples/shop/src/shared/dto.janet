@@ -24,6 +24,7 @@
   {:page :int :per-page :int :total :int :pages :int})
 
 (defn money
+  {:params [:number] :ret {:cents :number :currency :string}}
   "Cents, as the API's money value — the constructor for :Money above."
   [cents]
   {:cents cents :currency "EUR"})

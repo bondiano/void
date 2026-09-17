@@ -9,6 +9,7 @@
 (import void/core/system :as system)
 
 (defn greet
+  {:params [@{:greeted :number :greeting :string} :string] :ret :string}
   "Greet `who` through a started :demo/greeter instance."
   [inst who]
   (put inst :greeted (inc (inst :greeted)))

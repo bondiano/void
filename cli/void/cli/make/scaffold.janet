@@ -16,6 +16,9 @@
 ### Janet, which is what it is going to edit the output in anyway.
 
 (defn override
+  {:params [{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r} :string]
+   :ret {:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}
+   :throws [:string]}
   ``The project's replacement for one template entry, or the entry
   unchanged. An override is a Janet module at `templates/<kind>/<key>.janet`
   defining `render` — `(fn [spec] string)` — and optionally `path`. It
@@ -36,18 +39,27 @@
          (if (function? custom-path) {:path custom-path} {})))
 
 (defn templates
+  {:params [[{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}]
+            :string]
+   :ret @[{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}]
+   :throws [:string]}
   "The entries to render: the built-in ones with the project's
   overrides from `dir` applied."
   [entries dir]
   (map |(override $ dir) entries))
 
-(defn- ensure-dirs [path]
+(defn- ensure-dirs
+  {:params [:string] :ret :nil}
+  "Make every directory on `path` but its last part, as `mkdir -p`
+  would."
+  [path]
   (var cur "")
   (each part (drop -1 (string/split "/" path))
     (set cur (if (empty? cur) part (string cur "/" part)))
     (unless (os/stat cur) (os/mkdir cur))))
 
 (defn own-migration-version
+  {:params [:string :string] :ret :string?}
   ``The version of an earlier run's `_create_<table>` migration in
   `dir`, newest if there are several. A `--force` re-run adopts it so
   the rewrite lands on the same file — a second CREATE TABLE with a
@@ -62,6 +74,9 @@
                     v)))))
 
 (defn specced
+  {:params [(fn [:any] {:migrations-dir :string :table :string & r})
+            {:force :any :version :any & r}]
+   :ret {:migrations-dir :string :table :string & r}}
   ``Build the spec, then build it again with the version of the
   migration this generator wrote last time — which is what `--force`
   without an explicit `--version` has to mean, or the re-run leaves its
@@ -75,6 +90,12 @@
     s))
 
 (defn run!
+  {:params [:any
+            (or @[{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}]
+                [{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}])
+            {:dry-run :any :force :any & r}]
+   :ret [:string]
+   :throws [:string]}
   ``Render `entries` against `spec` and put the result where it goes.
 
   `--dry-run` prints every file to stdout instead, so the command
@@ -88,7 +109,9 @@
   (def planned
     (seq [e :in entries]
       {:path ((e :path) spec) :body ((e :render) spec) :source (get e :source)}))
-  (defn- via [p] (if (p :source) (string "  (via " (p :source) ")") ""))
+  (defn- via
+    {:params [{:path :string :body :string :source :string? & r}] :ret :string}
+    [p] (if (p :source) (string "  (via " (p :source) ")") ""))
 
   (if (opts :dry-run)
     (each p planned

@@ -60,10 +60,18 @@
 
 # -- the PHC string ------------------------------------------------------
 
-(defn- format-params [pairs]
+(defn- format-params
+  {:params [[[:string :number]]] :ret :string}
+  "Spell a PHC parameter list as `k=v,k=v` — the middle field between
+  the algorithm id and the salt."
+  [pairs]
   (string/join (map (fn [[k v]] (string/format "%s=%d" k v)) pairs) ","))
 
-(defn- parse-params [text]
+(defn- parse-params
+  {:params [:string] :ret @{:keyword :number} :throws [:string]}
+  "Read a PHC parameter field (`ln=14,r=8,p=1`) back into a table of
+  integers."
+  [text]
   (def out @{})
   (each field (string/split "," text)
     (def i (first (string/find-all "=" field)))
@@ -76,6 +84,10 @@
   out)
 
 (defn parse
+  {:params [(or :string :buffer)]
+   :ret {:id :keyword :version (or :number :nil) :params @{:keyword :number}
+         :salt :string :hash :string}
+   :throws [:string]}
   ``Parse a PHC string into {:id :version :params :salt :hash}. Throws
   on anything that is not one — a stored value that will not parse is
   a data problem, and the callers below turn it into a failed login
@@ -104,7 +116,11 @@
 
 # -- the hashers ---------------------------------------------------------
 
-(defn- scrypt-derive [password salt params]
+(defn- scrypt-derive
+  {:params [(or :string :buffer) (or :string :buffer) {:ln :number :r :number :p :number & r}]
+   :ret :string :throws [:string]}
+  "Derive with scrypt, sized to the PHC cost parameters."
+  [password salt params]
   (kdf/scrypt password salt
               {:n (blshift 1 (params :ln))
                :r (params :r)
@@ -115,7 +131,11 @@
                # one thing an operator never has to know about
                :maxmem (* 4 128 (blshift 1 (params :ln)) (params :r))}))
 
-(defn- argon2-derive [password salt params]
+(defn- argon2-derive
+  {:params [(or :string :buffer) (or :string :buffer) {:m :number :t :number :p :number & r}]
+   :ret :string :throws [:string]}
+  "Derive with argon2id, sized to the PHC cost parameters."
+  [password salt params]
   (kdf/argon2id password salt
                 {:m (params :m)
                  :t (params :t)
@@ -141,20 +161,35 @@
     :version 19
     :cost-keys [:m :t :p]}})
 
-(defn- hasher-for [id]
+(defn- hasher-for
+  {:params [:keyword]
+   :ret {:name :keyword :derive :function :encode-params :function
+         :version (or :number :nil) :cost-keys [:keyword]}
+   :throws [:string]}
+  "The hasher entry for a PHC algorithm id, or an error naming what
+  is registered instead."
+  [id]
   (or (hashers id)
       (errorf "no hasher for %q (have %s)" id
               (string/join (map string (sorted (keys hashers))) " "))))
 
-(defn- params-for [name]
+(defn- params-for
+  {:params [:keyword] :ret {:keyword :any}}
+  "The cost parameters for a hasher: the defaults, overridden by
+  whatever [:auth] configured."
+  [name]
   (merge (get defaults name {}) (get settings name {})))
 
 (defn active-hasher
+  {:params [] :ret :keyword}
   "The hasher new passwords are stored with — [:auth :hasher]."
   []
   (get settings :hasher (defaults :hasher)))
 
 (defn hash
+  {:params [(or :string :buffer)
+            (or {:hasher :keyword? :params (or {:keyword :any} :nil) & r} :nil)]
+   :ret :string :throws [:string]}
   ``Hash a password into a PHC string with the configured hasher (or
   the one named in `opts`). Every call uses a fresh random salt, so
   two identical passwords never collide in the database.
@@ -179,12 +214,19 @@
           (encode/base64 salt) "$"
           (encode/base64 raw)))
 
-(defn- recompute [password parsed]
+(defn- recompute
+  {:params [(or :string :buffer)
+            {:id :keyword :params @{:keyword :number} :salt :string :hash :string & r}]
+   :ret :string :throws [:string]}
+  "Re-derive a hash over the same algorithm, salt and cost a stored
+  PHC string parsed to, so it can be compared to what was stored."
+  [password parsed]
   (def h (hasher-for (parsed :id)))
   ((h :derive) password (parsed :salt)
    (merge (parsed :params) {:length (length (parsed :hash))})))
 
 (defn needs-rehash?
+  {:params [:string] :ret :boolean :narrows :any}
   ``Was this hash written with something other than what is configured
   now — another algorithm, or a lower cost? Rehash on the next
   successful login, which is the only moment the plaintext exists.``
@@ -203,6 +245,7 @@
 (var- dummy-cache nil)
 
 (defn dummy-verify
+  {:params [:string?] :ret :boolean :throws [:string]}
   ``Burn the time a real verification would take, and answer false.
   Call it where there is no stored hash to check — an unknown account,
   a user with no password set — or the difference between 200 µs and
@@ -218,6 +261,7 @@
   false)
 
 (defn verify
+  {:params [:string :string?] :ret [:boolean :boolean] :throws [:string]}
   ``Check a password against a stored PHC string. Returns
   `[ok? needs-rehash?]`.
 

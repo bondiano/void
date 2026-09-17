@@ -1,7 +1,11 @@
 (import ../void/core/deadline :as deadline)
 (import ../void/core/errors :as errors)
 
-(defn expect-error [name pred thunk]
+(defn expect-error
+  {:params [:string (fn [:any] :any) (fn [] :any)] :ret :any}
+  "Run `thunk`, asserting it throws and that `pred` holds of the
+  caught error; answers the caught error for further assertions."
+  [name pred thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (pred err) (string name ": unexpected error " (string/format "%q" err)))

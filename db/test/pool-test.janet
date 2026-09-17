@@ -4,7 +4,16 @@
 (import void/db/driver :as driver)
 (import void/db/pool :as pool)
 
-(defn- new-pool [&opt opts]
+(defn- new-pool
+  {:params [(or {:size :number? :checkout-timeout :number? & r} :nil)]
+   :ret [@{:driver {:connect (fn [] :any) :close (fn [:any] :any) & r} & r}
+         @{:log @[{:sql :string :params [:any] :conn :number}]
+           :conns :number :closed :number
+           :open @[@{:id :number :in-exchange :boolean & r}]
+           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           & r}]}
+  "A pool over a fresh fake driver, and the state it records into."
+  [&opt opts]
   (def [drv st] (fake/make))
   [(pool/make (driver/normalize drv) (or opts {})) st])
 
@@ -29,7 +38,11 @@
 (def order @[])
 (def done (ev/chan 2))
 
-(defn- waiter [name]
+(defn- waiter
+  {:params [:keyword] :ret :fiber}
+  "Park a fiber on `p2`'s checkout, then record `name` into `order`
+  once it is finally served."
+  [name]
   (ev/go (fn []
            (def e (pool/checkout p2))
            (array/push order name)

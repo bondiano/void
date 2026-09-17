@@ -41,6 +41,11 @@
   100)
 
 (defn normalize
+  {:params [:any]
+   :ret {:name :keyword :cookie :boolean :priority :number
+         :authenticate (or :function :nil) :verify (or :function :nil)
+         :challenge (or :function :nil) & r}
+   :throws [:string]}
   "Validate a strategy and fill in its defaults."
   [s]
   (unless (dictionary? s)
@@ -63,6 +68,7 @@
   @{})
 
 (defn register!
+  {:params [:any] :ret :keyword :throws [:string]}
   "Add (or replace) a strategy. Returns its name."
   [s]
   (def n (normalize s))
@@ -70,17 +76,24 @@
   (n :name))
 
 (defn deregister!
+  {:params [:keyword] :ret :nil}
   "Remove a strategy — the REPL's undo, and how a test cleans up."
   [name]
   (put registry name nil)
   nil)
 
 (defn lookup
+  {:params [:keyword]
+   :ret (or {:name :keyword :cookie :boolean :priority :number
+             :authenticate (or :function :nil) :verify (or :function :nil)
+             :challenge (or :function :nil) & r}
+            :nil)}
   "One strategy by name, or nil."
   [name]
   (get registry name))
 
 (defn known
+  {:params [] :ret @[:keyword]}
   "Every registered strategy name, sorted."
   []
   (sorted (keys registry)))
@@ -92,6 +105,11 @@
   nil)
 
 (defn request-strategies
+  {:params [(or [:keyword] :nil)]
+   :ret @[{:name :keyword :cookie :boolean :priority :number
+           :authenticate (or :function :nil) :verify (or :function :nil)
+           :challenge (or :function :nil) & r}]
+   :throws [:string]}
   ``The strategies that read a request, in the order they are tried.
   `names` (a route's :void.auth/strategies) narrows the list;
   `order` decides it otherwise. A name that is not registered is an
@@ -110,6 +128,9 @@
                (filter |($ :authenticate) (values registry)))))
 
 (defn authenticate
+  {:params [:any (or [:keyword] :nil)]
+   :ret (or {:subject :string & r} :nil)
+   :throws [:string]}
   ``Run the request strategies until one produces an identity. Returns
   it, or nil when the request is anonymous. An identity that has
   already expired is not an identity.``
@@ -128,6 +149,7 @@
   found)
 
 (defn attempt
+  {:params [:keyword :any] :ret (or {:subject :string & r} :nil) :throws [:string]}
   ``Verify credentials with one named strategy — the login half.
   Returns an identity or nil; an unknown strategy, or one that cannot
   verify, is an error rather than a failed login, because that is a
@@ -145,6 +167,7 @@
   id)
 
 (defn challenge
+  {:params [:any (or [:keyword] :nil)] :ret :any :throws [:string]}
   ``The response a refusal should carry, from the first strategy that
   offers one (`WWW-Authenticate` for bearer, a redirect for a form).
   nil when no strategy has an opinion — the caller then renders its

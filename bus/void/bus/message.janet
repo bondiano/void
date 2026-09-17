@@ -76,10 +76,15 @@
 
 # -- ids -----------------------------------------------------------------
 
-(defn- hex [bytes]
+(defn- hex
+  {:params [:buffer] :ret :string}
+  "Hex-encode a buffer of bytes, two digits each — the tail of a
+  message id."
+  [bytes]
   (string/join (seq [b :in bytes] (string/format "%02x" b))))
 
 (defn new-id
+  {:params [:number?] :ret :string}
   ``A message id: the second it was published, then eight random
   bytes. Sortable by time to the second, unique below it, and the same
   shape a job id has (void/jobs/record) — an id that sorts is what
@@ -91,6 +96,7 @@
 # -- topics --------------------------------------------------------------
 
 (defn topic?
+  {:params [:any] :ret :boolean :narrows :keyword}
   "Is `x` a usable topic — a keyword that is not a pattern?"
   [x]
   (and (keyword? x)
@@ -98,6 +104,7 @@
        (not (string/has-suffix? "/*" (string x)))))
 
 (defn pattern?
+  {:params [:any] :ret :boolean :narrows :keyword}
   "Is `x` a usable subscription pattern — an exact topic, `:ns/*` or
   `:*`?"
   [x]
@@ -107,12 +114,14 @@
            (topic? x))))
 
 (defn exact?
+  {:params [:any] :ret :boolean :narrows :keyword}
   "Is this pattern a single topic, rather than a wildcard? What lets a
   backend turn a subscription into a `topic IN (...)` filter."
   [pattern]
   (topic? pattern))
 
 (defn matches?
+  {:params [:any :any] :ret :boolean}
   ``Does `topic` match subscription `pattern`? `:*` matches
   everything, `:ns/*` matches every topic in that namespace, anything
   else matches itself.``
@@ -125,6 +134,7 @@
            (string/has-prefix? (string/slice p 0 (- (length p) 1)) (string topic))))))
 
 (defn check-pattern!
+  {:params [:any :string?] :ret :keyword :throws [:string]}
   "Throw unless `pattern` is one of the three subscription forms."
   [pattern &opt who]
   (unless (pattern? pattern)
@@ -134,13 +144,23 @@
 
 # -- the message ---------------------------------------------------------
 
-(defn- meta-table [m]
+(defn- meta-table
+  {:params [(or :nil :table :struct)] :ret :table :throws [:string]}
+  "A message's `:meta` as a fresh mutable table: nil becomes empty,
+  a dictionary is copied, anything else is a caller error."
+  [m]
   (cond
     (nil? m) @{}
     (dictionary? m) (merge @{} m)
     (errorf "bus: a message :meta must be a dictionary, got %q" m)))
 
 (defn make
+  {:params [:any :any
+            (or :nil {:id :string? :meta (or :nil :table :struct)
+                      :correlation-id :string? :causation-id :string?
+                      :reply-to :keyword? :at :number? & r})]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   ``Normalize a message. Everything but the topic is optional:
 
       (message/make :user/created {:id 42})
@@ -172,6 +192,8 @@
   @{:id id :topic topic :payload payload :meta meta})
 
 (defn message?
+  {:params [:any] :ret :boolean
+   :narrows {:id :string :topic :keyword :meta (or :table :struct) & r}}
   "Is `x` shaped like a message — an id, a topic and a meta table?"
   [x]
   (and (dictionary? x)
@@ -180,17 +202,20 @@
        (dictionary? (get x :meta))))
 
 (defn correlation-id
+  {:params [{:meta {:correlation-id :any & r} & r}] :ret :any}
   "The correlation id of a message."
   [msg]
   (get-in msg [:meta :correlation-id]))
 
 (defn redelivery
+  {:params [{:meta {:redelivery :number? & r} & r}] :ret :number}
   "How many times this message has been handed over before — 0 on a
   first delivery."
   [msg]
   (get-in msg [:meta :redelivery] 0))
 
 (defn with-meta
+  {:params [{:meta (or :nil :table :struct) & r} {:keyword :any}] :ret :table}
   "A copy of `msg` with `kvs` merged into its meta. The message itself
   is not mutated: a middleware that annotates a message must not
   change the one a retry will replay."
@@ -198,6 +223,9 @@
   (merge @{} msg {:meta (merge @{} (get msg :meta {}) kvs)}))
 
 (defn summary
+  {:params [{:id :any :topic :any :payload :any
+             :meta {:correlation-id :any :redelivery :number? & r} & r}]
+   :ret :string}
   "One line for a listing — what `void bus tail` prints."
   [msg]
   (string/format "%s  %-24s corr=%s%s  %j"

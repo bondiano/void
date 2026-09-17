@@ -2,7 +2,11 @@
 (import void/http/errors :as errors)
 
 (def quiet-log (fn [_ _ _] nil))
-(defn- req [] @{:method :get :path "/x" :headers @{}})
+(defn- req
+  {:params [] :ret @{:method :keyword :path :string :headers @{:string :any}}}
+  "A bare request table, just enough for wrap-panic's handlers and
+  renderers to read — this suite never routes anything for real."
+  [] @{:method :get :path "/x" :headers @{}})
 
 # -- happy path passes through -------------------------------------------
 

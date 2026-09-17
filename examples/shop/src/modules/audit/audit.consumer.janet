@@ -43,6 +43,7 @@
   :audit)
 
 (defn- field
+  {:params [:any :keyword] :ret :any}
   "One field of a payload, whichever way the codec spelled its keys."
   [payload key]
   (if (nil? (get payload key)) (get payload (string key)) (get payload key)))

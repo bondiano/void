@@ -18,10 +18,21 @@
 
 # -- the application -----------------------------------------------------
 
-(defn home [req] (ring/text 200 "home"))
-(defn boom [req] (error "handler blew up"))
+(defn home
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A plain page — the route the CSRF and header tests hit as a GET."
+  [req] (ring/text 200 "home"))
+(defn boom
+  {:params [:any] :ret :never :throws [:string]}
+  "A route that always blows up, to check the panic guard still gets
+  the security headers on its 500."
+  [req] (error "handler blew up"))
 
-(defn form-page [req]
+(defn form-page
+  {:params [@{:session :table & r}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A page whose form the CSRF field slot renders into, once a session
+  exists to bind the token to."
+  [req]
   # a real page has a session by the time it shows a form; CSRF only
   # applies to a credential that rode on a cookie, so a page with no
   # session at all is not the interesting case
@@ -31,7 +42,11 @@
   (def slot (dyn :void.html/csrf))
   (ring/text 200 (if slot (string/format "%q" (slot)) "no slot")))
 
-(defn accept [req] (ring/text 200 "accepted"))
+(defn accept
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A route that just confirms it was reached — what a CSRF-passing or
+  rate-limited-under-budget request lands on."
+  [req] (ring/text 200 "accepted"))
 
 (def app-routes
   (router/routes {}
@@ -53,7 +68,11 @@
 
 (def plugins ["void/http/init" "void/crypto/init" "void/security/init" app])
 
-(defn- config [extra]
+(defn- config
+  {:params [(or :struct :table)] :ret {:env :table :cli :table}}
+  "The `with-http` config for these tests: sessions and a signing key
+  on, plus whatever `extra` the test wants to layer on top."
+  [extra]
   {:env @{}
    :cli (merge-into
           @{:log {:level :error}

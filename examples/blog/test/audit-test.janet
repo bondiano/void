@@ -36,6 +36,7 @@
   "void_bus")
 
 (defn- reset-bus!
+  {:params [] :ret :nil}
   ``Take the message log, the cursors and the outbox back to empty.
 
   A consumer group's cursor is *state*: left over from the last run it
@@ -72,16 +73,26 @@
   ["audit_events" "comments" "articles" "authors"
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
-(defn- drop-app-tables! []
+(defn- drop-app-tables!
+  {:params [] :ret :nil}
+  "Drop every table this suite owns, so a pass starts from nothing."
+  []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "The response body as a string."
+  [resp] (test/text resp))
 
-(defn- token-of [resp]
+(defn- token-of
+  {:params [{:body :any & r}] :ret :string?}
+  "The CSRF token embedded in a rendered page, or nil."
+  [resp]
   (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
 (defn- settle
+  {:params [] :ret :nil}
   ``Forward whatever the outbox holds and let the consumer catch up.
   In a deployment this is the `:bus.db/forwarder` component and the
   consumer's own poll; in a test it is a call and a sleep, so that
@@ -90,9 +101,15 @@
   (busdb/forward-once! (bus-state/active-backend) 100)
   (ev/sleep 0.3))
 
-(defn run-suite [engine]
+(defn run-suite
+  {:params [{:label :string :database :keyword :config :any & r}] :ret :nil}
+  "Run the audit suite against one engine's composition."
+  [engine]
   (def label (engine :label))
-  (defn note [msg] (print "  [" label "] " msg))
+  (defn note
+    {:params [:string] :ret :nil}
+    "Print one progress line, tagged with the engine under test."
+    [msg] (print "  [" label "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
@@ -141,7 +158,10 @@
                     :status))
             "registering signs the visitor in")
 
-    (defn post [uri form]
+    (defn post
+      {:params [:string {:any :any}] :ret @{:raw :string & r}}
+      "Fetch a fresh CSRF token, then inject a form POST carrying it."
+      [uri form]
       (def token (token-of (test/inject c {:uri "/"})))
       (test/inject c {:uri uri :headers {"x-csrf-token" token} :form form}))
 

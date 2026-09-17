@@ -39,6 +39,7 @@
                 '1)))))
 
 (defn escape
+  {:params [:any] :ret :string}
   "Escape a string for HTML text/attribute content."
   [x]
   (in (peg/match escape-peg (string x)) 0))
@@ -46,6 +47,7 @@
 # -- raw -----------------------------------------------------------------
 
 (defn raw
+  {:params [:any] :ret {:void.html/raw :string}}
   ``(raw text) — splice unescaped HTML. The value is data (a struct
   with one key), not a function, so a renderer can tell it from a
   component somebody forgot to call.``
@@ -53,6 +55,7 @@
   {:void.html/raw (string text)})
 
 (defn raw?
+  {:params [:any] :ret :boolean :narrows {:void.html/raw :string}}
   "Is this a `raw` value?"
   [x]
   (and (struct? x) (string? (get x :void.html/raw))))
@@ -64,6 +67,7 @@
 # -- classes and styles --------------------------------------------------
 
 (defn classes
+  {:params [:any] :ret :string}
   ``Build a class attribute value from mixed pieces: strings and
   keywords are included, nil/false are skipped, an indexed value is
   flattened, a dictionary contributes the keys whose values are truthy:
@@ -82,6 +86,7 @@
   (string/join out " "))
 
 (defn- style-str
+  {:params [{:any :any}] :ret :string}
   "A :style dictionary as declarations — {:color \"red\" :margin 0}
   -> \"color:red;margin:0\". Sorted, nil values dropped."
   [d]
@@ -100,19 +105,33 @@
                             (range "\x30\x3c") (range "\x3f\x7e") (range "\x80\xff")))
                    -1)))
 
-(defn- attr-name [k]
+(defn- attr-name
+  {:params [:keyword] :ret :string :throws [:string]}
+  "The attribute's name, checked against HTML's own rule for what one
+  attribute name may contain."
+  [k]
   (def s (string k))
   (unless (peg/match attr-name-peg s)
     (errorf "hiccup attribute name %q is not one attribute — no space, quote, `=`, `>` or `/`" s))
   s)
 
-(defn- attr-value [k v]
+(defn- attr-value
+  {:params [:keyword :any] :ret :string}
+  "The attribute's value as a string: :class and :style take data
+  (a vector/dictionary through `classes`, a dictionary through
+  `style-str`), anything else is stringified as given."
+  [k v]
   (cond
     (and (= k :class) (or (indexed? v) (dictionary? v))) (classes v)
     (and (= k :style) (dictionary? v)) (style-str v)
     (string v)))
 
-(defn- render-attrs [buf attrs]
+(defn- render-attrs
+  {:params [:buffer {:keyword :any}] :ret :nil}
+  "Write every attribute of `attrs` into `buf`, sorted by name — nil
+  and false drop the attribute, true writes it bare, anything else is
+  escaped through `attr-value`."
+  [buf attrs]
   (each k (sorted-by string (keys attrs))
     (def v (attrs k))
     (cond
@@ -127,12 +146,21 @@
    :input true :link true :meta true :param true :source true :track true
    :wbr true :command true :keygen true :menuitem true})
 
-(defn- attrs? [x]
+(defn- attrs?
+  {:params [:any] :ret :boolean :narrows (or :table :struct)}
+  "Is this element's second position an attribute map rather than its
+  first child — a dictionary that is not a `raw` value?"
+  [x]
   (and (dictionary? x) (not (raw? x))))
 
 (var- render1 nil)
 
-(defn- render-element [buf tag node]
+(defn- render-element
+  {:params [:buffer (or :keyword :symbol) :tuple] :ret :buffer}
+  "Write one [tag attrs? & children] element into `buf`: the open tag
+  with its attributes, self-closed for a void element, else its
+  rendered children and the close tag."
+  [buf tag node]
   (def attrs (get node 1))
   (def has-attrs (attrs? attrs))
   (buffer/push buf "<" (string tag))
@@ -144,7 +172,13 @@
       (each child (tuple/slice node (if has-attrs 2 1)) (render1 buf child))
       (buffer/push buf "</" (string tag) ">"))))
 
-(defn- render-node [buf node]
+(defn- render-node
+  {:params [:buffer :any] :ret (or :buffer :nil) :throws [:string]}
+  "Render one hiccup node into `buf`: text is escaped, `raw` splices
+  unescaped, a tuple is an element or a component call or a fragment,
+  an array/fiber is a fragment, nil disappears, and a function leaf or
+  a dictionary outside attribute position is an error."
+  [buf node]
   (cond
     (nil? node) nil
     (or (string? node) (buffer? node) (number? node) (boolean? node))
@@ -173,6 +207,7 @@
 (set render1 render-node)
 
 (defn render
+  {:params [:any :buffer?] :ret :buffer :throws [:string]}
   "Render hiccup into `buf` (a fresh buffer by default). Returns the
   buffer."
   [data &opt buf]
@@ -181,6 +216,7 @@
   buf)
 
 (defn render-string
+  {:params [:any] :ret :string :throws [:string]}
   "Render hiccup to a string."
   [data]
   (string (render data)))
@@ -188,6 +224,7 @@
 # -- documents and data islands ------------------------------------------
 
 (defn html5
+  {:params [:any] :ret @[:any]}
   ``A full HTML5 document fragment: the doctype followed by
   [:html attrs & children]. `attrs` is optional:
 
@@ -200,6 +237,7 @@
   @[doctype [:html attrs ;children]])
 
 (defn json-script
+  {:params [:any :any] :ret :tuple}
   ``A data island: `<script type="application/json" id=...>` carrying
   a value for a script on the page to read with JSON.parse. The
   encoding escapes `<`, `>` and `&` as \u-sequences, so a string in

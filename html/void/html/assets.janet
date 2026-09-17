@@ -28,10 +28,15 @@
 # fingerprinted a file before the marshal, so there is no cache: the
 # variant costs a table, `fingerprint` runs once per asset, and the
 # invariant is one sentence — no abstract value lives in a def.
-(defn- crc32 [content]
+(defn- crc32
+  {:params [:string] :ret :number}
+  "The crc32 checksum of `content`, as a fresh variant per call (see
+  the comment above on why none is cached)."
+  [content]
   ((crc/named-variant :crc32) content))
 
 (defn fingerprint
+  {:params [:string :string] :ret :string}
   "Fingerprinted filename for a logical path: name-<crc32hex>.ext."
   [path content]
   (def dot (last (string/find-all "." path)))
@@ -41,6 +46,7 @@
     (string (string/slice path 0 dot) "-" sum (string/slice path dot))))
 
 (defn- ensure-dir
+  {:params [:string] :ret :nil}
   "mkdir -p for the directory that will hold `path`."
   [path]
   (def slash (last (string/find-all "/" path)))
@@ -51,7 +57,12 @@
       (unless (or (empty? acc) (= "." acc))
         (os/mkdir acc)))))
 
-(defn- walk-files [root &opt rel out]
+(defn- walk-files
+  {:params [:string :string? (or @[:string] :nil)] :ret @[:string]}
+  "Collect every file's path under `root`, relative to it, into `out`
+  (a fresh array by default) — sorted within each directory, so the
+  order is the same on every machine."
+  [root &opt rel out]
   (default rel "")
   (default out @[])
   (each name (sorted (os/dir root))
@@ -64,6 +75,10 @@
   out)
 
 (defn build!
+  {:params [{:root :string? :out :string? :manifest :string?
+             :steps (or @[(fn [] :any)] :nil) & r}]
+   :ret @{:string :string}
+   :throws [:string]}
   ``Build fingerprinted assets:
 
       (assets/build! {:root "assets" :out "public/assets"})
@@ -99,6 +114,7 @@
   manifest)
 
 (defn load-manifest
+  {:params [:string] :ret {:string :string} :throws [:string]}
   "Read a manifest written by build!."
   [path]
   (unless (os/stat path)
@@ -106,6 +122,9 @@
   (parse (slurp path)))
 
 (defn href
+  {:params [(or {:string :string} :nil) :string :string]
+   :ret :string
+   :throws [:string]}
   ``URL for a logical asset path: prefix + the manifest's fingerprinted
   path, or prefix + the logical path itself when there is no manifest
   (dev passthrough). An entry missing from a present manifest is an

@@ -413,7 +413,11 @@ binding), and new routes or metadata edits rebuild the route table
 automatically.
 ```)
 
-(defn- one [tmpl]
+(defn- one
+  {:params [:string] :ret (fn [:string] :string)}
+  "A template's own render function, its {{name}} and {{void-tag}}
+  holes closed over the void release tag."
+  [tmpl]
   (fn [name] (template/render tmpl {:name name :void-tag core/release-tag})))
 
 (def- render-project (one project-template))
@@ -443,11 +447,19 @@ automatically.
    {:path ".gitignore" :render render-gitignore}
    {:path "README.md" :render render-readme}])
 
-(defn- valid-name? [name]
+(defn- valid-name?
+  {:params [:string] :ret (or @[:any] :nil) :narrows :any}
+  "Does `name` match [a-z][a-z0-9-]* — the shape a plugin name (NAME/app)
+  is made of?"
+  [name]
   (peg/match '(* (range "az") (any (+ (range "az") (range "09") "-")) -1)
              name))
 
-(defn- ensure-dirs [path]
+(defn- ensure-dirs
+  {:params [:string] :ret :nil}
+  "Make every directory on `path` but its last part, as `mkdir -p`
+  would."
+  [path]
   (def parts (string/split "/" path))
   (var cur "")
   (each part (drop -1 parts)
@@ -456,6 +468,7 @@ automatically.
       (os/mkdir cur))))
 
 (defn create
+  {:params [:string?] :ret [:string] :throws [:string]}
   ``Create a project skeleton: `void new NAME` writes the template into
   ./NAME (which must not exist yet). Returns the tuple of files
   written.``

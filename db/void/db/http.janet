@@ -76,11 +76,16 @@
   "Defaults of the [:db-http] slice."
   {:session {:table "void_sessions" :auto-create true}})
 
-(defn- session-cfg []
+(defn- session-cfg
+  {:params [] :ret @{:table :string :auto-create :boolean & r}}
+  "The [:db-http :session] config slice, defaults merged with whatever
+  the running boot's config declares."
+  []
   (merge (defaults :session)
          (or (get-in (plugin/running-boot) [:config :values :db-http :session]) {})))
 
 (defn session-ddl
+  {:params [:keyword :string?] :ret [:string]}
   ``The statements the session table needs, as a tuple of SQL strings
   spelled for `dialect` — what `[:db-http :session :auto-create]` runs
   at boot and what `void db-http session-ddl` prints for a deployment
@@ -103,11 +108,19 @@
                  :if-not-exists true :columns [:expires]}])))
 
 (defn create-session-table!
+  {:params [:string?] :ret :nil}
   "Run `session-ddl` — idempotent, and safe to run at every boot."
   [&opt table]
   (state/ddl! (session-ddl ((state/driver) :dialect) table)))
 
 (defn session-store
+  {:params [(or {:table :string? & r} :nil)]
+   :ret {:name :keyword
+         :table :string
+         :load (fn [:string] (or @{:any :any} :nil))
+         :save (fn [:string :any :number] :string)
+         :delete (fn [:string] :nil)
+         :sweep (fn [] :nil)}}
   ``A `:void.http/session-store` over the running void/db pool. Which
   database and which dialect are read off the pool at call time, so
   the store is built once — at :before-start, before there is a pool —
@@ -188,7 +201,12 @@
    :doc "Run the handler inside a database transaction: true, or {:isolation :serializable} passed to the driver's BEGIN"
    :merge :replace})
 
-(defn- tx-opts [rmeta]
+(defn- tx-opts
+  {:params [{:void.db/txn (or :boolean {:isolation :keyword? & r}) & r}]
+   :ret {:isolation :keyword? & r}}
+  "The BEGIN options a route's :void.db/txn meta carries — {} for a
+  bare `true`, its own map otherwise."
+  [rmeta]
   (def v (get rmeta :void.db/txn))
   (if (dictionary? v) v {}))
 
@@ -223,7 +241,16 @@
    :doc "Load one row before the handler: {:entity User :param :id :preload [...]}. The path parameter (:id by default) is coerced through the entity's primary-key schema and looked up with db/find; a missing or malformed id is a 404 through the error renderers, and the row is at (req :void.db/row). Runs at phase 4600 — after auth and CSRF, before authz — so a forged request never reaches the database and a :void.authz/resource may read the row instead of loading again"
    :merge :replace})
 
-(defn- load-row [spec req]
+(defn- load-row
+  {:params [{:entity :any :param :keyword? :preload (or @[:keyword] [:keyword] :nil)}
+            {:params {:keyword :any} & r}]
+   :ret (or @{:any :any} :nil)
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+             :status :number :http/status :number}]}
+  "The row a :void.db/load route names: the path parameter coerced
+  through the entity's primary-key schema and looked up with
+  entity/find, or a 404 abort when it is missing or does not parse."
+  [spec req]
   (def desc (entity/resolve (spec :entity)))
   (def pk (desc :pk))
   # the router keys path captures as keywords — the same read every

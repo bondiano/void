@@ -19,6 +19,7 @@
 (def available? "Is there a server to test against?" (gate :available?))
 
 (defn config
+  {:params [] :ret (or {:url :string} {:params @{:keyword :string}})}
   ``The [:db-postgres] config slice for the configured server: the
   conninfo goes in as :url when it is one and as :params otherwise,
   since the slice speaks keywords either way.``

@@ -49,7 +49,13 @@
 
 (def plan @{:update 0 :select [] :insert :ok})
 
-(defn- respond [sql _]
+(defn- respond
+  {:params [:string :any] :ret {:rows @[{:keyword :any}] :count :number}
+   :throws [:string {:any :any}]}
+  "The fake driver's :execute answer, driven by `plan`: how many rows
+  an UPDATE or SELECT sees, and whether the INSERT succeeds or raises
+  what `plan`'s :insert names."
+  [sql _]
   (cond
     (string/has-prefix? "UPDATE" sql) @{:rows [] :count (plan :update)}
     (string/has-prefix? "SELECT" sql) @{:rows (plan :select) :count (length (plan :select))}
@@ -63,6 +69,7 @@
 (def p (pool/make (driver/normalize drv) {:size 2 :checkout-timeout 1}))
 
 (defn- statements
+  {:params [(fn [] :any)] :ret [:any @[:string]] :throws [:any]}
   "The SQL verbs the driver saw during `f`, in order."
   [f]
   (fake/clear! st)

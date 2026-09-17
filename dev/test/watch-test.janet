@@ -53,7 +53,13 @@
 # -- reload! into the existing module env (late binding) -----------------
 
 (def menv (require mod-path))
-(defn current-answer [] ((get-in menv ['answer :value])))
+(defn current-answer
+  {:params [] :ret :any}
+  "Call the watched module's current `answer` binding, straight off
+  its live env — proof that reload! updates the same env table rather
+  than creating a new one."
+  []
+  ((get-in menv ['answer :value])))
 (assert (= 1 (current-answer)))
 
 (spit mod-path "(defn answer [] 2)\n")

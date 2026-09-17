@@ -41,6 +41,10 @@
    :max-message 8388608})
 
 (defn parse-url
+  {:params [:any]
+   :ret {:scheme :string :host :string :port :string? :target :string
+         :userinfo :string?}
+   :throws [:string]}
   ``Split a `ws://` URL the way `void/http/client` splits an `http://`
   one — same parser, because they are the same authority grammar.
   `http://` is accepted as a spelling of the same thing (an upgrade
@@ -65,7 +69,13 @@
 
 # -- the handshake -------------------------------------------------------
 
-(defn- read-head [sock buf timeout]
+(defn- read-head
+  {:params [:any :buffer :number?]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :head-size :number}
+   :throws [:string]}
+  "Read off `sock` until `buf` holds a full response head, and parse it."
+  [sock buf timeout]
   (var head nil)
   (while (nil? head)
     (if-let [end (wire/head-end buf)]
@@ -78,6 +88,14 @@
   head)
 
 (defn connect
+  {:params [:any (or {:headers (or @{:string :any} :nil)
+                     :protocols (or @[:string] [:string] :nil)
+                     :timeout :number? :connect-timeout :number?
+                     :max-frame :number? :max-message :number? & r}
+                    :nil)]
+   :ret @{:socket :any :buffer :buffer :url :any :config @{:keyword :any}
+          :state :keyword :protocol :any :sent :number :received :number}
+   :throws [:string]}
   ``Open a websocket to `url`. Options:
     :headers    extra request headers (a cookie, an Authorization)
     :protocols  subprotocols to offer, best first
@@ -138,37 +156,53 @@
 
 # -- sending -------------------------------------------------------------
 
-(defn- write-frame [client opcode &opt payload]
+(defn- write-frame
+  {:params [{:state :keyword :socket :any & r} :keyword (or :string :buffer :nil)]
+   :ret :boolean?}
+  "Frame and write directly to the socket — the client has no writer
+  fiber of its own, so a send is just a write."
+  [client opcode &opt payload]
   (unless (= :closed (client :state))
     (:write (client :socket)
             (frame/encode opcode payload {:mask (os/cryptorand 4)}))
     true))
 
 (defn send!
+  {:params [{:sent :number :state :keyword :socket :any & r} :any]
+   :ret :boolean?}
   "Send a text message."
   [client text]
   (put client :sent (inc (client :sent)))
   (write-frame client :text (string text)))
 
 (defn send-binary!
+  {:params [{:sent :number :state :keyword :socket :any & r} (or :string :buffer)]
+   :ret :boolean?}
   "Send a binary message."
   [client bytes]
   (put client :sent (inc (client :sent)))
   (write-frame client :binary bytes))
 
 (defn ping!
+  {:params [{:state :keyword :socket :any & r} (or :string :buffer :nil)]
+   :ret :boolean?}
   "Send a ping."
   [client &opt payload]
   (write-frame client :ping payload))
 
 (defn pong!
+  {:params [{:state :keyword :socket :any & r} (or :string :buffer :nil)]
+   :ret :boolean?}
   "Send an unsolicited pong."
   [client &opt payload]
   (write-frame client :pong payload))
 
 # -- receiving -----------------------------------------------------------
 
-(defn- consume! [buf n]
+(defn- consume!
+  {:params [:buffer :number] :ret :buffer}
+  "Drop the first `n` bytes already consumed out of `buf`, in place."
+  [buf n]
   (if (>= n (length buf))
     (buffer/clear buf)
     (let [rest (string/slice buf n)]
@@ -176,6 +210,13 @@
       (buffer/push buf rest))))
 
 (defn receive
+  {:params [{:socket :any :buffer :buffer :config @{:keyword :any}
+             :state :keyword :received :number & r}
+            :number?]
+   :ret (or {:type :keyword :data :string}
+            {:type :keyword :code :number :name :keyword? :reason :string}
+            :nil)
+   :throws [:string]}
   ``Read the next message. Returns
 
       {:type :text|:binary :data <string>}   an application message
@@ -251,6 +292,11 @@
     out))
 
 (defn close!
+  {:params [{:state :keyword :socket :any :buffer :buffer
+             :config @{:keyword :any} :received :number & r}
+            (or :keyword :number :nil) :string? :number?]
+   :ret {:state :keyword :socket :any :buffer :buffer
+         :config @{:keyword :any} :received :number & r}}
   ``Close the connection: send a close frame, wait for the peer's
   answer (up to `timeout`) and drop the socket. Idempotent.``
   [client &opt code reason timeout]
@@ -270,5 +316,7 @@
   client)
 
 (defn open?
+  {:params [{:state :keyword & r}] :ret :boolean}
+  "Is this client's socket still up?"
   [client]
   (not= :closed (client :state)))

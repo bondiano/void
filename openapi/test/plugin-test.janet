@@ -18,7 +18,11 @@
   {:title [:string {:min 1}]
    :total [:number {:min 0}]})
 
-(defn ok [req] (rest/json {}))
+(defn ok
+  {:params [:any] :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
+  "A handler whose only job is to exist — every assertion below is
+  about the route table and the served document, never this body."
+  [req] (rest/json {}))
 
 (rest/defresource orders "/orders"
   {:id-schema :int

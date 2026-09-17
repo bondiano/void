@@ -16,7 +16,14 @@
 
 (def stored (hash/hash "hunter2"))
 
-(defn- users [&opt extra]
+(defn- users
+  {:params [(or {:keyword :any} :nil)]
+   :ret {:name :any :secret :function :claims :function
+         :find :function :subject :function & r}
+   :throws [:string]}
+  "A memory user store seeded with two fixtures, with `extra` merged
+  in to override a function for one test."
+  [&opt extra]
   (store/normalize-user-store
     (merge (store/memory-user-store
              {"user:1" {:subject "user:1" :email "a@b.c" :password-hash stored

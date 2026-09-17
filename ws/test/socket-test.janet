@@ -24,6 +24,11 @@
 (def events @[])
 
 (defn echo
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
   "Every message straight back — the smallest possible socket."
   [req]
   (ws/accept req
@@ -37,6 +42,11 @@
          (ws/send! c (msg :data))))}))
 
 (defn lobby
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
   "A room: everything one peer says, every other peer hears."
   [req]
   (ws/accept req
@@ -45,6 +55,11 @@
      :on-message (fn [c msg] (ws/broadcast! :lobby (msg :data) {:except c}))}))
 
 (defn params
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
   "The handshake is a routed request like any other: it has params, a
   query and headers, and the socket can see all of them."
   [req]
@@ -53,12 +68,18 @@
                                           (get-in req [:query "as"] "anon"))))}))
 
 (defn boom
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
   "A handler that throws: the connection must die with 1011 and the
   process must not."
   [req]
   (ws/accept req {:on-message (fn [c msg] (error "handler exploded"))}))
 
 (defn plain
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "An ordinary route, for the refusals."
   [req]
   (ring/text 200 "not a socket"))
@@ -92,9 +113,14 @@
 (def port (get-in boot [:system :instances :http/server :server :port]))
 (assert (pos? port) "the server bound an ephemeral port")
 
-(defn- url [path] (string "ws://127.0.0.1:" port path))
+(defn- url
+  {:params [:string] :ret :string}
+  "This server's own `ws://` URL at `path`."
+  [path]
+  (string "ws://127.0.0.1:" port path))
 
 (defn- wait-for
+  {:params [(fn [] :any) :number? :string?] :ret :boolean}
   "Poll a predicate for up to `seconds` — the server side of a socket
   runs in its own fiber, so a test that asserts on it right after
   writing to the wire is asserting on a race."
@@ -200,6 +226,9 @@
   # -- protocol violations get the code the RFC names --------------------
 
   (defn- raw-frame
+    {:params [(or :string :buffer)]
+     :ret (or {:code :number :name :keyword? :reason :string} :nil)
+     :throws [{:ws/close :number :message :string}]}
     "Send bytes straight at the server and read the close it earns."
     [bytes]
     (def sock (net/connect "127.0.0.1" (string port)))

@@ -32,6 +32,7 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn prefix
+  {:params [:any] :ret :string}
   ``A key prefix nothing else is using: the suite name and this
   process. Two suites, or two checkouts, can share one database
   without sharing keys.``
@@ -39,12 +40,15 @@
   (string "void-test:" suite ":" (os/getpid) ":"))
 
 (defn config
+  {:params [:any (or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:url (or :string :nil) :prefix :string & r}}
   "The [:redis] slice for the configured server, under this suite's
   own prefix."
   [suite &opt extra]
   (merge {:url (url) :prefix (prefix suite)} (or extra {})))
 
 (defn clean!
+  {:params [(fn [a b] :any) (fn [a & as] :any)] :ret :number}
   ``Delete every key this suite made. Takes the client functions as
   arguments rather than importing them, so the helper stays usable
   from a suite that is testing a different layer.``
@@ -55,6 +59,10 @@
   (length doomed))
 
 (defn client
+  {:params [:any (or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:pool :any
+          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :prefix :string :retry :boolean :conn-opts :any}}
   ``A client value — a pool, a codec and this suite's prefix — without
   a plugin bootstrap behind it. `state/client-dyn` takes one of these,
   which is what makes every layer above the pool testable on its own.``
@@ -68,6 +76,7 @@
     :conn-opts (config/options cfg)})
 
 (defn with-client*
+  {:params [:any (or {:keyword :any} @{:keyword :any} :nil) (fn [a] :any)] :ret :any}
   "Run (f client) with the client bound, and close its pool after."
   [suite extra f]
   (def c (client suite extra))

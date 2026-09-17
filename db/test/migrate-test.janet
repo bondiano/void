@@ -14,7 +14,11 @@
 (def sandbox (string root "/.tmp-migrate-test-" (os/time)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Remove a file or directory tree — the sandbox cleanup this suite
+  runs in a `defer`."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))
@@ -26,7 +30,12 @@
 # state a real database would give back
 (def versions @[])
 
-(defn- responder [sql params]
+(defn- responder
+  {:params [:string [:any]] :ret {:rows @[{:keyword :any}] :count :number}}
+  "The fake driver's :execute answer: a simulated version table kept
+  in `versions`, so migrate/* sees the state a real database would
+  give back."
+  [sql params]
   (cond
     (string/find "SELECT" sql)
     @{:rows (seq [v :in (sorted versions)] {:version v}) :count (length versions)}
@@ -161,7 +170,26 @@
 # connection — and reads the pending list *inside* it, so the one that
 # loses the race finds nothing left to do.
 
-(defn- lock-fixture [dialect got]
+(defn- lock-fixture
+  {:params [:keyword (or :number :nil)]
+   :ret [{:name :keyword :dialect :keyword :returning :boolean
+          :connect (fn [] @{:id :number :in-exchange :boolean})
+          :close (fn [@{:id :number :in-exchange :boolean & r}] :any)
+          :reusable? (fn [@{:id :number :in-exchange :boolean & r}] :boolean)
+          :ping (fn [@{:dead :boolean? & r}] :boolean)
+          :execute (fn [@{:id :number :in-exchange :boolean & r} :string [:any] :any]
+                     {:rows @[{:keyword :any}] :count :number})
+          & r}
+         @{:log @[{:sql :string :params [:any] :conn :number}]
+           :conns :number :closed :number
+           :open @[@{:id :number :in-exchange :boolean & r}]
+           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           & r}
+         @[:string]]}
+  ``A driver whose GET_LOCK answers `got` — nil (unsupported), 0
+  (already held) or 1 (free) — and the applied-versions array its
+  responder keeps, for the advisory-lock assertions.``
+  [dialect got]
   (def applied @[])
   (def [d st]
     (fake/make

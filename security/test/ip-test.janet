@@ -25,7 +25,11 @@
 
 # -- the client address --------------------------------------------------
 
-(defn- req [peer xff]
+(defn- req
+  {:params [:string? :string?] :ret @{:headers @{:string :string} :void.security/peer :string?}}
+  "A fake request with just enough shape for `ip/client-ip`: a peer
+  address and an optional X-Forwarded-For header."
+  [peer xff]
   @{:headers (if xff @{"x-forwarded-for" xff} @{})
     :void.security/peer peer})
 

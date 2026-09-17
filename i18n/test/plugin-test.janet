@@ -13,16 +13,27 @@
 
 # -- a small app: a translated page, a counter, a validated form ---------
 
-(defn hello [req]
+(defn hello
+  {:params [:any] :ret :any}
+  "A translated greeting page."
+  [req]
   (html/fragment [:p (i18n/t :hello/greeting {:name "void"})]))
 
-(defn items [req]
+(defn items
+  {:params [{:query {:string :string} & r}] :ret :any}
+  "A page whose count comes from the query string, exercising plural
+  selection."
+  [req]
   (def n (or (scan-number (get-in req [:query "n"] "")) 0))
   (html/fragment [:span (i18n/t :hello/items {:count n})]))
 
 (def SignUp {:email :string :age [:int {:min 18}]})
 
-(defn signup [req]
+(defn signup
+  {:params [{:form {:string :string} & r}] :ret :any}
+  "A form whose schema errors localize through the catalog with no
+  changes in void/html."
+  [req]
   (def result (form/check SignUp (req :form)))
   (if (empty? (result :errors))
     (ring/text 200 "ok")
@@ -31,6 +42,7 @@
                                       :errors (result :errors)}))))
 
 (defn refuse
+  {:params [:any] :ret :any :throws [{:keyword :any}]}
   "A refusal — rendered by the panic guard, which runs outside every
   middleware and so outside everything the locale middleware bound."
   [req]
@@ -75,7 +87,12 @@
        :fn (fn [req] (get-in req [:headers "x-user-lang"]))}]}))
 
 (def plugins ["void/http/init" "void/html/init" "void/i18n/init" app-manifest])
-(defn config [i18n-slice]
+(defn config
+  {:params [{:locales [:keyword] :default :keyword? & r}]
+   :ret {:env @{:keyword :any} :cli {:http {:port :number} :i18n :any}}}
+  "The boot config for this app: an empty :env and the [:cli :http
+  :i18n] slice under test."
+  [i18n-slice]
   {:env @{} :cli {:http {:port 0} :i18n i18n-slice}})
 
 # -- phases 1-5 ----------------------------------------------------------
@@ -101,7 +118,14 @@
 
 (defer (plugin/shutdown! boot 3)
 
-  (defn body [spec] (string ((http/with-request spec) :body)))
+  (defn body
+    {:params [{:uri :string :method :keyword?
+               :headers (or {:string :string} :nil)
+               :form (or {:string :string} :nil) & r}]
+     :ret :string}
+    "The rendered body of one request through the booted app, as a
+    string."
+    [spec] (string ((http/with-request spec) :body)))
 
   (assert (= "<p>Hello, void!</p>" (body {:uri "/hello"}))
           "no signal at all — the default locale")

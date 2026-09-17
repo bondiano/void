@@ -2,7 +2,10 @@
 (import void/core/schema :as schema)
 (import void/dev/generate :as gen)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :nil}
+  "Assert that `thunk` throws, and that the error mentions `pat`."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))

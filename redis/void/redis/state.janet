@@ -63,27 +63,35 @@
   (client :dyn))
 
 (defn active-client
+  {:params [] :ret @{:pool :any
+                     :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+                     :prefix :string :retry :boolean :conn-opts :any
+                     :describe :any? :keeper :any? :session-prefix :string? & r}}
   "The client this fiber runs against: the `client-dyn` override, else
   the started component."
   []
   (system/active client))
 
 (defn active-pool
+  {:params [] :ret :any}
   "The connection pool of the active client."
   []
   ((active-client) :pool))
 
 (defn active-codec
+  {:params [] :ret {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}}
   "The codec of the active client — what [:redis :codec] named."
   []
   ((active-client) :codec))
 
 (defn key-prefix
+  {:params [] :ret :string}
   "The string every key built through this client is prefixed with."
   []
   ((active-client) :prefix))
 
 (defn prefixed
+  {:params [:any] :ret :string}
   ``A key as it is sent to the server. The prefix is what lets one
   redis serve several applications — and one laptop several checkouts
   — without them writing over each other.``
@@ -92,6 +100,7 @@
   (if (empty? p) (string k) (string p k)))
 
 (defn unprefixed
+  {:params [:string] :ret :string}
   "The application's spelling of a key the server sent back (KEYS,
   SCAN, a keyspace notification)."
   [k]
@@ -103,6 +112,7 @@
 # -- connection scope ----------------------------------------------------
 
 (defn with-conn*
+  {:params [(fn [a] :any)] :ret :any}
   ``Run (f conn) with a connection checked out into `conn-dyn`.
   Re-entrant: an already-bound connection is reused and not returned
   early.``
@@ -117,6 +127,7 @@
           (f c))))))
 
 (defmacro with-conn
+  {:params [:any] :ret :any}
   ``Run the body on one connection from the pool:
 
       (redis/with-conn
@@ -132,6 +143,7 @@
   ~(,with-conn* (fn with-conn-body [_] ,;body)))
 
 (defn scoped?
+  {:params [] :ret :boolean}
   "True inside a `with-conn` scope — where a connection may not be
   replaced under the caller."
   []
@@ -139,7 +151,11 @@
 
 # -- the command funnel --------------------------------------------------
 
-(defn- elapsed-us [t0]
+(defn- elapsed-us
+  {:params [:number] :ret :number}
+  "Microseconds since `t0` (an `os/clock :monotonic` reading) — the
+  granularity the pool's command timing is kept in."
+  [t0]
   (math/round (* 1_000_000 (- (os/clock :monotonic) t0))))
 
 (var around-command
@@ -157,7 +173,15 @@
   fills it, and it is nil in a process that observes nothing.``
   nil)
 
-(defn- run-on [client c f label]
+(defn- run-on
+  {:params [@{:pool :any & r} :any (fn [a] :any) (or :string :nil)]
+   :ret :any
+   :throws [:any]}
+  ``Run `(f c)` on a connection already chosen, timing it into the
+  pool's metrics and logging it — the innermost step `execute` wraps
+  with the checkout/retry loop, once for the fiber's own scoped
+  connection and once per attempt otherwise.``
+  [client c f label]
   (def p (client :pool))
   (def t0 (os/clock :monotonic))
   # the closure is built only when something is wrapping
@@ -174,7 +198,12 @@
   (log/debug "redis command" :ns log-ns :command label :us us)
   res)
 
-(defn- label-of [args]
+(defn- label-of
+  {:params [:any] :ret (or :string :nil)}
+  "The command word of an argument array, upper-cased for logging and
+  for `blocking-label?`'s lookup — nil when `args` is not indexed at
+  all (a pipeline label, say)."
+  [args]
   (when (indexed? args)
     (string/ascii-upper (string (get args 0 "")))))
 
@@ -190,10 +219,17 @@
    "XREAD" true "XREADGROUP" true "WAIT" true "WAITAOF" true})
 
 (defn- blocking-label?
+  {:params [(or :string :nil)] :ret :boolean :narrows :any}
+  "Is this command word one the server holds its reply on purpose for
+  — the funnel's signal to skip the retry rather than risk replaying
+  it."
   [label]
   (truthy? (get blocking-commands label)))
 
 (defn execute
+  {:params [(fn [a] :any) (or :string :nil) :boolean?]
+   :ret :any
+   :throws [:any]}
   ``The funnel: run (f conn) on the fiber's connection, or on one taken
   from the pool for the call. Times it into the pool metrics, logs it
   at :debug, discards a connection whose protocol state is in doubt
@@ -233,6 +269,13 @@
       out)))
 
 (defn call
+  {:params [(or @[:any] [:any]) (or {:raw :any :timeout :any & r}
+                                    @{:raw :any :timeout :any & r} :nil)]
+   :ret :any
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   ``Run one command. Arguments are what ./resp accepts — strings,
   numbers, keywords — and the reply is what ./resp decoded.
 
@@ -249,6 +292,14 @@
            (blocking-label? label)))
 
 (defn pipeline
+  {:params [(or @[:any] [:any]) (or {:raw :any :timeout :any & r}
+                                    @{:raw :any :timeout :any & r} :nil)]
+   :ret @[:any]
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)
+             :index :number :results @[:any]}]}
   "Run several commands in one round trip on one connection. See
   conn/pipeline for what it does and does not guarantee. A pipeline
   carrying a blocking command is, like the command itself, never
@@ -259,11 +310,13 @@
            (truthy? (some |(blocking-label? (label-of $)) commands))))
 
 (defn codec-encode
+  {:params [:any] :ret (or :string :buffer)}
   "Encode a value with the active client's codec."
   [v]
   (codec/encode (active-codec) v))
 
 (defn codec-decode
+  {:params [:any] :ret :any}
   "Decode a reply with the active client's codec."
   [v]
   (codec/decode (active-codec) v))

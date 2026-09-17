@@ -9,7 +9,10 @@
 
 (def plugins ["void/jobs/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env @{:any :any} :cli @{:keyword :any}}}
+  "A dry-run config with `extra` merged into its :cli slice."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}} extra)})
 
 # -- phases 1-5 ----------------------------------------------------------

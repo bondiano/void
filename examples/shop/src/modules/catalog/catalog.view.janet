@@ -11,12 +11,17 @@
 (import ../../web/layout :as layout)
 (import ../cart/cart.view :as cart-view)
 
-(defn- stock-line [product]
+(defn- stock-line
+  {:params [{:stock :number & r}] :ret :tuple}
+  "The stock line under a product's price: how many are left, or that
+  there are none."
+  [product]
   (if (pos? (product :stock))
     [:span {:class "text-sm text-emerald-700"} (string (product :stock) " in stock")]
     [:span {:class "text-sm text-red-700"} "Sold out"]))
 
 (defn- picture
+  {:params [{:image :string? :name :string & r} :string] :ret (or :tuple :nil)}
   ``The product's image, or nothing. `storage/url` is the only thing on
   this page that knows where files live, and it answers a path under
   [:storage :serve :prefix] on a laptop and a minio URL in the compose
@@ -32,7 +37,13 @@
     [:img {:class class :src (storage/url key) :alt (product :name)
            :loading "lazy"}]))
 
-(defn product-card [product]
+(defn product-card
+  {:params [{:image :string? :name :string :sku :string :id :any
+             :stock :number :price-cents :number & r}]
+   :ret :tuple}
+  "One card in the storefront grid: picture, sku, name, price and
+  stock, linking through to the product's own page."
+  [product]
   [:li {:class "group flex flex-col gap-2 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"}
    (picture product "mb-1 aspect-[4/3] w-full rounded-xl bg-slate-100 object-cover")
    [:span {:class "font-mono text-xs uppercase tracking-widest text-slate-400"}
@@ -45,6 +56,10 @@
    (stock-line product)])
 
 (defn catalog-view
+  {:params [@[{:image :string? :name :string :sku :string :id :any
+              :stock :number :price-cents :number & r}]
+            (or {:message :any & r} :nil)]
+   :ret :tuple}
   ``The storefront. This is the one cached read in the shop
   (`catalog.service/listing`) — every other page is either personal or
   a write.``
@@ -62,7 +77,13 @@
         "void shop seed"] "."]
       (seq [p :in products] (product-card p)))]])
 
-(defn product-view [product]
+(defn product-view
+  {:params [{:image :string? :name :string :sku :string :id :any
+             :stock :number :price-cents :number :description :string & r}]
+   :ret :tuple}
+  "The product page: picture, price, description and the add-to-cart
+  control, or a sold-out notice when there is nothing left."
+  [product]
   # a product with no picture draws no column rather than an empty one
   (def pic (picture product "w-full rounded-2xl border border-slate-200 bg-slate-100 object-cover"))
   [:div {:id "product" :class (if pic "grid gap-10 md:grid-cols-2" "max-w-xl")}

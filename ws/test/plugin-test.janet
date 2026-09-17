@@ -11,10 +11,27 @@
 
 (log/set-level! "void" :error)
 
-(defn socket [req] (ws/accept req {}))
-(defn plain [req] (ring/text 200 "ok"))
+(defn socket
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
+  "The smallest possible socket route: no spec at all."
+  [req]
+  (ws/accept req {}))
 
-(defn- app [routes]
+(defn plain
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "An ordinary route, for the refusals."
+  [req]
+  (ring/text 200 "ok"))
+
+(defn- app
+  {:params [:any] :ret :any}
+  "A manifest that contributes `routes` as this test's own route
+  source."
+  [routes]
   (plugin/manifest 'test/app
     :version "0.1.0"
     :requires {:void/ws ">=0.0.1"}
@@ -22,7 +39,11 @@
                   [{:name :test/app :routes routes
                     :env (router/env-ref (curenv))}]}))
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env @{:any :any} :cli @{:keyword :any}}}
+  "The boot config for this suite: an empty :env and the [:cli] slice
+  under test, `extra` merged over its http/log defaults."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}
                          :http {:port 0 :strict-meta true}}
                         extra)})
@@ -135,8 +156,25 @@
 # foreign Origin is a 403 while the peer is still an HTTP client that
 # can read one. No list configured means the old behavior, untouched.
 
-(defn guarded [req] (ws/accept req {}))
-(defn spec-guarded [req] (ws/accept req {:origins ["https://spec.example"]}))
+(defn guarded
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
+  "A socket route behind [:ws :origins] alone."
+  [req]
+  (ws/accept req {}))
+
+(defn spec-guarded
+  {:params [{:keyword :any}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
+  "A socket route with its own :origins, overriding [:ws :origins]."
+  [req]
+  (ws/accept req {:origins ["https://spec.example"]}))
 
 (def origin-boot
   (plugin/start!
@@ -148,7 +186,11 @@
      :config (config {:ws {:origins ["https://app.example"]}})}))
 
 (defer (plugin/shutdown! origin-boot 3)
-  (defn- shake [uri &opt origin]
+  (defn- shake
+    {:params [:string :string?] :ret @{:status :number & r}}
+    "Run an upgrade request straight through the kernel, `origin`
+    heading it when given."
+    [uri &opt origin]
     (def headers @{"upgrade" "websocket"
                    "connection" "Upgrade"
                    "sec-websocket-version" "13"
@@ -173,7 +215,17 @@
 # -- the registry, without any of the rest -------------------------------
 
 (def reg (rooms/make {:max-connections 2 :sweep-interval 0}))
-(defn- fake [id]
+(defn- fake
+  {:params [:number]
+   :ret @{:id :number :socket :any :request :any :protocol :any
+          :registry :any :config @{:keyword :any} :outbox :any
+          :state :keyword :rooms @{:keyword :any} :data @{:any :any}
+          :opened :number :last-recv :number :awaiting-pong :number?
+          :sent :number :received :number :dropped :number
+          :writer-done :boolean}}
+  "A connection over a socket that answers every write and close with
+  nothing — the registry only needs an :id, not a real peer."
+  [id]
   (def c (conn/make @{:write (fn [_ _] nil) :close (fn [_] nil)}
                     {:send-queue 2}))
   c)

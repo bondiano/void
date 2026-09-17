@@ -3,7 +3,11 @@
 ### and shop/audit — a consumer like any other — turns them into rows.
 ### Deleting that one file stops the trail and changes no handler.
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create the audit_events table and the indexes its message-id
+  dedup and correlation-id lookups read by."
+  []
   [{:create-table "audit_events"
     :columns [[:id :serial {:primary-key true}]
               # the bus message id, so a row can be traced back to the
@@ -25,5 +29,8 @@
    {:create-index "audit_events_correlation_idx"
     :on "audit_events" :columns [:correlation-id]}])
 
-(defn down []
+(defn down
+  {:params [] :ret {:keyword :any}}
+  "Drop the audit_events table."
+  []
   {:drop-table "audit_events"})

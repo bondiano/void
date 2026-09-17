@@ -28,14 +28,32 @@
   "Every order of the caller, newest first."
   {:data [:vector [:ref :OrderView]]})
 
-(defn order-line-view [item]
+(defn order-line-view
+  {:params [{:sku :string :name :string :quantity :number
+             :unit-price-cents :number & r}]
+   :ret {:sku :string :name :string :quantity :number
+         :unit-price {:cents :number :currency :string}
+         :line-total {:cents :number :currency :string}}}
+  "Project one order line row into the shape OrderLineView promises."
+  [item]
   {:sku (item :sku)
    :name (item :name)
    :quantity (item :quantity)
    :unit-price (shared/money (item :unit-price-cents))
    :line-total (shared/money (* (item :quantity) (item :unit-price-cents)))})
 
-(defn order-view [order items]
+(defn order-view
+  {:params [{:number :string :status :string :placed-at :string
+             :total-cents :number & r}
+            @[{:sku :string :name :string :quantity :number
+               :unit-price-cents :number & r}]]
+   :ret {:number :string :status :string :placed-at :string
+         :total {:cents :number :currency :string}
+         :items @[{:sku :string :name :string :quantity :number
+                   :unit-price {:cents :number :currency :string}
+                   :line-total {:cents :number :currency :string}}]}}
+  "Project an order and its lines into the shape OrderView promises."
+  [order items]
   {:number (order :number)
    :status (order :status)
    :placed-at (order :placed-at)

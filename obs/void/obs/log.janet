@@ -84,6 +84,7 @@
 # -- counting sink -------------------------------------------------------
 
 (defn counting-sink
+  {:params [] :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
   ``A sink that writes nothing and counts everything: one table lookup
   and an increment per record, which is what makes
   `void_obs_log_records_total{level="error"}` an alert nobody has to
@@ -104,6 +105,9 @@
   :warn)
 
 (defn keep?
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r} :number :number]
+   :ret :boolean
+   :narrows :any}
   ``Does this record survive sampling? Three rules, in order:
 
     1. at or above `min-level` — always (a warning is not a sample);
@@ -131,6 +135,10 @@
   nil)
 
 (defn gate
+  {:params [(or @[(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)]
+                [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)])
+            :number :number]
+   :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
   "One sink that runs `sinks` only for the records sampling keeps."
   [sinks rate min-level]
   (fn obs-log-gate [rec]
@@ -140,6 +148,9 @@
     nil))
 
 (defn install-sampling!
+  {:params [:number? :keyword?]
+   :ret [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)]
+   :throws [:string]}
   ``Gate every active sink behind the sampling decision. `rate` of 1
   (or nil) removes the gate instead of installing a gate that keeps
   everything — a service that samples nothing should pay nothing.``
@@ -168,6 +179,7 @@
 # -- the file sink -------------------------------------------------------
 
 (defn jsonable
+  {:params [:any] :ret :any}
   ``A value as JSON-encodable data: keywords and symbols become
   strings, dictionaries and arrays are converted through, and
   anything else is printed the way `%q` would. Records carry janet
@@ -184,6 +196,8 @@
     (string/format "%q" v)))
 
 (defn format-record
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r} :keyword]
+   :ret :string}
   "One record as a line, without the newline: JDN (`%j`, what the core
   jdn-sink writes) or JSON."
   [rec format]
@@ -192,6 +206,13 @@
     (string/format "%j" rec)))
 
 (defn file-sink
+  {:params [{:path :string :format (or (enum :jdn :json) :nil) :buffer :number?
+             & r}]
+   :ret @{:path :string :format (enum :jdn :json)
+          :fn (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)
+          :close! (fn [] :nil)
+          :reopen! (fn [] :string)}
+   :throws [:string]}
   ``A sink writing one line per record to `:path`, from its own fiber
   behind a buffered channel: a full buffer drops the record and counts it
   instead of back-pressuring the request fiber that logged it, and
@@ -211,12 +232,20 @@
   (def cap (get opts :buffer 1024))
   (def chan (ev/chan cap))
   (def state @{:file nil})
-  (defn open! []
+  (defn open!
+    {:params [] :ret @{:file (or :abstract :nil)} :throws [:string]}
+    "Open `path` for appending, replacing `state`'s file handle —
+    the initial open and every `reopen!` after a rotation."
+    []
     (put state :file
          (or (file/open path :a)
              (errorf "file-sink: cannot open %s for appending" path))))
   (open!)
-  (defn write! [line]
+  (defn write!
+    {:params [(or :string :buffer)] :ret :nil}
+    "Write one line to the open file, counting it — a no-op once the
+    file handle has been closed out from under a pending write."
+    [line]
     (when-let [f (state :file)]
       (protect (file/write f line))
       (protect (file/flush f))

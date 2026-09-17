@@ -40,6 +40,9 @@
    :keep 100})
 
 (defn make
+  {:params [(or :nil {:buffer :number? :keep :number? & r})]
+   :ret @{:buffer :number :keep :number :groups @{:keyword :any}
+          :history @[:any] :stats @{:keyword :number}}}
   "The mutable state behind an in-process backend."
   [&opt cfg]
   (default cfg {})
@@ -50,10 +53,19 @@
     :history @[]
     :stats @{:published 0 :delivered 0 :dropped 0 :failed 0}})
 
-(defn- bump! [m key]
+(defn- bump!
+  {:params [{:stats @{:keyword :number} & r} (enum :published :delivered :dropped :failed)]
+   :ret @{:stats @{:keyword :number} & r}}
+  "Increment one counter of the backend's stats table."
+  [m key]
   (put-in m [:stats key] (inc (get-in m [:stats key] 0))))
 
-(defn- remember! [m env]
+(defn- remember!
+  {:params [{:history @[:any] :keep :number & r} :any] :ret :nil}
+  "Push `env` onto the inspection history, trimming it back to
+  `:keep` entries — never a source of delivery, only what `void bus
+  tail` and `recent` read."
+  [m env]
   (def h (m :history))
   (array/push h env)
   (when (> (length h) (m :keep))
@@ -61,6 +73,7 @@
   nil)
 
 (defn recent
+  {:params [{:history @[:any] & r} :number?] :ret [:any]}
   "The last messages this backend saw, oldest first — an inspection
   buffer, never a replay log."
   [m &opt n]
@@ -68,7 +81,11 @@
   (def from (if n (max 0 (- (length h) n)) 0))
   (tuple ;(array/slice h from)))
 
-(defn- wanted? [sub env]
+(defn- wanted?
+  {:params [{:match? (or :nil (fn [:any] :boolean)) & r} {:topic :any & r}] :ret :boolean}
+  "Does `sub`'s group want `env` — true when it named no filter at
+  all, or its filter matches this topic?"
+  [sub env]
   # the topics a group asked for are a hint the router re-checks; a
   # channel is a fixed allocation, so filtering here is what keeps a
   # group that wants one topic from spending its buffer on the other
@@ -77,6 +94,11 @@
   (or (nil? match?) (match? (env :topic))))
 
 (defn store
+  {:params [@{:buffer :number :groups @{:keyword :any} :history @[:any]
+              :stats @{:keyword :number} & r}]
+   :ret {:name :keyword :encoded? :boolean :guarantees :struct
+         :publish! :function :consume! :function :stop! :function
+         :close :function :stats :function}}
   ``The backend value over the state `m` — the dictionary
   ./backend normalizes.``
   [m]
@@ -168,6 +190,7 @@
              :history (length (m :history))}))})
 
 (defn factory
+  {:params [(or :nil (fn [:any] :any))] :ret {:name :keyword :doc :string :make :function}}
   "The `:void.bus/backend` contribution void/bus ships."
   [state-out]
   {:name :memory

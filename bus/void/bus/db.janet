@@ -120,7 +120,17 @@
    :channel "void_bus"
    :forwarder {:enabled true :interval 0.5 :batch 100 :lease-ttl 30}})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or :nil {:keyword :any})]
+   :ret @{:table :string :auto-create :boolean :poll-interval :number :batch :number
+          :lease-ttl :number :stuck-interval :number :stuck-max :number
+          :keep-for (or :number :keyword) :prune-interval :number :notify :boolean
+          :channel :string
+          :forwarder @{:enabled :boolean :interval :number :batch :number :lease-ttl :number}}}
+  "The [:bus-db] config slice, defaults filled in — including inside
+  the nested :forwarder slice, which a plain top-level merge would
+  otherwise overwrite whole."
+  [cfg0]
   (def cfg (merge @{} defaults (or cfg0 {})))
   (put cfg :forwarder (merge @{} (defaults :forwarder) (get (or cfg0 {}) :forwarder {})))
   cfg)
@@ -138,6 +148,8 @@
   reused once the highest row is deleted — which the pruner does, and
   a reused seq is a message a cursor has already passed. So sqlite
   keeps its own spelling.``
+  {:params [:keyword]
+   :ret (or [:keyword :string] [:keyword :keyword {:primary-key :boolean}])}
   [dialect]
   (case dialect
     :sqlite [:seq "integer primary key autoincrement"]
@@ -151,6 +163,11 @@
   one. Both are statements; the branch is on the capability rather
   than on the engine's name, because it is the capability that decides
   which index this is.``
+  {:params [:keyword :string]
+   :ret (or {:create-index :string :on :string :if-not-exists :boolean
+             :columns [:keyword] :where [:any]}
+            {:create-index :string :on :string :if-not-exists :boolean :columns [:keyword]})
+   :throws [:string]}
   [dialect outbox]
   (def name (string outbox "_pending_idx"))
   (if (db/capability dialect :partial-indexes)
@@ -160,6 +177,7 @@
      :columns [:forwarded-at :created-at]}))
 
 (defn- statements
+  {:params [:keyword :string] :ret [:any] :throws [:string]}
   "The schema as builder statements, in creation order."
   [dialect table]
   (def messages table)
@@ -202,18 +220,25 @@
   :auto-create]` runs at boot and what `void bus-db ddl` prints for a
   deployment that would rather run its own migration. A dialect the
   builder does not know is refused by name.``
+  {:params [:keyword :string?] :ret [:string] :throws [:string]}
   [dialect &opt table]
   (default table (defaults :table))
   (tuple ;(map |(first (builder/format $ dialect)) (statements dialect table))))
 
 (defn create-tables!
+  {:params [:string?] :ret :nil
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Run `ddl` — idempotent, and safe to run at every boot."
   [&opt table]
   (db/ddl! (ddl ((db/current-driver) :dialect) table)))
 
 # -- statement helpers ---------------------------------------------------
 
-(defn- postgres? []
+(defn- postgres?
+  {:params [] :ret :boolean :throws [:string]}
+  "Is the pool under this backend Postgres — the one dialect that
+  gets LISTEN/NOTIFY."
+  []
   (= :postgres ((db/current-driver) :dialect)))
 
 (defn- as-text
@@ -223,15 +248,21 @@
   and store hex-escaped. A codec whose output is not text at all —
   protobuf, once void/proto exists — needs a backend with a binary
   column, and this is where that will be noticed.``
+  {:params [:any] :ret :any}
   [v]
   (if (buffer? v) (string v) v))
 
-(defn- token []
+(defn- token
+  {:params [] :ret :string}
+  "A random hex token — a lease-holder's identity, distinct per
+  consumer and per forwarder."
+  []
   (string/join (seq [b :in (os/cryptorand 8)] (string/format "%02x" b))))
 
 # -- the LISTEN/NOTIFY seam ----------------------------------------------
 
 (defn- module-fn
+  {:params [:string :symbol] :ret :any}
   "The public binding `name` of module `path`, or nil when that
   package is not on this process's module path."
   [path name]
@@ -250,6 +281,7 @@
   `subscribe!` exists as a binding whether or not there is a listener
   behind it, and a consumer that refused to start because the
   *optimisation* was unavailable would be exactly the wrong failure.``
+  {:params [] :ret (or :nil {:subscribe! :any :unsubscribe! :any}) :throws [:string]}
   []
   (when (postgres?)
     (def sub (module-fn "void/db-postgres/init" 'subscribe!))
@@ -262,6 +294,7 @@
         {:subscribe! sub :unsubscribe! unsub}))))
 
 (defn- protect-listener
+  {:params [] :ret (or :nil {:subscribe! :any :unsubscribe! :any})}
   "`pg-listener`, and nil rather than an error whatever goes wrong."
   []
   (def [ok l] (protect (pg-listener)))
@@ -271,6 +304,17 @@
 # -- the backend ---------------------------------------------------------
 
 (defn store
+  {:params [(or :nil {:table :string? :channel :string? :notify :any :batch :number?
+                      :lease-ttl :number? :poll-interval :number? :stuck-interval :number?
+                      :stuck-max :number? :keep-for :any :prune-interval :number? & r})]
+   :ret {:name :keyword :encoded? :boolean
+         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
+                      :shared :boolean}
+         :publish! :function :consume! :function :stop! :function :close :function
+         :stats :function :outbox-write! :function :outbox-pending :function
+         :outbox-mark! :function :outbox-count :function :lease! :function
+         :counters @{:published :number :delivered :number :failed :number
+                     :pruned :number :forwarded :number}}}
   ``A bus backend over the running void/db pool. Nothing is captured
   but the configuration: which database, which driver and which
   dialect are read off the pool at call time, so the backend outlives
@@ -298,9 +342,20 @@
   (def subs @{})
   (def counters @{:published 0 :delivered 0 :failed 0 :pruned 0 :forwarded 0})
 
-  (defn bump! [k &opt n] (put counters k (+ (get counters k 0) (or n 1))))
+  (defn bump!
+    {:params [(enum :published :delivered :failed :pruned :forwarded) :number?]
+     :ret @{:published :number :delivered :number :failed :number :pruned :number
+            :forwarded :number}}
+    "Add `n` (default 1) to one running total."
+    [k &opt n] (put counters k (+ (get counters k 0) (or n 1))))
 
-  (defn insert-message! [env now]
+  (defn insert-message!
+    {:params [{:id :any :topic :any :body :any :meta-body :any & r} :number]
+     :ret :nil
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "Insert one message row, deduped by id, and NOTIFY on Postgres so
+    a waiting consumer wakes without polling."
+    [env now]
     # a dropped duplicate, because a message id is a message: a
     # forwarder that published and died before marking its outbox row
     # republishes on its next pass, and the log is the one place that
@@ -328,18 +383,35 @@
   # the leases are void/db/lease's, in `<table>_leases`: the fence, the
   # first taker's savepoint and the "a lost race is an answer" rule are
   # written once there, and a release is the row going away
-  (defn take-lease! [name tok now ttl]
+  (defn take-lease!
+    {:params [:string :string :number :number] :ret :boolean
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "Take or renew `name`'s lease for `tok`, until `now + ttl`."
+    [name tok now ttl]
     (lease/acquire! leases name tok now ttl))
 
-  (defn release-lease! [name tok]
+  (defn release-lease!
+    {:params [:string :string] :ret :nil}
+    "Give a held lease back — never an error, since a release racing a
+    lease that already expired to someone else is not this caller's
+    business."
+    [name tok]
     (protect (lease/release! leases name tok))
     nil)
 
-  (defn cursor-of [group]
+  (defn cursor-of
+    {:params [:any] :ret (or :nil {:keyword :any})
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "The cursor row for `group`, or nil when it has never consumed."
+    [group]
     (db/one-row {:select [:group-name :position :stuck-seq :stuck-attempts]
                  :from cursors :where {:group-name (string group)}}))
 
-  (defn ensure-cursor! [group now]
+  (defn ensure-cursor!
+    {:params [:any :number] :ret :nil
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "Insert `group`'s cursor row at position 0 if it has none yet."
+    [group now]
     # one statement rather than a SELECT and a swallowed INSERT: two
     # consumers of the same group starting together is the race, and
     # the primary key is what refuses the second row — saying so in
@@ -351,7 +423,12 @@
                   :on-conflict {:on [:group-name]}})
     nil)
 
-  (defn save-cursor! [group position stuck-seq stuck-attempts now]
+  (defn save-cursor!
+    {:params [:any :number (or :nil :number) :number :number] :ret :nil
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "Advance `group`'s cursor and record what it is stuck on, if
+    anything."
+    [group position stuck-seq stuck-attempts now]
     (db/execute!
       {:update cursors
        # db/null, not nil: a nil disappears from the map, and a column
@@ -364,7 +441,12 @@
        :where {:group-name (string group)}})
     nil)
 
-  (defn read-batch [position topics]
+  (defn read-batch
+    {:params [:number (or :nil [:keyword] @[:keyword])] :ret @[{:keyword :any}]
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "Up to one batch of messages past `position`, narrowed to
+    `topics` when it is an exact list."
+    [position topics]
     (db/query-sql
       {:select [:seq :id :topic :body :meta :published-at]
        :from tbl
@@ -374,7 +456,12 @@
        :order-by [:seq]
        :limit batch}))
 
-  (defn prune! [now]
+  (defn prune!
+    {:params [:number] :ret :nil
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+    "Delete delivered messages and forwarded outbox rows older than
+    `keep-for`; a no-op when `keep-for` is `:none`."
+    [now]
     (when (and (number? keep-for) (pos? keep-for))
       (def low (db/value {:select [[:raw "min(position)"]] :from cursors}))
       (def horizon (- now keep-for))
@@ -388,7 +475,12 @@
                             [:< :forwarded-at [:val horizon]]]}))
     nil)
 
-  (defn row->envelope [row cur]
+  (defn row->envelope
+    {:params [{:keyword :any} {:keyword :any}]
+     :ret @{:id :any :topic :keyword :body :any :meta-body :any :seq :any :redelivery :number}}
+    "A log row as the envelope `deliver` sees, with `:redelivery` set
+    from the cursor when this is the message it is stuck on."
+    [row cur]
     (def seq (get row :seq))
     @{:id (get row :id)
       :topic (keyword (get row :topic))
@@ -397,11 +489,17 @@
       :seq seq
       :redelivery (if (= seq (get cur :stuck_seq)) (get cur :stuck_attempts 0) 0)})
 
-  (defn drain! [sub deliver]
+  (defn drain!
+    {:params [@{:group :any :token :string :exact-topics :any :stopped :any
+                :leader :any & r}
+              (fn [:any] :any)]
+     :ret :number
+     :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
     ``One pass for one group: take the lease, read a batch, deliver it
     in order, advance the cursor. Returns how many messages were
     delivered — zero means "nothing to do", which is what sends the
     loop to sleep.``
+    [sub deliver]
     (def group (sub :group))
     (def now (os/clock :realtime))
     (if (not (take-lease! (string "consumer:" group) (sub :token) now lease-ttl))
@@ -591,6 +689,9 @@
   between the two republishes the message on its next pass, and the
   dedup middleware — or an idempotent handler, which is the contract
   anyway — absorbs it. Marking first would fail into silence.``
+  {:params [{:outbox-pending :function :publish! :function :outbox-mark! :function & r}
+            :number]
+   :ret :number}
   [b limit]
   (def now (os/clock :realtime))
   (def rows (db/with-conn ((b :outbox-pending) limit)))
@@ -606,6 +707,12 @@
   n)
 
 (defn make-forwarder
+  {:params [{:outbox-pending :function :publish! :function :outbox-mark! :function
+             :lease! :function & r}
+            (or :nil {:interval :number? :batch :number? :lease-ttl :number? & r})]
+   :ret @{:backend :any :interval :number :batch :number :lease-ttl :number
+          :token :string :stopped :boolean :leader :boolean :forwarded :number
+          :done :any}}
   "The forwarder's mutable state — a fiber, a lease and its counters."
   [b cfg]
   @{:backend b
@@ -623,6 +730,12 @@
   `outbox` lease forwards, so a fleet of web processes all composing
   void/bus-db publishes each outbox row once — the same lease the
   consumers take, and the same reason.``
+  {:params [@{:backend :any :interval :number :batch :number :lease-ttl :number
+              :token :string :stopped :boolean :leader :boolean :forwarded :number
+              :done :any}]
+   :ret @{:backend :any :interval :number :batch :number :lease-ttl :number
+          :token :string :stopped :boolean :leader :boolean :forwarded :number
+          :done :any}}
   [f]
   (def b (f :backend))
   (ev/go
@@ -643,6 +756,7 @@
   f)
 
 (defn stop-forwarder!
+  {:params [@{:stopped :boolean :done :any & r}] :ret :nil}
   "Stop the forwarding fiber and wait for its current pass."
   [f]
   (unless (f :stopped)

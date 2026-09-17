@@ -133,7 +133,12 @@
 
 # -- refusals ------------------------------------------------------------
 
-(defn- fails [f msg]
+(defn- fails
+  {:params [(fn [] :any) :string] :ret :string}
+  "Call `f`, assert it raises, and hand back its error rendered as a
+  string — `msg` names what refusal was expected, for the assertion
+  message if it does not."
+  [f msg]
   (def [ok err] (protect (f)))
   (assert (not ok) (string "expected a refusal: " msg))
   (string err))

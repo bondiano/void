@@ -48,7 +48,13 @@
 # -- the pull-based gauges ----------------------------------------------
 
 (def snap (metrics/snapshot))
-(defn- series-of [name]
+(defn- series-of
+  {:params [:keyword]
+   :ret (or @[(or {:labels :tuple :value :number}
+                  {:labels :tuple :buckets :tuple :sum :number :count :number})]
+            :nil)}
+  "The series of the snapshotted metric named `name`, or nil."
+  [name]
   (get-in (first (filter |(= name ($ :name)) snap)) [:series]))
 
 (assert (pos? (get-in (series-of :void.obs/process-uptime-seconds) [0 :value]))

@@ -82,6 +82,9 @@
   [json jdn raw])
 
 (defn normalize
+  {:params [:any]
+   :ret {:name :keyword :bytes? :boolean :doc :any :encode :function :decode :function & r}
+   :throws [:string]}
   "Validate a codec contribution and fill in its defaults. Throws with
   the offending key named."
   [c]
@@ -96,6 +99,10 @@
   (table/to-struct (merge @{:bytes? true :doc nil} c)))
 
 (defn find-codec
+  {:params [{:keyword {:name :keyword :bytes? :boolean :doc :any
+                       :encode :function :decode :function & r}} :keyword]
+   :ret {:name :keyword :bytes? :boolean :doc :any :encode :function :decode :function & r}
+   :throws [:string]}
   ``The codec named by `name` among `codecs` (the resolved extension
   point), or an error listing what there is — a typo in [:bus :codec]
   must not fall back to publishing something else.``
@@ -106,6 +113,8 @@
               (util/names-str (keys codecs)))))
 
 (defn check-compatible!
+  {:params [{:name :keyword :bytes? :boolean & r} {:name :keyword :encoded? :boolean & r}]
+   :ret :boolean :throws [:string]}
   ``Refuse a codec the backend cannot store. Only `:raw` can be wrong
   here, and only against a backend that keeps bytes: the error names
   both sides and the one-line fix, because the alternative is a
@@ -118,6 +127,7 @@
   true)
 
 (defn encode-body
+  {:params [{:encode :function & r} :any] :ret :any}
   ``Encode the part of a message that travels as an opaque body — the
   payload — with `codec`. The id, the topic and the meta are *not* in
   here: a backend that has columns puts them in columns, and a
@@ -127,12 +137,14 @@
   ((codec :encode) payload))
 
 (defn decode-body
+  {:params [{:decode :function & r} :any] :ret :any}
   "Decode a payload with `codec`. nil stays nil: a message with no
   payload is a fact, not a thing to decode."
   [codec body]
   (if (nil? body) nil ((codec :decode) body)))
 
 (defn encode-meta
+  {:params [{:encode :function & r} (or :nil {:keyword :any})] :ret :any}
   ``Encode a message's meta. Always the same codec as the payload —
   two formats in one row would be two things to explain to whoever
   reads the table without void.``
@@ -140,6 +152,7 @@
   ((codec :encode) (or meta {})))
 
 (defn decode-meta
+  {:params [{:decode :function & r} :any] :ret @{:keyword :any}}
   "Decode a message's meta back into a table, keyword-keyed. JSON
   hands back string keys, and meta is the one part of a message void
   itself reads, so the framework's own keys are put back the way the

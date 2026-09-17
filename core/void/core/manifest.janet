@@ -26,6 +26,7 @@
    :hooks true :on-load true :source true})
 
 (defn- plugin-name
+  {:params [:any] :ret :keyword :throws [:string]}
   "The plugin's name as a keyword: `defplugin` passes the bare symbol
   a module writes (`void/redis`), `manifest` callers may pass either."
   [name]
@@ -35,6 +36,9 @@
     (errorf "plugin name must be a symbol or keyword, got %q" name)))
 
 (defn- normalize-requires
+  {:params [:any (or {:any (or :boolean :string)} @[:any] [:any] :nil)]
+   :ret {:keyword (or :boolean :string)}
+   :throws [:string]}
   "Normalize :requires to a frozen {plugin-keyword constraint-or-true}:
   nil is no requirements, a tuple of names means any version, and a
   dictionary's constraint strings are parsed now so a typo in
@@ -71,6 +75,9 @@
             name requires)))
 
 (defn- normalize-components
+  {:params [:any (or @[:any] [:any])]
+   :ret [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+   :throws [:string]}
   "Check :components is a tuple of component definitions (a :key and
   a callable :start, see system/component) and stamp each with
   :plugin — the attribution `why` and the graph errors report — unless
@@ -90,6 +97,9 @@
            (table/to-struct (merge-into @{} c {:plugin name})))))))
 
 (defn- normalize-contributes
+  {:params [:any {:keyword (or @[:any] [:any])}]
+   :ret {:keyword [:any]}
+   :throws [:string]}
   "Check :contributes is {point-keyword [contribution ...]} and freeze
   it; the contributions themselves are validated against the point's
   schema in bootstrap phase 4, when the point is known."
@@ -107,6 +117,9 @@
   (freeze out))
 
 (defn- normalize-points
+  {:params [:any {:keyword :any}]
+   :ret {:keyword :any}
+   :throws [:string]}
   "Check :extension-points is {name point}: a built point must be
   stored under its own name; an options dictionary is built into one
   with `extension-point` here, so a manifest can be written as plain
@@ -131,6 +144,23 @@
   (freeze out))
 
 (defn manifest
+  {:params [:any :any]
+   :ret {:name :keyword
+         :doc :string?
+         :void-api :number
+         :version :string
+         :requires {:keyword (or :boolean :string)}
+         :config-key :keyword?
+         :config-schema :any
+         :config-defaults (or {:keyword :any} :nil)
+         :when (or (fn [:any] :boolean) :nil)
+         :components [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+         :contributes {:keyword [:any]}
+         :extension-points {:keyword :any}
+         :hooks [:keyword]
+         :on-load (or (fn [:any] :any) :nil)
+         :source :string?}
+   :throws [:string]}
   ``Build and validate a plugin manifest — a frozen struct that can be
   pp'd, diffed and serialized. `defplugin` is the module sugar over this.
 
@@ -227,6 +257,7 @@
   @{})
 
 (defn register-manifest!
+  {:params [{:name :keyword & r}] :ret {:name :keyword & r}}
   "Register a manifest for keyword lookup in :plugins (re-registering
   replaces — REPL-friendly). Returns the manifest."
   [m]
@@ -234,6 +265,9 @@
   m)
 
 (defn- merge-collected
+  {:params [{:name :keyword :contributes {:keyword [:any]} :extension-points {:keyword :any} & r}]
+   :ret {:name :keyword :contributes {:keyword [:any]} :extension-points {:keyword :any} & r}
+   :throws [:string]}
   "Fold the module-level contribute!/defextension-point queue into
   a manifest and clear the queue."
   [m]
@@ -254,6 +288,7 @@
                                  :extension-points (freeze points)})))))
 
 (defmacro defplugin
+  {:params [:symbol :any] :ret :any}
   ``Define this module's plugin manifest and export it as `manifest`:
 
       (defplugin void/redis

@@ -65,6 +65,7 @@
   @[])
 
 (defmacro- defpq
+  {:params [:symbol :any :any] :ret :tuple}
   ``Declare one libpq function: a module-level `var`, nil until
   `load!` installs the call. `& args` are ffi types; a trailing
   :optional marks a symbol that may be absent from an older libpq.``
@@ -209,6 +210,7 @@
 (def- cell-size 8)
 
 (defn cstr
+  {:params [(or :pointer :nil)] :ret :string?}
   ``A `char *` that may be NULL, as a janet string or nil. Bindings
   that can return NULL are declared :ptr for exactly this: janet's
   ffi reads a :string return straight off the pointer, and off NULL
@@ -220,6 +222,7 @@
     (ffi/read :string cell 0)))
 
 (defn cstr-array
+  {:params [(or @[:string?] [:string?])] :ret [(or :buffer :nil) @[:string]]}
   ``A `char *[]` for the paramValues of PQsendQueryParams: one cell
   per value, NULL where the value is nil (which is how a SQL NULL is
   passed). Returns [buffer keepalive] — the strings must stay
@@ -239,6 +242,7 @@
 (def- notify-size 32)   # char* + int + padding + char* + char*
 
 (defn notification
+  {:params [(or :pointer :nil)] :ret (or {:channel :string :pid :number :payload :string} :nil)}
   ``Read a PGnotify the way libpq lays it out — {:channel :pid
   :payload} — without freeing it; the caller does that with
   PQfreemem, since the strings are copied out of libpq's memory
@@ -262,11 +266,13 @@
   @[])
 
 (defn available?
+  {:params [] :ret :boolean}
   "Has libpq been loaded into these bindings?"
   []
   (not (nil? library-path)))
 
 (defn candidates
+  {:params [:string?] :ret [:string]}
   "The search order for a given configured path (nil = the defaults),
   environment override included."
   [&opt path]
@@ -275,11 +281,15 @@
     (os/getenv path-env) [(os/getenv path-env)]
     default-candidates))
 
-(defn- try-open [path]
+(defn- try-open
+  {:params [:string] :ret (or :abstract :nil)}
+  "Open one candidate path, nil (not an error) when it does not."
+  [path]
   (def [ok lib] (protect (ffi/native path)))
   (when ok lib))
 
 (defn load!
+  {:params [:string?] :ret :string :throws [:string]}
   ``Open libpq and install the bindings. `path` (from
   [:db-postgres :libpq]) is tried alone; without it the platform
   defaults are, in order. Idempotent for the same path — reopening a
@@ -324,6 +334,7 @@
   found)
 
 (defn version
+  {:params [] :ret (or [:number :number] :nil)}
   "The loaded libpq's version as [major minor], or nil before `load!`.
   libpq reports 160014 for 16.14 and 180006 for 18.6."
   []
@@ -332,6 +343,7 @@
     [(div n 10000) (mod (div n 100) 100)]))
 
 (defn supports?
+  {:params [:keyword] :ret :boolean :throws [:string]}
   ``Whether an optional feature's symbols made it in:
     :pipeline  PQenterPipelineMode & co (libpq 14+)
     :cancel    the non-blocking PQcancelStart poll loop (libpq 17+)

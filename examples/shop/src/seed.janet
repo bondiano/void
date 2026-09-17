@@ -57,6 +57,9 @@
   {:name "Ada" :email "ada@shop.example" :password "ada-ada-ada-ada"})
 
 (defn seed!
+  {:params []
+   :ret {:products-created :number :products-kept :number
+         :staff :keyword :customer :keyword}}
   ``Fill an empty shop. Returns what it did, so the CLI command can say
   it rather than the function printing.``
   []

@@ -2,7 +2,12 @@
 (import void/security/limit :as limit)
 
 (def store (limit/memory-store))
-(defn- opts [&opt extra] (merge {:limit 3 :window 10 :now 1000} (or extra {})))
+(defn- opts
+  {:params [(or {:limit :number? :window :number? :now :number? & r} :nil)]
+   :ret {:limit :number :window :number :now :number & r}}
+  "The `limit/check!` opts for this suite, with a fixed clock unless
+  `extra` overrides it."
+  [&opt extra] (merge {:limit 3 :window 10 :now 1000} (or extra {})))
 
 # -- the window ----------------------------------------------------------
 

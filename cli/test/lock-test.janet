@@ -25,8 +25,16 @@
         "a sequence hashes by its order — a reordered chain is a change")
 (assert (not= (lock/digest {:a 1}) (lock/digest {:a 2})) "values count")
 
-(defn named-fn [] 1)
-(defn other-name [] 1)
+(defn named-fn
+  {:params [] :ret :number}
+  "A named fixture function, so its digest can be compared to an
+  anonymous one's."
+  [] 1)
+(defn other-name
+  {:params [] :ret :number}
+  "A second named fixture, identical in body to `named-fn` but not in
+  name."
+  [] 1)
 (assert (= (lock/digest named-fn) (lock/digest named-fn))
         "a function hashes the same twice")
 (assert (not= (lock/digest named-fn) (lock/digest other-name))
@@ -59,7 +67,19 @@
 
 # -- a composition -------------------------------------------------------
 
-(defn- app-manifest [version extra-middleware]
+(defn- app-manifest
+  {:params [:string :boolean]
+   :ret {:name :keyword :doc :string? :void-api :number :version :string
+         :requires {:keyword (or :boolean :string)} :config-key :keyword?
+         :config-schema :any :config-defaults (or {:keyword :any} :nil)
+         :when (or (fn [:any] :boolean) :nil)
+         :components [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+         :contributes {:keyword [:any]} :extension-points {:keyword :any}
+         :hooks [:keyword] :on-load (or (fn [:any] :any) :nil) :source :string?}
+   :throws [:string]}
+  "A fixture manifest at a given version, with or without a second
+  middleware in its chain."
+  [version extra-middleware]
   (plugin/manifest 'test/app
     :version version
     :components [(system/component :app/thing :start (fn [&] @{}))]
@@ -70,14 +90,37 @@
         {:name :app/two :phase 200 :fn (fn [h] h)}]
        [{:name :app/one :phase 100 :fn (fn [h] h)}])}))
 
-(defn- point-manifest []
+(defn- point-manifest
+  {:params [] :ret {:name :keyword :doc :string? :void-api :number :version :string
+                    :requires {:keyword (or :boolean :string)} :config-key :keyword?
+                    :config-schema :any :config-defaults (or {:keyword :any} :nil)
+                    :when (or (fn [:any] :boolean) :nil)
+                    :components [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+                    :contributes {:keyword [:any]} :extension-points {:keyword :any}
+                    :hooks [:keyword] :on-load (or (fn [:any] :any) :nil) :source :string?}
+   :throws [:string]}
+  "A fixture manifest declaring the extension point the middleware
+  fixtures contribute to."
+  []
   (plugin/manifest 'test/points
     :version "1.0.0"
     :extension-points
     {:void.http/middleware {:doc "middleware, for the suite"
                             :cardinality :many}}))
 
-(defn- boot-of [& manifests]
+(defn- boot-of
+  {:params [{:name :keyword :doc :string? :void-api :number :version :string
+             :requires {:keyword (or :boolean :string)} :config-key :keyword?
+             :config-schema :any :config-defaults (or {:keyword :any} :nil)
+             :when (or (fn [:any] :boolean) :nil)
+             :components [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+             :contributes {:keyword [:any]} :extension-points {:keyword :any}
+             :hooks [:keyword] :on-load (or (fn [:any] :any) :nil) :source :string?}]
+   :ret {:profile :any :system :any :hooks :any :config :any :extensions :any & r}}
+  "Bootstrap a fresh test composition from fixture manifests, resetting
+  the deploy resolution first so one test's shape does not leak into
+  the next."
+  [& manifests]
   (deploy/reset!)
   (cli/bootstrap-app {:plugins (tuple ;manifests) :profile :test}))
 
@@ -96,7 +139,10 @@
 (def root (os/cwd))
 (def sandbox (string root "/.tmp-lock-test-" (os/time)))
 (os/mkdir sandbox)
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove a directory, the way `rm -rf` would."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))

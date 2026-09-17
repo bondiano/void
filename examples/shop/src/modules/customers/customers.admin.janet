@@ -38,6 +38,7 @@
   :form [:name :email :role])
 
 (defn- not-yourself
+  {:params [:any] :ret (or :boolean :string)}
   ``The desk may edit any account but the one it is signed in as.
 
   A pure function of a context, like every other policy in this

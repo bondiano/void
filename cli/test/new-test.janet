@@ -10,7 +10,10 @@
 (def sandbox (string root "/.tmp-new-test-" (os/time)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove a directory, the way `rm -rf` would."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))

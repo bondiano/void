@@ -1,7 +1,12 @@
 (import ../test-support/paths)
 (import void/bus/backend :as backend)
 
-(defn- minimal [&opt extra]
+(defn- minimal
+  {:params [(or :nil {:keyword :any})]
+   :ret @{:name :keyword :publish! :function :consume! :function :stop! :function & r}}
+  "A minimal, unnormalized backend dictionary — the three required
+  keys and nothing else, unless `extra` overrides or adds to it."
+  [&opt extra]
   (merge @{:name :fake
            :publish! (fn [_] 1)
            :consume! (fn [_ _] @{})

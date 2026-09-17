@@ -73,6 +73,7 @@
   @[])
 
 (defmacro- defssl
+  {:params [:symbol :any :any] :ret :tuple}
   ``Declare one libcrypto function: a module-level `var`, nil until
   `load!` installs the call. `& args` are ffi types; a trailing
   :optional marks a symbol that a supported-but-older library may not
@@ -163,11 +164,13 @@
   false)
 
 (defn available?
+  {:params [] :ret :boolean}
   "Has a libcrypto been loaded into these bindings?"
   []
   (not (nil? library-path)))
 
 (defn candidates
+  {:params [:string?] :ret [:string]}
   "The search order for a given configured path (nil = the defaults),
   environment override included."
   [&opt path]
@@ -177,6 +180,7 @@
     default-candidates))
 
 (defn- drain-errors
+  {:params [] :ret :nil}
   ``Empty OpenSSL's error queue. A call that is *expected* to fail
   still leaves its entry there, and an entry left behind is the one
   `last-error` hands to whoever fails next — a wrong message about an
@@ -185,6 +189,7 @@
   (while (not (zero? (int/to-number (ERR_get_error))))))
 
 (defn- probe-argon2id
+  {:params [] :ret :boolean}
   ``Ask this library for the ARGON2ID KDF and see what comes back.
   This is the whole reason the check is a probe and not a version
   comparison or a symbol lookup: the symbols say 3.0, the KDF says
@@ -198,11 +203,15 @@
         kdf (do (EVP_KDF_free kdf) true)
         (do (drain-errors) false)))))
 
-(defn- try-open [path]
+(defn- try-open
+  {:params [:string] :ret (or :abstract :nil)}
+  "Open one candidate path, nil (not an error) when it does not."
+  [path]
   (def [ok lib] (protect (ffi/native path)))
   (when ok lib))
 
 (defn load!
+  {:params [:string?] :ret :string :throws [:string]}
   ``Open libcrypto and install the bindings. `path` (from
   [:crypto :libcrypto]) is tried alone; without it the platform
   defaults are, in order. Idempotent for the same path — reopening a
@@ -249,11 +258,13 @@
   found)
 
 (defn handle
+  {:params [] :ret (or :abstract :nil)}
   "The open library object, or nil — see the `library` var."
   []
   library)
 
 (defn ensure!
+  {:params [] :ret :string :throws [:string]}
   ``The library, or a readable error. Every module in this package
   calls it before its first ffi call, so "OpenSSL is not installed"
   reads as one sentence rather than as a nil call.``
@@ -268,6 +279,7 @@
 # -- what this library can do --------------------------------------------
 
 (defn version
+  {:params [] :ret (or [:number :number :number] :nil)}
   "The loaded library's version as [major minor patch], or nil before
   `load!`. OpenSSL encodes 3.2.1 as 0x30200010."
   []
@@ -280,11 +292,13 @@
      (band (brshift n 4) 0xffff)]))
 
 (defn version-text
+  {:params [] :ret (or :string :nil)}
   "What the library calls itself (OPENSSL_VERSION_STR = 0), or nil."
   []
   (when (available?) (OpenSSL_version 0)))
 
 (defn algorithms
+  {:params [] :ret @{:keyword :boolean}}
   ``What this particular library gives us, as a table of
   algorithm -> true/false. The interesting entry is :argon2id: it
   needs OpenSSL 3.2, and an LTS distribution may be on 3.0 — which is
@@ -298,6 +312,7 @@
     @{}))
 
 (defn last-error
+  {:params [] :ret (or :string :nil)}
   "The message OpenSSL left on its error queue, drained, or nil."
   []
   (when (available?)

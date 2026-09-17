@@ -39,12 +39,19 @@
    :es384 {:digest "EVP_sha384" :kind :ec :width 48}
    :es512 {:digest "EVP_sha512" :kind :ec :width 66}})
 
-(defn- spec-of [algo]
+(defn- spec-of
+  {:params [:keyword] :ret {:digest :string :kind :keyword :width :number? & r} :throws [:string]}
+  "The algorithm table entry for `algo`, or an error naming the ones
+  there are."
+  [algo]
   (or (algorithms algo)
       (errorf "unknown signature algorithm %q (have %s)" algo
               (string/join (map string (sorted (keys algorithms))) " "))))
 
-(defn- md-of [algo]
+(defn- md-of
+  {:params [:keyword] :ret :pointer :throws [:string]}
+  "The EVP_MD pointer for `algo`'s digest."
+  [algo]
   (case (get (spec-of algo) :digest)
     "EVP_sha256" (lib/EVP_sha256)
     "EVP_sha384" (lib/EVP_sha384)
@@ -52,7 +59,13 @@
 
 # -- keys ----------------------------------------------------------------
 
-(defn- read-key [pem public?]
+(defn- read-key
+  {:params [(or :string :buffer) :boolean]
+   :ret {:pkey :pointer :kind :keyword :public :boolean}
+   :throws [:string]}
+  "Open a PEM key (public or private) into the struct every
+  sign/verify call takes."
+  [pem public?]
   (lib/ensure!)
   (def text (string pem))
   (def bio (lib/BIO_new_mem_buf text (length text)))
@@ -78,25 +91,31 @@
   {:pkey pkey :kind kind :public public?})
 
 (defn public-key
+  {:params [(or :string :buffer)] :ret {:pkey :pointer :kind :keyword :public :boolean} :throws [:string]}
   "Open a PEM public key (SubjectPublicKeyInfo). Release it with
   `free-key`; see the module docstring about lifetimes."
   [pem]
   (read-key pem true))
 
 (defn private-key
+  {:params [(or :string :buffer)] :ret {:pkey :pointer :kind :keyword :public :boolean} :throws [:string]}
   "Open a PEM private key (PKCS#8 or the traditional forms libcrypto
   accepts). Release it with `free-key`."
   [pem]
   (read-key pem false))
 
 (defn free-key
+  {:params [(or {:pkey :pointer & r} :nil)] :ret :nil}
   "Release a key opened by `public-key` / `private-key`."
   [key]
   (when (and key (key :pkey))
     (lib/EVP_PKEY_free (key :pkey))
     nil))
 
-(defn- check-kind [key algo]
+(defn- check-kind
+  {:params [{:kind :keyword & r} :keyword] :ret :nil :throws [:string]}
+  "Throw when `key`'s kind does not match what `algo` needs."
+  [key algo]
   (def want (get (spec-of algo) :kind))
   (def have (key :kind))
   (when (and (not= have :unknown) (not= have want))
@@ -107,6 +126,7 @@
 # -- ECDSA: DER <-> the fixed-width pair JWS wants -----------------------
 
 (defn- der-integer
+  {:params [(or :string :buffer) :number] :ret [:string :number] :throws [:string]}
   "Read one DER INTEGER at `pos`; returns [bytes next-pos]."
   [der pos]
   (unless (= 0x02 (der pos))
@@ -116,7 +136,11 @@
     (error "ECDSA signature: an INTEGER longer than 127 bytes is not a P-curve coordinate"))
   [(string/slice der (+ pos 2) (+ pos 2 len)) (+ pos 2 len)])
 
-(defn- pad-left [bytes width]
+(defn- pad-left
+  {:params [(or :string :buffer) :number] :ret :string :throws [:string]}
+  "Pad a DER INTEGER's bytes to `width`, stripping the leading zero a
+  signed encoding may carry."
+  [bytes width]
   (def b (string bytes))
   # a DER INTEGER is signed: a coordinate whose top bit is set carries
   # a leading zero byte, and one with leading zero bytes has them
@@ -131,7 +155,11 @@
             (length trimmed) width))
   (string (string/repeat "\x00" (- width (length trimmed))) trimmed))
 
-(defn- der->raw [der width]
+(defn- der->raw
+  {:params [(or :string :buffer) :number] :ret :string :throws [:string]}
+  "DER `SEQUENCE { INTEGER r, INTEGER s }` to the fixed-width `r || s`
+  pair JWS wants."
+  [der width]
   (unless (and (>= (length der) 2) (= 0x30 (der 0)))
     (error "ECDSA signature: not a DER SEQUENCE"))
   (def body-start (if (>= (der 1) 0x80) (+ 2 (- (der 1) 0x80)) 2))
@@ -139,14 +167,22 @@
   (def [s _] (der-integer der after-r))
   (string (pad-left r width) (pad-left s width)))
 
-(defn- der-int-bytes [raw]
+(defn- der-int-bytes
+  {:params [(or :string :buffer)] :ret :string}
+  "One coordinate's bytes as a DER INTEGER's body: a leading zero
+  added when the top bit is set, none otherwise."
+  [raw]
   (def b
     (do (var i 0)
         (while (and (< i (dec (length raw))) (zero? (raw i))) (++ i))
         (string/slice raw i)))
   (if (>= (b 0) 0x80) (string "\x00" b) b))
 
-(defn- raw->der [raw width]
+(defn- raw->der
+  {:params [(or :string :buffer) :number] :ret :string :throws [:string]}
+  "The fixed-width `r || s` pair JWS carries back to the DER
+  `SEQUENCE { INTEGER r, INTEGER s }` OpenSSL wants."
+  [raw width]
   (unless (= (length raw) (* 2 width))
     (errorf "ECDSA signature: %d bytes, expected %d" (length raw) (* 2 width)))
   (def r (der-int-bytes (string/slice raw 0 width)))
@@ -162,6 +198,8 @@
 # -- sign and verify -----------------------------------------------------
 
 (defn sign
+  {:params [{:pkey :pointer :kind :keyword & r} :keyword (or :string :buffer)]
+   :ret :string :throws [:string]}
   ``Sign bytes with a private key. Returns the signature in **JWS
   form**: PKCS#1 v1.5 for RS*, the raw `r || s` pair for ES*.``
   [key algo data]
@@ -191,6 +229,8 @@
     sig))
 
 (defn verify
+  {:params [{:pkey :pointer :kind :keyword & r} :keyword (or :string :buffer) (or :string :buffer)]
+   :ret :boolean :throws [:string]}
   ``Verify a JWS-form signature over bytes with a public key. Returns
   true or false; a malformed signature is false, not an error —
   "this token is not valid" is one answer, and a caller that had to

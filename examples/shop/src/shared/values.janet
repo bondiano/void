@@ -12,6 +12,7 @@
 ### string would be a number that cannot be summed.
 
 (defn now
+  {:params [] :ret :string}
   ``An ISO-8601 UTC timestamp. Text on both engines, which is what
   keeps the migrations one file instead of two.``
   []
@@ -21,6 +22,7 @@
                  (d :hours) (d :minutes) (d :seconds)))
 
 (defn timestamp-before
+  {:params [:number] :ret :string}
   ``The same stamp, `seconds` ago — what a sweep compares against.``
   [seconds]
   (def d (os/date (- (os/time) seconds) true))
@@ -29,12 +31,14 @@
                  (d :hours) (d :minutes) (d :seconds)))
 
 (defn token
+  {:params [:number?] :ret :string}
   "A URL-safe random handle — a cart's, and nothing that authenticates."
   [&opt bytes]
   (default bytes 16)
   (string/join (map |(string/format "%02x" $) (os/cryptorand bytes)) ""))
 
 (defn order-number
+  {:params [] :ret :string}
   ``The number a customer quotes. Deliberately not the primary key and
   deliberately not sequential: an order number that counts tells every
   customer how many orders this shop has taken today.``
@@ -42,6 +46,7 @@
   (string "SH-" (string/ascii-upper (token 4))))
 
 (defn format-price
+  {:params [:number] :ret :string}
   ``Cents as the one string a page prints. The only place in the
   application where money stops being an integer.``
   [cents]

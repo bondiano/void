@@ -78,11 +78,19 @@
   an int8 has to come back as an int/s64 to survive the trip."
   9007199254740992)
 
-(defn- decode-int8 [s]
+(defn- decode-int8
+  {:params [:string] :ret (or :number :abstract)}
+  "Parse an int8 column's text back to a number, or an int/s64 when
+  the value is too large for a double to hold exactly."
+  [s]
   (def n (scan-number s))
   (if (and n (< (math/abs n) max-exact-int)) n (int/s64 s)))
 
-(defn- decode-float [s]
+(defn- decode-float
+  {:params [:string] :ret :number}
+  "Parse a float4/float8 column's text, including the non-finite
+  specials Postgres spells out by name rather than digits."
+  [s]
   (case s
     "NaN" math/nan
     "Infinity" math/inf
@@ -96,6 +104,7 @@
     (table/to-struct t)))
 
 (defn decode-bytea
+  {:params [:string] :ret :buffer :throws [:string]}
   ``Postgres' hex output format (`\\x48656c6c6f`) as a buffer. The
   ancient escape format is not produced by any server since 9.0
   unless bytea_output is turned back, and a caller who does that gets
@@ -133,7 +142,11 @@
 
 (def- null-marker :void.db-postgres/null)
 
-(defn- unquoted [s]
+(defn- unquoted
+  {:params [:string] :ret (or :keyword :string)}
+  "A bare array element, turned into `null-marker` when it spells
+  Postgres' unquoted NULL."
+  [s]
   (if (= "NULL" (string/ascii-upper s)) null-marker s))
 
 (def- array-peg
@@ -159,6 +172,7 @@
       :bare (/ (<- (some (if-not (set ",}") 1))) ,unquoted)}))
 
 (defn parse-array
+  {:params [:string] :ret (or @[:any] :nil)}
   ``A Postgres array literal as nested janet arrays, with
   `null-marker` where an element is NULL (janet arrays cannot hold
   nil, and a hole would be indistinguishable from a short array).
@@ -171,13 +185,19 @@
 
 # -- decoding ------------------------------------------------------------
 
-(defn- decode-elements [x decoder]
+(defn- decode-elements
+  {:params [:any (fn [a] b)] :ret :any}
+  "Apply `decoder` through the nested arrays `parse-array` produces,
+  turning `null-marker` back into nil at any depth."
+  [x decoder]
   (cond
     (= null-marker x) nil
     (array? x) (map |(decode-elements $ decoder) x)
     (decoder x)))
 
 (defn decoder-for
+  {:params [:number (or {:json :boolean? :arrays :boolean? & r} :nil)]
+   :ret (fn [a] b)}
   ``The (fn [text] value) for a column OID, honouring the options:
 
     :json    false leaves json/jsonb as the text Postgres sent
@@ -205,13 +225,19 @@
     (or (get scalar-decoders oid) string)))
 
 (defn decode
+  {:params [:number :string (or {:json :boolean? :arrays :boolean? & r} :nil)]
+   :ret :any}
   "One text value from Postgres, by column OID."
   [oid text &opt opts]
   ((decoder-for oid opts) text))
 
 # -- encoding ------------------------------------------------------------
 
-(defn- number->string [n]
+(defn- number->string
+  {:params [:number] :ret :string}
+  "A number as the decimal text Postgres will parse back to it,
+  including the non-finite specials by name rather than digits."
+  [n]
   (cond
     (nan? n) "NaN"
     (= n math/inf) "Infinity"
@@ -222,6 +248,7 @@
     (string/format "%.17g" n)))
 
 (defn encode-bytea
+  {:params [(or :string :buffer)] :ret :string}
   "A buffer as the bytea hex literal Postgres parses back to it."
   [b]
   (def out (buffer/new (+ 2 (* 2 (length b)))))
@@ -229,7 +256,11 @@
   (each byte b (buffer/push-string out (string/format "%02x" byte)))
   (string out))
 
-(defn- array-element-literal [s]
+(defn- array-element-literal
+  {:params [:string] :ret :string}
+  "One array element, quoted the way Postgres accepts unconditionally
+  — see the comment below for why every element is quoted."
+  [s]
   # every non-NULL element is quoted: Postgres accepts a quoted
   # element for any element type, and quoting unconditionally means
   # never having to decide whether this particular text needed it
@@ -246,6 +277,7 @@
   [_] nil)
 
 (defn array-literal
+  {:params [(or @[:any] [:any])] :ret :string}
   "A janet array or tuple as a Postgres array literal."
   [xs]
   (string "{"
@@ -287,6 +319,7 @@
             v)))
 
 (defn encode-params
+  {:params [(or @[:any] [:any] :nil)] :ret @[(or :string :nil)]}
   "Every parameter of a statement, in order."
   [params]
   (map encode (or params [])))

@@ -174,7 +174,13 @@
   this — what can be computed once is, and the hot path looks it up.``
   @{})
 
-(defn- new-info [e]
+(defn- new-info
+  {:params [{:name :keyword :meta {:keyword :any} & r}]
+   :ret {:label :string :sample-rate :number? :keys @{:any :tuple}}}
+  "A fresh route-info entry for a matched route: its label
+  (`:void.obs/name` or the route's own name) and head sample rate,
+  with an empty label-tuple memo."
+  [e]
   {:label (or (get-in e [:meta :void.obs/name]) (string (e :name)))
    :sample-rate (get-in e [:meta :void.obs/sample-rate])
    :keys @{}})
@@ -193,6 +199,7 @@
    :delete :delete :options :options :trace :trace})
 
 (defn normalize-method
+  {:params [:keyword] :ret :keyword}
   "The closed-set spelling of a request's method: itself for the ones
   HTTP has, :other for anything somebody typed onto the wire."
   [method]
@@ -205,6 +212,7 @@
   256)
 
 (defn forget-routes!
+  {:params [] :ret :nil}
   "Drop the memoized route labels — what a rebuilt route table (a dev reload) needs, since an edited `:void.obs/name` must not
   keep reporting under the old one."
   []
@@ -220,6 +228,9 @@
    :fn (fn on-reloaded [_ _] (forget-routes!))})
 
 (defn route-info
+  {:params [@{:void/route (or {:name :keyword :meta {:keyword :any} & r} :nil)
+              & r}]
+   :ret {:label :string :sample-rate :number? :keys @{:any :tuple}}}
   "The label, head sampling rate and memoized label tuples of the
   request's route."
   [req]
@@ -231,6 +242,8 @@
     unmatched-info))
 
 (defn- labels
+  {:params [{:label :string :keys @{:any :tuple} & r} :keyword :number?]
+   :ret :tuple}
   ``The memoized label tuple for one [method status?] of a route —
   built on the first request that needs it and looked up afterwards.
   The cache is capped: past `max-label-keys` entries the tuple is
@@ -338,6 +351,9 @@
 # -- the middleware ------------------------------------------------------
 
 (defn tracing?
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret :boolean
+   :narrows :any}
   ``Will this request get a root span? Only when something consumes
   it: an exporter is configured, `[:obs :trace :always]` asks for one,
   or the caller sent a `traceparent` and is tracing this request
@@ -350,7 +366,18 @@
        (or (trace/consuming?)
            (truthy? (ring/request-header req trace/traceparent-header)))))
 
-(defn- traced [handler req info]
+(defn- traced
+  {:params [(fn [@{:headers {:string (or :string @[:string])} :method :keyword
+                   :path :string :request-id :string? & r}]
+              @{:status :number :body :any :headers @{:string :any}})
+            @{:headers {:string (or :string @[:string])} :method :keyword
+              :path :string :request-id :string? & r}
+            {:label :string :sample-rate :number? & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Run `handler` inside the request's root span: attributes for
+  method, path and route, the response status recorded once the
+  handler answers, and a 5xx marking the span itself failed."
+  [handler req info]
   (trace/with-span* (info :label)
     {:parent nil
      :remote (trace/parse-traceparent (ring/request-header req "traceparent"))
@@ -421,11 +448,16 @@
 (def health-path "Where the health report is served." "/health")
 (def ready-path "Where the readiness answer is served." "/ready")
 
-(defn- off []
+(defn- off
+  {:params [] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The 404 an obs endpoint answers with when it is turned off in
+  config."
+  []
   (ring/response 404 "404 Not Found — this obs endpoint is off ([:obs-http :endpoints])"
                  @{"content-type" "text/plain; charset=utf-8"}))
 
 (defn- same-secret?
+  {:params [:any :any] :ret :boolean :narrows :any}
   ``Compare two secrets without leaking their common prefix in the
   time it takes. A token check is not a hot path, and a comparison
   that returns early is the one thing about it worth being careful
@@ -439,19 +471,32 @@
     (set diff (bor diff (bxor (in x i) (in y i)))))
   (zero? diff))
 
-(defn- authorized? [req]
+(defn- authorized?
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret :boolean
+   :narrows :any}
+  "Does this request carry the configured bearer token, when one is
+  set? True when [:obs-http :token] is unset — no token means no
+  door."
+  [req]
   (if-let [token (settings :token)]
     (if-let [given (ring/request-header req "authorization")]
       (same-secret? (string "Bearer " token) given)
       false)
     true))
 
-(defn- unauthorized []
+(defn- unauthorized
+  {:params [] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The 401 an obs endpoint answers with when the bearer token is
+  missing or wrong."
+  []
   (ring/response 401 "401 Unauthorized"
                  @{"content-type" "text/plain; charset=utf-8"
                    "www-authenticate" "Bearer"}))
 
 (defn metrics-handler
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``GET /metrics — the Prometheus text exposition of every metric this
   process holds. Public so an application can mount it on a path (or a
   port) of its own.``
@@ -463,6 +508,9 @@
                    @{"content-type" prometheus/content-type})))
 
 (defn health-report
+  {:params []
+   :ret {:status (enum :up :down) :components {:keyword {:status :any & r}}
+         :ready :boolean}}
   ``The health of this process as data — `plugin/health` (every
   running component's `:health` plus every `:void.core/health`
   contribution, folded) with this endpoint's own readiness flag on
@@ -472,7 +520,12 @@
   []
   (merge (plugin/health boot-ref) {:ready ready}))
 
-(defn- json-response [status value]
+(defn- json-response
+  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A JSON response of `value`, run through `obslog/jsonable` first so
+  a health contribution that returns a raw janet value never throws
+  in the encoder."
+  [status value]
   # every value that reaches here has been through jsonable: a health
   # contribution may return anything at all, and an endpoint that
   # throws because a component reported a function is an endpoint that
@@ -481,6 +534,8 @@
                  @{"content-type" "application/json"}))
 
 (defn health-handler
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``GET /health — the health report, 200 when nothing is down and 503
   when something is. Behind the same bearer token as /metrics when
   `[:obs-http :token]` is set: the report folds every component's
@@ -496,6 +551,8 @@
       (json-response (if (= :down (report :status)) 503 200) report))))
 
 (defn ready-handler
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``GET /ready — is this process taking traffic? The flag and the
   component states, and deliberately nothing else: a readiness probe
   runs every second or two, and one that reaches a database turns a

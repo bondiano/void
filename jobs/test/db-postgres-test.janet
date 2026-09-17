@@ -32,7 +32,10 @@
 (def p (pool/make (server/driver {:application-name "void-jobs-pg-test"})
                   {:size 8}))
 
-(defn- drop-tables! []
+(defn- drop-tables!
+  {:params [] :ret :any}
+  "Drop this suite's table and its lock/rate tables."
+  []
   # client_min_messages: DROP IF EXISTS on a table that is not there is
   # the normal case here, and three NOTICEs per run would train the eye
   # to skip the output this suite exists to produce

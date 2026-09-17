@@ -28,6 +28,7 @@
   {:trace 10 :debug 20 :info 30 :warn 40 :error 50 :fatal 60})
 
 (defn- level-num
+  {:params [:keyword] :ret :number :throws [:string]}
   "The numeric rank of a level keyword, or an error naming the known
   levels."
   [l]
@@ -47,6 +48,7 @@
     :closers @[]})     # async sink shutdown thunks (see close!)
 
 (defn set-level!
+  {:params [(or :string :nil) :keyword] :ret :keyword :throws [:string]}
   ``Set the minimum level for a namespace prefix ("my-app.orders"), or
   the root minimum with nil/"" — runtime-changeable:
 
@@ -61,6 +63,7 @@
   level)
 
 (defn- parent-ns
+  {:params [:string] :ret :string}
   "\"a.b.c\" -> \"a.b\"; \"a\" -> \"\"."
   [s]
   (var last-dot nil)
@@ -69,6 +72,7 @@
   (if last-dot (string/slice s 0 last-dot) ""))
 
 (defn level-for
+  {:params [:string] :ret :number}
   "The effective numeric minimum for a namespace: the longest dotted
   prefix with an explicit level, else the root minimum. Memoized —
   the disabled-level fast path is one table lookup."
@@ -87,6 +91,7 @@
         n)))
 
 (defn enabled?
+  {:params [:string :keyword] :ret :boolean :narrows :any}
   "Is `level` on for `ns`? The macros call this before evaluating
   anything else."
   [ns level]
@@ -99,11 +104,13 @@
   :void.core.log/context)
 
 (defn context
+  {:params [] :ret {:keyword :any}}
   "The current bound context (or {})."
   []
   (or (dyn context-dyn) {}))
 
 (defmacro with-context
+  {:params [:any :any] :ret a}
   ``Bind extra kv pairs to every record emitted in `body` (per-fiber — the child logger of):
 
       (log/with-context {:request-id id} (handler req))``
@@ -116,6 +123,7 @@
      ,;body))
 
 (defn carrying
+  {:params [(fn [& :any] :any)] :ret (fn [& :any] :any)}
   "Wrap `f` so it runs with the context bound at wrap time — for
   handing work to ev/go, whose fibers do not inherit dyns."
   [f]
@@ -136,6 +144,7 @@
   [:message :msg :error])
 
 (defn message-of
+  {:params [:any (or :number :nil)] :ret :string}
   ``What an error value *says*, as a string.
 
   Errors in void are frequently values rather than strings — a status
@@ -154,7 +163,10 @@
   fixed here.``
   [e &opt limit]
   (default limit 500)
-  (defn cut [s]
+  (defn cut
+    {:params [:string] :ret :string}
+    "Truncate `s` to `limit` characters, an ellipsis marking the cut."
+    [s]
     (if (> (length s) limit) (string (string/slice s 0 (- limit 3)) "...") s))
   (cond
     (or (string? e) (buffer? e)) (cut (string e))
@@ -170,6 +182,8 @@
 # -- redaction and serializers -------------------------------------------
 
 (defn- redact
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}]
+   :ret @{:ts :number :level :keyword :ns :string :msg :any & r}}
   "Blank, in place, every configured redaction path the record has a
   value at."
   [rec]
@@ -179,6 +193,8 @@
   rec)
 
 (defn- serialize
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}]
+   :ret @{:ts :number :level :keyword :ns :string :msg :any & r}}
   "Apply the registered serializers to the record in place, each to its
   key when present; a serializer that throws leaves a placeholder
   naming its error rather than losing the record."
@@ -216,12 +232,14 @@
   {10 "90" 20 "36" 30 "32" 40 "33" 50 "31" 60 "35"})
 
 (defn- fmt-ts
+  {:params [:number] :ret :string}
   "A timestamp as the local HH:MM:SS the pretty sink prints."
   [ts]
   (def d (os/date (math/floor ts) true))
   (string/format "%02d:%02d:%02d" (d :hours) (d :minutes) (d :seconds)))
 
 (defn- kv-str
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}] :ret :string}
   "The record's extra keys as ` k=v ...` in key order for the pretty
   sink — the four standard keys are printed by the line itself; empty
   when there are none."
@@ -233,6 +251,8 @@
   (if (empty? parts) "" (string " " (string/join parts " "))))
 
 (defn pretty-sink
+  {:params [(or {:color :boolean? & r} :nil)]
+   :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
   "Synchronous human sink: one colored line per record to stderr
   (colors only on a tty)."
   [&opt opts]
@@ -249,6 +269,8 @@
              (rec :ns) (rec :msg) (kv-str rec))))
 
 (defn jdn-sink
+  {:params [(or {:buffer :number? :stream :abstract? & r} :nil)]
+   :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
   ``Production sink: JDN lines (janet %j — machine-parseable, JSON-ish
   for plain data) written by a dedicated fiber behind a buffered
   channel. A full buffer drops the record and counts it —
@@ -260,7 +282,11 @@
   (def cap (get opts :buffer 1024))
   (def out (get opts :stream stderr))
   (def chan (ev/chan cap))
-  (defn write! [rec]
+  (defn write!
+    {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}] :ret :nil}
+    "Write one record synchronously, bypassing the buffered channel —
+    used for :fatal, which never waits behind a full buffer."
+    [rec]
     (xprintf out "%j" rec))
   (ev/go (fn jdn-writer []
            # batch whatever queued into one write — fewer syscalls
@@ -289,6 +315,7 @@
         (ev/give chan rec)))))
 
 (defn dropped
+  {:params [] :ret :number}
   "Records dropped by full async sink buffers since startup."
   []
   (state :dropped))
@@ -296,6 +323,7 @@
 (def- default-sinks [(pretty-sink)])
 
 (defn close!
+  {:params [] :ret :nil}
   "Shut down async sink writers (jdn-sink fibers). Called by
   plugin/shutdown!; safe to call twice."
   []
@@ -304,6 +332,8 @@
   nil)
 
 (defn set-sinks!
+  {:params [(or [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)] :nil)]
+   :ret :nil}
   "Replace the active sinks (tuple/array of (fn [record])). nil
   restores the default pretty stderr sink. Close previous async
   writers with (log/close!) BEFORE constructing replacements —
@@ -312,17 +342,20 @@
   (put state :sinks sinks))
 
 (defn sinks
+  {:params [] :ret [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)]}
   "The active sink list (the default pretty sink when none set)."
   []
   (or (state :sinks) default-sinks))
 
 (defn set-serializers!
+  {:params [(or {:keyword (fn [:any] :any)} :nil)] :ret :nil}
   "Replace the serializer table (key -> fn). The :err serializer is
   merged in unless overridden."
   [sers]
   (put state :serializers (merge {:err err-serializer} (or sers {}))))
 
 (defn set-redact!
+  {:params [(or [[:keyword]] :nil)] :ret :nil}
   "Replace the redaction paths ([[:password] [:user :token] ...])."
   [paths]
   (put state :redact (or paths [])))
@@ -332,6 +365,7 @@
 # -- emission ------------------------------------------------------------
 
 (defn emit
+  {:params [:string :keyword :any :any] :ret :nil :throws [:string]}
   "Assemble and dispatch one record — the macros call this after the
   level check. kvs are key-value pairs."
   [ns level msg & kvs]
@@ -349,6 +383,7 @@
   nil)
 
 (defn ns-from-file
+  {:params [:string] :ret :string}
   "Derive a dotted log namespace from a source path: strip the
   extension, dots for slashes, leading ./ and / trimmed."
   [file]
@@ -361,7 +396,12 @@
             (string/split "/" no-ext))
     "."))
 
-(defmacro- deflevel [name level]
+(defmacro- deflevel
+  {:params [:symbol :keyword] :ret :function}
+  "Define one level macro (`log/trace`, `log/info`, ...): the
+  generated macro reads its call site's file for the namespace,
+  short-circuiting to nothing when the level is off."
+  [name level]
   ~(defmacro ,name
      ,(string "Log at :" name " — `(log/" name " \"msg\" :k v ...)`. "
               "Arguments are NOT evaluated when the level is off for "
@@ -404,6 +444,16 @@
    :buffer [:optional [:int {:min 1}]]})
 
 (defn configure!
+  {:params [(or {:level :keyword?
+                 :levels (or {:string :keyword} :nil)
+                 :sink :keyword?
+                 :redact (or [[:keyword]] :nil)
+                 :buffer :number?
+                 & r}
+                :nil)
+            :keyword]
+   :ret :keyword
+   :throws [:string]}
   ``Apply the [:log] config slice for a profile: root/per-ns levels,
   redaction, and the built-in sink — :pretty (default for :dev/:test)
   or :jdn (default for any other profile). Contributed sinks and

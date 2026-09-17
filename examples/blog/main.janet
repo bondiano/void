@@ -55,6 +55,7 @@
    :postgres (fn [] (require "void/db-postgres/init") :void/db-postgres)})
 
 (defn plugins
+  {:params [:keyword] :ret [:keyword] :throws [:string]}
   ``The composition, as a function of the one thing that changes.
   Everything but the driver is the same list on either engine — which
   is the wave-2 demo, and what test/crud-test.janet asserts.``
@@ -110,5 +111,8 @@
   {:plugins (plugins database)
    :profile (keyword (or (os/getenv "VOID_PROFILE") "dev"))})
 
-(defn main [& args]
+(defn main
+  {:params [:any] :ret @{:keyword :any} :throws [:string]}
+  "The executable's entrypoint."
+  [& args]
   (void/run! app))

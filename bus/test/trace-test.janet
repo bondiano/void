@@ -34,7 +34,13 @@
 # halves of this suite. Composing obs is the decision to observe, and
 # it is the one the broker reads at :start.
 
-(defn- start [plugins &opt extra]
+(defn- start
+  {:params [(or @[:any] [:any]) (or :nil {:keyword :any})]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Start a test system on `plugins`, with `extra` merged into the CLI
+  profile's config."
+  [plugins &opt extra]
   (test/start! {:plugins plugins
                 :profile :test
                 :config {:env @{}

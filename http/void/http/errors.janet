@@ -35,6 +35,10 @@
   {:status 400 :doc "the request could not be read: a body its codec cannot decode, malformed signals"})
 
 (defn abort
+  {:params [:number :string? (or {:keyword :any} :nil)]
+   :ret :never
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+            :status :number :http/status :number}]}
   ``Throw an HTTP error the panic guard answers with its status:
   (abort 404) (abort 422 "invalid state"). An envelope of kind
   :void.http/abort — `(errors/raise kind message data)` is the same
@@ -42,13 +46,17 @@
   [status &opt message data]
   (errors/raise :void.http/abort message data status))
 
-(defn- html-escape [s]
+(defn- html-escape
+  {:params [:any] :ret :string}
+  "Escape &, < and > for safe interpolation into HTML markup."
+  [s]
   (->> (string s)
        (string/replace-all "&" "&amp;")
        (string/replace-all "<" "&lt;")
        (string/replace-all ">" "&gt;")))
 
 (defn stacktrace-str
+  {:params [:fiber :any] :ret :string}
   "Render a fiber's stacktrace for an error value into a string."
   [fib err]
   (def out @"")
@@ -56,7 +64,12 @@
     (debug/stacktrace fib err ""))
   (string out))
 
-(defn- err-message [err]
+(defn- err-message
+  {:params [:any] :ret :string}
+  "The one-line human message for a caught error: its own :message or
+  a translated one when a locale is bound, else the status's standard
+  phrase."
+  [err]
   (def env (errors/of err))
   (if (or (get env :message) (get (dyn :void.errors/messages {}) (errors/kind env)))
     (errors/message env)
@@ -80,6 +93,7 @@
 (def- t (text/translator en))
 
 (defn- status-title
+  {:params [:number] :ret :string}
   ``The phrase next to the code. The reason phrases are the protocol's
   own English and this package ships no translation of them — but a
   catalog that carries `:void.http/status-404` is a catalog that means
@@ -116,6 +130,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 ::selection{background:rgba(76,194,255,.25)}`)
 
 (defn- html-error-page
+  {:params [:number :string] :ret @{:headers @{:string :any} & r}}
   ``One self-contained error page. It carries its own <style>, so it
   also carries its own Content-Security-Policy — the tightest one an
   inline-styled page can have. The security middleware keeps a CSP a
@@ -136,6 +151,9 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                "default-src 'none'; style-src 'unsafe-inline'"))
 
 (defn dev-page
+  {:params [:any @{:method :keyword :path :string & r}
+            {:status :number :dev :any :stacktrace :string? :error :any}]
+   :ret @{:headers @{:string :any} & r}}
   "The dev error page: status, message, stacktrace, request summary."
   [err req ctx]
   (def trace (string/trim (or (ctx :stacktrace) "")))
@@ -151,6 +169,8 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
       "<dt>route</dt><dd>" (html-escape (string (get-in req [keys/route :name]))) "</dd></dl>")))
 
 (defn wants-html?
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret :boolean :narrows :any}
   "Is this a browser? The Accept header says text/html; an API client,
   a curl and a health probe do not. Public because the 404/405 path
   (init's route-or-404) is outside every renderer and asks the same
@@ -159,11 +179,16 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   (def accept (get-in req [:headers "accept"]))
   (and (string? accept) (truthy? (string/find "text/html" accept))))
 
-(defn- hint [status]
+(defn- hint
+  {:params [:number] :ret :string?}
+  "The translated one-sentence recovery hint for a status, or nil when
+  this package has none for it."
+  [status]
   (def key (keyword "void.http/hint-" status))
   (when (get en key) (t key)))
 
 (defn prod-page
+  {:params [:number] :ret @{:headers @{:string :any} & r}}
   ``The error page a browser gets outside dev: the status, the
   standard phrase, one sentence of recovery — and none of the detail,
   which is the same rule problem+json follows for a 5xx.``
@@ -177,6 +202,9 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
         ""))))
 
 (defn default-renderer
+  {:params [:any @{:method :keyword :path :string :headers {:string (or :string @[:string])} & r}
+            {:status :number :dev :any :stacktrace :string? :error :any}]
+   :ret @{:headers @{:string :any} & r}}
   "The floor renderer: the dev page in dev, a presentable HTML page
   for a browser, terse text for everything else."
   [err req ctx]
@@ -188,6 +216,11 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                        (get wire/status-messages (ctx :status) "Error")))))
 
 (defn render
+  {:params [(or @[{:fn (or :function :cfunction) :name :keyword & r}] :nil)
+            :any
+            @{:method :keyword :path :string :headers {:string (or :string @[:string])} & r}
+            {:status :number :dev :any :stacktrace :string? :error :any}]
+   :ret @{:headers @{:string :any} & r}}
   ``Run the renderers (sorted contributions of
   :void.http/error-renderer) over an error; the first response wins,
   default-renderer is the guaranteed fallback.
@@ -215,6 +248,14 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
           (default-renderer err req ctx)))))
 
 (defn wrap-panic
+  {:params [(or :function :cfunction)
+            (or {:renderers (or @[{:fn (or :function :cfunction) :name :keyword & r}] :nil)
+                 :dev :any
+                 :on-error (or @[(or :function :cfunction)] :function :cfunction :nil)
+                 :log (or (fn [:any :any :string?] :any) :nil)
+                 & r}
+                :nil)]
+   :ret :function}
   ``The phase-0 panic guard. Options:
     :renderers  :void.http/error-renderer contributions, priority order
     :dev        truthy exposes stacktraces (dev error page)

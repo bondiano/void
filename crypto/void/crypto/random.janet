@@ -20,6 +20,7 @@
   32)
 
 (defn bytes
+  {:params [:number?] :ret :string :throws [:string]}
   "n cryptographically random bytes from the OS."
   [&opt n]
   (default n default-size)
@@ -28,6 +29,7 @@
   (os/cryptorand n))
 
 (defn token
+  {:params [:number?] :ret :string :throws [:string]}
   ``A URL- and cookie-safe random token: n random bytes as base64url
   (43 characters for the default 32 bytes). This is what an API token,
   a magic-link code and a session id are made of.``
@@ -35,12 +37,14 @@
   (encode/base64url (bytes n)))
 
 (defn hex-token
+  {:params [:number?] :ret :string :throws [:string]}
   "The same randomness spelled in hex — for places that must stay
   case-insensitive or alphanumeric (a URL path segment, an OTP link)."
   [&opt n]
   (encode/hex (bytes n)))
 
 (defn digits
+  {:params [:number?] :ret :string :throws [:string]}
   ``A numeric one-time code of `n` digits, uniform and without modulo
   bias: rejection sampling over whole bytes rather than `(% x 10)`,
   which would make 0-5 more likely than 6-9 on a 256-value byte.``

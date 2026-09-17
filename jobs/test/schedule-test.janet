@@ -8,9 +8,20 @@
 
 (each ns ["void.jobs" "void.jobs.schedule" "void.jobs.worker"] (log/set-level! ns :fatal))
 
-(defn- queue [] (state/make (memory/store (memory/make)) {}))
+(defn- queue
+  {:params []
+   :ret @{:backend {:keyword :any} :config {:keyword :any} :queues {:keyword :any}
+          :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
+                    :timeout :number? :claim-ttl :number & r}
+          :stats @{:enqueued :number :duplicates :number}}}
+  "A fresh in-process queue value, for a test that needs its own."
+  []
+  (state/make (memory/store (memory/make)) {}))
 
-(defmacro- with-queue [q & body]
+(defmacro- with-queue
+  {:params [:any :any] :ret :tuple}
+  "Run `body` with `q` bound as the active queue."
+  [q & body]
   ~(with-dyns [state/queue-dyn ,q] ,;body))
 
 (job/defjob report [& args] args)

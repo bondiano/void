@@ -61,6 +61,7 @@
   native/direction)
 
 (defn ready?
+  {:params [(enum :read :write :hup :err :closed)] :ret :boolean :narrows (enum :read :write)}
   ``Did a wait end in a readiness (:read / :write) rather than in
   :hup, :err or :closed? The one predicate worth having over `wait`'s
   return value.``
@@ -68,6 +69,9 @@
   (or (= :read outcome) (= :write outcome)))
 
 (defn wait-once
+  {:params [:number (enum :read :write :both)]
+   :ret (enum :read :write :hup :err :closed)
+   :throws [:string]}
   ``Wait once on a throwaway watcher, returning `wait`'s outcome.
   Convenient for a one-off; in a loop use `pair`, which does not
   allocate a watcher and an event-loop registration per wait.``
@@ -77,6 +81,7 @@
     (wait w)))
 
 (defmacro with-watcher
+  {:params [:tuple :any] :ret a}
   "Run the body with `binding` bound to a watcher over fd, closed on
   the way out (on the error path too)."
   [[binding fd dir] & body]
@@ -87,6 +92,7 @@
 # -- a long-lived pair ---------------------------------------------------
 
 (defn pair
+  {:params [:number] :ret @{:fd :number :read :nil :write :nil}}
   ``Both directions of one descriptor, created on first use and kept
   for the life of the connection: a driver waits thousands of times on
   the same socket, and a dup() plus an event-loop registration per wait
@@ -99,19 +105,25 @@
   [fd]
   @{:fd fd :read nil :write nil})
 
-(defn- watcher-for [p dir]
+(defn- watcher-for
+  {:params [@{:fd :number & r} (enum :read :write)] :ret :abstract}
+  "The watcher for one direction of a pair, creating and caching it on
+  first use."
+  [p dir]
   (or (get p dir)
       (let [w (watch (p :fd) dir)]
         (put p dir w)
         w)))
 
 (defn await
+  {:params [@{:fd :number & r} (enum :read :write)] :ret (enum :read :write :hup :err :closed)}
   ``Wait on one direction of a `pair`, reusing its watcher. Same
   return values as `wait`.``
   [p dir]
   (wait (watcher-for p dir)))
 
 (defn release!
+  {:params [@{:fd :number & r}] :ret @{:fd :number & r}}
   "Close both watchers of a pair; it can be used again afterwards."
   [p]
   (each dir [:read :write]
@@ -121,6 +133,7 @@
   p)
 
 (defn refresh!
+  {:params [@{:fd :number & r} :number] :ret @{:fd :number & r}}
   ``Point a pair at a (possibly new) descriptor, dropping the watchers
   when it actually moved. libpq's socket changes while connecting to a
   multi-host cluster, and a watcher over the previous one would wait

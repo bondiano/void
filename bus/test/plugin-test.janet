@@ -11,11 +11,21 @@
 
 (def plugins ["void/bus/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env :table :cli :table}}
+  "The test system's :config, with `extra` merged over the CLI
+  profile's own."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}} extra)})
 
-(defn- start [&opt extra profile]
+(defn- start
+  {:params [(or :nil {:keyword :any}) :keyword?]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Start a test system on this suite's one plugin, with `extra`
+  merged into its config."
+  [&opt extra profile]
   (test/start! {:plugins plugins
                 :profile (or profile :test)
                 :config (config (or extra {}))}))

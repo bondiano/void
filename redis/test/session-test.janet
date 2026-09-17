@@ -25,13 +25,20 @@
 # -- the routes the request test drives ----------------------------------
 
 (defn visit
+  {:params [{:session @{:any :any} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   "Counts visits in the session, and answers with the count."
   [req]
   (def s (req :session))
   (put s :visits (inc (get s :visits 0)))
   (ring/text 200 (string (s :visits))))
 
-(defn logout [_req]
+(defn logout
+  {:params [:any]
+   :ret @{:status :number :body :any :headers @{:string :any} :session :keyword}}
+  "Ends the session: the response's :session :delete tells the
+  middleware to drop it."
+  [_req]
   (put (ring/text 200 "bye") :session :delete))
 
 (def app-routes

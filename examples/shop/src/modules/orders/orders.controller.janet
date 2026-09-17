@@ -20,7 +20,11 @@
 (import ./orders.service :as service)
 (import ./orders.view :as view)
 
-(defn- refusal-message [result]
+(defn- refusal-message
+  {:params [{:reason :keyword :product (or {:name :string? & r} :nil) & r}]
+   :ret :string}
+  "The sentence a refused checkout shows, by why it was refused."
+  [result]
   (case (result :reason)
     :empty "There is nothing in your cart."
     :out-of-stock (string "Sorry — "
@@ -31,6 +35,12 @@
     "Something went wrong placing that order. Nothing has been charged."))
 
 (defn place-order
+  {:params [:any]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r})
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
   "POST /checkout — the transaction in ./orders.service, and the two
   answers it can give."
   [req]
@@ -45,11 +55,20 @@
     (cart-controller/checkout-refused req (refusal-message result))))
 
 (defn my-orders
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET /orders — the caller's own, newest first."
   [req]
   (layout/page (view/orders-view (repo/of-customer (customers/current-id)))))
 
 (defn show-order
+  {:params [{:params {:number :any & r} & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
   ``GET /orders/:number — one order.
 
   The policy on the route already decided that this caller may see it

@@ -110,7 +110,15 @@
   "The store the rate limiter counts in."
   nil)
 
-(defn- merge-slice [cfg]
+(defn- merge-slice
+  {:params [(or {:csrf :any :headers :any :cors :any :rate :any :csp :any & r} :nil)]
+   :ret {:signing-key :any :previous-keys @[:any] :trusted-proxies @[:string]
+         :forwarded-header :string :csrf :any :headers :any :cors :any :rate :any
+         :csp :any & r}}
+  "Merge a config table (or nil) over `defaults`, with the nested
+  :csrf/:headers/:cors/:rate/:csp slices merged on their own so a
+  config setting only one of a slice's keys does not drop the rest."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   (each key [:csrf :headers :cors]
     (put c key (merge (defaults key) (get cfg key {}))))
@@ -120,7 +128,11 @@
     (put c :csp (merge (c :csp) {:policy policy})))
   c)
 
-(defn- ip-config [cfg]
+(defn- ip-config
+  {:params [{:trusted-proxies (or @[:string] :nil) :forwarded-header :string? & r}]
+   :ret {:trusted-proxies @[:string] :forwarded-header :string}}
+  "The [:security] slice narrowed to what `ip/client-ip` needs."
+  [cfg]
   {:trusted-proxies (get cfg :trusted-proxies [])
    :forwarded-header (get cfg :forwarded-header "x-forwarded-for")})
 
@@ -131,6 +143,7 @@
   :void.security/nonce)
 
 (defn nonce
+  {:params [] :ret :string?}
   ``This request's CSP nonce, or nil when the policy does not use one.
   A template puts it on an inline script: `[:script {:nonce
   (security/nonce)} ...]`.``
@@ -138,18 +151,27 @@
   (dyn nonce-dyn))
 
 (defn csrf-token
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}]
+   :ret :string :throws [:string]}
   "The CSRF token for this request — what a form field or a fetch()
   header carries."
   [req]
   (csrf/token-for req (settings :csrf)))
 
 (defn csrf-field
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}]
+   :ret [:keyword {:type :string :name :string :value :string}] :throws [:string]}
   "The hidden input, as hiccup. void/html splices it into every non-GET
   form on its own; this is for a form built by hand."
   [req]
   (csrf/field-markup req (settings :csrf)))
 
 (defn htmx-meta
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}]
+   :ret [[:keyword {:name :string :content :string}]] :throws [:string]}
   ``The `<meta>` tags htmx (and any fetch()) reads the token from:
 
       (html/page {:head (security/htmx-meta req)} ...)``
@@ -157,12 +179,17 @@
   (csrf/meta-markup req (settings :csrf)))
 
 (defn htmx-attrs
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}]
+   :ret {:hx-headers:inherited :string} :throws [:string]}
   "The `hx-headers:inherited` attribute for `<body>`, so every htmx
   request the page makes carries the token."
   [req]
   (csrf/hx-headers req (settings :csrf)))
 
 (defn client-ip
+  {:params [@{:headers {:string (or :string @[:string])} :remote-addr :string? & r}]
+   :ret :string?}
   "The address this request is attributed to."
   [req]
   (ip/client-ip req (ip-config settings)))
@@ -218,11 +245,16 @@
                    :rate (get-in cfg [:rate :enabled])
                    :trusted-proxies (length (cfg :trusted-proxies))))})
 
-(defn- cache-store [boot]
+(defn- cache-store
+  {:params [{:system :any & r}] :ret :any}
+  "The running `:void/cache-store` instance, or nil when this
+  composition has none."
+  [boot]
   (def [ok inst] (protect (system/instance (boot :system) :void/cache-store)))
   (when ok inst))
 
 (defn- resolve-limiter-store
+  {:params [{:system :any & r} {:store :keyword? & r}] :ret :any :throws [:string]}
   "The store [:security :rate :store] names, resolved against a
   running system. Called at :after-start for the wrappers, and again
   by the deployment survey — `void deploy check` starts the components
@@ -329,10 +361,15 @@
 
 # -- CSRF ----------------------------------------------------------------
 
-(defn- csrf-cookie! [req resp cfg]
+(defn- csrf-cookie!
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/fresh-binding :string? & r}
+            a
+            {:cookie :string? :cookie-opts :any & r}]
+   :ret a}
   ``Make sure the browser has something to bind a token to. Only when
   the request had no session and no CSRF cookie — a session-bearing
   request binds to the session and needs no cookie of ours.``
+  [req resp cfg]
   (when (and (dictionary? resp) (nil? (csrf/binding-of req cfg)))
     (when-let [fresh (get req :void.security/fresh-binding)]
       (ring/set-cookie resp (get cfg :cookie "void-csrf") fresh
@@ -345,6 +382,7 @@
   {:status 429 :doc "a rate limit refused the request; :data {:limit :window}"})
 
 (defn refused
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret :any}
   "The 403 for a request whose CSRF token was missing or wrong — through
   the error renderers, like every other refusal in void."
   [req]
@@ -396,14 +434,24 @@
 
 # -- rate limiting -------------------------------------------------------
 
-(defn- rate-config [rmeta]
+(defn- rate-config
+  {:params [{:void.security/rate :any & r}] :ret (or {:limit :number :window :number & r} :nil)}
+  "The effective rate-limit spec for this route: its own
+  `:void.security/rate`, or the configured global — nil when the
+  limiter is off or neither applies."
+  [rmeta]
   (def cfg (settings :rate))
   (def route (get rmeta :void.security/rate))
   (when (get cfg :enabled)
     (when-let [spec (or route (get cfg :global))]
       (merge cfg spec))))
 
-(defn- rate-key [req spec]
+(defn- rate-key
+  {:params [@{:headers {:string (or :string @[:string])} :remote-addr :string? & r} {:key :any & r}]
+   :ret :any}
+  "The value one request counts against: the address, the
+  authenticated subject, or whatever `:key` (a function) computes."
+  [req spec]
   (def key (get spec :key :ip))
   (cond
     (function? key) (key req)
@@ -414,7 +462,14 @@
                          (client-ip req))
     (client-ip req)))
 
-(defn- limited [req spec result]
+(defn- limited
+  {:params [@{:headers {:string (or :string @[:string])} & r}
+            {:message :string? :limit :number? :window :number? :status :number? & r}
+            {:limit :number :remaining :number :reset :number :allowed :boolean & r}]
+   :ret :any}
+  "The 429 for a refused request, with the RateLimit-* headers
+  attached."
+  [req spec result]
   (def resp (http/render-error (errors/make :void.security/rate-limited
                                             (get spec :message "too many requests")
                                             {:limit (get spec :limit) :window (get spec :window)}
@@ -424,7 +479,13 @@
     (ring/header resp name value))
   resp)
 
-(defn- rate-wrapper [phase name subject?]
+(defn- rate-wrapper
+  {:params [:number :keyword :boolean]
+   :ret {:name :keyword :phase :number :doc :string :when (fn [:any] :any)
+         :route-aware :boolean :wrap (fn [:any :any] (fn [:any] :any))}}
+  "One :void.http/middleware contribution for the rate limiter, keyed
+  by address (`subject?` false) or by authenticated subject."
+  [phase name subject?]
   {:name name
    :phase phase
    :doc (if subject?
@@ -471,6 +532,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn print-status
+  {:params [] :ret :nil}
   "Print what this process will send — the body of `void security
   headers`."
   []

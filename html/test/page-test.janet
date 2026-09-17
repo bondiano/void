@@ -12,7 +12,11 @@
 
 # -- pager: pagination as one call ----------------------------------------
 
-(defn- render [x] (hiccup/render-string x))
+(defn- render
+  {:params [:any] :ret :string :throws [:string]}
+  "Render hiccup to a string, for the assertions below."
+  [x]
+  (hiccup/render-string x))
 
 (def p2 (render (html/pager {:page 2 :per-page 25 :total 130
                              :href (fn [p] (string "/orders?page=" p))})))
@@ -56,20 +60,41 @@
 
 # -- the app: one route that flashes, one page that shows ----------------
 
-(defn layout [content context]
+(defn layout
+  {:params [:any (or {:request :any & r} :nil)] :ret @[:any]}
+  "The app's one layout: the flash slot above the content, when a
+  request (carrying a session) is in the render context."
+  [content context]
   (def req (get context :request))
   (hiccup/html5
     [:head [:title "flash"]]
     [:body (when req (html/flash-view req)) [:main content]]))
 
-(defn home [req]
+(defn home
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "The page that shows whatever flash the last request queued."
+  [req]
   (html/page [:h1 "home"] {:layout layout}))
 
-(defn save [req]
+(defn save
+  {:params [(or {:session (or @{:any :any} :nil) & r} :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
+  "Queue one flash and redirect home."
+  [req]
   (html/flash! req :ok "Saved.")
   (ring/redirect "/"))
 
-(defn warn-two [req]
+(defn warn-two
+  {:params [(or {:session (or @{:any :any} :nil) & r} :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
+  "Queue two flashes in order, to check they show in the order
+  queued."
+  [req]
   (html/flash! req :warn "first")
   (html/flash! req :danger "second")
   (ring/redirect "/"))

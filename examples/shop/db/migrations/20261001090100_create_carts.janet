@@ -3,7 +3,11 @@
 # holding it signs in (shop/cart:adopt!). That is why the foreign key
 # is nullable and the token is the unique one.
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create the carts and cart_items tables, and the indexes the
+  merge-into-cart write and the abandoned-cart sweep read by."
+  []
   [{:create-table "carts"
     :columns [[:id :serial {:primary-key true}]
               [:token :text {:null false :unique true}]
@@ -25,6 +29,9 @@
 
    {:create-index "carts_updated_idx" :on "carts" :columns [:updated-at]}])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop the cart_items and carts tables."
+  []
   [{:drop-table "cart_items"}
    {:drop-table "carts"}])

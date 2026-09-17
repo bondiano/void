@@ -10,13 +10,19 @@
 
 (import spork/json)
 
-(defn- attr-value [v]
+(defn- attr-value
+  {:params [:any] :ret :string}
+  "A single attribute value as Datastar wants it on the wire: a
+  dictionary JSON-encodes, a boolean stringifies, anything else
+  stringifies as-is."
+  [v]
   (cond
     (dictionary? v) (string (json/encode v))
     (boolean? v) (string v)
     (string v)))
 
 (defn attrs
+  {:params [:any] :ret @{:string :string} :throws [:string]}
   ``Datastar attributes from key-value pairs:
 
       (ds/attrs :text "$count" :show "$open")
@@ -33,18 +39,27 @@
     (put out (string "data-" k) (attr-value v)))
   out)
 
-(defn- camelize [k]
+(defn- camelize
+  {:params [:any] :ret :string}
+  "A dash-case key as the camelCase Datastar option name — `k` is
+  stringified first, so a keyword or a string both work."
+  [k]
   (def [head & tail] (string/split "-" (string k)))
   (string head ;(map |(string (string/ascii-upper (string/slice $ 0 1))
                               (string/slice $ 1))
                      tail)))
 
-(defn- option-value [v]
+(defn- option-value
+  {:params [:any] :ret :string}
+  "An option's literal on the wire: booleans and numbers stay bare,
+  anything else is single-quoted as a JS string literal."
+  [v]
   (cond
     (or (boolean? v) (number? v)) (string v)
     (string "'" v "'")))
 
 (defn action
+  {:params [:keyword :string (or {:keyword :any} :nil)] :ret :string}
   ``A backend action expression for a data-on:* attribute:
 
       (ds/action :post "/inc")
@@ -65,16 +80,19 @@
     (string "@" verb "('" url "')")))
 
 (defn signals
+  {:params [{:keyword :any}] :ret @{:string :string}}
   "data-signals from a dictionary: (ds/signals {:count 0})."
   [table]
   (attrs :signals table))
 
 (defn on
+  {:params [:any :any] :ret @{:string :string}}
   "data-on:<event>: (ds/on :click (ds/action :post \"/inc\"))."
   [event expr]
   (attrs (keyword "on:" event) expr))
 
 (defn load
+  {:params [:any] :ret @{:string :string}}
   ``data-init — the attribute Datastar runs when the element mounts,
   which is how a page opens its stream: (ds/load (ds/action :get
   "/live")). It is `data-init`, not `data-on:load`: the bundle has no
@@ -84,21 +102,25 @@
   (attrs :init expr))
 
 (defn bind
+  {:params [:any] :ret @{:string :string}}
   "data-bind — two-way binding between an input and a signal."
   [signal]
   (attrs :bind (string signal)))
 
 (defn text
+  {:params [:any] :ret @{:string :string}}
   "data-text — the element's text from an expression."
   [expr]
   (attrs :text expr))
 
 (defn show
+  {:params [:any] :ret @{:string :string}}
   "data-show — the element's visibility from an expression."
   [expr]
   (attrs :show expr))
 
 (defn indicator
+  {:params [:any] :ret @{:string :string}}
   "data-indicator — a signal that is true while a request from this
   element is in flight."
   [signal]

@@ -46,6 +46,7 @@
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
 (defn- empty-backlog!
+  {:params [:string] :ret :nil}
   ``Take the bus's log, cursors and outbox, and this suite's job queue,
   back to empty — emptied, not dropped, because the broker and the
   worker are already running over them, and *before* the application's
@@ -64,13 +65,20 @@
   (each t ["void_bus" "void_bus_cursors" "void_bus_outbox" jobs-table]
     (db/execute-sql (string "DELETE FROM " t) [] {:kind :write :prepared false})))
 
-(defn- drop-app-tables! []
+(defn- drop-app-tables!
+  {:params [] :ret :nil}
+  "Drop every table this suite owns, so a pass starts from nothing."
+  []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "The response body as a string."
+  [resp] (test/text resp))
 
 (defn- settle
+  {:params [] :ret :nil}
   ``Forward the outbox and let the consumer catch up. In a deployment
   this is the `:bus.db/forwarder` component and the consumer's own
   poll; here it is a call and a sleep, so what is asserted is the
@@ -79,12 +87,21 @@
   (busdb/forward-once! (bus-state/active-backend) 100)
   (ev/sleep 0.3))
 
-(defn- token-of [resp]
+(defn- token-of
+  {:params [{:body :any & r}] :ret :string?}
+  "The CSRF token embedded in a rendered page, or nil."
+  [resp]
   (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
-(defn run-suite [engine]
+(defn run-suite
+  {:params [{:label :string :database :keyword :config :any & r}] :ret :nil}
+  "Run the admin suite against one engine's composition."
+  [engine]
   (def label (engine :label))
-  (defn note [msg] (print "  [" label "] " msg))
+  (defn note
+    {:params [:string] :ret :nil}
+    "Print one progress line, tagged with the engine under test."
+    [msg] (print "  [" label "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))

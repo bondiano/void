@@ -11,6 +11,7 @@
 (log/set-level! "void.redis.pubsub" :fatal)
 
 (defn- wait-for
+  {:params [:number (fn [] :any)] :ret :any}
   "Poll a predicate for up to `seconds`, letting the loop run. A
   subscriber is another fiber, so a test has to give it a turn."
   [seconds pred]

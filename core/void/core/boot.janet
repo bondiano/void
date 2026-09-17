@@ -33,6 +33,7 @@
 (def- allowed-boot-opts {:plugins true :profile true :config true})
 
 (defn- checked
+  {:params [:keyword @[:string] (or {:keyword :string} :nil)] :ret :nil :throws [:string]}
   "Throw the batched phase errors, if any. `sources` (plugin name ->
   :source file) adds a `plugin files:` footer for the plugins the
   errors mention, pointing at the defining files."
@@ -49,6 +50,7 @@
               (string "\n  plugin files:\n    " (string/join files "\n    "))))))
 
 (defn- load-manifests
+  {:params [@[:any] @[:string]] :ret @[{:name :keyword & r}]}
   "Phase 1 (load): resolve :plugins entries — manifest values, keywords
   looked up in manifest-registry, or module paths to require."
   [entries errors]
@@ -83,6 +85,10 @@
   out)
 
 (defn- check-compat
+  {:params [@[{:name :keyword :version :string :void-api :number
+               :requires {:keyword (or :boolean :string)} & r}]
+            @[:string]]
+   :ret :nil}
   "Phase 1 (load): :void-api compatibility and :requires (semver)."
   [ms errors]
   (def versions @{:void/core core/version})
@@ -105,6 +111,8 @@
                                    (m :name) r c (versions r)))))))
 
 (defn- run-on-load
+  {:params [@[{:name :keyword :on-load (or (fn [:any] :any) :nil) & r}] :keyword @[:string]]
+   :ret :nil}
   "Phase 1 (load), last step: call every manifest's :on-load with
   {:name :manifest :plugins :profile} — codegen and the like, before
   any config is read. A throwing hook is one batched error naming
@@ -135,6 +143,9 @@
    {:plugin :void/core :key deploy/config-key :schema deploy/Config}])
 
 (defn- manifest-slice
+  {:params [{:name :keyword :config-key :keyword? :config-schema :any
+             :config-defaults :any & r}]
+   :ret (or {:plugin :keyword :key :keyword :schema :any :defaults :any} :nil)}
   "A manifest's config slice, {:plugin :key :schema :defaults}, or nil
   for a plugin without a :config-key."
   [m]
@@ -143,6 +154,8 @@
      :schema (m :config-schema) :defaults (m :config-defaults)}))
 
 (defn- config-sources
+  {:params [@[{:name :keyword :contributes {:keyword [:any]} & r}] @[:string]]
+   :ret @[(or :function :cfunction)]}
   ``Phase 2 (config): the :void.core/config-source contributions of
   every loaded manifest, resolved through the point's own contract
   (schema, unique :name, :priority order) into the functions
@@ -162,6 +175,14 @@
   (map |($ :fn) (or resolved [])))
 
 (defn- load-boot-config
+  {:params [@[{:name :keyword :config-key :keyword? :config-schema :any
+               :config-defaults :any & r}]
+            {:config (or {:defaults :any & r} :nil) :profile :keyword? & r}
+            @[:string]]
+   :ret (or @{:profile :keyword :values @{:any :any}
+              :provenance @{:any @[{:layer :keyword & r}]}
+              :layers @[{:layer :keyword & r}]}
+             :nil)}
   "Phase 2 (config): layered load with plugin defaults, secret
   references resolved through the contributed config sources, then
   batch validation of every slice — the core's and each manifest's
@@ -191,6 +212,11 @@
         nil)))
 
 (defn- split-active
+  {:params [@[{:name :keyword :when (or (fn [:any] :boolean) :nil)
+               :requires {:keyword (or :boolean :string)} & r}]
+            {:values @{:any :any} & r}
+            @[:string]]
+   :ret [@[{:name :keyword & r}] @[{:name :keyword & r}]]}
   "Phase 3 (conditional): evaluate :when against the config values; an
   inactive plugin contributes neither components nor contributions. An
   active plugin requiring a deactivated one is an error."
@@ -217,6 +243,10 @@
   [active inactive])
 
 (defn- warn-component-schemas
+  {:params [@[{:name :keyword :config-key :keyword? :config-schema :any
+               :components [{:key :keyword :config (or {:key :keyword? :schema :any & r} :nil) & r}]
+               & r}]]
+   :ret :nil}
   "The deprecation notice for `:config :schema` on a component
   (ADR-0046), once per plugin per boot, naming the components: the
   schema is still honoured — system/init validates it through the same
@@ -239,6 +269,14 @@
                 :ns "void.core.boot" :plugin (m :name) :components keyed))))
 
 (defn- build-system
+  {:params [@[{:name :keyword :config-key :keyword? :config-schema :any
+               :components [{:key :keyword :plugin :keyword :provides [:keyword]
+                             :config (or {:key :keyword? :schema :any & r} :nil) & r}]
+               & r}]
+            {:keyword {:resolved :any & r} & r}
+            {:values @{:any :any} & r}
+            @[:string]]
+   :ret (or {:components :any & r} :nil)}
   "Phase 5 (graph): components of active plugins -> system/init (dups,
   missing deps, interface conflicts, cycles, deprecated component
   config schemas). Every :provides interface must be declared via
@@ -273,6 +311,7 @@
   nil)
 
 (defn running-boot
+  {:params [] :ret :any}
   ``The boot this process is running — what `plugin/start!` attached and
   has not shut down, or the `:void/boot` dyn where a scope overrides
   it. Nil when nothing is up.
@@ -286,6 +325,13 @@
   (system/current system/running-boot))
 
 (defn- build-hooks
+  {:params [@[{:name :keyword :hooks (or [:keyword] :nil) & r}]
+            {:keyword {:contributions [{:plugin :keyword
+                                        :value {:hook :keyword :fn (or :function :cfunction)
+                                                :phase :number? :name :keyword? :doc :string?}}]
+                       & r}
+             & r}]
+   :ret @{:keyword :any}}
   ``Fold the :void.core/hooks contributions into a hooks/registry, each
   handler attributed to its source plugin. The registry is declared
   with every hook the active plugins say they fire (plus the lifecycle
@@ -311,6 +357,21 @@
   reg)
 
 (defn- bootstrap*
+  {:params [{:plugins (or @[:any] [:any] :nil) :profile :keyword? :config :any? & r}
+            :boolean]
+   :ret @{:phase :keyword
+          :profile :keyword
+          :deploy {:shape :keyword :reason :string}
+          :plugins [:keyword]
+          :manifests {:keyword {:name :keyword & r}}
+          :active [:keyword]
+          :inactive [:keyword]
+          :config (or {:values @{:any :any} & r} :nil)
+          :extensions {:keyword :any}
+          :hooks @{:keyword :any}
+          :system (or {:components :any & r} :nil)
+          & r}
+   :throws [:string]}
   "Phases 1-5 in order, each `checked` before the next runs on its
   output; the boot value is assembled at the end and, with `track?`,
   becomes `last-boot`. `bootstrap` tracks unless told otherwise,
@@ -370,6 +431,20 @@
   boot)
 
 (defn bootstrap
+  {:params [{:plugins (or @[:any] [:any] :nil) :profile :keyword? :config :any? & r} :any?]
+   :ret @{:phase :keyword
+          :profile :keyword
+          :deploy {:shape :keyword :reason :string}
+          :plugins [:keyword]
+          :manifests {:keyword {:name :keyword & r}}
+          :active [:keyword]
+          :inactive [:keyword]
+          :config (or {:values @{:any :any} & r} :nil)
+          :extensions {:keyword :any}
+          :hooks @{:keyword :any}
+          :system (or {:components :any & r} :nil)
+          & r}
+   :throws [:string]}
   ``Run bootstrap phases 1-5 (load -> config -> conditional ->
   extension resolution -> graph) and return the boot value — nothing is
   started yet. Any error stops the run at its phase with the full batch
@@ -393,6 +468,21 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn start!
+  {:params [(or {:system (or {:components :any & r} :nil)
+                 :config (or {:values @{:any :any} & r} :nil)
+                 :profile :keyword :hooks @{:keyword :any}
+                 :extensions {:keyword :any} :phase :keyword & r}
+                {:keyword :any})]
+   :ret {:system (or {:components :any & r} :nil)
+         :config (or {:values @{:any :any} & r} :nil)
+         :profile :keyword :hooks @{:keyword :any}
+         :extensions {:keyword :any} :phase :keyword
+         :stores (or @[{:name :keyword :what :string
+                        :shared? (or :boolean (enum :by-design :unknown))
+                        :store :keyword? :why :string? :replacement :string? :error :string?}]
+                     :nil)
+         & r}
+   :throws [:any]}
   ``Phases 6-7: run the :config-loaded and :before-start hooks, start
   the component graph in dependency order, mark the boot :ready, run
   the :after-start hooks (see hooks/lifecycle-hooks; every handler
@@ -448,6 +538,12 @@
   boot)
 
 (defn shutdown!
+  {:params [{:hooks @{:keyword :any} :system (or {:components :any & r} :nil)
+             :phase :keyword & r}
+            :number?]
+   :ret {:hooks @{:keyword :any} :system (or {:components :any & r} :nil)
+         :phase :keyword & r}
+   :throws [:string]}
   "Run the :before-stop hooks, stop the system in reverse dependency
   order — each component's :stop under a deadline of `timeout` seconds
   (default 5); a hung stop is cancelled and reported instead of
@@ -469,6 +565,7 @@
   boot)
 
 (defn declared
+  {:params [@[:any] :keyword] :ret [:any] :throws [:string]}
   ``Every contribution to `point` the plugins in `entries` declare —
   phase 1 alone, and not even all of it: the manifests are resolved
   (values, registered keywords, module paths), nothing is read from a
@@ -491,6 +588,16 @@
   (tuple ;(mapcat |(get-in $ [:contributes point] []) ms)))
 
 (defn dry-run
+  {:params [{:plugins (or @[:any] [:any] :nil) :profile :keyword? :config :any? & r}]
+   :ret {:ok :boolean
+         :profile :keyword
+         :deploy {:shape :keyword :reason :string}
+         :plugins [:keyword]
+         :active [:keyword]
+         :inactive [:keyword]
+         :components [:keyword]
+         :extensions {:keyword {:owner :any :contributions :number}}}
+   :throws [:string]}
   ``Phases 1-5 without starting anything — the full validation of a
   system configuration for CI: :void-api and :requires compatibility,
   config schemas, broken contributions, cardinality and :provides
@@ -513,6 +620,12 @@
 # -- REPL tools ----------------------------------------------------------
 
 (defn- pick-boot
+  {:params [(or {:phase :keyword :profile :keyword :extensions {:keyword :any}
+                 :system (or {:components :any & r} :nil) & r}
+                :nil)]
+   :ret {:phase :keyword :profile :keyword :extensions {:keyword :any}
+         :system (or {:components :any & r} :nil) & r}
+   :throws [:string]}
   "The boot a REPL tool works on: the one given, else the one this
   process is running, else the most recent bootstrap, else an error
   saying nothing has been bootstrapped in this process."
@@ -521,6 +634,7 @@
       (error "no bootstrapped system — run plugin/bootstrap or plugin/start! first")))
 
 (defn extension
+  {:params [:any] :ret :any :throws [:string]}
   ``Resolved value of an extension point — what the point owner reads
   in its component's :start:
 
@@ -539,6 +653,7 @@
   (e :resolved))
 
 (defn- check-value
+  {:params [{:fn (fn [] :any) & r}] :ret :any}
   "One :void.core/health contribution's answer: what its :fn returns,
   or `{:status :down :reason <the throw>}` — a check that fails is a
   failure, never an exception out of the health endpoint."
@@ -547,6 +662,11 @@
   (if ok v {:status :down :reason (if (string? v) v (describe v))}))
 
 (defn health
+  {:params [(or {:phase :keyword :profile :keyword :extensions {:keyword :any}
+                 :system (or {:components :any & r} :nil) & r}
+                :nil)]
+   :ret {:status (enum :up :down) :components {:keyword :any}}
+   :throws [:string]}
   ``The health of a composition as data: every running component's
   `:health` folded together with every `:void.core/health`
   contribution, plus the aggregate.
@@ -576,6 +696,7 @@
    :components all})
 
 (defn inspect
+  {:params [:any :any] :ret :any :throws [:string]}
   ``Who registered what.
 
       (plugin/inspect)                    # plugin -> active? -> components -> contributions
@@ -612,6 +733,7 @@
        :contributes (tabseq [[p vs] :pairs (m :contributes)] p (length vs))})))
 
 (defn why
+  {:params [:any] :ret :any :throws [:string]}
   ``Why is a component in the graph, and who depends on it:
 
       (plugin/why :redis/pool)      # component: source plugin, deps, dependents

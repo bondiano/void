@@ -14,7 +14,10 @@
 
 (def plugins ["void/obs/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli @{:log {:level :keyword} & r}}}
+  "A boot :config with `extra` merged into :cli."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}} extra)})
 
 # -- phases 1-5 ----------------------------------------------------------

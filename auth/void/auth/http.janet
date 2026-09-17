@@ -116,7 +116,12 @@
   there."
   defaults)
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:session @{:keyword :any} :jwt @{:keyword :any} & r}}
+  "The [:auth-http] slice, defaulted key by key so an application that
+  overrides one setting keeps the rest."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   (each key [:session :jwt]
     (put c key (merge (defaults key) (get cfg key {}))))
@@ -133,6 +138,8 @@
 # -- the session strategy ------------------------------------------------
 
 (defn session-record
+  {:params [{:subject :string :via :keyword & r} :number?]
+   :ret {:subject :string :via :keyword :at :any :seen :number}}
   "What a login stores in the session: the subject and how it was
   established, never the user."
   [id &opt now]
@@ -142,7 +149,11 @@
    :at (get id :at now)
    :seen now})
 
-(defn- session-identity [req]
+(defn- session-identity
+  {:params [{:session :any & r}] :ret (or {:subject :string & r} :nil) :throws [:string]}
+  "The identity behind the session record a login left, re-reading
+  the user store unless [:session :load] says to trust the session."
+  [req]
   (def cfg (settings :session))
   (def key (cfg :key))
   (def sess (get req :session))
@@ -201,6 +212,10 @@
 # -- login and logout ----------------------------------------------------
 
 (defn login!
+  {:params [{:session :any & r} {:subject :string :via :keyword & r}
+            (or {:claims (or {:keyword :any} :nil) & r} :nil)]
+   :ret {:subject :string :via :keyword & r}
+   :throws [:string]}
   ``Sign `id` into this request's session and rotate the session id.
   Binds the identity for the rest of the request as well, so a
   handler that logs somebody in and renders a page sees them.
@@ -223,6 +238,7 @@
   id)
 
 (defn logout!
+  {:params [{:session :any & r}] :ret :nil}
   ``Sign the current session out: drop the identity, rotate the id
   (the same fixation argument applies in reverse — the next visitor
   on this machine must not inherit the id), and unbind the dyn. The
@@ -241,12 +257,21 @@
 
 # -- bearer tokens and JWT -----------------------------------------------
 
-(defn- authorization [req scheme]
+(defn- authorization
+  {:params [@{:headers {:string (or :string @[:string])} & r} :string] :ret :string?}
+  "The credential half of an `Authorization: <scheme> <credential>`
+  header, or nil when the header is absent or names another scheme."
+  [req scheme]
   (def header (ring/request-header req (get-in settings [:jwt :header] "authorization")))
   (when (and header (string/has-prefix? (string scheme " ") header))
     (string/trim (string/slice header (inc (length scheme))))))
 
-(defn- bearer-identity [req]
+(defn- bearer-identity
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret (or {:subject :string & r} :nil) :throws [:string]}
+  "The identity behind a presented API token, or nil — including when
+  the credential is a JWT the bearer strategy leaves for the next one."
+  [req]
   (when-let [presented (authorization req (get-in settings [:jwt :scheme] "Bearer"))]
     (def opts (get (state/settings) :token {}))
     # not a void token (no prefix) — leave it for the JWT strategy
@@ -267,6 +292,7 @@
                              (string/format "Bearer realm=%q" (settings :realm))))})
 
 (defn jwt-key
+  {:params [] :ret :any :throws [:string]}
   ``The configured JWT key, with a config secret box unwrapped
   (`{:secret "JWT_SIGNING_KEY"}` is the production spelling). nil when
   no key is configured, which is what turns the strategy off.``
@@ -274,7 +300,13 @@
   (when-let [k (get-in settings [:jwt :key])]
     (if (config/secret? k) (config/reveal k) k)))
 
-(defn- jwt-identity [req]
+(defn- jwt-identity
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret (or {:subject :string & r} :nil) :throws [:string]}
+  "The identity a bearer JWT carries, verified against the configured
+  algorithm and key; nil for anything a void API token already claimed
+  or a JWT that fails to verify."
+  [req]
   (def cfg (settings :jwt))
   (when-let [secret (jwt-key)
              presented (authorization req (get cfg :scheme "Bearer"))]
@@ -331,10 +363,15 @@
 
 # -- enforcement ---------------------------------------------------------
 
-(defn- access-of [rmeta]
+(defn- access-of
+  {:params [{:keyword :any}] :ret :any}
+  "This route's :void.auth/access, or the configured default when the
+  route says nothing."
+  [rmeta]
   (get rmeta :void.auth/access (settings :default)))
 
 (defn local-path?
+  {:params [:any] :ret :boolean :narrows (or :string :buffer)}
   ``Is `s` a path on this application — the only kind of value a
   `?next=` redirect may follow? `//evil.example` is a scheme-relative
   URL, and `/\evil.example` is the *same* URL to a browser, which
@@ -359,6 +396,7 @@
                   (not= second (chr "\\")))))))
 
 (defn safe-next
+  {:params [{:query (or {:any :any} :nil) & r} :string?] :ret :string}
   ``Where a redirected visitor was going — the `?next=` `unauthorized`
   minted, read back as a path of this application and nothing else
   (`local-path?`), or `dflt` ("/"). The one reader every login handler
@@ -376,6 +414,7 @@
   {:status 403 :doc "the credential was fine, the grant was not: :data {:scopes [...]}"})
 
 (defn unauthorized
+  {:params [{:uri :any :path :any & r} (or [:keyword] :nil)] :ret :any :throws [:string]}
   ``The response for a request that needed somebody and had nobody:
   a redirect to the login page, or the configured status through the
   error renderers — never a raise, because a stack trace per

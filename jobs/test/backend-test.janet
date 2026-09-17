@@ -1,7 +1,13 @@
 (import ../test-support/paths)
 (import void/jobs/backend :as backend)
 
-(defn- minimal [&opt extra]
+(defn- minimal
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:name :keyword :push! (fn [& :any] :any) :claim! (fn [& :any] :any)
+          :settle! (fn [& :any] :any) :fetch (fn [& :any] :any) :list (fn [& :any] :any)
+          :counts (fn [& :any] :any) :remove! (fn [& :any] :any) :clear! (fn [& :any] :any) & r}}
+  "A minimal raw backend dictionary, with `extra` keys merged over it."
+  [&opt extra]
   (merge @{:name :fake
            :push! (fn [j] j)
            :claim! (fn [o] nil)

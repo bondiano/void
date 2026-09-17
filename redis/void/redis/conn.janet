@@ -63,6 +63,9 @@
 # -- errors --------------------------------------------------------------
 
 (defn command-error
+  {:params [{:code :string? :reply :string? & r} (or @[:any] [:any] :nil)]
+   :ret {:redis/error :boolean :code :string :message :string
+         :reply :string :command (or :string :nil)}}
   ``An error reply as the value this module throws: the code a caller
   can branch on, the server's own line, and the command that earned
   it.``
@@ -75,6 +78,10 @@
      :command (when args (string (resp/argument (first args))))}))
 
 (defn connection-error
+  {:params [@{:opts (or {:describe :string? & r} @{:describe :string? & r}) & r}
+            :string :any]
+   :ret {:redis/error :boolean :code :string :fatal :boolean
+         :message :string :server :string}}
   ``A failure of the connection itself rather than of a command.
   :fatal marks it: the pool discards a connection that raised one,
   because what is left of the protocol state on it is unknown.``
@@ -88,17 +95,20 @@
      :server (get-in c [:opts :describe] "")}))
 
 (defn error?
+  {:params [:any] :ret :boolean :narrows :any}
   "Is this value (or thrown error) a redis error?"
   [v]
   (and (dictionary? v) (truthy? (get v :redis/error))))
 
 (defn fatal?
+  {:params [:any] :ret :boolean :narrows :any}
   "Did this error break the connection, rather than just fail a
   command?"
   [v]
   (and (dictionary? v) (truthy? (get v :fatal))))
 
 (defn error-code
+  {:params [:any] :ret (or :string :nil)}
   "The leading code of a redis error (\"WRONGTYPE\", \"NOSCRIPT\",
   \"MOVED\", \"CONNECTION\"), or nil."
   [v]
@@ -114,7 +124,13 @@
   quietly spoken to in plaintext.``
   nil)
 
-(defn- connect-stream [opts]
+(defn- connect-stream
+  {:params [(or {:keyword :any} @{:keyword :any})] :ret :abstract :throws [:string]}
+  ``The raw stream `open` completes its handshake over: a plain
+  `net/connect` for `:host`/`:port` or `:unix`, or the `tls-connect`
+  seam for a `:tls` target — refused outright when nothing installed
+  one, rather than quietly falling back to plaintext.``
+  [opts]
   (def timeout (get opts :connect-timeout 5))
   (def [host port]
     (if-let [sock (get opts :unix)]
@@ -142,6 +158,7 @@
                    timeout))))
 
 (defn describe-target
+  {:params [(or {:keyword :any} @{:keyword :any})] :ret :string}
   "What a set of connection options points at, for logs and errors."
   [opts]
   (if-let [sock (get opts :unix)]
@@ -150,11 +167,22 @@
 
 # -- reading -------------------------------------------------------------
 
-(defn- mark-broken! [c]
+(defn- mark-broken!
+  {:params [@{:broken :boolean & r}] :ret @{:broken :boolean & r}}
+  "Flag a connection as unusable after a framing or I/O failure — the
+  one thing every failure path here has in common, so the pool never
+  hands this connection to another fiber."
+  [c]
   (put c :broken true)
   c)
 
-(defn- compact! [c]
+(defn- compact!
+  {:params [@{:pos :number :buf :buffer & r}] :ret :nil}
+  ``Reclaim the read buffer's consumed prefix: cleared outright once
+  every byte is spent, or shifted down past `compact-threshold` so a
+  pipelined batch does not hold on to memory it no longer needs. Below
+  the threshold nothing is copied — the common case costs nothing.``
+  [c]
   (def pos (c :pos))
   (cond
     (zero? pos) nil
@@ -166,10 +194,17 @@
         (put c :pos 0)))
   nil)
 
-(defn- read-more! [c want timeout]
+(defn- read-more!
+  {:params [@{:stream :abstract :buf :buffer :broken :boolean
+             :opts (or {:describe :string? & r} @{:describe :string? & r}) & r}
+            :number :number?]
+   :ret :nil
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}]}
   ``Read until the buffer is `want` bytes long. `want` comes from
   `resp/scan`, so a blob that is still arriving is asked for in one
   read rather than discovered a chunk at a time.``
+  [c want timeout]
   (def s (c :stream))
   (def buf (c :buf))
   (while (< (length buf) want)
@@ -192,7 +227,15 @@
   no :timeout key in it and would silently mean the default.``
   :none)
 
-(defn- read-timeout [c opts]
+(defn- read-timeout
+  {:params [@{:opts (or {:timeout :number? & r} @{:timeout :number? & r}) & r}
+            (or {:timeout :any & r} @{:timeout :any & r})]
+   :ret (or :number :nil)}
+  ``The read timeout `receive` should use: the call's own `:timeout`
+  when it named one, the connection's configured default otherwise, or
+  nil for `conn/no-timeout` — the spelling a blocking command needs to
+  wait as long as the server was told to.``
+  [c opts]
   (def t (get opts :timeout :default))
   (cond
     (= :default t) (get-in c [:opts :timeout] 5)
@@ -200,6 +243,14 @@
     t))
 
 (defn receive
+  {:params [@{:closed :boolean :buf :buffer :pos :number :broken :boolean
+             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
+                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             & r}
+            (or {:timeout :any & r} @{:timeout :any & r} :nil)]
+   :ret :any
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}]}
   ``Read one frame, whatever it is — a reply, or a RESP3 push. Blocks
   the fiber, not the loop. `opts` takes a :timeout of its own, which is
   what a blocking command (BLPOP, XREAD BLOCK) needs: the server holds
@@ -239,13 +290,28 @@
       (read-more! c n timeout)))
   out)
 
-(defn- dispatch-push [c value]
+(defn- dispatch-push
+  {:params [@{:on-push (or (fn [a] :any) :nil) & r} {:redis/push :any & r}] :ret :nil}
+  ``Hand an out-of-band push frame to the connection's `:on-push`, or
+  drop it at :debug when nothing is listening — a subscriber that has
+  not yet installed a handler should not blow up the reader that
+  found one.``
+  [c value]
   (if-let [handler (c :on-push)]
     (handler value)
     (log/debug "dropping an unexpected push frame" :ns log-ns
                :kind (first (resp/push-items value)))))
 
 (defn receive-reply
+  {:params [@{:closed :boolean :buf :buffer :pos :number :broken :boolean
+             :pending :number :on-push (or (fn [a] :any) :nil)
+             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
+                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             & r}
+            (or {:timeout :any & r} @{:timeout :any & r} :nil)]
+   :ret :any
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}]}
   ``Read the next *reply*: attribute frames are skipped (RESP3 metadata
   a client that does not use it must ignore) and push frames are
   handed to the connection's :on-push before the wait resumes. What
@@ -266,7 +332,19 @@
 
 # -- writing -------------------------------------------------------------
 
-(defn- write! [c bytes]
+(defn- write!
+  {:params [@{:closed :boolean :lock :abstract :stream :abstract
+             :opts (or {:timeout :number? :describe :string? & r}
+                       @{:timeout :number? :describe :string? & r})
+             & r}
+            (or :string :buffer)]
+   :ret :nil
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}]}
+  ``Write `bytes` under the connection's lock — the one write path
+  every command goes through, and why a subscriber sending SUBSCRIBE
+  and a request fiber sending GET can share one socket safely.``
+  [c bytes]
   (when (c :closed) (error (connection-error c "the connection is closed")))
   (def timeout (get-in c [:opts :timeout] 5))
   (def [ok err]
@@ -278,6 +356,10 @@
   nil)
 
 (defn- note-sent!
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean & r}
+            (or @[:any] [:any])]
+   :ret :nil}
   ``Account for one command going out: it is owed a reply (`:pending`),
   and a few commands open or close state that outlives the exchange —
   an open MULTI queues the next owner's commands into this owner's
@@ -298,12 +380,30 @@
   nil)
 
 (defn send
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+             :opts (or {:timeout :number? :describe :string? & r}
+                       @{:timeout :number? :describe :string? & r})
+             & r}
+            (or @[:any] [:any])]
+   :ret :nil
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}]}
   "Write one command. The reply is left in the stream for `receive`."
   [c args]
   (note-sent! c args)
   (write! c (resp/encode args)))
 
 (defn send-all
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+             :opts (or {:timeout :number? :describe :string? & r}
+                       @{:timeout :number? :describe :string? & r})
+             & r}
+            (or @[:any] [:any])]
+   :ret :nil
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}]}
   "Write several commands as one buffer — the write half of a
   pipeline, and the reason a pipeline is one round trip rather than
   N."
@@ -314,6 +414,20 @@
 # -- commands ------------------------------------------------------------
 
 (defn call
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+             :buf :buffer :pos :number :broken :boolean
+             :on-push (or (fn [a] :any) :nil)
+             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
+                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             & r}
+            (or @[:any] [:any])
+            (or {:raw :any & r} @{:raw :any & r} :nil)]
+   :ret :any
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   ``Send one command and return its reply. An error reply is thrown
   (see `command-error`) unless `opts` asks for it `:raw`, which is what
   a caller that expects a failure — a probe, a handshake against a
@@ -330,6 +444,21 @@
     v))
 
 (defn pipeline
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+             :buf :buffer :pos :number :broken :boolean
+             :on-push (or (fn [a] :any) :nil)
+             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
+                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             & r}
+            (or @[:any] [:any])
+            (or {:raw :any & r} @{:raw :any & r} :nil)]
+   :ret @[:any]
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)
+             :index :number :results @[:any]}]}
   ``Send every command, then read every reply: one round trip instead
   of N, which for a redis on another host is the difference between a
   batch and a queue.
@@ -356,6 +485,7 @@
 # -- the handshake -------------------------------------------------------
 
 (defn- hello-map
+  {:params [:any] :ret (or :struct :table)}
   "The HELLO reply as a table, whichever protocol answered it: RESP3
   sends a map, RESP2 the same pairs flattened into an array."
   [reply]
@@ -369,6 +499,7 @@
     @{}))
 
 (defn- fall-back-to-resp2?
+  {:params [{:code :string? :reply :string? & r}] :ret :boolean :narrows :any}
   ``Is this HELLO failure the server saying it is too old, rather than
   the server saying no? A redis before 6 has no HELLO command at all,
   and a proxy in front of one answers the same way; NOPROTO is the
@@ -381,7 +512,36 @@
       (string/find "unknown command" line)
       (string/find "unknown subcommand" line)))
 
-(defn- handshake! [c opts]
+(defn- handshake!
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+             :buf :buffer :pos :number :broken :boolean
+             :protocol :number :server :any :server-id :any :database :number
+             :on-push (or (fn [a] :any) :nil)
+             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
+                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             & r}
+            (or {:protocol :number? :username :string? :password :string?
+                :database :number? :client-name :string? & r}
+                @{:protocol :number? :username :string? :password :string?
+                 :database :number? :client-name :string? & r})]
+   :ret @{:commands :number :pending :number :in-multi :boolean
+          :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+          :buf :buffer :pos :number :broken :boolean
+          :protocol :number :server :any :server-id :any :database :number
+          :on-push (or (fn [a] :any) :nil)
+          :opts :any & r}
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
+  ``HELLO (falling back to RESP2 when the server or a proxy in front of
+  it has none), then AUTH, SELECT and CLIENT SETNAME as the options
+  ask for them. Runs once at `open` and again at `reconnect!`, which
+  is why it takes `opts` rather than reading `(c :opts)` — a
+  reconnect's opts are the same value, but this keeps the two calls
+  honest about it.``
+  [c opts]
   (def want (get opts :protocol 3))
   (def user (get opts :username))
   (def pass (get opts :password))
@@ -426,6 +586,20 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn open
+  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+   :ret @{:stream :abstract
+          :opts (or {:keyword :any} @{:keyword :any})
+          :buf :buffer :pos :number :lock :abstract :id :number
+          :generation :number :commands :number :pending :number
+          :in-multi :boolean :watching :boolean :protocol :number
+          :server :any :server-id :any :database :number
+          :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
+          & r}
+   :throws [:string
+            {:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   ``Open one connection and complete its handshake (HELLO/AUTH/SELECT/
   CLIENT SETNAME). Options are what ./config produces:
 
@@ -468,11 +642,14 @@
   c)
 
 (defn open?
+  {:params [@{:closed :boolean :broken :boolean & r}] :ret :boolean :narrows :any}
   "Is this connection usable — open, and not broken by a failure?"
   [c]
   (and (not (c :closed)) (not (c :broken))))
 
 (defn clean?
+  {:params [@{:pending :number :in-multi :boolean :watching :boolean & r}]
+   :ret :boolean :narrows :any}
   ``Is the protocol state of this connection known-good: every sent
   command answered, no MULTI open, no WATCH standing? The pool refuses
   to reuse one that is not — a fiber cancelled between a send and its
@@ -484,6 +661,7 @@
        (not (c :watching))))
 
 (defn close
+  {:params [@{:closed :boolean :stream :abstract & r}] :ret :nil}
   "Close the connection. Closing twice is not an error — the pool and
   a component's :stop both do it on the way down."
   [c]
@@ -493,6 +671,27 @@
   nil)
 
 (defn reconnect!
+  {:params [@{:stream :abstract
+             :opts (or {:keyword :any} @{:keyword :any})
+             :buf :buffer :pos :number :lock :abstract :id :number
+             :generation :number :commands :number :pending :number
+             :in-multi :boolean :watching :boolean :protocol :number
+             :server :any :server-id :any :database :number
+             :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
+             & r}]
+   :ret @{:stream :abstract
+          :opts (or {:keyword :any} @{:keyword :any})
+          :buf :buffer :pos :number :lock :abstract :id :number
+          :generation :number :commands :number :pending :number
+          :in-multi :boolean :watching :boolean :protocol :number
+          :server :any :server-id :any :database :number
+          :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
+          & r}
+   :throws [:string
+            {:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   ``Replace the socket under an existing connection value and redo the
   handshake, keeping the connection's identity (and whatever holds a
   reference to it). The generation counter is what tells a caller that
@@ -515,6 +714,14 @@
   c)
 
 (defn info
+  {:params [@{:id :number
+             :opts (or {:describe :string? & r} @{:describe :string? & r})
+             :server :any :server-id :any :protocol :number :database :number
+             :generation :number :commands :number :closed :boolean :broken :boolean
+             & r}]
+   :ret {:id :number :server :any :server-version :any :mode :any :role :any
+         :client-id :any :protocol :number :database :number :generation :number
+         :commands :number :open :boolean}}
   "What this connection is: server version, protocol, database, and
   how many times it has been replaced."
   [c]
@@ -531,6 +738,18 @@
    :open (open? c)})
 
 (defn ping
+  {:params [@{:commands :number :pending :number :in-multi :boolean
+             :watching :boolean :closed :boolean :lock :abstract :stream :abstract
+             :buf :buffer :pos :number :broken :boolean
+             :on-push (or (fn [a] :any) :nil)
+             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
+                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             & r}]
+   :ret :boolean
+   :throws [{:redis/error :boolean :code :string :fatal :boolean
+             :message :string :server :string}
+            {:redis/error :boolean :code :string :message :string
+             :reply :string :command (or :string :nil)}]}
   "PING, as the pool's liveness check. Returns true, or throws."
   [c]
   (def r (call c ["PING"]))

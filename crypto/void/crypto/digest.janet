@@ -18,6 +18,7 @@
   {:sha1 20 :sha256 32 :sha384 48 :sha512 64})
 
 (defn- known
+  {:params [:keyword] :ret [:number :pointer] :throws [:string]}
   ``[digest length, EVP_MD pointer] for an algorithm name, or an error
   naming the ones there are. One lookup for both callers below, so the
   message cannot depend on which of them asked.``
@@ -36,6 +37,7 @@
      :sha1 (lib/EVP_sha1))])
 
 (defn digest
+  {:params [:keyword (or :string :buffer)] :ret :string :throws [:string]}
   "Hash bytes with one of :sha1 :sha256 :sha384 :sha512. Returns raw
   bytes."
   [algo data]
@@ -48,11 +50,18 @@
     (errorf "EVP_Digest(%q) failed: %s" algo (or (lib/last-error) "no detail")))
   (string out))
 
-(defn sha256 "SHA-256 of bytes, raw." [data] (digest :sha256 data))
-(defn sha384 "SHA-384 of bytes, raw." [data] (digest :sha384 data))
-(defn sha512 "SHA-512 of bytes, raw." [data] (digest :sha512 data))
+(defn sha256
+  {:params [(or :string :buffer)] :ret :string :throws [:string]}
+  "SHA-256 of bytes, raw." [data] (digest :sha256 data))
+(defn sha384
+  {:params [(or :string :buffer)] :ret :string :throws [:string]}
+  "SHA-384 of bytes, raw." [data] (digest :sha384 data))
+(defn sha512
+  {:params [(or :string :buffer)] :ret :string :throws [:string]}
+  "SHA-512 of bytes, raw." [data] (digest :sha512 data))
 
 (defn hmac
+  {:params [:keyword (or :string :buffer) (or :string :buffer)] :ret :string :throws [:string]}
   ``HMAC of `data` under `key`, raw bytes. The key is bytes, not a
   password: HMAC does not stretch, so a key derived from something
   guessable stays guessable.``
@@ -67,6 +76,7 @@
   (string (buffer/slice out 0 size)))
 
 (defn hmac-sha256
+  {:params [(or :string :buffer) (or :string :buffer)] :ret :string :throws [:string]}
   "HMAC-SHA256 — what signs a CSRF token, a JWS with HS256 and every
   short-lived value void hands a client."
   [key data]

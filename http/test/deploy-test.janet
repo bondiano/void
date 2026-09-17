@@ -10,7 +10,11 @@
 (import void/http/router :as router)
 (import void/http/ring :as ring)
 
-(defn home [_req] (ring/text 200 "ok"))
+(defn home
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "A route handler that always answers 200 — this suite only needs
+  something for a route to point at, never what it says."
+  [_req] (ring/text 200 "ok"))
 
 (def app
   (plugin/manifest 'test/deploy-app
@@ -36,7 +40,12 @@
                       :sweep (fn [] nil)})
        :shared? true}]}))
 
-(defn- start [plugins profile http-cfg]
+(defn- start
+  {:params [[:any] :keyword {:keyword :any}] :ret @{:stores @[:any] & r}}
+  "Start a kernel-only test system under `profile`, with `http-cfg`
+  merged into the session config — the shared setup every shape check
+  in this suite boots from."
+  [plugins profile http-cfg]
   # :only [:http/kernel] — everything the request path needs and not
   # the listener, so nothing here opens a port (and :workers 2 does not
   # fork this test suite)

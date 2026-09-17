@@ -197,7 +197,10 @@
 # running leaves the process running — deploy check in a built binary
 # hung on exactly this
 (log/configure! {:level :info} :prod)
-(defn- writer-alive? []
+(defn- writer-alive?
+  {:params [] :ret :boolean :narrows :any}
+  "Is the :prod logger's async JDN writer fiber still running?"
+  []
   (ev/sleep 0)
   (truthy? (some (fn [t] (some |(= "jdn-writer" (get $ :name)) (debug/stack t)))
                  (ev/all-tasks))))

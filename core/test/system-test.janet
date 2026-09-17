@@ -1,6 +1,10 @@
 (import ../void/core/system :as system)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :string}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error rendered as a string."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
@@ -80,7 +84,11 @@
 
 # -- :provides interfaces ------------------------------------------------
 
-(defn cache-comp [key plugin]
+(defn cache-comp
+  {:params [:keyword :keyword] :ret :any}
+  "A component providing `:void/cache`, so several of them can
+  contend for the same interface."
+  [key plugin]
   (system/component key
     :provides [:void/cache]
     :plugin plugin
@@ -144,7 +152,11 @@
 # -- restart: transitive dependents only --------------------------------
 
 (def rlog @[])
-(defn rcomp [key deps]
+(defn rcomp
+  {:params [:keyword (or @[:keyword] [:keyword])] :ret :any}
+  "A component that logs its own start/stop to `rlog`, for asserting
+  restart's dependency order."
+  [key deps]
   (system/component key
     :deps deps
     :start (fn [d c] (array/push rlog [:start key]) (gensym))
@@ -188,7 +200,11 @@
 # -- stop-key: one component and its dependents, nothing else ------------
 
 (def klog @[])
-(defn- kcomp [key deps]
+(defn- kcomp
+  {:params [:keyword (or @[:keyword] [:keyword])] :ret :any}
+  "A component that logs its own start/stop to `klog`, for asserting
+  stop-key's reach."
+  [key deps]
   (system/component key
     :deps deps
     :start (fn [d c] (array/push klog [:start key]) key)
@@ -282,7 +298,11 @@
 # starts a second time over a system that is already partly up, and a
 # failure there used to take the first call's components down with it
 (def rlog2 @[])
-(defn- rc [key deps]
+(defn- rc
+  {:params [:keyword (or @[:keyword] [:keyword])] :ret :any}
+  "A component that logs its own start/stop to `rlog2`, and fails to
+  start if its key is :late-boom."
+  [key deps]
   (system/component key
     :deps deps
     :start (fn [d c]
@@ -337,7 +357,12 @@
 # deprecated on a component (ADR-0046: the manifest's :config-schema is
 # where a plugin's slice is validated), but honoured: `init` checks it
 # through the same config/validate, before anything starts
-(defn db-schema [cfg] (string? (get cfg :host)))
+(defn db-schema
+  {:params [{:host :any & r}] :ret :boolean :narrows :any}
+  "The deprecated function form of a component's :config :schema:
+  true when :host is a string."
+  [cfg]
+  (string? (get cfg :host)))
 
 (def sys9-err
   (expect-error "schema rejects bad config" "schema"
@@ -423,7 +448,11 @@
 # -- subset start (:needs bootstrap for CLI commands) --------------------
 
 (def subset-log @[])
-(defn- track [k]
+(defn- track
+  {:params [:keyword] :ret :any}
+  "A component in the fixed chain a<-b<-c (plus unrelated :d), logging
+  its own start/stop to `subset-log`."
+  [k]
   (system/component k
     :deps (case k :b [:a] :c [:b] [])
     :start (fn [d c] (array/push subset-log [:start k]) k)

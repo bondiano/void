@@ -57,10 +57,15 @@
    "google/protobuf/field_mask.proto" ["google.protobuf.FieldMask"]
    "google/protobuf/wrappers.proto" (sorted (keys wrappers))})
 
-(defn- register-message [pname fields]
+(defn- register-message
+  {:params [:string {:keyword :any}] :ret {:kind :keyword :name :keyword & r}}
+  "Register one well-known type under its protobuf name, with the
+  field table its descriptor is built from."
+  [pname fields]
   (desc/register! (desc/message (desc/name-of pname) fields {:proto-name pname})))
 
 (defn install!
+  {:params [] :ret :nil}
   ``Register every well-known type void/proto carries. Called once at
   module load; calling it again is harmless (the registry replaces).``
   []
@@ -75,6 +80,7 @@
 (install!)
 
 (defn file
+  {:params [:string] :ret (or [:string] :nil)}
   ``The protobuf names a `google/protobuf/*.proto` import brings in, or
   nil when the path is not one of ours.``
   [path]

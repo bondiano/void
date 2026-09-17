@@ -16,7 +16,11 @@
                                [:route {:t/hooks {:a [2]} :name :x}]]))
   (assert (not (empty? (bad :errors))) "mixing shapes is an error"))
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :string}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error rendered as a string."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))

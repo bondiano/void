@@ -54,6 +54,8 @@
    "void/admin/init"])
 
 (defn- boot
+  {:params [(or {:any :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}}
   ``The kernel only: the route table is built by the :before-start
   hooks either way, so the whole projection is on the table without a
   database anywhere near it.``
@@ -71,7 +73,10 @@
 (def b (boot))
 (def table (http/routes-table))
 
-(defn- entry [name] (get-in table [:by-name name]))
+(defn- entry
+  {:params [:keyword] :ret :any}
+  "The route table's entry for `name`, or nil when nothing was named that."
+  [name] (get-in table [:by-name name]))
 
 (each [name method pattern]
   [[:admin.notes/index :get "/admin/notes"]

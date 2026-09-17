@@ -79,6 +79,7 @@
 # -- the live half: what this OS's janet actually raises ------------------
 
 (defn- caught
+  {:params [(fn [] :any)] :ret :any}
   "The value a thunk raised, or [:ok value] when it did not."
   [thunk]
   (def [ok res] (protect (thunk)))
@@ -87,6 +88,7 @@
 (def srv (net/listen "127.0.0.1" "0"))
 (def [_ port] (net/localname srv))
 (defn- pair
+  {:params [] :ret [:any :any]}
   "A connected [client server] pair of sockets."
   []
   (def c (net/connect "127.0.0.1" (string port)))

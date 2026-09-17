@@ -48,6 +48,12 @@
    :max-connections 4096})
 
 (defn make
+  {:params [(or {:ping-interval :number? :pong-timeout :number?
+                :sweep-interval :number? :max-connections :number? & r}
+               :nil)]
+   :ret @{:conns @{:number :any} :rooms @{:keyword @{:number :any}}
+          :config @{:keyword :any} :sweeper :any :sweeping :boolean
+          :peak :number :total :number}}
   "A registry: every open connection of this process, and the rooms
   they are in."
   [&opt opts]
@@ -62,16 +68,21 @@
 # -- membership ----------------------------------------------------------
 
 (defn count-conns
+  {:params [{:conns @{:number :any} & r}] :ret :number}
   "How many connections this registry holds."
   [reg]
   (length (reg :conns)))
 
 (defn full?
+  {:params [{:conns @{:number :any} :config @{:keyword :any} & r}] :ret :boolean}
   "Is the registry at `[:ws :max-connections]`?"
   [reg]
   (>= (count-conns reg) (get-in reg [:config :max-connections])))
 
 (defn register!
+  {:params [{:conns @{:number :any} :total :number :peak :number & r}
+            {:id :number :registry :any & r}]
+   :ret {:id :number :registry :any & r}}
   "Add a connection to the registry."
   [reg conn]
   (put (reg :conns) (conn :id) conn)
@@ -80,11 +91,20 @@
   (put reg :peak (max (reg :peak) (count-conns reg)))
   conn)
 
-(defn- room-set [reg name]
+(defn- room-set
+  {:params [{:rooms @{:keyword @{:number :any}} & r} :keyword]
+   :ret @{:number :any}}
+  "The member set of a room, creating an empty one on its first join."
+  [reg name]
   (or (get (reg :rooms) name)
       (let [s @{}] (put (reg :rooms) name s) s)))
 
 (defn join!
+  {:params [{:rooms @{:keyword @{:number :any}} & r}
+            {:id :number :rooms @{:keyword :any} & r}
+            :any]
+   :ret {:id :number :rooms @{:keyword :any} & r}
+   :throws [:string]}
   ``Put a connection in a room (a keyword). Joining twice is joining
   once — membership is a set.``
   [reg conn name]
@@ -95,6 +115,10 @@
   conn)
 
 (defn leave!
+  {:params [{:rooms @{:keyword @{:number :any}} & r}
+            {:id :number :rooms @{:keyword :any} & r}
+            :keyword]
+   :ret {:id :number :rooms @{:keyword :any} & r}}
   "Take a connection out of one room. Empty rooms are forgotten —
   a room is its members."
   [reg conn name]
@@ -105,6 +129,9 @@
   conn)
 
 (defn unregister!
+  {:params [{:conns @{:number :any} :rooms @{:keyword @{:number :any}} & r}
+            {:id :number :rooms @{:keyword :any} & r}]
+   :ret {:id :number :rooms @{:keyword :any} & r}}
   "Remove a connection from the registry and from every room it was
   in. Called from the connection's own close path, so it runs however
   the connection ended."
@@ -115,16 +142,19 @@
   conn)
 
 (defn members
+  {:params [{:rooms @{:keyword @{:number :any}} & r} :keyword] :ret [:any]}
   "The connections in a room (an empty tuple for a room nobody is in)."
   [reg name]
   (tuple ;(sorted-by |($ :id) (values (get (reg :rooms) name {})))))
 
 (defn room-names
+  {:params [{:rooms @{:keyword :any} & r}] :ret [:keyword]}
   "Every room with at least one member."
   [reg]
   (tuple ;(sorted (keys (reg :rooms)))))
 
 (defn connections
+  {:params [{:conns @{:number :any} & r}] :ret [:any]}
   "Every connection this registry holds."
   [reg]
   (tuple ;(sorted-by |($ :id) (values (reg :conns)))))
@@ -132,6 +162,7 @@
 # -- broadcast -----------------------------------------------------------
 
 (defn- fan-out
+  {:params [[:any] (or :string :buffer) (or {:id :number & r} :nil)] :ret :number}
   "Queue already-framed bytes on every connection in `targets`.
   Returns how many took it."
   [targets bytes except]
@@ -144,6 +175,9 @@
   delivered)
 
 (defn broadcast!
+  {:params [{:rooms @{:keyword @{:number :any}} & r} :keyword (or :string :buffer)
+            (or {:except (or {:id :number & r} :nil) :binary :boolean? & r} :nil)]
+   :ret :number}
   ``Send one message to every connection in a room. Returns the number
   of connections that took it — a connection whose queue overflowed is
   not one of them (see ./conn on what a full queue means).
@@ -160,6 +194,9 @@
   (fan-out (members reg name) bytes (opts :except)))
 
 (defn broadcast-all!
+  {:params [{:conns @{:number :any} & r} (or :string :buffer)
+            (or {:except (or {:id :number & r} :nil) :binary :boolean? & r} :nil)]
+   :ret :number}
   "As broadcast!, to every connection of this process rather than to a
   room."
   [reg message &opt opts]
@@ -168,6 +205,8 @@
   (fan-out (connections reg) bytes (opts :except)))
 
 (defn close-all!
+  {:params [{:conns @{:number :any} & r} (or :keyword :number :nil) :string?]
+   :ret {:conns @{:number :any} & r}}
   "Close every connection with a code — what the component's :stop
   does, so a drain says goodbye rather than cutting sockets."
   [reg &opt code reason]
@@ -179,6 +218,8 @@
 # -- liveness ------------------------------------------------------------
 
 (defn sweep!
+  {:params [{:conns @{:number :any} :config @{:keyword :any} & r}]
+   :ret {:pinged :number :abandoned :number :reaped :number}}
   ``One liveness pass: ping the connections that have been silent for
   `:ping-interval`, abandon the ones that never answered a ping within
   `:pong-timeout`, and forget the ones that are already closed.
@@ -210,6 +251,8 @@
   {:pinged pinged :abandoned abandoned :reaped reaped})
 
 (defn start-sweeper!
+  {:params [{:config @{:keyword :any} :sweeping :boolean :sweeper :any & r}]
+   :ret {:config @{:keyword :any} :sweeping :boolean :sweeper :any & r}}
   ``Start the one fiber that keeps every connection of this process
   honest. One fiber, not one timer per socket: at a thousand
   connections the difference is a thousand fibers waking on their own
@@ -235,6 +278,8 @@
   reg)
 
 (defn stop-sweeper!
+  {:params [{:sweeping :boolean :sweeper :any & r}]
+   :ret {:sweeping :boolean :sweeper :any & r}}
   "Ask the sweeper to stop; it exits within one interval."
   [reg]
   (put reg :sweeping false)
@@ -244,6 +289,11 @@
 # -- status --------------------------------------------------------------
 
 (defn status
+  {:params [{:conns @{:number :any} :peak :number :total :number
+             :config @{:keyword :any} :rooms @{:keyword :any}
+             :sweeping :boolean & r}]
+   :ret {:connections :number :peak :number :total :number :limit :number
+         :rooms {:keyword :number} :sweeping :boolean :pid :number}}
   "What this process's socket layer looks like right now — the body of
   a health check and of `void ws status`."
   [reg]

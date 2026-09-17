@@ -21,17 +21,24 @@
   "VOID_HTTP_WORKER")
 
 (defn worker?
+  {:params [] :ret :boolean}
   "Is this process a prefork worker?"
   []
   (not (nil? (os/getenv worker-env))))
 
 (defn worker-index
+  {:params [] :ret :number?}
   "This worker's index, nil in the master."
   []
   (when-let [v (os/getenv worker-env)]
     (scan-number v)))
 
-(defn- detected-cpus []
+(defn- detected-cpus
+  {:params [] :ret :number?}
+  "CPU count by shelling out to `sysctl -n hw.ncpu`, for platforms
+  without `os/cpu-count` — nil when the process fails or reports
+  something unparseable."
+  []
   (def [ok out]
     (protect
       (with [p (os/spawn ["sysctl" "-n" "hw.ncpu"] :px {:out :pipe})]
@@ -41,6 +48,7 @@
   (if ok out nil))
 
 (defn worker-count
+  {:params [:any] :ret :number :throws [:string]}
   ":workers config to a number: :auto means one per CPU (os/cpu-count,
   falling back to sysctl, falling back to 1)."
   [workers]
@@ -49,10 +57,22 @@
     (and (int? workers) (pos? workers)) workers
     (errorf ":workers must be a positive integer or :auto, got %q" workers)))
 
-(defn- spawn-worker [cmd base-env i]
+(defn- spawn-worker
+  {:params [(or [:string] @[:string]) @{:string :string} :number] :ret :abstract}
+  "Spawn one worker process, its VOID_HTTP_WORKER env var set to `i`."
+  [cmd base-env i]
   (os/spawn cmd :ep (merge base-env {worker-env (string i)})))
 
 (defn start
+  {:params [{:workers (or (enum :auto) :number)
+             :cmd (or [:string] @[:string] :nil)
+             :env (or @{:string :string} :nil)
+             :backoff :number?
+             :on-exit (or (fn [:number :number] :any) :nil)
+             & r}]
+   :ret @{:procs @{:number :abstract} :workers :number :stopping :boolean
+          :cmd (or [:string] @[:string])}
+   :throws [:string]}
   ``Start the prefork master: spawn and supervise :workers processes.
 
   Options:
@@ -78,7 +98,11 @@
                     (fn [i status]
                       (eprintf "http worker %d exited with %q — respawning" i status))))
   (def inst @{:procs @{} :workers n :stopping false :cmd cmd})
-  (defn supervise [i]
+  (defn supervise
+    {:params [:number] :ret (fn [] :nil)}
+    "The supervisor loop for worker `i`: waits on its process, respawns
+    it after :backoff seconds unless the master is stopping."
+    [i]
     (fn supervisor []
       (while (not (inst :stopping))
         (def p (get-in inst [:procs i]))
@@ -96,11 +120,14 @@
   inst)
 
 (defn alive
+  {:params [@{:procs @{:number :abstract} & r}] :ret @[:number]}
   "Indexes of currently running workers."
   [inst]
   (sorted (keys (inst :procs))))
 
 (defn stop
+  {:params [@{:procs @{:number :abstract} :stopping :boolean & r} :number?]
+   :ret @{:procs @{:number :abstract} :stopping :boolean & r}}
   ``Stop the master: SIGTERM every worker (its own void/run! handles
   the graceful drain), wait up to `timeout` seconds (default 15), then
   SIGKILL the stragglers. Returns the instance.``

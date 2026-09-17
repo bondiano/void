@@ -5,7 +5,12 @@
 # why), so every value in and out is a string somewhere. This file is
 # about the edges of that: the values a naive round trip loses.
 
-(defn- dec* [name text &opt opts]
+(defn- dec*
+  {:params [:keyword :string (or {:json :boolean? :arrays :boolean? & r} :nil)]
+   :ret :any}
+  "Decode one text value by the OID `types/oids` names — the short
+  spelling every assertion below uses."
+  [name text &opt opts]
   (types/decode (get types/oids name) text opts))
 
 # -- scalars out ---------------------------------------------------------

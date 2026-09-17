@@ -13,7 +13,12 @@
 (def sandbox (string (os/cwd) "/.tmp-lease-" (os/time) "-" (os/getpid)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove a file or directory, quietly doing nothing when
+  the path is already gone — the sandbox cleanup every fixture defers
+  to."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))

@@ -122,6 +122,7 @@
 (var settings "The [:auth-oauth] slice, read at :before-start." defaults)
 
 (defn- secret-value
+  {:params [:any] :ret :any :throws [:string]}
   "A config value that may be a secret box (`{:secret \"ENV\"}`)."
   [v]
   (when v (if (config/secret? v) (config/reveal v) v)))
@@ -133,17 +134,23 @@
   nil)
 
 (defn ring-state
+  {:params [] :ret @{:keyword :any} :throws [:string]}
   "The running key ring, or a readable error."
   []
   (or current-ring
       (error "void/auth-oauth is not started — add :void/auth-oauth to :plugins (the :auth.oauth/keys component holds the issuer's keys)")))
 
-(defn- free-keys! [ring]
+(defn- free-keys!
+  {:params [@{:keyword :any}] :ret @{:keyword :any}}
+  "Free every open key and empty the ring's `:keys` — the one place a
+  key's lifetime ends."
+  [ring]
   (each entry (values (ring :keys))
     (protect (sign/free-key (entry :key))))
   (put ring :keys @{}))
 
 (defn- fetch-json
+  {:params [:string :number] :ret :any :throws [:string]}
   "GET a URL and decode JSON, or throw with the status in the text."
   [url timeout]
   (def resp (client/get url {:timeout timeout
@@ -153,6 +160,7 @@
   (json/decode (string (or (resp :body) "")) true))
 
 (defn discover
+  {:params [@{:keyword :any} (or {:keyword :any} :nil)] :ret {:keyword :any} :throws [:string]}
   ``The authorization server's metadata (RFC 8414). Tried in the order
   the specifications prescribe: the OAuth document first, then the
   OpenID Connect one, because an issuer that publishes only the latter
@@ -193,12 +201,17 @@
         (put ring :metadata found)
         found)))
 
-(defn- jwks-uri [ring cfg]
+(defn- jwks-uri
+  {:params [@{:keyword :any} {:keyword :any}] :ret :string :throws [:string]}
+  "The JWKS URI to fetch: configured directly, or read from the
+  issuer's discovered metadata."
+  [ring cfg]
   (or (cfg :jwks-uri)
       (get (discover ring cfg) :jwks_uri)
       (error "no JWKS: set [:auth-oauth :jwks-uri], or an issuer whose metadata publishes jwks_uri")))
 
 (defn refresh-keys!
+  {:params [@{:keyword :any} (or {:keyword :any} :nil)] :ret :number :throws [:string]}
   ``Fetch the issuer's JWKS and open every usable key. Replaced keys
   are freed here — this is the one place a key's lifetime ends, and
   the reason the ring is a component rather than a module variable.
@@ -229,6 +242,8 @@
   (length opened))
 
 (defn- ensure-keys!
+  {:params [@{:keyword :any} {:keyword :any}]
+   :ret @{:any {:alg :keyword :key :any :kid :any}}}
   ``The keys, fetched if they are missing or stale. A fetch that fails
   is logged and remembered, never raised: an authorization server that
   is down must make tokens fail to verify, not make the process throw
@@ -246,6 +261,8 @@
   (ring :keys))
 
 (defn- key-for
+  {:params [@{:keyword :any} {:keyword :any} :string?]
+   :ret (or {:alg :keyword :key :any :kid :any} :nil)}
   ``The key a token's `kid` names. An unknown kid is the signal that
   the issuer rotated, so it is worth exactly one refetch — behind the
   cooldown, because an attacker who can invent a `kid` must not be
@@ -264,9 +281,15 @@
 
 # -- verifying -----------------------------------------------------------
 
-(defn- no [reason] {:ok false :reason reason})
+(defn- no
+  {:params [:string] :ret {:ok :boolean :reason :string}}
+  "A refused-token result, with `reason` for the log."
+  [reason] {:ok false :reason reason})
 
 (defn verify-jwt
+  {:params [:string (or {:keyword :any} :nil) (or @{:keyword :any} :nil)]
+   :ret (or {:ok :boolean :reason :string} {:ok :boolean :claims :any})
+   :throws [:string]}
   ``Verify an access token as a JWS against the issuer's keys.
   Returns `{:ok true :claims}` or `{:ok false :reason}` — the reason
   is for the log (see the header).``
@@ -309,6 +332,9 @@
             out))))))
 
 (defn introspection-request
+  {:params [:string {:keyword :any} :string]
+   :ret {:method :keyword :url :string :form @{:keyword :any}
+         :headers @{:string :any} :timeout :any}}
   "The introspection call as data — the request table, so the suite
   can assert on what would go out without a socket."
   [tok cfg url]
@@ -328,6 +354,8 @@
   {:method :post :url url :form form :headers headers :timeout (cfg :timeout)})
 
 (defn introspect
+  {:params [:string (or {:keyword :any} :nil) (or @{:keyword :any} :nil)]
+   :ret (or {:ok :boolean :reason :string} {:ok :boolean :claims :any})}
   ``Ask the authorization server about an opaque token (RFC 7662).
   Returns the same shape as `verify-jwt`.
 
@@ -385,6 +413,7 @@
             {:ok true :claims body}))))))
 
 (defn- signature-refusal?
+  {:params [:any] :ret :boolean :narrows (or :string :buffer)}
   ``Did a JWS fail on its *signature* (or on the segment carrying it)?
   That failure is final: the token is a forged or corrupted JWT, never
   an opaque token, and asking the issuer about it would let anybody
@@ -394,6 +423,9 @@
   (truthy? (and (bytes? reason) (string/find "signature" (string reason)))))
 
 (defn verify
+  {:params [:string (or {:keyword :any} :nil) (or @{:keyword :any} :nil)]
+   :ret (or {:ok :boolean :reason :string} {:ok :boolean :claims :any})
+   :throws [:string]}
   ``Check an access token and return `{:ok true :claims}` or
   `{:ok false :reason}`. `[:auth-oauth :mode]` picks the method:
   `:jwt`, `:introspect`, or `:auto` — which verifies a JWS locally and
@@ -423,6 +455,7 @@
 # -- scopes --------------------------------------------------------------
 
 (defn claim-scopes
+  {:params [{:keyword :any}] :ret [:string]}
   ``The scopes of a token's claims, as a tuple of strings. `scope` is
   the space-delimited string RFC 6749 defines; `scp` is the array some
   issuers send instead, and reading both is cheaper than telling
@@ -436,6 +469,7 @@
     []))
 
 (defn scopes
+  {:params [(or {:claims {:keyword :any} & r} :nil)] :ret [:string]}
   "The scopes of an identity (the current one by default) — what a
   route's `:void.auth/scopes` is checked against."
   [&opt id]
@@ -443,6 +477,8 @@
   (if id (claim-scopes (get id :claims {})) []))
 
 (defn has-scopes?
+  {:params [(or [:string] @[:string] :nil) (or {:claims {:keyword :any} & r} :nil)]
+   :ret :boolean :narrows :any}
   "Does this identity carry every one of `wanted`?"
   [wanted &opt id]
   (def have (scopes id))
@@ -450,12 +486,23 @@
 
 # -- the strategy --------------------------------------------------------
 
-(defn- bearer-token [req]
+(defn- bearer-token
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret :string?}
+  "The credential half of an `Authorization: Bearer <token>` header,
+  or nil when there is none."
+  [req]
   (when-let [header (ring/request-header req "authorization")]
     (when (string/has-prefix? "Bearer " header)
       (string/trim (string/slice header 7)))))
 
-(defn- oauth-identity [req]
+(defn- oauth-identity
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret (or {:subject :string & r} :nil)
+   :throws [:string]}
+  "The identity behind a presented OAuth access token, or nil —
+  including when the credential is a void API token the :bearer
+  strategy already owns."
+  [req]
   (when-let [presented (bearer-token req)]
     # a void API token belongs to the :bearer strategy, and handing it
     # to an authorization server would put a credential of ours in
@@ -477,6 +524,7 @@
           nil)))))
 
 (defn resource-metadata-url
+  {:params [(or {:keyword :any} :nil)] :ret :string?}
   ``The absolute URL of this server's protected-resource metadata —
   the pointer a refusal carries. Derived from `[:auth-oauth
   :audience]`, which is this server's canonical URI, so it is right by
@@ -497,6 +545,8 @@
     (string scheme host metadata-path (if (= "/" path) "" path))))
 
 (defn challenge-header
+  {:params [:string? :string? (or [:string] @[:string] :nil) (or {:keyword :any} :nil)]
+   :ret :string}
   ``A `WWW-Authenticate` value (RFC 6750 §3, RFC 9728 §5.1). `error`
   is nil for "no credentials at all", `\"invalid_token\"` for one that
   did not verify, `\"insufficient_scope\"` for one that did and may
@@ -542,6 +592,7 @@
    :merge :concat})
 
 (defn required-scopes
+  {:params [{:keyword :any} (or {:keyword :any} :nil)] :ret @[:string]}
   "The scopes a route needs: the ones it declares plus
   `[:auth-oauth :required-scopes]`, which every route needs."
   [rmeta &opt cfg]
@@ -550,6 +601,7 @@
                    ;(get rmeta :void.auth/scopes []))))
 
 (defn forbidden
+  {:params [{:keyword :any} (or [:string] @[:string])] :ret :any :throws [:string]}
   "The 403 for a valid token that may not do this."
   [req wanted]
   (ring/header (http/render-error
@@ -600,6 +652,7 @@
 # -- the metadata document -----------------------------------------------
 
 (defn metadata-document
+  {:params [(or {:keyword :any} :nil)] :ret @{:keyword :any}}
   ``This server's protected-resource metadata (RFC 9728 §2), as data.
   `authorization_servers` defaults to the one issuer configured: a
   resource server that trusts one issuer should not have to say so
@@ -623,6 +676,7 @@
   doc)
 
 (defn metadata-handler
+  {:params [{:keyword :any}] :ret :any}
   "GET /.well-known/oauth-protected-resource — the document a client
   reads to find out where to get a token. Public by definition: it is
   what an unauthenticated client is sent to."
@@ -645,6 +699,7 @@
 # -- config, boot gates, component ---------------------------------------
 
 (defn build-settings
+  {:params [{:keyword :any}] :ret @{:keyword :any} :throws [:string]}
   ``The [:auth-oauth] slice over the defaults, with the two things
   that must be true before a token is ever checked:
 

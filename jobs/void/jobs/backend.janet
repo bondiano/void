@@ -103,6 +103,7 @@
 # -- the in-process fallbacks --------------------------------------------
 
 (defn local-rate-limiter
+  {:params [] :ret (fn [:any :number? :number? :number] :number)}
   ``A fixed-window rate limiter in this process's heap: the fallback
   for a backend that has no shared counter. Returns 0 when the call
   may proceed (having counted it) and otherwise the seconds until the
@@ -131,6 +132,8 @@
           (max 0.001 (- (+ start duration) now)))))))
 
 (defn local-locks
+  {:params []
+   :ret {:lock! (fn [:any :number :any :number] :boolean) :unlock! (fn [:any :any] (or :boolean :nil))}}
   ``Named leases in this process's heap: the fallback for a backend
   with no shared lock. A schedule guarded by one fires once per slot
   *per process*, which is right for a single process and wrong for a
@@ -152,6 +155,17 @@
 # -- normalization -------------------------------------------------------
 
 (defn normalize
+  {:params [{:keyword :any}]
+   :ret {:name :any :shared? :boolean :transactional? :boolean
+         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+         :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+         :release-parent! (or (fn [& :any] :any) :nil)
+         :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+         :shared-rate? :boolean :shared-locks? :boolean
+         :stats (fn [] :any) :close (fn [] :any) & r}
+   :throws [:string]}
   ``Validate a backend dictionary and fill in the documented
   fallbacks. Returns the completed backend; throws with the offending
   key on any contract violation.``
@@ -192,11 +206,13 @@
         :shared-locks? (truthy? (and (get b :lock!) (get b :unlock!)))})))
 
 (defn supports-flows?
+  {:params [{:release-parent! :any & r}] :ret :boolean :narrows :any}
   "True when the backend can hold a parent until its children finish."
   [b]
   (truthy? (get b :release-parent!)))
 
 (defn transactional?
+  {:params [{:transactional? :any & r}] :ret :boolean :narrows :any}
   ``True when a `push!` on this backend commits with the database
   transaction the caller is in — the property `jobs/enqueue-tx!`
   needs, and the one `enqueue` refuses to be quiet about.``
@@ -204,16 +220,23 @@
   (truthy? (get b :transactional?)))
 
 (defn supports-reaping?
+  {:params [{:reap! :any & r}] :ret :boolean :narrows :any}
   "True when the backend can return an abandoned claim to the queue."
   [b]
   (truthy? (get b :reap!)))
 
 (defn supports-heartbeat?
+  {:params [{:touch! :any & r}] :ret :boolean :narrows :any}
   "True when a worker can keep a long job's claim alive."
   [b]
   (truthy? (get b :touch!)))
 
 (defn capabilities
+  {:params [{:name :any :shared? :any :transactional? :any :reap! :any :touch! :any
+             :shared-rate? :any :shared-locks? :any & r}]
+   :ret {:name :any :shared :boolean :transactional :boolean :flows :boolean
+         :reaping :boolean :heartbeat :boolean
+         :rate-limit (enum :shared :process) :locks (enum :shared :process)}}
   ``What this backend actually provides, as data — what `void jobs
   stats` prints and what the worker logs at boot, so that "the rate
   limit is per process" is something an operator reads rather than
@@ -229,6 +252,7 @@
    :locks (if (b :shared-locks?) :shared :process)})
 
 (defn require-transaction!
+  {:params [{:transactional? :any :name :any & r}] :ret :boolean :throws [:string]}
   ``Throw unless this backend's writes commit with the caller's
   database transaction — what `jobs/enqueue-tx!` asks before it
   queues, named the way `require-flows!` is: the error says which
@@ -240,6 +264,7 @@
   true)
 
 (defn require-flows!
+  {:params [{:release-parent! :any :name :any & r}] :ret :boolean :throws [:string]}
   "Throw unless the backend can hold flow parents — named, so that the
   error says which backend and what to switch to."
   [b]

@@ -79,7 +79,12 @@
 (def p (pool/make (driver/normalize drv) {:size 2 :checkout-timeout 1}))
 (setdyn state/pool-dyn p)
 
-(defn- answer [spec] (set responder (fake/rows-responder spec)))
+(defn- answer
+  {:params [{:string @[{:keyword :any}]}]
+   :ret (fn [:string :any] (or {:rows @[{:keyword :any}] :count :number} :nil))}
+  "Point the fake driver's responder at a fresh {sql-substring rows}
+  table for the next assertion."
+  [spec] (set responder (fake/rows-responder spec)))
 
 # -- mapping rows to instances -------------------------------------------
 

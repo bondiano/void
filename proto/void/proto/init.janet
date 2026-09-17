@@ -59,6 +59,8 @@
 (descriptor/watch! pschema/register-schema!)
 
 (defn register!
+  {:params [{:kind :keyword :name :keyword & r}] :ret {:kind :keyword :name :keyword & r}
+   :throws [:string]}
   ``Register a descriptor and project it into the schema registry.
   The public door to `descriptor/register!` — everything void/proto
   offers goes through here, so nothing can register a message that
@@ -69,17 +71,20 @@
   desc)
 
 (defn registered
+  {:params [:keyword?] :ret @[:keyword]}
   "Names of every registered descriptor, optionally of one kind
   (:message, :enum, :service)."
   [&opt kind]
   (descriptor/registered kind))
 
 (defn lookup
+  {:params [(or :keyword :string :buffer)] :ret (or {:kind :keyword :name :keyword & r} :nil)}
   "A descriptor by keyword name or protobuf name, or nil."
   [name]
   (descriptor/lookup name))
 
 (defn describe
+  {:params [(or :keyword :string :buffer)] :ret :string :throws [:string]}
   "A descriptor as `.proto` source — what `void proto describe`
   prints."
   [name]
@@ -89,31 +94,45 @@
 # -- the codec, re-exported ----------------------------------------------
 
 (defn encode
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any} :buffer?]
+   :ret :buffer :throws [:string]}
   "Encode a message value to protobuf bytes."
   [message value &opt buf]
   (codec/encode message value buf))
 
 (defn decode
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) (or :string :buffer)]
+   :ret @{:keyword :any} :throws [:string]}
   "Decode protobuf bytes into a message value."
   [message bytes]
   (codec/decode message bytes))
 
 (defn to-json
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+            (or {:keyword :any} :nil)]
+   :ret :any :throws [:string]}
   "A message value as plain data in the proto3 JSON mapping."
   [message value &opt opts]
   (pjson/to-json message value opts))
 
 (defn from-json
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :any (or {:keyword :any} :nil)]
+   :ret (or @{:keyword :any} :nil) :throws [:string]}
   "Plain data in the proto3 JSON mapping as a message value."
   [message value &opt opts]
   (pjson/from-json message value opts))
 
 (defn encode-json
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+            (or {:keyword :any} :nil)]
+   :ret :string :throws [:string]}
   "A message value as a proto3-JSON string."
   [message value &opt opts]
   (pjson/encode message value opts))
 
 (defn decode-json
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :string (or {:keyword :any} :nil)]
+   :ret (or @{:keyword :any} :nil) :throws [:string]}
   "A proto3-JSON string as a message value."
   [message text &opt opts]
   (pjson/decode message text opts))
@@ -121,6 +140,7 @@
 # -- declaring messages in Janet -----------------------------------------
 
 (defmacro defmessage
+  {:params [:any :any :any] :ret :any}
   ``Declare and register a message:
 
       (defmessage :example/Order
@@ -136,6 +156,7 @@
   ~(,register! (,descriptor/message ,name ,fields ,opts)))
 
 (defmacro defenum
+  {:params [:any :any :any] :ret :any}
   ``Declare and register an enum:
 
       (defenum :example/Status {:unknown 0 :active 1 :closed 2})
@@ -145,6 +166,7 @@
   ~(,register! (,descriptor/enum ,name ,values ,opts)))
 
 (defmacro defservice-proto
+  {:params [:any :any :any] :ret :any}
   ``Declare and register a *service descriptor* — the shape of an
   RPC service with no handlers attached. void/grpc's `defservice`
   binds handlers to one of these; here is the shape by itself, for a
@@ -152,13 +174,18 @@
   [name methods &opt opts]
   ~(,register! (,descriptor/service ,name ,methods ,opts)))
 
-(defn- source-dir []
+(defn- source-dir
+  {:params [] :ret :string}
+  "The directory of the file currently compiling, for resolving a
+  `defproto` path relative to it rather than to the process's cwd."
+  []
   (def f (dyn *current-file*))
   (if (and f (string/find "/" f))
     (string/slice f 0 (last (string/find-all "/" f)))
     "."))
 
 (defmacro defproto
+  {:params [:any :any] :ret :any}
   ``Load a `.proto` file **at compile time** and register everything in
   it:
 
@@ -179,7 +206,12 @@
   [path &opt opts]
   (default opts {})
   (def dir (source-dir))
-  (defn rooted [p] (if (string/has-prefix? "/" p) p (string dir "/" p)))
+  (defn rooted
+    {:params [:string] :ret :string}
+    "`p`, rooted at the compiling file's directory unless it is
+    already absolute."
+    [p]
+    (if (string/has-prefix? "/" p) p (string dir "/" p)))
   (def where (rooted path))
   (def paths (map rooted (get opts :paths [])))
   # `seen` is how `load` remembers which files it has parsed, and
@@ -234,6 +266,7 @@
 (var settings "The [:proto] slice, read at :before-start." defaults)
 
 (defn load-file!
+  {:params [:string (or [:string] :nil)] :ret :nil :throws [:string]}
   ``Read, parse and register a `.proto` file and everything it
   imports. `paths` are searched after the importing file's own
   directory; `[:proto :paths]` is appended to them.``
@@ -257,7 +290,11 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- kind-line [name]
+(defn- kind-line
+  {:params [(or :keyword :string :buffer)] :ret :string :throws [:string]}
+  "One line of `void proto list`: a descriptor's kind, name and
+  protobuf name, column-aligned."
+  [name]
   (def d (descriptor/lookup name))
   (string/format "%-10s %-32s %s"
                  (string (d :kind)) (string name) (d :proto-name)))

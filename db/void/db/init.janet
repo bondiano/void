@@ -70,6 +70,7 @@
 (def rollback-reason "See state/rollback-reason — the reason a with-tx rolled back, or nil." state/rollback-reason)
 (def with-conn* "See state/with-conn*." state/with-conn*)
 (defmacro with-conn
+  {:params [:any] :ret :any}
   ``See state/with-conn — run the body on one pooled connection. A fiber
   started with `ev/go` inside the scope inherits the connection dyn and
   must be wrapped in `db/detached`.``
@@ -77,6 +78,7 @@
   ~(,state/with-conn* (fn with-conn-body [_] ,;body)))
 (def detached* "See state/detached*." state/detached*)
 (defmacro detached
+  {:params [:any] :ret :any}
   ``See state/detached — run the body with the db bindings cleared, for a
   fiber spawned with `ev/go` from inside a connection or transaction
   scope.``
@@ -84,6 +86,7 @@
   ~(,state/detached* (fn detached-body [] ,;body)))
 (def with-tx* "See state/with-tx*." state/with-tx*)
 (defmacro with-tx
+  {:params [:any] :ret :any}
   ``Run the body in a transaction (see state/with-tx): nested scopes
   become savepoints, an error rolls back and propagates. A fiber started
   with `ev/go` inside the scope inherits the transaction dyn and must be
@@ -101,6 +104,7 @@
 (def resolve-entity "See entity/resolve — descriptor from a name, node or descriptor." entity/resolve)
 (def define-entity! "See entity/define! — the runtime half of defentity." entity/define!)
 (defmacro defentity
+  {:params [:symbol :any :any] :ret :any}
   ``Define an entity — schema plus db-mapping in one declaration (see
   void/db/entity):
 
@@ -135,6 +139,7 @@
 (def instance? "See entity/instance?." entity/instance?)
 (def with-identity-map* "See entity/with-identity-map*." entity/with-identity-map*)
 (defmacro with-identity-map
+  {:params [:any] :ret :any}
   "See entity/with-identity-map — one instance per row inside the scope."
   [& body]
   ~(,entity/with-identity-map* (fn identity-map-body [] ,;body)))
@@ -158,11 +163,19 @@
    :migrations [:optional {:dir [:optional :string]
                            :table [:optional :string]}]})
 
-(defn- guard-default [cfg profile]
+(defn- guard-default
+  {:params [{:n1-guard (or (enum :off :warn :strict) :nil) & r} :keyword]
+   :ret (enum :off :warn :strict)}
+  "The N1-guard mode a pool starts with: the config's own :n1-guard, or
+  the profile default — :warn while developing, :off in :prod."
+  [cfg profile]
   (or (get cfg :n1-guard)
       (if (= :prod profile) :off :warn)))
 
 (defn migration-opts
+  {:params [{:migrations (or {:dir :string? :table :string? & r} :nil) & r}
+            (or {:any :any} :nil)]
+   :ret {:dir :string :table :string & r}}
   "Migration options from the :db config slice merged with overrides."
   [cfg &opt extra]
   (def m (get cfg :migrations {}))
@@ -203,10 +216,20 @@
 
 # -- CLI commands --------------------------------------------------------
 
-(defn- config-slice []
+(defn- config-slice
+  {:params [] :ret {:any :any}}
+  "The :db slice of the running boot's config, or {} before one is
+  running."
+  []
   (or (get-in (plugin/running-boot) [:config :values :db]) {}))
 
-(defn- print-status [rows]
+(defn- print-status
+  {:params [(or @[{:version :string :name :string :applied :boolean :missing :boolean? & r}]
+                [{:version :string :name :string :applied :boolean :missing :boolean? & r}])]
+   :ret :nil}
+  "Print `migrate/status`'s rows: applied, pending, or applied-but-the-
+  file-is-gone."
+  [rows]
   (if (empty? rows)
     (print "no migrations")
     (each m rows

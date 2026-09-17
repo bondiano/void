@@ -64,6 +64,7 @@
       (merge {:main ~(* :response-status :headers)} http-grammar))))
 
 (defn- accum-key-values
+  {:params [:any] :ret @{:any :any}}
   "Accumulate key-value pairs based on arg index (even = key, odd =
   value) into a table, combining duplicate keys into arrays of values
   rather than overwriting. Used for both query strings and headers."
@@ -83,6 +84,7 @@
 (def head-terminator "The bytes that end an HTTP/1.1 head." "\r\n\r\n")
 
 (defn head-end
+  {:params [:buffer :number?] :ret :number?}
   "Index just past the \\r\\n\\r\\n head terminator in buf, or nil while
   the head is incomplete. `start` lets an incremental reader resume the
   search near the tail instead of rescanning the whole buffer."
@@ -92,6 +94,10 @@
     (+ pos (length head-terminator))))
 
 (defn parse-request-head
+  {:params [:buffer]
+   :ret (or :nil (enum :error)
+            @{:method :string :path :string :http-version [:number :number]
+              :headers @{:any :any} :head-size :number})}
   ``Parse an HTTP request head from the start of buf. Returns nil while
   the head terminator has not arrived yet, :error on a malformed head,
   otherwise a table with:
@@ -116,6 +122,10 @@
       :error)))
 
 (defn parse-response-head
+  {:params [:buffer]
+   :ret (or :nil (enum :error)
+            @{:status :number :message :string :http-version [:number :number]
+              :headers @{:any :any} :head-size :number})}
   ``Parse an HTTP response head from the start of buf. Returns nil while
   the head is incomplete, :error on a malformed head, otherwise a table
   with `:status`, `:message`, `:http-version`, `:headers` and
@@ -142,6 +152,7 @@
         "\r\n")))
 
 (defn parse-chunk-head
+  {:params [:buffer :number?] :ret (or :nil (enum :error) [:number :number])}
   ``Parse one chunk-size line ("1a3;ext\r\n") at `start` in buf.
   Returns [size consumed] where consumed counts the size line only,
   nil while the line is still incomplete, :error on a malformed line.``
@@ -176,6 +187,7 @@
    :oversized-trailers "oversized trailers"})
 
 (defn chunked-start
+  {:params [:number?] :ret {:phase (enum :size) :pos :number :received :number :out :string}}
   "The decoder state for a chunked body whose first chunk-size line
   begins at `pos` in the buffer — just past the head."
   [&opt pos]
@@ -183,6 +195,7 @@
   {:phase :size :pos pos :received 0 :out ""})
 
 (defn- advance
+  {:params [:any :any] :ret :struct}
   "The next decoder state: `st` with the given keys replaced, frozen —
   a state is a value the caller can keep, log or compare."
   [st & kvs]
@@ -193,26 +206,31 @@
   (freeze next))
 
 (defn- need-bytes
+  {:params [:any :number] :ret :struct}
   "Stop until buf holds at least n bytes."
   [st n]
   (advance st :need n))
 
 (defn- fail
+  {:params [:any :keyword] :ret :struct}
   "Stop for good with one of `chunked-reasons`."
   [st reason]
   (advance st :phase :error :reason reason :message (chunked-reasons reason)))
 
 (defn- past-limit?
+  {:params [:number (or :number :nil)] :ret :boolean :narrows :any}
   "Is n over a limit that may be absent (nil = unbounded)?"
   [n limit]
   (and limit (> n limit)))
 
 (defn- line-too-long?
+  {:params [:buffer :number {:max-line (or :number :nil) & r}] :ret :boolean :narrows :any}
   "Has more than :max-line arrived since `from` without the line ending?"
   [buf from limits]
   (past-limit? (- (length buf) from) (limits :max-line)))
 
 (defn- step-size
+  {:params [:buffer :any {:max-body (or :number :nil) :max-line (or :number :nil) & r}] :ret :struct}
   "At a chunk-size line: size 0 opens the trailer section, anything
   else the chunk's data. The body limit is checked here, before the
   data arrives — a peer announcing a 2 GB chunk is refused at the
@@ -237,6 +255,7 @@
         (advance st :phase :data :pos next-pos :remaining size)))))
 
 (defn- step-data
+  {:params [:buffer :any :buffer] :ret :struct}
   "Inside a chunk: emit whatever of it has arrived, then require the
   CRLF that closes it. Data is emitted as it comes rather than once the
   whole chunk is in, so a caller that streams bodies can — and one that
@@ -266,6 +285,7 @@
     (fail st :bad-terminator)))
 
 (defn- step-trailers
+  {:params [:buffer :any {:max-line (or :number :nil) & r}] :ret :struct}
   "After the last chunk: either an immediate CRLF or trailer lines
   ending in a blank one, bounded by :max-line. Trailers are consumed,
   not surfaced — nothing in void reads them yet."
@@ -287,11 +307,15 @@
     (need-bytes st (inc (length buf)))))
 
 (defn- settled?
+  {:params [:any] :ret :boolean :narrows :any}
   "Nothing more to do with the bytes at hand."
   [st]
   (or (st :need) (= :done (st :phase)) (= :error (st :phase))))
 
 (defn decode-chunked
+  {:params [:buffer :struct
+            (or {:max-body (or :number :nil) :max-line (or :number :nil) & r} :nil)]
+   :ret :struct}
   ``Advance a chunked-body decoder over the bytes in buf, as far as
   they go. `state` is `chunked-start`'s value or what the previous
   call returned; `limits` is `{:max-body n :max-line n}`, either nil
@@ -323,6 +347,10 @@
   (advance st :out (string out)))
 
 (defn read-chunked
+  {:params [:buffer :number
+            (or {:max-body (or :number :nil) :max-line (or :number :nil) & r} :nil)
+            (fn [:number] :any)]
+   :ret :struct}
   ``Decode a whole chunked body starting at `start` in buf, pulling
   bytes through `want`: `(want n)` makes buf hold at least n bytes or
   throws, and is the whole of the I/O — the timeout, the clock and
@@ -373,6 +401,7 @@
     (freeze t)))
 
 (defn net-error-kind
+  {:params [:any] :ret (enum :timeout :reset :closed :cancelled :other)}
   ``What a caught socket error means, as one of a closed set:
 
     * `:timeout`   — the read or write ran out of its timeout;
@@ -399,6 +428,7 @@
     :other))
 
 (defn peer-gone?
+  {:params [:keyword] :ret :boolean :narrows (enum :reset :closed)}
   "Did the peer end the connection — reset it, or had it closed under
   us — as opposed to a timeout, a cancellation or a real error? The
   question both read loops ask: this is EOF, not a failure."
@@ -417,6 +447,7 @@
     (freeze t)))
 
 (defn url-encode
+  {:params [:string] :ret :string}
   "Percent-encode everything outside the RFC 3986 unreserved set."
   [s]
   (def out (buffer/new (length s)))
@@ -427,6 +458,7 @@
   (string out))
 
 (defn url-decode
+  {:params [:string :boolean?] :ret :string}
   ``Percent-decode a string — the inverse of `url-encode`, for the
   places a value arrives already encoded and no query grammar is
   running over it (a cookie value, a `Content-Disposition` filename).
@@ -454,6 +486,7 @@
   (string out))
 
 (defn encode-query
+  {:params [{:any :any}] :ret :string}
   "Encode a dictionary into a query string (no leading ?). A true value
   renders the bare key, an indexed value repeats the key."
   [params]
@@ -485,6 +518,7 @@
       :main (/ (any :entry) ,accum-key-values)}))
 
 (defn split-path
+  {:params [:string] :ret [:string (or :string :nil)]}
   "Split a raw request target into [route query-string]; query-string is
   nil when the target has no ? character."
   [path]
@@ -493,6 +527,7 @@
     [path nil]))
 
 (defn path-segments
+  {:params [:string] :ret @[:string]}
   ``The non-empty segments of a path: `"/one//two/"` -> `@["one"
   "two"]`. What a client does with a `Location` it has to reason about
   and what a caller does with a target it did not build itself; the
@@ -503,6 +538,7 @@
   (filter |(not (empty? $)) (string/split "/" p)))
 
 (defn parse-query
+  {:params [(or :string :nil)] :ret (or @{:any :any} :nil)}
   "Parse a query string (without the leading ?) into a table. Values are
   percent-decoded, + becomes space, duplicate keys accumulate into
   arrays, a key without a value maps to true. Returns nil when qs is nil
@@ -521,6 +557,7 @@
      :main '(some (* (<- :content) :eql (<- :content) (? :sep)))}))
 
 (defn parse-cookies
+  {:params [(or :string :nil)] :ret @{:string :string}}
   ``Parse a Cookie header value into a table of cookie names to values.
   Returns an empty table when s is nil or has no cookie pairs.
 
@@ -537,6 +574,7 @@
   raw)
 
 (defn cookie-header
+  {:params [(or {:any :any} @[[:any :any]])] :ret :string}
   ``Format a `Cookie` request header value from a dictionary or a list
   of pairs:
 
@@ -560,6 +598,13 @@
   {"strict" :strict "lax" :lax "none" :none})
 
 (defn parse-set-cookie
+  {:params [(or :string :nil)]
+   :ret (or :nil
+            @{:name :string :value :string
+              :path (or :string :nil) :domain (or :string :nil)
+              :expires (or :string :nil) :max-age (or :number :nil)
+              :secure :boolean? :http-only :boolean?
+              :same-site (or :keyword :string :nil)})}
   ``Parse one `Set-Cookie` header value into a table:
 
       {:name "session" :value "abc" :path "/" :domain "example.test"
@@ -669,7 +714,11 @@
   # a Location built from user input becomes header injection
   (peg/compile '(set "\r\n\0")))
 
-(defn- write-header-line [buf k v]
+(defn- write-header-line
+  {:params [:buffer :any :any] :ret :buffer :throws [{:header :string :message :string}]}
+  "Write one `name: value\\r\\n` header line into buf, raising a
+  structured error instead when either side carries CR, LF or NUL."
+  [buf k v]
   (when (or (peg/find header-split-peg (string k))
             (peg/find header-split-peg (string v)))
     (error {:header (string k)
@@ -678,6 +727,8 @@
   (buffer/format buf "%V: %V\r\n" k v))
 
 (defn write-head
+  {:params [:buffer :number {:any :any}] :ret :buffer
+   :throws [{:header :string :message :string}]}
   "Format the response status line and headers into buf, without the
   terminating blank line — write-body appends Content-Length or
   Transfer-Encoding plus the terminator. An indexed headers value
@@ -695,6 +746,8 @@
   buf)
 
 (defn write-body
+  {:params [:any :buffer (or :nil :buffer :string :array :tuple :fiber)]
+   :ret :buffer :throws [:any]}
   "Finish and send a response whose head is already formatted in buf:
   append Content-Length (byte-sequence body), Transfer-Encoding: chunked
   (iterable body — each element one chunk, may be lazy for streaming) or

@@ -29,8 +29,14 @@
 
 # -- parsing: RESP2 ------------------------------------------------------
 
-(defn- value-of [s] (first (resp/parse s)))
-(defn- end-of [s] (last (resp/parse s)))
+(defn- value-of
+  {:params [:string] :ret :any}
+  "The decoded value of the one frame `s` holds."
+  [s] (first (resp/parse s)))
+(defn- end-of
+  {:params [:string] :ret :number}
+  "The index just past the one frame `s` holds."
+  [s] (last (resp/parse s)))
 
 (assert (= "OK" (value-of "+OK\r\n")) "simple string")
 (assert (= 42 (value-of ":42\r\n")) "integer")

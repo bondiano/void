@@ -19,6 +19,7 @@
 ### with — which the templates it generates are full of.
 
 (defn fill
+  {:params [:string {:keyword :any}] :ret :string :throws [:string]}
   ``Fill `{{key}}` holes from a dictionary. Substitution is one pass
   left to right, so a value that happens to contain `{{` is data
   rather than a further hole; a hole with no value is an error, since
@@ -41,6 +42,7 @@
   (string out))
 
 (defn render
+  {:params [:string {:keyword :any}] :ret :string :throws [:string]}
   ``Fill a template and end the result with a newline — janet drops the
   one before a long string's closing delimiter, and a generated file
   that ends without it is the only file in the tree that does.``

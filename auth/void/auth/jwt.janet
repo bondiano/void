@@ -46,34 +46,69 @@
   large enough that two machines with NTP never disagree."
   30)
 
-(defn- alg-name [algo]
+(defn- alg-name
+  {:params [:keyword] :ret :string}
+  "A JWS algorithm name as the header spells it — \"HS256\", not
+  `:hs256`."
+  [algo]
   (string/ascii-upper (string algo)))
 
-(defn- alg-of [name]
+(defn- alg-of
+  {:params [:any] :ret :keyword?}
+  "A header's `alg` (any JSON value) as one of `algorithms`' keys, or
+  nil when it names nothing this module supports."
+  [name]
   (def k (keyword (string/ascii-lower (string name))))
   (when (algorithms k) k))
 
-(defn- spec-of [algo]
+(defn- spec-of
+  {:params [:keyword]
+   :ret (or {:kind :keyword :digest :keyword} {:kind :keyword :sign :keyword})
+   :throws [:string]}
+  "The `algorithms` entry for `algo`, or an error naming what is
+  supported instead."
+  [algo]
   (or (algorithms algo)
       (errorf "unknown JWT algorithm %q (have %s)" algo
               (string/join (map |(alg-name $) (sorted (keys algorithms))) " "))))
 
-(defn- segment [value]
+(defn- segment
+  {:params [:any] :ret :string}
+  "One compact-serialization segment: `value` as base64url JSON."
+  [value]
   (encode/base64url (json/encode value)))
 
-(defn- signature [algo key input]
+(defn- signature
+  {:params [:keyword (or :string :buffer {:pkey :pointer :kind :keyword & r})
+            (or :string :buffer)]
+   :ret :string :throws [:string]}
+  "The raw signature bytes over `input` — HMAC for a symmetric
+  algorithm, `crypto/sign` for a keyed one."
+  [algo key input]
   (def spec (spec-of algo))
   (if (= :hmac (spec :kind))
     (digest/hmac (spec :digest) key input)
     (sign/sign key (spec :sign) input)))
 
-(defn- signature-ok? [algo key input sig]
+(defn- signature-ok?
+  {:params [:keyword (or :string :buffer {:pkey :pointer :kind :keyword & r})
+            (or :string :buffer) (or :string :buffer)]
+   :ret :boolean :narrows :any :throws [:string]}
+  "Does `sig` verify over `input` under `algo`/`key`? Constant-time
+  for HMAC, `crypto/sign`'s verifier for a keyed algorithm."
+  [algo key input sig]
   (def spec (spec-of algo))
   (if (= :hmac (spec :kind))
     (ct/equal? sig (digest/hmac (spec :digest) key input))
     (sign/verify key (spec :sign) input sig)))
 
 (defn encode-token
+  {:params [{:keyword :any}
+            (or {:alg :keyword? :key (or :string :buffer {:pkey :pointer :kind :keyword & r} :nil)
+                 :ttl :number? :issuer :any :audience :any :subject :any :kid :any :now :number?
+                 & r}
+                :nil)]
+   :ret :string :throws [:string]}
   ``Sign claims into a JWT. Options:
 
     :alg      :hs256 (default) .. :es512
@@ -107,6 +142,7 @@
   (string input "." (encode/base64url (signature algo key input))))
 
 (defn peek
+  {:params [:string] :ret (or {:header {:keyword :any} :claims :any} :nil)}
   ``The header and payload of a token **without verifying anything** —
   for picking a key by `kid` before the signature is checked. Never
   trust what it returns: that is the entire point of the signature.``
@@ -118,6 +154,14 @@
   (when (and ok ok2) {:header header :claims payload}))
 
 (defn decode-token
+  {:params [:string
+            (or {:alg (or :keyword [:keyword] :nil)
+                 :key (or :string :buffer {:pkey :pointer :kind :keyword & r} :nil)
+                 :keys (or @{:any :any} :nil)
+                 :issuer :any :audience :any :leeway :number? :now :number? & r}
+                :nil)]
+   :ret (or {:ok :boolean :reason :string}
+            {:ok :boolean :claims :any :header {:keyword :any}})}
   ``Verify a token and its claims. Returns `{:ok true :claims :header}`
   or `{:ok false :reason "..."}` — the reason is for the log, not for
   the client.
@@ -141,7 +185,7 @@
   (def leeway (get opts :leeway default-leeway))
   (def now (get opts :now (os/time)))
   (def parts (string/split "." (string token)))
-  (defn no [reason] {:ok false :reason reason})
+  (defn no {:params [:string] :ret {:ok :boolean :reason :string}} "A refused-token result, with `reason` for the log." [reason] {:ok false :reason reason})
   (cond
     (not= 3 (length parts)) (no "not three segments")
 

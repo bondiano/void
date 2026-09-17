@@ -15,6 +15,7 @@
 (import ./cart.service :as service)
 
 (defn add-form
+  {:params [@{:id :number & r}] :ret :tuple :throws [:string]}
   ``The "add to cart" control. It lives in this module rather than in
   the catalog's view because the form is about a cart — the catalog
   module calls it, and does not have to know what it posts.``
@@ -26,11 +27,13 @@
               :quantity {:control :input :type "number"}}
      :submit "Add to cart"}))
 
-(defn- quantity-form [line]
+(defn- quantity-form
+  {:params [@{:product-id :number :quantity :number & r}] :ret :tuple :throws [:string]}
   ``The quantity control: an htmx post that swaps the whole cart back
   in. The line is addressed by *product*, not by the line's own id
   (./cart.repository explains why), and the token rides on the form
   because void/security spliced it.``
+  [line]
   (form/form dto/SetQuantity
     {:action (string "/cart/items/" (line :product-id))
      :values {:quantity (line :quantity)}
@@ -41,6 +44,12 @@
                             :target "#cart" :swap :outer-html))}))
 
 (defn cart-view
+  {:params [(or @[@{:id :number :cart-id :number :product-id :number :quantity :number & r}]
+               [@{:id :number :cart-id :number :product-id :number :quantity :number & r}])
+            {:count :number :subtotal-cents :number}
+            (or {:tone :string? :message :string? & r} :nil)]
+   :ret :tuple
+   :throws [:string]}
   ``The cart, and the one control that matters. `db/rel` is a table
   lookup here because ./cart.repository preloaded the products; without
   the preload this page would be an N+1 that only shows up when

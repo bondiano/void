@@ -24,6 +24,12 @@
 (import ./driver :as suite)
 
 (defn run!
+  {:params [:string
+            {:dialect :keyword :connect (fn [] :any) :close (fn [:any] :any)
+             :execute (fn [:any :string [:any] {:any :any}] :any) & r}
+            (or {:racers :number? & r} :nil)]
+   :ret :nil
+   :throws [:any]}
   ``Assert that void/db/lease keeps its promise over `drv0`. `name`
   names the engine in the failure messages.
 

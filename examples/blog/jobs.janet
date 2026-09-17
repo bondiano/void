@@ -19,6 +19,9 @@
   "articles:index")
 
 (defn recount!
+  {:params [:number]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Recompute one article's comment counter. Returns the new count."
   [article-id]
   (db/with-tx

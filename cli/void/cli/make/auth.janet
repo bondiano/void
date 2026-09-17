@@ -42,6 +42,23 @@
   [:id :email :password :password-hash :verified-at :created-at])
 
 (defn auth-spec
+  {:params [:string?
+            (or @[{:name :keyword :type :keyword :optional? :boolean
+                   :entity :keyword? :rel :keyword? :table :string?}]
+                [{:name :keyword :type :keyword :optional? :boolean
+                  :entity :keyword? :rel :keyword? :table :string?}]
+                :nil)
+            (or {:dir :string? :table :string? :plural :string? :project :string?
+                 :migrations-dir :string? :test-dir :string? :version :string?
+                 :link-path :string? :driver :keyword? & r}
+                :nil)]
+   :ret {:name :string :entity :string :plural :string :table :string
+         :title :string :project :string :plugin :string :dir :string
+         :module-path :string :link-path :string :driver :keyword
+         :migrations-dir :string :test-dir :string :version :string
+         :fields [{:name :keyword :type :keyword :optional? :boolean
+                   :entity :keyword? :rel :keyword? :table :string?}]}
+   :throws [:string]}
   ``The value every auth template is a pure function of:
 
       {:name "user" :entity "User" :plural "users" :table "users"
@@ -92,6 +109,7 @@
    :fields (tuple ;fields)})
 
 (defn- block
+  {:params [:number (or @[:string] [:string])] :ret :string}
   "Extra lines, indented under a line the template already opened —
   empty when there are no extra fields, which is the common case."
   [n lines]
@@ -891,11 +909,30 @@
 (print "auth-test ok")
 ```)
 
-(defn- auth-migration-path [spec]
+(defn- auth-migration-path
+  {:params [{:migrations-dir :string :version :string :table :string & r}]
+   :ret :string}
+  "Where the migration this spec describes lives, built the same way
+  from a fresh spec or one read back off disk."
+  [spec]
   (string (spec :migrations-dir) "/" (spec :version)
           "_create_" (spec :table) ".janet"))
 
 (defn- auth-substitutions
+  {:params [{:name :string :entity :string :plural :string :table :string
+             :title :string :project :string :plugin :string :dir :string
+             :module-path :string :link-path :string :driver :keyword
+             :migrations-dir :string :test-dir :string :version :string
+             :fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]
+             & r}]
+   :ret {:name :string :entity :string :plural :string :table :string
+         :title :string :project :string :plugin :string :dir :string
+         :module-path :string :link-path :string :driver :string
+         :driver-module :string :migrations-dir :string :version :string
+         :field-keys :string :schema-fields :string :columns :string
+         :inserts :string :form-fields :string :sample :string}
+   :throws [:string]}
   "Every hole the built-in auth templates have, filled from the spec.
   An override that wants one of them gets it by calling this."
   [spec]
@@ -977,13 +1014,20 @@
   {:void/db-sqlite "https://github.com/janet-lang/sqlite3.git"})
 
 (defn auth-report
+  {:params [{:driver :keyword :test-dir :string :plugin :string :table :string
+             :name :string :link-path :string :project :string & r}]
+   :ret [:string]}
   ``The lines `void make auth` prints after it has written its files:
   the three edits it did not make, in the order they have to happen.
   A pure function of the spec, so a test can read what a person is
   told rather than only what was written to disk.``
   [spec]
   (def out @[])
-  (defn say [& parts] (array/push out (string ;parts)))
+  (defn say
+    {:params [:any] :ret @[:string]}
+    "Append one printed line, built from `parts` the way `string`
+    joins them."
+    [& parts] (array/push out (string ;parts)))
   (def dep (get driver-dependencies (spec :driver)))
 
   (say "  none of the three edits below was made for you: `void make` writes")
@@ -992,7 +1036,10 @@
   (say "  in the order they have to happen.")
 
   (var step 0)
-  (defn heading [& parts]
+  (defn heading
+    {:params [:any] :ret @[:string]}
+    "A numbered step heading, blank line first."
+    [& parts]
     (++ step)
     (say)
     (say "  " step ". " ;parts))
@@ -1093,6 +1140,14 @@
            "--no-input" {:key :no-input :type :bool :doc "accepted and inert — nothing here asks"}}})
 
 (defn create
+  {:params [{:driver :any :dry-run :boolean? :force :boolean? :dir :string?
+             :table :string? :plural :string? :project :string?
+             :migrations-dir :string? :test-dir :string? :version :string?
+             :link-path :string? :no-input :any & r}
+            :string?
+            :string]
+   :ret [:string]
+   :throws [:string]}
   ``The body of `void make auth [NAME] [field:type ...]`.
 
   NAME is what an account is called here — `user` by default. It

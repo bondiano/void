@@ -22,7 +22,10 @@
 
 # -- views (plain functions returning hiccup) ----------------------------
 
-(defn layout [content context]
+(defn layout
+  {:params [:any :any] :ret @[:any]}
+  "Wrap `content` in the page shell: head, stylesheet, htmx script."
+  [content context]
   (html/html5 {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
@@ -37,6 +40,7 @@
      [:main {:class "mx-auto max-w-2xl px-6 py-16"} content]]))
 
 (defn guestbook-view
+  {:params [(or {:any :any} :nil) (or [{:path :any & r}] :nil)] :ret :tuple}
   "The #guestbook fragment: schema-driven form plus the entries list.
   On an invalid submission the caller passes the raw values and the
   schema errors back in and the same markup re-renders annotated."
@@ -71,11 +75,16 @@
 # -- handlers ------------------------------------------------------------
 
 (defn home
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET / — the full page."
   [req]
   (html/page (guestbook-view) {:layout layout}))
 
 (defn create-entry
+  {:params [{:form :any & r}] :ret :any :throws [:string]}
   ``POST /entries — form/submit checks Entry and picks one of two
   continuations: a valid one appends and re-renders the fragment, an
   invalid one re-renders it with the raw values and the per-field

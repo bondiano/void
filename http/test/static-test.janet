@@ -10,7 +10,12 @@
 (os/mkdir (string dir "/sub"))
 (spit (string dir "/sub/app.js") "console.log(1)")
 
-(defn- req [path &opt headers method]
+(defn- req
+  {:params [:string (or @{:string :any} :nil) :keyword?]
+   :ret @{:method :keyword :path :string :headers @{:string :any}}}
+  "A bare request table for static/file-response and wrap-static to
+  read — method defaults to :get, headers to none."
+  [path &opt headers method]
   @{:method (or method :get) :path path :headers (or headers @{})})
 
 # -- mime / helpers ------------------------------------------------------

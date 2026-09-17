@@ -123,6 +123,7 @@
     :start-realtime (os/clock :realtime)})
 
 (defn observe!
+  {:params [:number] :ret :number}
   "Record one lag sample, in seconds — the histogram, the maximum and
   the counter. Public because a test (and a REPL) has no reason to
   wait a tenth of a second to see the effect."
@@ -137,6 +138,7 @@
   lag)
 
 (defn start-sampler!
+  {:params [:number?] :ret @{:running :boolean & r}}
   ``Start the lag sampler: a heartbeat thread stamps the clock every
   `interval` and the fiber records how long each stamp waited to be
   taken — the cost of the only signal that sees a blocked loop. A
@@ -165,6 +167,7 @@
   state)
 
 (defn stop-sampler!
+  {:params [] :ret @{:running :boolean & r}}
   "Stop the lag sampler: close the heartbeat (which wakes the fiber
   and retires the thread), then cancel the fiber."
   []
@@ -179,6 +182,7 @@
   state)
 
 (defn sampling?
+  {:params [] :ret :boolean :narrows :any}
   "Is the lag sampler running?"
   []
   (truthy? (state :running)))
@@ -208,13 +212,23 @@
 # -- the status view -----------------------------------------------------
 
 (defn stats
+  {:params []
+   :ret {:sampling :boolean :interval :number :samples :number
+         :uptime :number :rss :number?
+         :available {:loop-lag :boolean :rss :boolean :heap :boolean}
+         :loop-lag {:last :number? :p50 :number? :p90 :number? :p99 :number?
+                    :max :number?}}}
   ``What the sampler has seen, in **milliseconds** — the unit the budgets and
   every under-pressure-shaped dashboard are written in, and the unit
   `void obs status` prints. The percentiles come off the histogram
   itself (`metrics/quantile`), so what an operator reads in the REPL
   is what a scraper reads from /metrics, to the bucket.``
   []
-  (defn ms [x] (when x (* 1000 x)))
+  (defn ms
+    {:params [:number?] :ret :number?}
+    "milliseconds, or nil through nil — a lag that has not happened
+    yet stays unreported rather than becoming a false zero."
+    [x] (when x (* 1000 x)))
   {:sampling (truthy? (state :running))
    :interval (state :interval)
    :samples (state :samples)
@@ -228,6 +242,10 @@
               :max (ms (state :max))}})
 
 (defn health
+  {:params []
+   :ret {:status :keyword :sampling :boolean :samples :number
+         :loop-lag-p99 :number? :loop-lag-max :number? :rss :number?
+         :uptime :number :metrics :number}}
   ``The health value of the runtime component: up, plus the numbers
   that make a /health response worth reading. `:degraded` is
   deliberately not in here — void/pressure is the plugin that decides

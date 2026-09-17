@@ -83,17 +83,59 @@
    :poll-interval 1
    :shutdown-timeout 20})
 
-(defn- now [] (os/clock :realtime))
+(defn- now
+  {:params [] :ret :number}
+  "The wall clock this worker measures claims and settles against."
+  []
+  (os/clock :realtime))
 
 (errors/define! :void.jobs/timeout
   {:doc "the handler ran past the job's :timeout and was cancelled; :data {:timeout <seconds>}"})
 
-(defn- worker-id []
+(defn- worker-id
+  {:params [] :ret :string}
+  "A fresh worker token: `w-` plus the random tail of a job id."
+  []
   (string "w-" (string/slice (record/new-id) 11)))
 
 # -- construction --------------------------------------------------------
 
 (defn make
+  {:params [{:backend {:name :any :shared? :boolean :transactional? :boolean
+                       :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+                       :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+                       :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+                       :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+                       :release-parent! (or (fn [& :any] :any) :nil)
+                       :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+                       :shared-rate? :boolean :shared-locks? :boolean
+                       :stats (fn [] :any) :close (fn [] :any) & r}
+             :queues {:keyword :any}
+             :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
+                       :timeout :number? :claim-ttl :number & r}
+             :config {:keyword :any} :stats @{:enqueued :number :duplicates :number}}
+            (or {:keyword :any} :nil)]
+   :ret @{:id :string
+          :queue {:backend {:name :any :shared? :boolean :transactional? :boolean
+                            :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+                            :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+                            :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+                            :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+                            :release-parent! (or (fn [& :any] :any) :nil)
+                            :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+                            :shared-rate? :boolean :shared-locks? :boolean
+                            :stats (fn [] :any) :close (fn [] :any) & r}
+                  :queues {:keyword :any}
+                  :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
+                            :timeout :number? :claim-ttl :number & r}
+                  :config {:keyword :any} :stats @{:enqueued :number :duplicates :number}}
+          :queues [:keyword] :concurrency :number
+          :poll-interval :any :shutdown-timeout :any :claim-ttl :number
+          :running @{:string :any} :per-queue @{:any :number} :per-group @{:any :number}
+          :paused @{:any :number} :stop-chan :nil :stopped :boolean :fibers @[:any]
+          :stats @{:claimed :number :completed :number :failed :number :dead :number
+                   :deferred :number :reaped :number :timeouts :number}}
+   :throws [:string]}
   ``Build a worker over a queue value (see state/make). Options:
 
     :queues              which queues to serve, most-wanted first
@@ -131,16 +173,30 @@
 
 # -- limits --------------------------------------------------------------
 
-(defn- queue-limit [w qname]
+(defn- queue-limit
+  {:params [{:queue {:queues {:keyword :any} & r} :concurrency :number & r} :keyword] :ret :number}
+  "How many of this queue's jobs may run at once."
+  [w qname]
   (get (state/queue-config (w :queue) qname) :concurrency (w :concurrency)))
 
-(defn- group-limit [w qname]
+(defn- group-limit
+  {:params [{:queue {:queues {:keyword :any} & r} & r} :keyword] :ret :number?}
+  "The :group-concurrency this queue declares, or nil for none."
+  [w qname]
   (get (state/queue-config (w :queue) qname) :group-concurrency))
 
-(defn- rate-limit [w qname]
+(defn- rate-limit
+  {:params [{:queue {:queues {:keyword :any} & r} & r} :keyword]
+   :ret (or {:max :number :duration :number & r} :nil)}
+  "The :rate-limit this queue declares, or nil for none."
+  [w qname]
   (get (state/queue-config (w :queue) qname) :rate-limit))
 
 (defn eligible-queues
+  {:params [{:per-queue {:keyword :number} :paused {:keyword :number} :queues [:keyword]
+             :queue {:queues {:keyword :any} & r} :concurrency :number & r}
+            :number]
+   :ret [:keyword]}
   ``The queues this worker may claim from right now: the ones it
   serves, minus those at their concurrency cap and those paused by a
   rate limit that has not reopened.``
@@ -153,6 +209,8 @@
             (w :queues))))
 
 (defn blocked-groups
+  {:params [{:per-group {:any :number} :queues [:keyword] :queue {:queues {:keyword :any} & r} & r}]
+   :ret @{:any :boolean}}
   ``Group keys already running as many jobs as their queue allows —
   what the claim is told to skip. Without a :group-concurrency
   anywhere this is empty and the backend does no extra work.``
@@ -164,13 +222,23 @@
       (when (>= n (min ;caps)) (put out g true))))
   out)
 
-(defn- note-start! [w r]
+(defn- note-start!
+  {:params [{:running @{:string :any} :per-queue @{:any :number} :per-group @{:any :number} & r}
+            {:id :string :queue :keyword :group :string? & r}]
+   :ret :any}
+  "Count a claimed record against its queue's and group's limits."
+  [w r]
   (put-in w [:running (r :id)] r)
   (update (w :per-queue) (r :queue) |(inc (or $ 0)))
   (when-let [g (r :group)]
     (update (w :per-group) g |(inc (or $ 0)))))
 
-(defn- note-end! [w r]
+(defn- note-end!
+  {:params [{:running @{:string :any} :per-queue @{:any :number} :per-group @{:any :number} & r}
+            {:id :string :queue :keyword :group :string? & r}]
+   :ret :any}
+  "Release a settled record's count against its queue's and group's limits."
+  [w r]
   (put (w :running) (r :id) nil)
   (update (w :per-queue) (r :queue) |(max 0 (dec (or $ 0))))
   (when-let [g (r :group)]
@@ -181,7 +249,10 @@
 
 # -- settling ------------------------------------------------------------
 
-(defn- err-str [e]
+(defn- err-str
+  {:params [:any] :ret :string}
+  "The message a caught error keeps in a record — what the dashboard shows."
+  [e]
   # what the record keeps and the dashboard shows. log/message-of is
   # what reads a structured throw's own message: a job that failed
   # against `{:status 404 :message "..."}` used to record the struct's
@@ -189,6 +260,9 @@
   (log/message-of e 500))
 
 (defn- kill-parents!
+  {:params [{:fetch (fn [& :any] :any) :settle! (fn [& :any] :any) & r}
+            {:parent :string? :id :string :job :keyword & r} :number]
+   :ret :nil}
   ``A dead child kills the flow it belongs to. The alternative — a
   parent that waits for a child that will never finish — is a queue
   that quietly stops, and a queue that stops quietly is worse than one
@@ -216,7 +290,10 @@
             (set pid (get parent :parent)))))
       (set pid nil))))
 
-(defn- claim-lost! [w r what]
+(defn- claim-lost!
+  {:params [:any @{:keyword :any} :keyword] :ret @{:keyword :any}}
+  "Log that a settle lost the fence to a reaper, and return the record unchanged."
+  [w r what]
   # the settle was fenced off: a reaper re-tokened the claim while
   # this worker held it, and the run under the new token is the one
   # that counts — writing ours over it would be last-writer-wins on a
@@ -225,7 +302,14 @@
             :ns log-ns :outcome what)
   r)
 
-(defn- settle-completed! [w r result t]
+(defn- settle-completed!
+  {:params [{:queue {:backend {:settle! (fn [& :any] :any) :fetch (fn [& :any] :any)
+                               :release-parent! (or (fn [& :any] :any) :nil) & r} & r}
+             :id :string :stats @{:completed :number & r} & r}
+            @{:parent :string? & r} :any :number]
+   :ret @{:keyword :any}}
+  "Settle a job that ran to completion, releasing a flow parent if it was the last child."
+  [w r result t]
   (def b (get-in w [:queue :backend]))
   (record/complete! r result t)
   (if (nil? ((b :settle!) r (w :id)))
@@ -240,7 +324,14 @@
           (state/emit! :enqueued parent)))
       r)))
 
-(defn- settle-failed! [w r err t]
+(defn- settle-failed!
+  {:params [{:queue {:backend {:settle! (fn [& :any] :any) :fetch (fn [& :any] :any) & r} & r}
+             :id :string :stats @{:failed :number :dead :number & r} & r}
+            @{:attempt :number? :max-attempts :number? :backoff :any :parent :string? & r}
+            :string :number]
+   :ret @{:keyword :any}}
+  "Settle a job that failed: retry it while it has attempts left, else kill it and its flow."
+  [w r err t]
   (def b (get-in w [:queue :backend]))
   (def msg (err-str err))
   (if (< (get r :attempt 0) (get r :max-attempts 3))
@@ -268,6 +359,10 @@
 # -- running one job -----------------------------------------------------
 
 (defn- call-handler
+  {:params [{:handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string} & r}
+            {:args (or @[:any] [:any]) :timeout :number? & r}]
+   :ret :any}
   ``Run the handler, under its own deadline when the job has a
   :timeout. The deadline is put on a child task rather than on this
   fiber: `ev/with-deadline` cancels the root task, and this fiber is a
@@ -303,6 +398,14 @@
   nil)
 
 (defn- run-one-inner!
+  {:params [{:running @{:string :any} :per-queue @{:any :number} :per-group @{:any :number}
+             :queue {:backend {:settle! (fn [& :any] :any) :fetch (fn [& :any] :any)
+                               :release-parent! (or (fn [& :any] :any) :nil) & r} & r}
+             :id :string
+             :stats @{:timeouts :number :completed :number :failed :number :dead :number & r} & r}
+            @{:id :string :job :keyword :queue :keyword :attempt :number? :group :string?
+              :parent :string? :backoff :any :max-attempts :number? & r}]
+   :ret @{:keyword :any}}
   "`run-one!` with nothing wrapped around it."
   [w r]
   (note-start! w r)
@@ -341,6 +444,14 @@
   — carries which job it was: `log/with-context` here is what
   `{:request-id id}` is in void/http, and the reason a worker's log
   can be read by job id at all.``
+  {:params [{:running @{:string :any} :per-queue @{:any :number} :per-group @{:any :number}
+             :queue {:backend {:settle! (fn [& :any] :any) :fetch (fn [& :any] :any)
+                               :release-parent! (or (fn [& :any] :any) :nil) & r} & r}
+             :id :string
+             :stats @{:timeouts :number :completed :number :failed :number :dead :number & r} & r}
+            @{:id :string :job :keyword :queue :keyword :attempt :number? :group :string?
+              :parent :string? :backoff :any :max-attempts :number? & r}]
+   :ret @{:keyword :any}}
   [w r]
   (log/with-context {:job (r :job) :job-id (r :id)
                      :queue (r :queue) :attempt (r :attempt)}
@@ -359,6 +470,7 @@
   timeout as no deadline — the take would then park this loop until
   `stop!`. The loop still yields once, so the fibers it shares the
   thread with (the `stop!` that ends it, for one) get to run.``
+  {:params [{:stop-chan :any :stopped :boolean & r} :number?] :ret :nil}
   [w seconds]
   (def ch (w :stop-chan))
   (unless (or (w :stopped) (nil? ch))
@@ -367,12 +479,22 @@
       (ev/sleep 0)))
   nil)
 
-(defn- pause-queue! [w qname until]
+(defn- pause-queue!
+  {:params [{:paused @{:any :number} & r} :keyword :number] :ret :any}
+  "Mark a queue closed by its rate limit until `until`."
+  [w qname until]
   (put-in w [:paused qname] until)
   (log/debug "queue paused by its rate limit" :ns log-ns
              :queue qname :for (math/round (- until (now)))))
 
 (defn claim-one
+  {:params [{:per-queue @{:any :number} :paused @{:any :number} :queues [:keyword]
+             :queue {:queues {:keyword :any}
+                     :backend {:claim! (fn [& :any] :any) :rate-take! (fn [& :any] :any)
+                               :settle! (fn [& :any] :any) & r} & r}
+             :concurrency :number :per-group @{:any :number} :id :string
+             :stats @{:claimed :number :deferred :number & r} & r}]
+   :ret (or @{:keyword :any} :nil)}
   ``Claim one runnable record for this worker, honouring the
   concurrency caps and the rate limits. Returns the record, or nil
   when there is nothing to do right now.``
@@ -399,14 +521,22 @@
         nil)
       r)))
 
-(defn- runner [w]
+(defn- runner
+  {:params [{:stopped :boolean :poll-interval :any & r}] :ret :nil}
+  "One worker fiber's loop: claim, run, or nap until there is work."
+  [w]
   (while (not (w :stopped))
     (def r (claim-one w))
     (if r
       (run-one! w r)
       (wait-or-stop w (w :poll-interval)))))
 
-(defn- heartbeat [w]
+(defn- heartbeat
+  {:params [{:queue {:backend {:touch! (or (fn [& :any] :any) :nil) & r} & r}
+             :claim-ttl :number :stopped :boolean :running @{:string :any} :id :string & r}]
+   :ret :nil}
+  "The fiber that refreshes this worker's claims so a slow job is not reaped mid-run."
+  [w]
   (def b (get-in w [:queue :backend]))
   (def every (max 1 (/ (w :claim-ttl) 3)))
   (while (not (w :stopped))
@@ -426,6 +556,9 @@
   their jobs through the ordinary failure path — a retry when they
   have attempts left, the dead letter queue when they do not. Returns
   how many were reaped.``
+  {:params [{:queue {:backend {:reap! (or (fn [& :any] :any) :nil) & r} & r}
+             :claim-ttl :number :id :string :stats @{:reaped :number & r} & r}]
+   :ret :number}
   [w]
   (def b (get-in w [:queue :backend]))
   (unless (backend/supports-reaping? b) (break 0))
@@ -440,7 +573,12 @@
     (settle-failed! w r "stalled: the worker holding this job stopped answering" t))
   (length stalled))
 
-(defn- reaper [w]
+(defn- reaper
+  {:params [{:queue {:backend {:reap! (or (fn [& :any] :any) :nil) & r} & r}
+             :claim-ttl :number :stopped :boolean & r}]
+   :ret :nil}
+  "The fiber that reaps stalled claims on this worker's queue, when the backend can."
+  [w]
   (def b (get-in w [:queue :backend]))
   (unless (backend/supports-reaping? b) (break))
   (def every (max 1 (/ (w :claim-ttl) 2)))
@@ -454,6 +592,15 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn start!
+  {:params [@{:stopped :boolean :concurrency :number :fibers @[:any]
+              :queue {:backend {:name :any :shared? :any :transactional? :any
+                                :reap! :any :touch! :any :shared-rate? :any :shared-locks? :any
+                                & r} & r}
+              :id :string :queues [:keyword] :claim-ttl :number & r}]
+   :ret @{:stopped :boolean :concurrency :number :fibers @[:any]
+          :queue {:backend {:name :any :shared? :any :transactional? :any
+                            :reap! :any :touch! :any :shared-rate? :any :shared-locks? :any & r} & r}
+          :id :string :queues [:keyword] :claim-ttl :number & r}}
   ``Start the worker's fibers and return immediately. The queue value
   the worker was built over is bound into every fiber, so a worker
   started against a test queue keeps running against it.``
@@ -486,6 +633,11 @@
   w)
 
 (defn stop!
+  {:params [@{:stopped :boolean :shutdown-timeout :any :stop-chan :any :sup :any
+              :fibers @[:any] :running @{:string :any} :id :string
+              :stats @{:completed :number :failed :number :dead :number & r} & r}
+            :number?]
+   :ret :number}
   ``Stop claiming and wait for the jobs in flight, for up to
   `timeout` seconds (default :shutdown-timeout). Returns the number of
   jobs still running when it gave up — zero on a clean drain.``
@@ -518,6 +670,15 @@
   stuck)
 
 (defn run!
+  {:params [@{:stopped :boolean :concurrency :number :fibers @[:any]
+              :queue {:backend {:name :any :shared? :any :transactional? :any
+                                :reap! :any :touch! :any :shared-rate? :any :shared-locks? :any
+                                & r} & r}
+              :id :string :queues [:keyword] :claim-ttl :number & r}]
+   :ret @{:stopped :boolean :concurrency :number :fibers @[:any]
+          :queue {:backend {:name :any :shared? :any :transactional? :any
+                            :reap! :any :touch! :any :shared-rate? :any :shared-locks? :any & r} & r}
+          :id :string :queues [:keyword] :claim-ttl :number & r}}
   ``Start a worker and block until it is stopped — what `void jobs
   work` runs. Returns the worker.``
   [w]
@@ -540,6 +701,7 @@
   them, when that is the point of the test). A queue whose rate limit
   has closed ends the drain rather than sleeping through the window,
   and the job it deferred stays queued. Returns how many ran.``
+  {:params [(or {:keyword :any} :nil)] :ret :number}
   [&opt opts]
   (def o (or opts {}))
   (def q (or (get o :queue) (state/active-queue)))
@@ -556,6 +718,9 @@
   n)
 
 (defn stats
+  {:params [{:id :string :queues [:keyword] :concurrency :number :running @{:string :any}
+             :paused @{:any :number} :stats @{:keyword :number} & r}]
+   :ret @{:id :any :queues :any :concurrency :any :running :number :paused [:any] & r}}
   "What this worker has done: claims, completions, failures, deaths,
   rate-limit deferrals, timeouts and reaps, plus what is in flight."
   [w]

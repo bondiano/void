@@ -55,12 +55,38 @@
   (queue :dyn))
 
 (defn active-queue
+  {:params []
+   :ret @{:backend {:name :any :shared? :boolean :transactional? :boolean
+                    :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+                    :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+                    :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+                    :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+                    :release-parent! (or (fn [& :any] :any) :nil)
+                    :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+                    :shared-rate? :boolean :shared-locks? :boolean
+                    :stats (fn [] :any) :close (fn [] :any) & r}
+          :config {:keyword :any} :queues {:keyword :any}
+          :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
+                     :timeout :number? :claim-ttl :number & r}
+          :stats @{:enqueued :number :duplicates :number}}
+   :throws [:string]}
   "The queue this fiber runs against: the `queue-dyn` override, else
   the started component."
   []
   (system/active queue))
 
 (defn active-backend
+  {:params []
+   :ret {:name :any :shared? :boolean :transactional? :boolean
+         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+         :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+         :release-parent! (or (fn [& :any] :any) :nil)
+         :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+         :shared-rate? :boolean :shared-locks? :boolean
+         :stats (fn [] :any) :close (fn [] :any) & r}
+   :throws [:string]}
   "The `:void/jobs-backend` behind the active queue."
   []
   ((active-queue) :backend))
@@ -85,17 +111,20 @@
   @{})
 
 (defn listen!
+  {:params [:any (fn [:any] :any)] :ret (fn [:any] :any)}
   "Register a listener under `name` (re-registering replaces it)."
   [name f]
   (put listeners name f)
   f)
 
 (defn unlisten!
+  {:params [:any] :ret :nil}
   "Remove a listener by name."
   [name]
   (put listeners name nil))
 
 (defn emit!
+  {:params [:keyword :any (or {:keyword :any} :nil)] :ret {:event :keyword :job :any :at :number & r}}
   ``Fire a lifecycle event: the `event-hook` handlers of the running
   boot, then every `listen!` listener. Nothing here may fail a job, so
   a handler that throws is logged at :warn and the rest still run.``
@@ -121,11 +150,15 @@
 # -- policy resolution ---------------------------------------------------
 
 (defn queue-config
+  {:params [{:queues {:keyword :any} & r} :keyword] :ret {:keyword :any}}
   "The [:jobs :queues :<name>] slice, or an empty one."
   [q name]
   (or (get-in q [:queues name]) {}))
 
-(defn- pick [& vs]
+(defn- pick
+  {:params [:any] :ret :any}
+  "The first non-nil of `vs`, in order — the layering `resolve-policy` reads."
+  [& vs]
   (var out nil)
   (each v vs (when (and (nil? out) (not (nil? v))) (set out v)))
   out)
@@ -148,6 +181,23 @@
   nil)
 
 (defn resolve-policy
+  {:params [{:defaults {:queue :keyword? :priority :number? :max-attempts :number?
+                        :backoff :any :timeout :number? & r} & r}
+            {:name :keyword
+             :opts {:queue :keyword? :priority :number? :max-attempts :number? :backoff :any
+                    :timeout :number? :unique (or :keyword :string :nil) :unique-ttl :number?
+                    :group (or :string :keyword (fn [& :any] :any) :nil) & r} & r}
+            (or @[:any] [:any])
+            {:queue :keyword? :priority :number? :max-attempts :number? :backoff :any
+             :timeout :number? :unique (or :keyword :string :nil) :unique-ttl :number?
+             :group (or :string :keyword (fn [& :any] :any) :nil)
+             :parent :string? :children-left :number? :at :number? :delay :number? & r}
+            :number]
+   :ret {:job :keyword :args (or @[:any] [:any]) :queue :keyword :priority :number
+         :max-attempts :number :backoff {:strategy :keyword :base :number :max :number :jitter :number}
+         :timeout :number? :unique-key :string? :unique-until :number? :group :string?
+         :parent :string? :children-left :number? :run-at :number :now :number}
+   :throws [:string]}
   ``The policy of one call: the enqueue overrides over the job
   definition over the queue slice over the [:jobs] slice over the
   framework defaults. Returns the fields `record/make` needs.``
@@ -186,7 +236,10 @@
    :unique true :unique-ttl true :group true :delay true :at true
    :parent true :children-left true})
 
-(defn- check-enqueue-opts [name opts]
+(defn- check-enqueue-opts
+  {:params [:keyword (or {:keyword :any} :nil)] :ret :nil :throws [:string]}
+  "Validate the keys and the :delay/:at pair of an `enqueue-with` call."
+  [name opts]
   (unless (dictionary? opts)
     (errorf "enqueue %q: options must be a dictionary, got %q" name opts))
   (eachk k opts
@@ -205,6 +258,7 @@
 # -- enqueue -------------------------------------------------------------
 
 (defn enabled?
+  {:params [] :ret :boolean}
   "False when [:jobs :enabled] is off — enqueue then runs the job
   inline instead of queueing it (see `enqueue-with`)."
   []
@@ -221,6 +275,7 @@
   :void.db/tx)
 
 (defn in-db-transaction?
+  {:params [] :ret :boolean}
   ``True when this fiber is inside a `db/with-tx` scope. False when
   there is no database in the composition at all — the same answer for
   the purpose it is asked for, which is "would this enqueue be
@@ -231,6 +286,7 @@
   (truthy? (dyn db-tx-dyn)))
 
 (defn enqueue-with
+  {:params [(or {:keyword :any} :nil) :keyword :any] :ret @{:keyword :any} :throws [:string]}
   ``Queue a job with per-call overrides:
 
       (jobs/enqueue-with {:delay 60 :priority 1} :welcome-mail 42)
@@ -319,6 +375,7 @@
       r)))
 
 (defn enqueue
+  {:params [:keyword :any] :ret @{:keyword :any} :throws [:string]}
   ``Queue a job by name:
 
       (jobs/enqueue :welcome-mail 42)
@@ -329,6 +386,7 @@
   (enqueue-with {} name ;args))
 
 (defn enqueue-tx!
+  {:params [:keyword :any] :ret @{:keyword :any} :throws [:string]}
   ``Queue a job **in the transaction the caller is already in**: the
   row is written on that connection, and the job becomes visible to a
   worker when — and only when — the transaction commits.
@@ -358,17 +416,20 @@
   (enqueue-with {} name ;args))
 
 (defn enqueue-in
+  {:params [:number :keyword :any] :ret @{:keyword :any} :throws [:string]}
   "Queue a job to run no earlier than `delay` seconds from now."
   [delay name & args]
   (enqueue-with {:delay delay} name ;args))
 
 (defn enqueue-at
+  {:params [:number :keyword :any] :ret @{:keyword :any} :throws [:string]}
   "Queue a job to run no earlier than the absolute time `at` (seconds
   since the epoch, as `os/clock :realtime` counts them)."
   [at name & args]
   (enqueue-with {:at at} name ;args))
 
 (defn perform
+  {:params [:keyword :any] :ret :any}
   ``Run a job right now, on this fiber, with no queue involved at all
   — what a test does when it is testing the work rather than the
   queueing of it. Errors propagate; nothing is retried.``
@@ -387,11 +448,13 @@
   :void.jobs/current)
 
 (defn current-job
+  {:params [] :ret (or @{:keyword :any} :nil)}
   "The record this handler is running under, or nil outside a worker."
   []
   (dyn current-job-dyn))
 
 (defn attempt
+  {:params [] :ret :number}
   "Which attempt this is, 1-based — 0 outside a worker. The number a
   handler consults when the last attempt should do something
   different (give up quietly, or alert)."
@@ -399,12 +462,14 @@
   (get (current-job) :attempt 0))
 
 (defn last-attempt?
+  {:params [] :ret :boolean}
   "True when a failure now sends this job to the dead letter queue."
   []
   (def r (current-job))
   (and r (>= (get r :attempt 0) (get r :max-attempts 0))))
 
 (defn children
+  {:params [] :ret (or @[{:id :string :job :keyword :result :any}] [:any])}
   ``What this job's children returned: [{:id :job :result} ...], in
   the order they finished. Empty outside a flow (see void/jobs/flow).``
   []
@@ -413,11 +478,13 @@
 # -- inspection ----------------------------------------------------------
 
 (defn fetch
+  {:params [:string] :ret (or @{:keyword :any} :nil)}
   "The record with this id, or nil."
   [id]
   (((active-backend) :fetch) id))
 
 (defn list-jobs
+  {:params [(or {:keyword :any} :nil)] :ret (or @[:any] [:any])}
   ``Records matching {:queue :state :job :limit} — the reader behind
   `void jobs list`. The limit defaults to 50 because a queue is
   routinely large enough that "show me the jobs" without one is a way
@@ -426,22 +493,26 @@
   (((active-backend) :list) (or opts {})))
 
 (defn counts
+  {:params [(or {:keyword :any} :nil)] :ret {:keyword {:keyword :number}}}
   "Records per queue per state: {:default {:pending 12 :running 2}}."
   [&opt opts]
   (((active-backend) :counts) (or opts {})))
 
 (defn remove-job!
+  {:params [:string] :ret :boolean}
   "Drop a record whatever state it is in. True when there was one."
   [id]
   (((active-backend) :remove!) id))
 
 (defn clear!
+  {:params [(or {:keyword :any} :nil)] :ret :number}
   "Drop records matching {:queue :state} — everything when neither is
   given. Returns how many went."
   [&opt opts]
   (((active-backend) :clear!) (or opts {})))
 
 (defn retry!
+  {:params [:string] :ret (or @{:keyword :any} :nil)}
   ``Put a dead (or merely failed) record back at the front of the
   queue with its attempts reset — `void jobs retry`. Returns the
   revived record, or nil when there is no such id.``
@@ -452,6 +523,7 @@
     ((b :settle!) r)))
 
 (defn stats
+  {:params [] :ret {:queues [:keyword] :backend {:keyword :any} & r}}
   "What this queue has been doing, plus whatever the backend counts."
   []
   (def q (active-queue))
@@ -473,6 +545,21 @@
    :claim-ttl 60})
 
 (defn make
+  {:params [{:keyword :any} (or {:keyword :any} :nil)]
+   :ret @{:backend {:name :any :shared? :boolean :transactional? :boolean
+                    :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+                    :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+                    :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+                    :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+                    :release-parent! (or (fn [& :any] :any) :nil)
+                    :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+                    :shared-rate? :boolean :shared-locks? :boolean
+                    :stats (fn [] :any) :close (fn [] :any) & r}
+          :config {:keyword :any} :queues {:keyword :any}
+          :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
+                     :timeout :number? :claim-ttl :number & r}
+          :stats @{:enqueued :number :duplicates :number}}
+   :throws [:string]}
   ``Build a queue value over a backend — the component's instance, and
   what a test builds directly when it wants one without a bootstrap.``
   [b cfg0]
@@ -490,6 +577,7 @@
     :stats @{:enqueued 0 :duplicates 0}})
 
 (defn queue-names
+  {:params [{:queues {:keyword :any} :defaults {:queue :keyword & r} & r}] :ret [:keyword]}
   "Every queue the config knows about, plus the default one — what a
   worker with no :queues of its own serves."
   [q]

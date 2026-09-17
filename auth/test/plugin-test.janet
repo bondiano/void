@@ -11,7 +11,10 @@
 
 (def plugins ["void/crypto/init" "void/auth/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env @{:any :any} :cli {:keyword :any}}}
+  "The composition config, with `extra` merged into the :cli slice."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}
                 :crypto {:kdf {:in-thread false}}
@@ -68,7 +71,11 @@
 # the CLI commands render what the composition holds
 (def printed @"")
 (def cli (plugin/extension boot :void.core/cli))
-(defn- run-cli [name & args]
+(defn- run-cli
+  {:params [:keyword :string] :ret :string}
+  "Run a registered CLI command by name against the booted registry,
+  and return what it printed."
+  [name & args]
   (buffer/clear printed)
   (def cmd (first (filter |(= name ($ :name)) cli)))
   (assert cmd (string/format "%q is a command" name))

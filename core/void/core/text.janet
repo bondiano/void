@@ -58,6 +58,7 @@
   :void.i18n/scope)
 
 (defn locale
+  {:params [] :ret :keyword?}
   "The locale of the current scope, or nil when nothing bound one."
   []
   (dyn locale-dyn))
@@ -73,6 +74,7 @@
       :brace '(set "{}")}))
 
 (defn interpolate
+  {:params [:string (or {:keyword :any} :nil)] :ret :string}
   ``Render {name} placeholders of a template from params (keyword
   keys); a missing parameter stays {name} verbatim, {{ and }} are
   literal braces. Positions were rejected in ADR-0036 — a translation
@@ -91,6 +93,8 @@
   (string out))
 
 (defn render
+  {:params [(or :string {:other :string :one :string? & r}) (or {:keyword :any} :nil)]
+   :ret :string}
   ``One entry of a package's own table to a string. A plural entry is
   `{:one "1 row" :other "{count} rows"}` and selects on `(params
   :count)` by **English**'s rule, because a package's own table is
@@ -106,6 +110,7 @@
 # -- lookup --------------------------------------------------------------
 
 (defn t?
+  {:params [:keyword (or {:keyword :any} :nil)] :ret :string?}
   ``What the bound catalog says about `key`, or nil — no fallback of
   any kind. This is how a package translates a key it does **not**
   own: a schema's `:label`, whose words belong to the application that
@@ -115,6 +120,9 @@
     (f key params)))
 
 (defn t
+  {:params [{:keyword (or :string {:other :string :one :string? & r})}
+            :keyword (or {:keyword :any} :nil)]
+   :ret :string}
   ``One of a package's own strings: the bound catalog first, then
   `dict` — the package's `:en` table — then the key's own name, which
   is visible on the page the way a missing translation is.
@@ -128,6 +136,8 @@
       (string key)))
 
 (defn translator
+  {:params [{:keyword (or :string {:other :string :one :string? & r})}]
+   :ret (fn [:keyword (or {:keyword :any} :nil)] :string)}
   ``The `t` of one package, with its table closed over:
 
       (def t (text/translator en))
@@ -140,6 +150,7 @@
 # -- the scope a refusal is rendered in ----------------------------------
 
 (defn in-scope
+  {:params [(or {:keyword :any} :nil) (fn [] a)] :ret a}
   ``Run `thunk` inside the locale scope `req` carries, or plainly when
   it carries none. What puts a locale back for code that runs outside
   the middleware chain: the error renderers, which the phase-0 panic
@@ -150,6 +161,7 @@
     (thunk)))
 
 (defn humanize
+  {:params [:keyword] :ret :string}
   ``A key as a label: `:first-name` -> "First name". The one reading of
   a key as words the framework has — void/html/form re-exports it and
   void/admin titles resources with it — and the fallback under every
@@ -161,6 +173,7 @@
     (string (string/ascii-upper (string/slice s 0 1)) (string/slice s 1))))
 
 (defn label-of
+  {:params [(or :keyword :string :nil) :keyword] :ret :string}
   ``The words of a `:label` annotation: a keyword is a translation key
   (the application owns those words, so only the catalog answers, and
   without one the fallback is the field's own name), a string is the

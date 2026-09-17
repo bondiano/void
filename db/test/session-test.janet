@@ -51,7 +51,17 @@
 
 (def plugins ["void/http/init" "void/db/init" "void/db/http" driver-manifest])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}]
+   :ret {:env @{}
+         :cli {:http {:port :number :session {:enabled :boolean :store :keyword}}
+               :db {:pool {:size :number}}
+               :db-http {:session {:auto-create :boolean}}
+               :log {:level :keyword}
+               & r}}}
+  "The boot config for this test: a fake session store on a fleet
+  profile, with `extra` merged over the :cli defaults."
+  [extra]
   {:env @{}
    :cli (merge {:http {:port 0 :session {:enabled true :store :db}}
                 :db {:pool {:size 1}}

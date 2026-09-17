@@ -132,6 +132,46 @@ CI runs B0/B1 with a 5% relative regression gate (merge-base vs head on
 the same runner); absolute budgets are verified on the recorded
 reference environment (`bench/results/baseline.jdn`).
 
+## Types
+
+Every `defn` and `defmacro` carries its types in the metadata Janet
+already keeps for it, between the name and the docstring:
+
+```janet
+(defn parse-version
+  {:params [:string] :ret [:number :number :number] :throws [:string]}
+  "Parse \"1.2.3\" into a [major minor patch] tuple."
+  [s]
+  ...)
+```
+
+`:params` is one type per parameter, in order — the rest parameter's
+type standing for every argument from its position on; `:ret` is what
+the call answers, `:throws` what its body raises, `:type` the form of a
+`def` or `var`, and `:narrows` what a predicate's argument is wherever
+it answers truly (`:any` where it tests a value rather than a type).
+The vocabulary is [janet-zed](https://github.com/bondiano/janet-zed)'s:
+the atoms `(type x)` answers plus `:any`, a `?` suffix for "or nil",
+`(or ...)`, `(enum :get :post)`, `[:number :number]` for a tuple,
+`@[:string]` for an array, `{:status :number & r}` for a struct with
+more keys than it names, `(fn [a] b)` for a function, and a lowercase
+symbol for a type variable. The metadata survives into the compiled
+environment, so a REPL and an editor read the same types the source
+writes down.
+
+The reader is the check. `janet-zed-server` on `PATH`, then:
+
+```sh
+janet scripts/lsp-check.janet core/void/core/semver.janet
+janet scripts/lsp-check.janet http/            # every file under it
+```
+
+It opens each file the way the editor does, with type diagnostics
+turned up to `warning`, and exits non-zero on anything the types rule
+out — a call with more arguments than the declaration takes, a literal
+of the wrong kind, a key a named type does not have, a value called as
+a function.
+
 ## Commit style
 
 `feat:` / `fix:` / `refactor:` / `test:` / `chore:` / `docs:` / `style:`
@@ -164,3 +204,6 @@ expected to live.
    (`void/<package>/conformance/<contract>`, see
    [Frozen contracts](#deprecation)), and every implementation's test
    runs it.
+8. Every `defn` and `defmacro` carries its `:params` and `:ret` (see
+   [Types](#types)), and `janet scripts/lsp-check.janet <package>/`
+   comes out clean.

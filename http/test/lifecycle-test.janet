@@ -14,18 +14,38 @@
 (import void/http/wire :as wire)
 
 (def calls @[])
-(defn- mark [k] (array/push calls k))
+(defn- mark
+  {:params [:any] :ret @[:any]}
+  "Records that a hook or stage ran, in order — this suite's whole
+  observation mechanism for chain ordering."
+  [k] (array/push calls k))
 
 # hooks as symbols prove late binding wiring; fns prove literals work
-(defn global-on-request [req]
+(defn global-on-request
+  {:params [:any] :ret :nil}
+  "The global :on-request hook: marks that it ran and answers nothing,
+  so the chain falls through to the route."
+  [req]
   (mark :global/on-request)
   nil)
 
-(defn slow [req] (ev/sleep 10) (ring/text 200 "never"))
+(defn slow
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "A handler that outlasts the route's :void.http/timeout, to prove
+  :on-timeout fires and the client sees a 503 rather than this body."
+  [req] (ev/sleep 10) (ring/text 200 "never"))
 
-(defn show [req] (ring/text 200 "shown"))
+(defn show
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "A plain 200 handler, reused across the ordering and hook
+  assertions where the response body itself does not matter."
+  [req] (ring/text 200 "shown"))
 
-(defn boom [req] (error "kaboom"))
+(defn boom
+  {:params [:any] :ret :any :throws [:string]}
+  "A handler that always panics, to drive the :on-error hook and the
+  error-rendering path."
+  [req] (error "kaboom"))
 
 (def app-routes
   (router/routes {}
@@ -59,9 +79,21 @@
        :void.http/timeout 0.05
        :void.http/hooks {:on-timeout [(fn [req] (mark :on-timeout))]}})))
 
-(defn group-hook [req] (mark :group/pre-handler) nil)
-(defn route-hook [req] (mark :route/pre-handler) nil)
-(defn route-on-response [req resp] (mark :route/on-response))
+(defn group-hook
+  {:params [:any] :ret :nil}
+  "The group's :pre-handler hook: marks that it ran, ahead of the
+  route's own pre-handler hook."
+  [req] (mark :group/pre-handler) nil)
+(defn route-hook
+  {:params [:any] :ret :nil}
+  "The route's :pre-handler hook: marks that it ran, after the
+  group's."
+  [req] (mark :route/pre-handler) nil)
+(defn route-on-response
+  {:params [:any :any] :ret @[:any]}
+  "The route's :on-response hook: marks that it fired, out of chain,
+  after the response was written to the socket."
+  [req resp] (mark :route/on-response))
 
 # a fake "rendering" middleware at the response phase proves the
 # :pre-serialization slot (9800) runs inside it and :on-send (500)
@@ -167,7 +199,12 @@
 
   # -- the socket path: :on-response (global + route) and :on-timeout ----
   (def port (get-in boot [:system :instances :http/server :server :port]))
-  (defn fetch [path]
+  (defn fetch
+    {:params [:string] :ret :buffer}
+    "Sends a bare GET for `path` over a fresh socket and reads until
+    the peer closes — the raw bytes a real client would see, for the
+    :on-response/:on-timeout assertions the inject path cannot reach."
+    [path]
     (def conn (net/connect "127.0.0.1" (string port)))
     (:write conn (string "GET " path " HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
     (def buf @"")

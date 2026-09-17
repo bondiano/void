@@ -28,20 +28,27 @@
 
 # -- request side --------------------------------------------------------
 
-(defn- header-true? [req name]
+(defn- header-true?
+  {:params [@{:headers @{:string :any} & r} :string] :ret :boolean :narrows :any}
+  "True when request header `name` is exactly \"true\" — the shape
+  every boolean HX-* request header takes."
+  [req name]
   (= "true" (ring/request-header req name)))
 
 (defn request?
+  {:params [@{:headers @{:string :any} & r}] :ret :boolean :narrows :any}
   "Did htmx issue this request (HX-Request)?"
   [req]
   (header-true? req "hx-request"))
 
 (defn boosted?
+  {:params [@{:headers @{:string :any} & r}] :ret :boolean :narrows :any}
   "Is this a boosted (hx-boost) request?"
   [req]
   (header-true? req "hx-boosted"))
 
 (defn history-restore?
+  {:params [@{:headers @{:string :any} & r}] :ret :boolean :narrows :any}
   "Is htmx refetching a page for the history stack
   (HX-History-Restore-Request)? htmx 4 keeps no page cache — going
   back asks the server again, and asks for the whole page."
@@ -49,6 +56,7 @@
   (header-true? req "hx-history-restore-request"))
 
 (defn request-type
+  {:params [@{:headers @{:string :any} & r}] :ret (or :string :nil)}
   ``How much of the page this request is for (HX-Request-Type):
   "partial" when the swap targets an element, "full" when it targets
   the body or an hx-select picks the response apart. nil when the
@@ -63,24 +71,28 @@
   html/partial-request?)
 
 (defn full-request?
+  {:params [@{:headers @{:string :any} & r}] :ret :boolean :narrows :any}
   "Is this htmx request for a whole page (HX-Request-Type: full) — a
   body-targeted swap, a boosted navigation, a history restore?"
   [req]
   (= "full" (request-type req)))
 
 (defn target
+  {:params [@{:headers @{:string :any} & r}] :ret (or :string :nil)}
   ``The swap target as htmx names it (HX-Target): `tag#id`, e.g.
   "div#results", or the bare tag name when the element has no id.``
   [req]
   (ring/request-header req "hx-target"))
 
 (defn source
+  {:params [@{:headers @{:string :any} & r}] :ret (or :string :nil)}
   ``The element that issued the request (HX-Source), in the same
   `tag#id` form as target — "button#save".``
   [req]
   (ring/request-header req "hx-source"))
 
 (defn element-id
+  {:params [(or :string :nil)] :ret (or :string :nil)}
   ``The id out of htmx's `tag#id` identifier, percent-decoded; nil for
   an element that has none:
 
@@ -92,16 +104,19 @@
       (wire/url-decode (string/slice ident (inc i))))))
 
 (defn target-id
+  {:params [@{:headers @{:string :any} & r}] :ret (or :string :nil)}
   "The id of the swap target, or nil — (element-id (target req))."
   [req]
   (element-id (target req)))
 
 (defn source-id
+  {:params [@{:headers @{:string :any} & r}] :ret (or :string :nil)}
   "The id of the element that issued the request, or nil."
   [req]
   (element-id (source req)))
 
 (defn current-url
+  {:params [@{:headers @{:string :any} & r}] :ret (or :string :nil)}
   "The browser URL when the request fired (HX-Current-URL), or nil."
   [req]
   (ring/request-header req "hx-current-url"))
@@ -109,6 +124,9 @@
 # -- response side -------------------------------------------------------
 
 (defn trigger
+  {:params [@{:headers @{:string :any} & r} (or :string :keyword {:keyword :any})]
+   :ret @{:headers @{:string :any} & r}
+   :throws [:string]}
   ``Fire client-side events from the response (HX-Trigger). Events are
   names (string/keyword) or dictionaries {event payload}; any payload
   switches the header to its JSON form, which htmx reads as HCON:
@@ -134,11 +152,13 @@
                  (string/join (map |(string ($ 0)) all) ", "))))
 
 (defn redirect
+  {:params [@{:headers @{:string :any} & r} :string] :ret @{:headers @{:string :any} & r}}
   "Client-side redirect without a full reload (HX-Redirect)."
   [resp url]
   (ring/header resp "hx-redirect" url))
 
 (defn redirect-back
+  {:params [@{:headers @{:string :any} & r} :string] :ret @{:headers @{:string :any} & r}}
   ``After a write, send the client to `url`: htmx gets an HX-Redirect
   on an empty 204 (it will not follow a redirect into a swap target),
   a browser gets a 303 — See Other, the status that says "the write
@@ -150,45 +170,58 @@
     (ring/redirect url 303)))
 
 (defn location
+  {:params [@{:headers @{:string :any} & r} (or {:keyword :any} :string)]
+   :ret @{:headers @{:string :any} & r}}
   "Client-side navigation (HX-Location): a URL string or a dictionary
   with :path plus swap options — JSON-encoded."
   [resp to]
   (ring/header resp "hx-location" (if (dictionary? to) (json/encode to) to)))
 
 (defn refresh
+  {:params [@{:headers @{:string :any} & r}] :ret @{:headers @{:string :any} & r}}
   "Ask the client for a full page refresh (HX-Refresh)."
   [resp]
   (ring/header resp "hx-refresh" "true"))
 
 (defn push-url
+  {:params [@{:headers @{:string :any} & r} (or :string :boolean)]
+   :ret @{:headers @{:string :any} & r}}
   "Push a URL into the history (HX-Push-Url); false prevents the
   push."
   [resp url]
   (ring/header resp "hx-push-url" (if (false? url) "false" url)))
 
 (defn replace-url
+  {:params [@{:headers @{:string :any} & r} (or :string :boolean)]
+   :ret @{:headers @{:string :any} & r}}
   "Replace the current history URL (HX-Replace-Url); false prevents
   the replacement."
   [resp url]
   (ring/header resp "hx-replace-url" (if (false? url) "false" url)))
 
 (defn retarget
+  {:params [@{:headers @{:string :any} & r} :string] :ret @{:headers @{:string :any} & r}}
   "Override the swap target with a CSS selector (HX-Retarget)."
   [resp selector]
   (ring/header resp "hx-retarget" selector))
 
 (defn reswap
+  {:params [@{:headers @{:string :any} & r} (or :string :keyword)]
+   :ret @{:headers @{:string :any} & r}
+   :throws [:string]}
   "Override the swap style (HX-Reswap) — a swap keyword or verbatim
   string, see hx/swap-style."
   [resp style]
   (ring/header resp "hx-reswap" (hx/swap-style style)))
 
 (defn reselect
+  {:params [@{:headers @{:string :any} & r} :string] :ret @{:headers @{:string :any} & r}}
   "Choose a part of the response to swap in (HX-Reselect)."
   [resp selector]
   (ring/header resp "hx-reselect" selector))
 
 (defn stop-polling
+  {:params [:string?] :ret @{:headers @{:string :any} & r} :throws [:string]}
   ``Answer a poll with the end of the poll. htmx 4 has no status code
   for this — an `every` trigger runs as long as its element is in the
   document — so the response says it with a swap instead: an empty
@@ -217,6 +250,7 @@
   "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc")
 
 (defn script-tag
+  {:params [(or {:src :string? :integrity :string? & r} :nil)] :ret :tuple}
   ``The <script> that loads htmx, as hiccup for a layout's <head>: the
   pinned file with its integrity hash. Options: :src for a file served
   elsewhere (a self-hosted copy), :integrity for its hash — a :src

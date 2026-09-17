@@ -4,7 +4,12 @@
 # set) and binds the shared port via SO_REUSEPORT. SIGTERM drains
 # everything through the normal lifecycle. Run with cwd = http/.
 
-(defn- add-tree [root]
+(defn- add-tree
+  {:params [:string] :ret @[:any]}
+  "Prepends `root` to module/paths under both directory and flat init
+  conventions, so this standalone worker script can import void/core
+  and void/http without a package install."
+  [root]
   (array/insert module/paths 0 [(string root "/:all:/init.janet") :source])
   (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
 (add-tree (string (os/cwd) "/../core"))
@@ -16,7 +21,12 @@
 (import void/http/ring :as ring)
 (require "void/http/init")
 
-(defn worker-id [req]
+(defn worker-id
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "Reports which prefork worker (or the master, unforked) answered —
+  the e2e assertion that a fixed port really is shared across
+  workers reads this back."
+  [req]
   (ring/text 200 (string "worker=" (or (os/getenv "VOID_HTTP_WORKER") "master"))))
 
 (def app

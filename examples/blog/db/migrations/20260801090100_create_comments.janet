@@ -1,4 +1,8 @@
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create the comments table and the index its article-page query
+  reads by."
+  []
   [{:create-table "comments"
     :columns [[:id :serial {:primary-key true}]
               [:article-id :int {:null false :refs [:articles :id]
@@ -10,5 +14,8 @@
    {:create-index "comments_article_idx"
     :on "comments" :columns [:article-id]}])
 
-(defn down []
+(defn down
+  {:params [] :ret {:keyword :any}}
+  "Drop the comments table."
+  []
   {:drop-table "comments"})

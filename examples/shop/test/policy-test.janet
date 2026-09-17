@@ -27,6 +27,7 @@
 (log/set-sinks! [(fn [_])])
 
 (defn- customer
+  {:params [:number :string] :ret {:subject :string :claims {:role :string}}}
   ``An identity, the shape void/auth-db builds one in: the subject
   string plus the claims copied off the row at sign-in ([:auth-db
   :users :claims-columns] in config/default.janet).
@@ -80,7 +81,10 @@
 # back office contributed no rule of its own and no `if` in a handler,
 # it named a route, and the application answered with a function.
 
-(defn- account [id] {:id id :name "Somebody" :role "staff"})
+(defn- account
+  {:params [:number] :ret {:id :number :name :string :role :string}}
+  "A resource shaped like the row a policy over an account reads."
+  [id] {:id id :name "Somebody" :role "staff"})
 
 (each name [:admin.customers/edit :admin.customers/update]
   (assert (authz/can? name {:subject desk :resource (account 4)})

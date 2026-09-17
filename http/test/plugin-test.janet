@@ -11,22 +11,47 @@
 
 (def hits @[])
 
-(defn home [req]
+(defn home
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "The application's root route — an HTML page, to prove the app
+  renders more than plain text through the same middleware chain."
+  [req]
   (ring/html 200 "<h1>home</h1>"))
 
-(defn show-order [req]
+(defn show-order
+  {:params [@{:params @{:id :string & r} & r}]
+   :ret @{:status :number :body :string & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  "Looks an order up by its routed :id, aborting 404 for the one id
+  this suite treats as missing — the custom error-renderer and
+  render-error path both exercise this abort."
+  [req]
   (if (= "0" (get-in req [:params :id]))
     (errors/abort 404 "no such order")
     (ring/text 200 (string "order " (get-in req [:params :id])))))
 
-(defn create-order [req]
+(defn create-order
+  {:params [@{:form @{:string :any} & r}] :ret @{:status :number :body :string & r}}
+  "Creates an order from a urlencoded or codec-decoded form body,
+  echoing the title back — the suite's route for exercising body
+  parsing middleware."
+  [req]
   (ring/text 201 (string "created " (get-in req [:form "title"]))))
 
-(defn whoami [req]
+(defn whoami
+  {:params [@{:session @{:seen :number? & r} & r}] :ret @{:status :number :body :string & r}}
+  "Bumps and reports the visit counter kept in the session — drives
+  the cookie and session-persistence assertions."
+  [req]
   (put (req :session) :seen (inc (get (req :session) :seen 0)))
   (ring/text 200 (string "seen " (get-in req [:session :seen]))))
 
-(defn peer [req]
+(defn peer
+  {:params [@{:remote-addr :string? & r}] :ret @{:status :number :body :string & r}}
+  "Reports the request's :remote-addr, or \"none\" when the inject
+  path left it unset — proves :remote-addr is a request key the
+  server fills, not something read off a socket."
+  [req]
   (ring/text 200 (string "peer " (or (req :remote-addr) "none"))))
 
 (def app-routes
@@ -227,14 +252,21 @@
 # reach it. An edge wrapper does — which is the whole reason the point
 # exists (void/security's headers).
 
-(defn- boom [req] (error "handler blew up"))
+(defn- boom
+  {:params [:any] :ret :any :throws [:string]}
+  "A handler that always panics — proves the edge layer sees a
+  rendered 500, because it sits outside the panic guard."
+  [req] (error "handler blew up"))
 
 (def edge-routes
   (router/routes {}
     (router/GET "/fine" 'edge-ok {:name :edge/fine})
     (router/GET "/boom" 'boom {:name :edge/boom})))
 
-(defn edge-ok [req] (ring/text 200 "fine"))
+(defn edge-ok
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "A plain 200, for the edge wrappers to stamp headers onto."
+  [req] (ring/text 200 "fine"))
 
 (def edge-app
   (plugin/manifest 'test/edge

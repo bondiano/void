@@ -14,30 +14,52 @@
 
 # -- an app whose routes answer both full-page and Datastar requests -----
 
-(defn base-layout [content context]
+(defn base-layout
+  {:params [:any :any] :ret :tuple}
+  "The test app's layout: title and a #main wrapping content."
+  [content context]
   (hiccup/html5
     [:head [:title "counter"]]
     [:body [:main {:id "main"} content]]))
 
 (def counter @{:n 0})
 
-(defn page [req]
+(defn page
+  {:params [:any] :ret :any}
+  "The counter page, rendered lazily through html/page so the same
+  handler serves a full-page request and a Datastar morph."
+  [req]
   (html/page [:p {:id "count"} (string "count: " (counter :n))]
              {:layout base-layout}))
 
-(defn inc-count [req]
+(defn inc-count
+  {:params [{:method :keyword :query {:string :any} :body :any & r}] :ret :any}
+  "Bump the counter by the signals' :by (default 1) and re-answer the
+  page."
+  [req]
   (def sig (datastar/signals req))
   (put counter :n (+ (counter :n) (get (or sig {}) :by 1)))
   (page req))
 
-(defn frag [req]
+(defn frag
+  {:params [:any] :ret :any}
+  "A fragment route: markup with no <body>, morphed by id."
+  [req]
   (html/fragment [:p {:id "count"} "fragment"]))
 
-(defn read-signals [req]
+(defn read-signals
+  {:params [{:method :keyword :query {:string :any} :body :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Echo the signals the request carried, as JSON."
+  [req]
   (ring/response 200 (json/encode (or (datastar/signals req) {}))
                  @{"content-type" "application/json"}))
 
-(defn push [req]
+(defn push
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A hand-built event push, to prove events frame straight through
+  ring/sse untouched."
+  [req]
   (datastar/events [(datastar/patch-signals {:count (counter :n)})
                     (datastar/remove-elements "#toast")]))
 

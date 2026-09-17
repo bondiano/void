@@ -29,12 +29,14 @@
 (import ./util :as util)
 
 (defn- path-str
+  {:params [(or @[:any] [:any])] :ret :string}
   "A value path as it reads in a message: `[:db :pool :size]`."
   [path]
   (string/format "[%s]"
                  (string/join (map |(string/format "%q" $) path) " ")))
 
 (defn- integer?
+  {:params [:any] :ret :boolean :narrows :number}
   "A finite number with no fractional part — Janet has one number type,
   so :int is a predicate."
   [v]
@@ -55,11 +57,20 @@
    :map true :map-of true :ref true :pred true :peg true :literal true})
 
 (defn types
+  {:params [] :ret @[:keyword]}
   "Names of all registered schema types."
   []
   (sorted (keys type-registry)))
 
 (defn register-type!
+  {:params [:keyword
+            {:validate (fn [:any :any] :boolean)
+             :coerce (or (fn [:any :any] :any) :nil)
+             :kind :keyword?
+             :message (or :string (fn [:any] :string) :nil)
+             & r}]
+   :ret :keyword
+   :throws [:string]}
   ``Register a custom schema type such as :money or :uuid — the substrate
   for the :void.core/schema-type extension point. spec keys:
 
@@ -90,6 +101,7 @@
   name)
 
 (defn register-format!
+  {:params [:keyword :any] :ret :keyword :throws [:string]}
   "Register a named string format (used as [:string {:format :email}]).
   The PEG pattern is anchored: it must match the whole string."
   [name pattern]
@@ -101,6 +113,7 @@
 # -- built-in types and formats ------------------------------------------
 
 (defn- coerce-scan
+  {:params [(fn [:number] :boolean)] :ret (fn [:any :any] (or :number :nil))}
   "The :coerce of a numeric type: a string that scans as a number
   passing `check`, else nil (no coercion)."
   [check]
@@ -157,12 +170,16 @@
 (def- node-proto {:void.schema/node true})
 
 (defn node?
+  {:params [:any] :ret :boolean
+   :narrows {:type :keyword :props {:any :any} :children [:any]}}
   "True when x is a normalized schema node — a struct with keys
   :type, :props and :children."
   [x]
   (and (struct? x) (= node-proto (struct/getproto x))))
 
 (defn- node
+  {:params [:keyword (or {:any :any} :nil) (or @[:any] [:any] :nil)]
+   :ret {:type :keyword :props {:any :any} :children [:any]}}
   "Build a normalized schema node — a struct with the node prototype,
   its :type, frozen :props and :children as a tuple."
   [type props children]
@@ -174,6 +191,7 @@
 (var- normalize* nil)
 
 (defn- check-bound
+  {:params [{:any :any} :keyword :keyword] :ret :nil :throws [:string]}
   "Refuse a non-numeric :min / :max on a type node."
   [props head k]
   (when-let [v (get props k)]
@@ -181,6 +199,9 @@
       (errorf "schema %q: %q must be a number, got %q" head k v))))
 
 (defn- type-node
+  {:params [:keyword :any]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   "Normalize `[type props]` for a registered type: check the bounds,
   compile a :pattern into a PEG (kept as :pattern-peg) and check a
   :format is registered — both only make sense on string-like types."
@@ -207,6 +228,9 @@
   (node head out []))
 
 (defn- map-node
+  {:params [:any :any]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   "Normalize a `[:map props entries]` form: the entries in sorted key
   order, each normalized."
   [props-form entries-form]
@@ -219,6 +243,7 @@
           [k (normalize* (entries-form k))])))
 
 (defn- props-form
+  {:params [(or @[:any] [:any]) :number :keyword] :ret {:any :any} :throws [:string]}
   "The optional props dictionary at `idx` of a tuple form (`{}` when
   absent), or an error naming the head."
   [form idx head]
@@ -228,6 +253,9 @@
   props)
 
 (defn- normalize-tuple
+  {:params [(or @[:any] [:any])]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   "Normalize a tuple form by its head keyword — :enum, :or/:union,
   :and, :optional, :vector, :map-of, :map, :ref, :pred, :peg,
   :literal, or a registered type with props — checking each head's
@@ -300,6 +328,7 @@
               head (util/names-str (keys type-registry))))))
 
 (defn normalize
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   ``Normalize any schema form into a node struct {:type :props
   :children}. Idempotent; every public function accepts sugar and
   normalizes, but `defschema`/`register!` do it once up front.``
@@ -318,6 +347,9 @@
 # -- registry ------------------------------------------------------------
 
 (defn register!
+  {:params [:keyword :any]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   "Normalize and register a schema under a name (OpenAPI $ref, reuse,
   recursion via [:ref name]). Re-registering replaces — REPL-friendly.
   Returns the normalized schema."
@@ -329,16 +361,19 @@
   n)
 
 (defn lookup
+  {:params [:keyword] :ret (or {:type :keyword :props {:any :any} :children [:any]} :nil)}
   "Fetch a registered schema by name, or nil."
   [name]
   (get schema-registry name))
 
 (defn registered
+  {:params [] :ret @[:keyword]}
   "Names of all registered schemas."
   []
   (sorted (keys schema-registry)))
 
 (defmacro defschema
+  {:params [:symbol :any] :ret :any}
   ``Define `name` as a normalized schema and register it under
   (keyword name):
 
@@ -361,6 +396,9 @@
     ~(def ,name (,register! ,(keyword name) ,(first body)))))
 
 (defn- resolve-ref
+  {:params [:keyword (or {:registry (or {:any :any} :nil) & r} :nil)]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   "The schema a `[:ref name]` points at: the per-call :registry in
   `opts` first, then the global one; an unknown name lists what is
   registered. Returns it normalized."
@@ -400,11 +438,13 @@
    :peg (fn [e] (string/format "%q does not match peg %q" (e :value) (e :source)))})
 
 (defn- err!
+  {:params [@[:any] (or @[:any] [:any]) :keyword :any] :ret :nil}
   "Push one validation error `{:path :code ...kvs}` onto `errors`."
   [errors path code & kvs]
   (array/push errors (struct :path (tuple ;path) :code code ;kvs)))
 
 (defn message
+  {:params [{:path :any :code :keyword :message :any & r}] :ret :string}
   ``The text of one validation error without its path: "expected
   :keyword, got 42". A :message on the error (custom type / [:pred fn
   msg]) wins; otherwise the code is looked up in (dyn
@@ -421,6 +461,7 @@
       (if f (f err) (string/format "invalid value %q" (err :value))))))
 
 (defn error-str
+  {:params [{:path :any :code :keyword & r}] :ret :string}
   ``Render one validation error: "[:tags 3]: expected :keyword, got 42"
   — the path, then `message`.``
   [err]
@@ -433,6 +474,7 @@
 (var- visit nil)
 
 (defn- check-props
+  {:params [:keyword? {:any :any} :any (or @[:any] [:any]) @[:any]] :ret :nil}
   "Check a type's props against a value that already passed its
   predicate: :min/:max on numbers; length bounds, :pattern and :format
   on bytes; length bounds on sized collections."
@@ -457,6 +499,10 @@
     nil))
 
 (defn- visit-type-node
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any] {:any :any}]
+   :ret :any
+   :throws [:string]}
   "Validate a value against a registered type: coerce first when asked
   and the raw value fails the predicate, then the predicate, then the
   props. Returns the (possibly coerced) value."
@@ -477,6 +523,9 @@
   v)
 
 (defn- visit-enum
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any] {:any :any}]
+   :ret :any}
   "Validate membership in the enum's values; with coercion a string is
   also tried as the keyword and as the number it spells."
   [sch value path errors opts]
@@ -492,6 +541,9 @@
   v)
 
 (defn- visit-union
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any] {:any :any}]
+   :ret :any}
   "Validate against each branch in order and take the first that
   accepts, returning its (possibly coerced) value; when none does, one
   :union error carrying every branch's errors as :causes."
@@ -511,6 +563,9 @@
         value)))
 
 (defn- visit-vector
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any] {:any :any}]
+   :ret :any}
   "Validate an indexed value: the length props, then each item at its
   index. With coercion the items' coerced values are rebuilt into the
   input's kind (tuple or array)."
@@ -531,6 +586,9 @@
         value))))
 
 (defn- visit-map
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any] {:any :any}]
+   :ret :any}
   "Validate a dictionary field by field: a missing non-optional key is
   :missing, and under :closed an undeclared key is :unknown. With
   coercion the coerced fields are rebuilt into the input's kind
@@ -563,6 +621,9 @@
         value))))
 
 (defn- visit-map-of
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any] {:any :any}]
+   :ret :any}
   "Validate a homogeneous dictionary: every key against the key schema
   (a failing key is one :key error, its own errors dropped) and every
   value against the value schema."
@@ -587,6 +648,9 @@
         value))))
 
 (defn- visit-pred
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any]]
+   :ret :any}
   "Validate with a predicate function: false or a throw is one :pred
   error with the schema's message."
   [sch value path errors]
@@ -596,6 +660,9 @@
   value)
 
 (defn- visit-peg
+  {:params [{:type :keyword :props {:any :any} :children [:any]}
+            :any (or @[:any] [:any]) @[:any]]
+   :ret :any}
   "Validate a bytes value against a compiled PEG: not bytes is a :type
   error, no match a :peg error naming the pattern's source."
   [sch value path errors]
@@ -632,6 +699,9 @@
 (def- allowed-check-opts {:coerce true :registry true})
 
 (defn check
+  {:params [:any :any (or {:coerce :boolean? :registry (or {:any :any} :nil) & r} :nil)]
+   :ret {:value :any :errors [:any]}
+   :throws [:string]}
   ``Validate value against schema; collect every error, never throw on
   invalid data. Returns {:value v :errors [...]} where each error is
   {:path [:tags 3] :code :type ...} (render with `error-str`).
@@ -653,6 +723,9 @@
   {:value v :errors (tuple ;errors)})
 
 (defn check!
+  {:params [:any :any (or {:coerce :boolean? :registry (or {:any :any} :nil) & r} :nil)]
+   :ret :any
+   :throws [(or :string {:void/error :keyword :message :string? :data {:any :any} & r})]}
   ``A `check` that raises: the coerced value when it validates, otherwise an
   error envelope of kind :void.schema/invalid (status 422) whose
   `:data` carries the same `:errors` `check` returns, plus the
@@ -668,11 +741,15 @@
                   {:errors (res :errors) :value (res :value)})))
 
 (defn valid?
+  {:params [:any :any] :ret :boolean :throws [:string]}
   "True when value matches schema (no coercion)."
   [sch value]
   (empty? ((check sch value) :errors)))
 
 (defn validate
+  {:params [:any :any (or {:coerce :boolean? :registry (or {:any :any} :nil) & r} :nil)]
+   :ret :any
+   :throws [:string]}
   "Like `check`, but throws one error listing every failure; returns
   the (possibly coerced) value on success. Options as in `check`."
   [sch value &opt opts]
@@ -683,12 +760,14 @@
   (res :value))
 
 (defn coerce
+  {:params [:any :any] :ret :any :throws [:string]}
   "Validate in coercion mode; returns the coerced value or throws the
   full error batch. Sugar for (validate sch value {:coerce true})."
   [sch value]
   (validate sch value {:coerce true}))
 
 (defn closed
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   ``Normalize `form` with every map closed by default: a map whose
   props do not say `:closed` gets `:closed true`, so an undeclared key
   is one :unknown error with a did-you-mean instead of silence. A map
@@ -715,6 +794,7 @@
 # -- composition ---------------------------------------------------------
 
 (defn- as-map-node
+  {:params [:any :string] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   "Normalize and insist on a map schema — what `who` (schema/merge,
   schema/select) operates on."
   [sch who]
@@ -724,6 +804,7 @@
   n)
 
 (defn union
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   "Schema matching any of the given schemas (first match wins, also
   for coercion)."
   [& schs]
@@ -731,12 +812,14 @@
   (node :union {} (map normalize schs)))
 
 (defn optional
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   "Wrap a schema so the value may be nil — and, as a map entry, the
   key may be absent. Equivalent to [:optional sch]."
   [sch]
   (node :optional {} [(normalize sch)]))
 
 (defn merge
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   "Merge map schemas left to right: later entries and props win."
   [& schs]
   (when (empty? schs) (error "schema/merge needs at least one schema"))
@@ -749,6 +832,9 @@
   (node :map props (seq [k :in (sorted (keys entries))] [k (entries k)])))
 
 (defn select
+  {:params [:any (or @[:keyword] [:keyword])]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   "Project a map schema onto a subset of its keys — a DTO from an
   entity: (schema/select User [:email :brand-id])."
   [sch ks]
@@ -765,11 +851,13 @@
 # -- projections ---------------------------------------------------------
 
 (defn projections
+  {:params [] :ret @[:keyword]}
   "Names of all registered projections."
   []
   (sorted (keys projection-registry)))
 
 (defn register-projection!
+  {:params [:keyword (fn [:any & :any] :any)] :ret :keyword :throws [:string]}
   ``Register a projection — the substrate for the
   :void.core/schema-projection extension point (OpenAPI, protobuf,
   form hints, generators, docs...). f is (fn [normalized-schema & args])
@@ -784,6 +872,7 @@
   name)
 
 (defn project
+  {:params [:keyword :any :any] :ret :any :throws [:string]}
   "Apply a registered projection to a schema:
   (schema/project :validator CreateUser {:coerce true})."
   [name sch & args]
@@ -804,6 +893,9 @@
 # a given prefix are hung on it. These are those questions, asked once.
 
 (defn unwrap
+  {:params [{:type :keyword :props {:any :any} :children [:any]} :boolean?]
+   :ret [{:type :keyword :props {:any :any} :children [:any]} :boolean]
+   :throws [:string]}
   ``Strip the :optional and :ref wrappers off a normalized node ->
   [inner-node required?]: :optional makes the field not required, :ref
   is followed into the registered schema (an unregistered name is an
@@ -823,6 +915,9 @@
     [node true]))
 
 (defn fields
+  {:params [:any :boolean?]
+   :ret [[:keyword {:type :keyword :props {:any :any} :children [:any]} :boolean]]
+   :throws [:string]}
   ``The fields of a map schema in the schema's own order (a map is
   normalized with its keys sorted), each unwrapped: a tuple of
   [key inner-node required?] (see `unwrap`; `keep-refs?` passes
@@ -837,6 +932,7 @@
             [k inner required?])))
 
 (defn- props-under
+  {:params [:string {:any :any}] :ret {:keyword :any}}
   "The props whose keyword starts with `prefix` — one projection's
   annotations — frozen."
   [prefix props]
@@ -845,6 +941,9 @@
             k v)))
 
 (defn annotations
+  {:params [:any :string]
+   :ret {:schema {:keyword :any} :fields {:keyword {:keyword :any}}}
+   :throws [:string]}
   ``The props under one namespace prefix — "db/", "proto/", or any
   other a projection reserves — as {:schema {...} :fields {key {...}}}:
   the top-level props of the schema and, for a map, those of each field
@@ -864,6 +963,7 @@
    :fields (freeze fields)})
 
 (defn db-annotations
+  {:params [:any] :ret {:schema {:keyword :any} :fields {:keyword {:keyword :any}}} :throws [:string]}
   ``The :db/* annotations of a schema — `(annotations sch "db/")`:
   :db/table at the top, :db/pk, :db/type ... per field. They feed the
   entity layer, void/admin and migrations-diff.``

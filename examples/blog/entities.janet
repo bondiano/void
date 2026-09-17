@@ -104,6 +104,7 @@
   (schema/select Comment [:author-name :body]))
 
 (defn now
+  {:params [] :ret :string}
   ``An ISO-8601 UTC timestamp. Text on both engines, which is what
   keeps the migrations one file instead of two.``
   []

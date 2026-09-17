@@ -13,7 +13,11 @@
    :at [14 :google.protobuf/Timestamp] :took [15 :google.protobuf/Duration]
    :wrapped [16 :google.protobuf/Int32Value]})
 
-(defn- j [v &opt opts] (proto/to-json :j/Msg v opts))
+(defn- j
+  {:params [{:keyword :any} (or {:keyword :any} :nil)] :ret :any}
+  "A :j/Msg value as proto3-JSON data, with the given options."
+  [v &opt opts]
+  (proto/to-json :j/Msg v opts))
 
 # -- the rules that surprise people --------------------------------------
 
@@ -45,7 +49,11 @@
 
 # -- back again ------------------------------------------------------------
 
-(defn- back [text] (proto/decode-json :j/Msg text))
+(defn- back
+  {:params [:string] :ret (or @{:keyword :any} :nil)}
+  "`text` decoded as proto3-JSON against :j/Msg."
+  [text]
+  (proto/decode-json :j/Msg text))
 
 (assert (= 42 ((back `{"big":"42"}`) :big)) "a quoted 64-bit integer reads back as a number")
 (assert (= 42 ((back `{"big":42}`) :big)) "and so does an unquoted one, which is also legal")

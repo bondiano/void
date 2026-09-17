@@ -32,6 +32,12 @@
    :max-dead 1000})
 
 (defn make
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:jobs @{:string :any} :unique @{:string :any}
+          :finished @{:completed @[:string] :dead @[:string]}
+          :max-completed :number :max-dead :number
+          :stats @{:pushed :number :claimed :number :completed :number :failed :number
+                   :dead :number :duplicates :number :reaped :number}}}
   "The table behind an in-process backend."
   [&opt opts]
   (def cfg (merge defaults (or opts {})))
@@ -45,7 +51,13 @@
 
 # -- unique keys ---------------------------------------------------------
 
-(defn- unique-held? [m k now]
+(defn- unique-held?
+  {:params [{:unique @{:any {:id :string :until :number? & r}}
+             :jobs @{:string @{:keyword :any}} & r}
+            :any :number]
+   :ret :boolean}
+  "Is unique key `k` still holding a live job, or a not-yet-expired ttl?"
+  [m k now]
   (when-let [e (get-in m [:unique k])]
     (def owner (get-in m [:jobs (e :id)]))
     (cond
@@ -54,7 +66,10 @@
       (and owner (record/live? owner)) true
       (do (put (m :unique) k nil) false))))
 
-(defn- release-unique! [m r now]
+(defn- release-unique!
+  {:params [{:unique @{:any :any} & r} {:unique-key :any :id :string & r} :number] :ret :nil}
+  "Release a record's unique key, unless its ttl still outlives it."
+  [m r now]
   (when-let [k (get r :unique-key)]
     (def e (get-in m [:unique k]))
     (when (and e (= (e :id) (r :id))
@@ -63,7 +78,13 @@
 
 # -- retention -----------------------------------------------------------
 
-(defn- remember-finished! [m r]
+(defn- remember-finished!
+  {:params [{:finished @{:keyword @[:string]} :max-completed :number :max-dead :number
+             :jobs @{:string @{:state :any & r}} & r}
+            {:state :keyword :id :string & r}]
+   :ret :nil}
+  "Add a finished record's id to its retention ring, trimming the oldest past its cap."
+  [m r]
   (def state (r :state))
   (def ring (get-in m [:finished state]))
   (when ring
@@ -79,7 +100,10 @@
         (when (= state (victim :state))
           (put (m :jobs) old nil))))))
 
-(defn- forget-finished! [m id]
+(defn- forget-finished!
+  {:params [{:finished @{:keyword @[:string]} & r} :string] :ret :nil}
+  "Drop an id from the retention rings — what a removed or revived record needs."
+  [m id]
   (each state [:completed :dead]
     (def ring (get-in m [:finished state]))
     (when-let [i (index-of id ring)]
@@ -88,6 +112,9 @@
 # -- ordering ------------------------------------------------------------
 
 (defn claim-order
+  {:params [{:queue :keyword? :priority :number? :run-at :number? :id :string? & r}
+            (or @[:keyword] [:keyword])]
+   :ret [:number :number :number :string]}
   ``The sort key of a claimable record: the position of its queue in
   the worker's preference list first — a worker asked to serve
   [:critical :default] drains :critical first, whatever :default's
@@ -100,12 +127,26 @@
    (get r :run-at 0)
    (get r :id "")])
 
-(defn- better? [a b]
+(defn- better?
+  {:params [:any :any] :ret :boolean}
+  "Is claim-order key `a` preferred over `b`?"
+  [a b]
   (< (compare a b) 0))
 
 # -- the backend ---------------------------------------------------------
 
 (defn store
+  {:params [@{:jobs @{:string :any} :unique @{:string :any}
+              :finished @{:completed @[:string] :dead @[:string]}
+              :max-completed :number :max-dead :number
+              :stats @{:pushed :number :claimed :number :completed :number :failed :number
+                       :dead :number :duplicates :number :reaped :number}}]
+   :ret {:name :keyword :shared? :boolean
+         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any) :reap! (fn [& :any] :any)
+         :touch! (fn [& :any] :any) :release-parent! (fn [& :any] :any)
+         :stats (fn [] :any) :close (fn [] :any)}}
   ``A `:void/jobs-backend` over the table from `make`. Nothing is
   captured but that table, so a REPL holding onto the backend keeps
   seeing the same queue after a component restart handed it out
@@ -276,6 +317,17 @@
    :close (fn mem-close [] nil)})
 
 (defn backend-of
+  {:params [(or {:keyword :any} :nil)]
+   :ret {:name :any :shared? :boolean :transactional? :boolean
+         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
+         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
+         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
+         :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
+         :release-parent! (or (fn [& :any] :any) :nil)
+         :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
+         :shared-rate? :boolean :shared-locks? :boolean
+         :stats (fn [] :any) :close (fn [] :any) & r}
+   :throws [:string]}
   "A normalized backend over a fresh table — the one-liner tests and
   fixtures reach for."
   [&opt opts]

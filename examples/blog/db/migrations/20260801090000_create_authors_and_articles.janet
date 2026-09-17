@@ -8,7 +8,11 @@
 # projected `defentity` would rewrite its own history every time a field
 # changed (generation from the entity registry is a v2 story).
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create the authors and articles tables, plus the index the blog's
+  feed queries lean on."
+  []
   [{:create-table "authors"
     :columns [[:id :serial {:primary-key true}]
               [:name :text {:null false}]
@@ -30,6 +34,10 @@
    {:create-index "articles_created_at_idx"
     :on "articles" :columns [:created-at]}])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop articles before authors, undoing `up` in reverse of the
+  foreign key it created."
+  []
   [{:drop-table "articles"}
    {:drop-table "authors"}])

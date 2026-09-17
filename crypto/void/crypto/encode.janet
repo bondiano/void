@@ -16,6 +16,7 @@
 (import spork/base64)
 
 (defn base64url
+  {:params [(or :string :buffer)] :ret :string}
   ``Encode bytes as base64url without padding (RFC 4648 §5) — the
   spelling JWS, PHC and every cookie-safe token use.``
   [bytes]
@@ -30,6 +31,7 @@
   (string/replace-all "/" "_" (string/replace-all "+" "-" (string/slice std 0 end))))
 
 (defn base64url-decode
+  {:params [(or :string :buffer)] :ret :string :throws [:string]}
   ``Decode base64url, with or without padding. Throws on input that is
   not base64url — a token that does not decode is not a token, and
   the caller should not have to tell "invalid" from "empty".``
@@ -44,6 +46,7 @@
   out)
 
 (defn base64
+  {:params [(or :string :buffer)] :ret :string}
   ``Encode bytes as base64 with the standard alphabet and **no
   padding** — the spelling PHC password hashes use (`$scrypt$ln=14,
   r=8,p=1$<salt>$<hash>`). Padding is left off because the PHC string
@@ -56,6 +59,7 @@
   (string/slice std 0 i))
 
 (defn base64-decode
+  {:params [(or :string :buffer)] :ret :string :throws [:string]}
   "Decode standard-alphabet base64, with or without padding."
   [s]
   (def text (string s))
@@ -68,6 +72,7 @@
   out)
 
 (defn hex
+  {:params [(or :string :buffer)] :ret :string}
   "Bytes as lowercase hex — for hashes in logs, tokens in the database
   and everything a human has to compare by eye."
   [bytes]
@@ -76,6 +81,7 @@
   (string out))
 
 (defn unhex
+  {:params [:string] :ret :string :throws [:string]}
   "Hex back to bytes; throws on anything that is not an even-length
   string of hex digits."
   [s]

@@ -60,6 +60,7 @@
 (def with-locale* catalog/with-locale*)
 
 (defmacro with-locale
+  {:params [:any :any] :ret a}
   "Run body with the locale bound — CLI, jobs and tests; the request
   path is the middleware's."
   [loc & body]
@@ -146,23 +147,35 @@
 # -- the middleware ------------------------------------------------------
 
 (defn- configured
+  {:params [:keyword?] :ret :keyword?}
+  "The element of [:i18n :locales] equal to loc, or nil — a header, a
+  cookie and even the application's hook are inputs, not verdicts."
   # the element of [:i18n :locales] equal to loc, or nil — a header, a
   # cookie and even the application's hook are inputs, not verdicts
   [loc]
   (when loc
     (find |(= $ loc) (get (or catalog/settings {}) :locales []))))
 
-(defn- hook-locale [req]
+(defn- hook-locale
+  {:params [{:headers {:string :string} & r}] :ret :keyword?}
+  "The application's :void.i18n/locale-source hook's answer for this
+  request, if it named one and that locale is configured."
+  [req]
   (when-let [hook catalog/source-hook
              f (get hook :fn)]
     (configured (locale/normalize (f req)))))
 
-(defn- cookie-locale [req]
+(defn- cookie-locale
+  {:params [{:headers {:string :string} & r}] :ret :keyword?}
+  "The visitor's cookie-chosen locale, if [:i18n :cookie] names one
+  and the cookie carries a configured locale."
+  [req]
   (def name (get (or catalog/settings {}) :cookie))
   (when (and name (not= false name))
     (configured (locale/normalize (get (ring/cookies req) name)))))
 
 (defn resolve-locale
+  {:params [{:headers {:string :string} & r}] :ret :keyword}
   "The locale of one request: application hook -> cookie ->
   Accept-Language -> [:i18n :default]."
   [req]
@@ -173,6 +186,7 @@
       (get (or catalog/settings {}) :default :en)))
 
 (defn unrouted-locale
+  {:params [{:headers {:string :string} & r}] :ret :keyword}
   ``The locale of a request that never reached a route: cookie ->
   Accept-Language -> default. The application's
   `:void.i18n/locale-source` hook is **not** asked here — it is

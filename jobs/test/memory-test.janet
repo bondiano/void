@@ -16,7 +16,10 @@
 (def m (memory/make {:max-completed 2 :max-dead 2}))
 (def b (backend/normalize (memory/store m)))
 
-(defn- run-one [job]
+(defn- run-one
+  {:params [:keyword] :ret @{:keyword :any}}
+  "Push, claim and complete one job of `job`'s name, returning its record."
+  [job]
   (def r ((b :push!) (record/make {:job job :queue :default})))
   (def c ((b :claim!) {:queues [:default] :now (os/clock :realtime) :token "w"}))
   ((b :settle!) (record/complete! c :ok (os/clock :realtime)))

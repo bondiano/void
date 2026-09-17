@@ -35,6 +35,7 @@
 # -- the grammar ---------------------------------------------------------
 
 (defn- unescape
+  {:params [:string] :ret :string}
   "The body of a `.proto` string literal, with its escapes resolved."
   [s]
   (def out @"")
@@ -59,10 +60,18 @@
       (do (buffer/push-byte out c) (++ i))))
   (string out))
 
-(defn- kw [word]
+(defn- kw
+  {:params [:string] :ret :tuple}
+  "The grammar fragment for a keyword token: `word`, not followed by
+  another name character, then whitespace."
+  [word]
   ~(* ,word (not :name-char) :ws))
 
-(defn- p [punct]
+(defn- p
+  {:params [:string] :ret :tuple}
+  "The grammar fragment for a punctuation token: `punct` then
+  whitespace."
+  [punct]
   ~(* ,punct :ws))
 
 (def grammar
@@ -170,6 +179,8 @@
 (def- compiled (peg/compile grammar))
 
 (defn tokens
+  {:params [:string :string?] :ret {:syntax (or :string :nil) :statements [:any]}
+   :throws [:string]}
   ``Parse `.proto` source into the statement tree — the grammar's own
   output, before any of it means anything. Public because it is what a
   test asserts on when it is the *parser* under test rather than the
@@ -185,10 +196,15 @@
 
 # -- the tree becomes descriptors ----------------------------------------
 
-(defn- qualify [prefix name]
+(defn- qualify
+  {:params [:string :string] :ret :string}
+  "`name`, prefixed with `prefix.` unless the prefix is empty (the
+  top level)."
+  [prefix name]
   (if (empty? prefix) name (string prefix "." name)))
 
 (defn- collect-names
+  {:params [[:any] :string @{:string :keyword}] :ret @{:string :keyword}}
   "Every message and enum a statement tree defines, fully qualified."
   [statements prefix into]
   (each st statements
@@ -201,6 +217,8 @@
   into)
 
 (defn- resolve-type
+  {:params [:string :string (or {:string :keyword} @{:string :keyword}) :string] :ret :string
+   :throws [:string]}
   ``The fully-qualified name of a type as written inside `scope`.
   protobuf's own rule: a leading dot is absolute, and everything else
   is looked for from the innermost scope outward — so `Item` inside
@@ -223,7 +241,11 @@
                   (let [ns (sorted (keys known))]
                     (if (empty? ns) "nothing" (string/join ns " "))))))))
 
-(defn- field-options [opts]
+(defn- field-options
+  {:params [[[:any :any]]] :ret @{:keyword :any} :throws [:string]}
+  "The `[json_name packed deprecated]` options a field's `[...]` list
+  carries, keyword-keyed and with their values coerced."
+  [opts]
   (def out @{})
   (each o opts
     (def [k v] o)
@@ -236,12 +258,23 @@
       nil))
   out)
 
-(defn- type-form [written scope known where]
+(defn- type-form
+  {:params [:string :string (or {:string :keyword} @{:string :keyword}) :string] :ret :keyword
+   :throws [:string]}
+  "The type keyword a written type resolves to: a proto3 scalar as
+  itself, anything else through `resolve-type` and `desc/name-of`."
+  [written scope known where]
   (if (desc/scalars (keyword written))
     (keyword written)
     (desc/name-of (resolve-type written scope known where))))
 
-(defn- field-entry [st scope known where]
+(defn- field-entry
+  {:params [[:keyword :string :string :string :number [:any]] :string
+            (or {:string :keyword} @{:string :keyword}) :string]
+   :ret [:keyword [:any]] :throws [:string]}
+  "One `field` or `oneof-field` statement as a `[key value]` fields
+  entry, in the shape `descriptor/field` expects."
+  [st scope known where]
   (def [_ label type name number opts] st)
   (when (= "required" label)
     (errorf (string "proto: %s: field %q is `required`, which proto3 removed — a reader "
@@ -254,7 +287,12 @@
     (type-form type scope known where)
     o]])
 
-(defn- map-entry [st scope known where]
+(defn- map-entry
+  {:params [[:keyword :string :string :string :number [:any]] :string
+            (or {:string :keyword} @{:string :keyword}) :string]
+   :ret [:keyword [:any]] :throws [:string]}
+  "One `map-field` statement as a `[key value]` fields entry."
+  [st scope known where]
   (def [_ ktype vtype name number opts] st)
   [(keyword name)
    [number :map
@@ -262,7 +300,14 @@
     (type-form vtype scope known where)
     (field-options opts)]])
 
-(defn- build-enum [st prefix where]
+(defn- build-enum
+  {:params [[:keyword :string [:any]] :string :string]
+   :ret {:kind :keyword :name :keyword :proto-name :string :values {:keyword :number}
+         :by-number @{:number :keyword} :zero :keyword :allow-alias :boolean
+         :doc (or :string :nil)}
+   :throws [:string]}
+  "One `enum` statement as an enum descriptor."
+  [st prefix where]
   (def [_ name members] st)
   (def full (qualify prefix name))
   (def values @{})
@@ -307,7 +352,13 @@
                                 {:proto-name full :reserved (tuple ;reserved)}))
   out)
 
-(defn- build-service [st prefix known where]
+(defn- build-service
+  {:params [[:keyword :string [:any]] :string (or {:string :keyword} @{:string :keyword}) :string]
+   :ret {:kind :keyword :name :keyword :proto-name :string :methods [:any]
+         :by-name @{:keyword :any} :doc (or :string :nil)}
+   :throws [:string]}
+  "One `service` statement as a service descriptor."
+  [st prefix known where]
   (def [_ name members] st)
   (def full (qualify prefix name))
   (def methods @[])
@@ -332,7 +383,11 @@
 
 # -- files ---------------------------------------------------------------
 
-(defn- file-options [statements]
+(defn- file-options
+  {:params [[:any]] :ret @{:keyword :any}}
+  "The `option ... = ...;` statements at a file's top level,
+  keyword-keyed."
+  [statements]
   (def out @{})
   (each st statements
     (when (= :option (first st))
@@ -340,6 +395,10 @@
   out)
 
 (defn parse
+  {:params [:string :string? (or {:string :keyword} @{:string :keyword} :nil)]
+   :ret {:syntax :string :package :string :imports [:string] :options @{:keyword :any}
+         :descriptors [:any] :source :string}
+   :throws [:string]}
   ``Parse `.proto` source into a file value:
 
       {:syntax "proto3" :package "example" :imports [...]
@@ -376,6 +435,7 @@
    :source where})
 
 (defn register-file!
+  {:params [{:descriptors [:any] & r}] :ret {:descriptors [:any] & r} :throws [:string]}
   ``Register every descriptor a parsed file defines, then flush — so
   the watchers see a whole file at once and a message that names a
   type defined below it still projects (see `descriptor/watch!`).
@@ -387,14 +447,21 @@
 
 # -- reading from disk ---------------------------------------------------
 
-(defn- dirname [path]
+(defn- dirname
+  {:params [:string] :ret :string}
+  "The directory portion of a path, or \".\" when it has none."
+  [path]
   (def idxs (string/find-all "/" path))
   (if (empty? idxs) "." (string/slice path 0 (last idxs))))
 
-(defn- readable [path]
+(defn- readable
+  {:params [:string] :ret :string?}
+  "`path` itself when it names an ordinary file on disk, else nil."
+  [path]
   (when (= :file (os/stat path :mode)) path))
 
 (defn find-file
+  {:params [:string :string? (or [:string] :nil)] :ret :string?}
   ``Where an `import "a/b.proto"` points: next to the importing file
   first, then along `paths`. nil when it is nowhere — the caller says
   what that means, because for a `google/protobuf/*.proto` it means
@@ -406,6 +473,13 @@
          target]))
 
 (defn load
+  {:params [:string (or {:seen (or @{:string :any} :nil) :paths (or [:string] :nil) :from :string?
+                        & r}
+                       :nil)]
+   :ret (or {:syntax :string :package :string :imports [:string] :options @{:keyword :any}
+             :descriptors [:any] :source :string}
+            :keyword)
+   :throws [:string]}
   ``Read a `.proto` file and everything it imports, parse all of it and
   register the descriptors. Returns the file value of `path`.
 

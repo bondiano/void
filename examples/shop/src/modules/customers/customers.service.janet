@@ -14,6 +14,7 @@
 (import ./customers.repository :as repo)
 
 (defn id-of-subject
+  {:params [:string?] :ret :number?}
   ``The customer id inside a subject string. The subject is
   `"customer:42"` — `[:auth-db :users :subject-kind]` is the
   `customer` half — so this is the one place the application unpacks
@@ -22,23 +23,29 @@
   (when subject (scan-number (last (auth/subject-of subject)))))
 
 (defn current-id
+  {:params [] :ret :number?}
   "The signed-in customer's id, or nil."
   []
   (when-let [id (auth/current-user)]
     (id-of-subject (id :subject))))
 
 (defn current
+  {:params [] :ret (or @{:any :any} :nil) :throws [:string]}
   "The signed-in customer's row, or nil."
   []
   (when-let [id (current-id)]
     (repo/find-by-id id)))
 
 (defn taken?
+  {:params [:string] :ret :boolean :throws [:string]}
   "Is this address already an account?"
   [email]
   (truthy? (repo/find-by-email email)))
 
 (defn register!
+  {:params [{:name :string :email :string :password :string}]
+   :ret {:customer @{:any :any} :identity (or {:subject :string & r} :nil)}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Create an account and return `{:customer <row> :identity <id>}`.
 
   `auth/hash-password` produces a PHC string: the algorithm and its
@@ -53,6 +60,9 @@
   {:customer customer :identity (get check :identity)})
 
 (defn authenticate
+  {:params [(or {:any :any} :nil)]
+   :ret (or {:subject :string & r} :nil)
+   :throws [:string]}
   ``The password path, and the identity it produces — or nil.
 
   Whatever went wrong, the caller is told the same thing:
@@ -63,6 +73,7 @@
   (get (auth/check-password (auth/user-store) credentials) :identity))
 
 (defn request-link!
+  {:params [:string] :ret (or @{:any :any} :nil) :throws [:string :any]}
   ``Mint a one-time sign-in challenge for an address, if it has an
   account. Returns nothing either way — **the answer is the same
   whether or not the address is known**, because a page that said "no
@@ -81,12 +92,20 @@
     customer))
 
 (defn redeem-link
+  {:params [:string? :string?]
+   :ret (or {:subject :string :via :keyword :cookie :boolean
+             :claims {:keyword :any} :at :number :expires (or :number :nil)}
+            :nil)
+   :throws [:string]}
   ``The link from the letter, as an identity or nil. `redeem!` takes
   the challenge out of the store before it checks the code, so a link works once and a wrong one is spent.``
   [handle code]
   (auth/redeem! handle code))
 
 (defn ensure-account!
+  {:params [{:name :string :email :string :password :string :role :string?}]
+   :ret [(enum :kept :created) @{:any :any}]
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Create an account with a role, or leave the one that is there
   alone. The seed's idempotence lives here rather than in the seed,
   because "an account that exists keeps its password" is a rule about

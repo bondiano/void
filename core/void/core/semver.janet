@@ -11,6 +11,7 @@
 ### under everything else in the plugin API.
 
 (defn parse-version
+  {:params [:string] :ret [:number :number :number] :throws [:string]}
   "Parse \"1.2.3\" (also \"v1.2\", \"0.1\", prerelease tail ignored)
   into a [major minor patch] tuple; missing parts default to 0."
   [s]
@@ -30,6 +31,7 @@
   [(get nums 0 0) (get nums 1 0) (get nums 2 0)])
 
 (defn- vcmp
+  {:params [[:number] [:number]] :ret :number}
   "Compare two parsed versions the way `cmp` does: -1, 0 or 1 by the
   first of major, minor, patch that differs."
   [a b]
@@ -39,6 +41,7 @@
   r)
 
 (defn- caret-upper
+  {:params [[:number]] :ret [:number :number :number]}
   "The exclusive upper bound of a caret range: the next major when the
   major is non-zero, else the next minor, else the next patch — the
   npm reading of `^`, where a 0.x release may break on every minor."
@@ -49,6 +52,9 @@
     [0 0 (inc (v 2))]))
 
 (defn parse-constraint
+  {:params [:string]
+   :ret [:keyword [:number :number :number]]
+   :throws [:string]}
   "Parse one comparator token of a constraint string — \">=1.2\",
   \"^1\", \"~0.3\", \"1.2.3\" — into `[op version]`, where `op` is one
   of :>= :<= :> :< := :caret :tilde. Throws on an unparsable version,
@@ -67,6 +73,7 @@
   [op (parse-version rest)])
 
 (defn satisfies?
+  {:params [(or :string [:number]) :string] :ret :boolean :narrows :any :throws [:string]}
   ``True when a version satisfies a constraint string: space-separated
   comparators, all of which must hold — ">=0.1 <0.5", "^1.2" (same
   major, or same minor while major is 0), "~1.2" (same minor),

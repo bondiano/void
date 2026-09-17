@@ -56,6 +56,9 @@
   @{})
 
 (defn define-event!
+  {:params [:any :any]
+   :ret {:name :any :topic :keyword :schema :any :doc :any}
+   :throws [:string]}
   "Register an event declaration (the runtime half of `defevent`)."
   [name opts]
   (unless (keyword? name)
@@ -78,6 +81,8 @@
   d)
 
 (defn event
+  {:params [:keyword] :ret {:name :any :topic :keyword :schema :any :doc :any}
+   :throws [:string]}
   "The declaration behind an event name; throws naming what is
   declared when there is none."
   [name]
@@ -86,17 +91,23 @@
               name (util/names-str (keys events)))))
 
 (defn declared-events
+  {:params [] :ret @[:keyword]}
   "Names of every declared event."
   []
   (sorted (keys events)))
 
 (defn forget-event!
+  {:params [:keyword] :ret @{:keyword :any}}
   "Drop an event declaration — for tests, and for a REPL that renamed
   one."
   [name]
   (put events name nil))
 
-(defn- checked [d payload who]
+(defn- checked
+  {:params [{:schema :any :name :any & r} :any :string] :ret :any :throws [:string]}
+  "The payload, coerced and validated against `d`'s schema, or the
+  payload unchanged when it declared none."
+  [d payload who]
   (if-let [sch (d :schema)]
     (let [[ok res] (protect (schema/validate sch payload {:coerce true}))]
       (unless ok
@@ -106,6 +117,12 @@
     payload))
 
 (defn emit!
+  {:params [:keyword :any
+            (or :nil {:id :string? :meta (or :nil :table :struct)
+                      :correlation-id :string? :causation-id :string?
+                      :reply-to :keyword? :at :number? & r})]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   ``Publish a declared event after checking its payload against the
   schema the declaration carries. The check is on the *publishing*
   side, which is where a shape can still be fixed by the person who
@@ -115,6 +132,12 @@
   (state/publish (d :topic) (checked d payload "event") opts))
 
 (defn emit-tx!
+  {:params [:keyword :any
+            (or :nil {:id :string? :meta (or :nil :table :struct)
+                      :correlation-id :string? :causation-id :string?
+                      :reply-to :keyword? :at :number? & r})]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string]}
   ``The same as `emit!`, through the transactional outbox — the
   spelling an event about money uses: the message is written in the
   transaction that made the change it announces.``
@@ -123,6 +146,7 @@
   (state/publish-tx! (d :topic) (checked d payload "event") opts))
 
 (defn event-handler-opts
+  {:params [{:event :any & r}] :ret {:topic :keyword :schema :any & r} :throws [:string]}
   ``Turn `{:event :account-debited}` into the `defhandler` options it
   stands for — the event's topic and its schema, so that a consumer
   declares which event it handles and never repeats the shape.``
@@ -145,6 +169,13 @@
   @{})
 
 (defn define-command!
+  {:params [:any (or :nil {:schema :any & r})
+            {:binding :symbol? :env :any :fn (or :function :cfunction :nil) & r}]
+   :ret {:name :any :schema :any :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}
+   :throws [:string]}
   ``Register a command handler (the runtime half of `defcommand`). A
   second handler for the same name is an error — that rule is the
   whole difference between a command and an event, and it is checked
@@ -179,6 +210,12 @@
   d)
 
 (defn command
+  {:params [:keyword]
+   :ret {:name :any :schema :any :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}
+   :throws [:string]}
   "The handler declaration behind a command name; throws naming what
   is declared when there is none."
   [name]
@@ -187,22 +224,28 @@
               name (util/names-str (keys commands)))))
 
 (defn declared-commands
+  {:params [] :ret @[:keyword]}
   "Names of every declared command."
   []
   (sorted (keys commands)))
 
 (defn forget-command!
+  {:params [:keyword] :ret @{:keyword :any}}
   "Drop a command declaration."
   [name]
   (put commands name nil))
 
 (defn command-fn
+  {:params [{:handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string} & r}]
+   :ret (or :function :cfunction) :throws [:struct]}
   "The function behind a command, resolved now — late-bound the way a
   handler's is, so a reload is live."
   [d]
   (bind/current (d :handler)))
 
 (defn send
+  {:params [:keyword :any] :ret :any :throws [:string]}
   ``Dispatch a command to its one handler and return what the handler
   returned. The payload is validated (and coerced) against the
   command's schema first, so a handler's body may assume the shape it
@@ -220,6 +263,7 @@
 # -- the macros ----------------------------------------------------------
 
 (defn defevent-form
+  {:params [:symbol :tuple] :ret :tuple :throws [:string]}
   "The expansion of `defevent`, as a function."
   [name more]
   (var rest more)
@@ -237,6 +281,7 @@
                      (,merge @{:doc ,doc} ,opts))))
 
 (defn defevent-handler-form
+  {:params [:symbol :tuple] :ret :tuple :throws [:string]}
   "The expansion of `defevent-handler`, as a function: the event's
   topic and schema are looked up at declaration and handed to the
   ordinary handler registry, so there is one kind of handler and not
@@ -261,6 +306,7 @@
                       {:env (,curenv) :binding ',name :fn ,name :doc ,doc})))
 
 (defn defcommand-form
+  {:params [:symbol :tuple] :ret :tuple :throws [:string]}
   "The expansion of `defcommand`, as a function."
   [name more]
   (var rest more)
@@ -293,6 +339,7 @@
 
   `:topic` defaults to the name. The declaration is a value — `(pp
   account-debited)` prints it — and `bus/emit!` is what publishes.``
+  {:params [:symbol :any] :ret {:name :any :topic :keyword :schema :any :doc :any}}
   [name & more]
   (defevent-form name more))
 
@@ -307,6 +354,14 @@
 
   Every `defhandler` option except `:topic` and `:schema` may be
   given as well — `:group`, `:middleware`, `:timeout`.``
+  {:params [:symbol :any]
+   :ret {:name :any :topic :keyword
+         :opts {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+                :retry :any :schema :any :timeout :number? :name :any}
+         :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}}
   [name & more]
   (defevent-handler-form name more))
 
@@ -326,5 +381,10 @@
   The function stays an ordinary function: calling it directly skips
   the schema check, which is what a unit test of the body usually
   wants.``
+  {:params [:symbol :any]
+   :ret {:name :any :schema :any :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}}
   [name & more]
   (defcommand-form name more))

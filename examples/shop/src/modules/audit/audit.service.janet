@@ -17,7 +17,13 @@
 
 (def log-ns "shop.audit")
 
-(defn- on-decision [decision]
+(defn- on-decision
+  {:params [{:allow :boolean :policy :keyword :subject (or :string :nil)
+             :reason (or :string :nil) & r}]
+   :ret :nil}
+  "Publish a refused decision onto the bus; an allow is not published
+  (see the module docstring)."
+  [decision]
   (unless (decision :allow)
     (def [ok err]
       (protect
@@ -32,12 +38,16 @@
                 :err (if (string? err) err (describe err))))))
 
 (defn install!
+  {:params [:any] :ret :function}
   "Subscribe to void/authz's decision hook. Called from the plugin's
   :after-start (src/app.janet)."
   [boot]
   (authz/listen! :shop/audit on-decision))
 
 (defn trail
+  {:params [(or {:limit :number? :correlation-id :string? :match :string? & r} :nil)]
+   :ret @[@{:any :any}]
+   :throws [:string]}
   "The trail, newest first."
   [&opt opts]
   (repo/trail opts))

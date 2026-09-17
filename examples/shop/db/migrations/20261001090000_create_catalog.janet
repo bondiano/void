@@ -8,7 +8,11 @@
 # projected `defentity` would rewrite its own history every time a field
 # changed (generation from the entity registry is a v2 story).
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create the customers and products tables, and the index the
+  storefront's status filter reads by."
+  []
   [{:create-table "customers"
     :columns [[:id :serial {:primary-key true}]
               [:name :text {:null false}]
@@ -37,6 +41,9 @@
 
    {:create-index "products_status_idx" :on "products" :columns [:status]}])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop the products and customers tables."
+  []
   [{:drop-table "products"}
    {:drop-table "customers"}])

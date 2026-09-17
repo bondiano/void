@@ -38,7 +38,13 @@
 
 (def cfg csrf/defaults)
 
-(defn- req [method &opt cookies identity]
+(defn- req
+  {:params [:keyword :string? (or {:subject :string? :cookie :boolean? & r} :nil)]
+   :ret @{:method :keyword :headers @{:string :string}
+          :void.auth/identity (or {:subject :string? :cookie :boolean? & r} :nil)}}
+  "A fake request with just enough shape for `csrf/applies?`: a
+  method, an optional cookie header, and an optional identity."
+  [method &opt cookies identity]
   @{:method method
     :headers (if cookies @{"cookie" cookies} @{})
     :void.auth/identity identity})

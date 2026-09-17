@@ -30,11 +30,17 @@
    "cart_items" "carts" "products" "customers"
    "auth_challenges" "auth_tokens" "schema_migrations"])
 
-(defn- drop-tables! []
+(defn- drop-tables!
+  {:params [] :ret :nil}
+  "Drop every table this suite owns, if it exists."
+  []
   (each t app-tables
     (db/execute-sql (string "DROP TABLE IF EXISTS " t) [] {:kind :write :prepared false})))
 
-(defn- body [resp] (json/decode (resp :body) true))
+(defn- body
+  {:params [{:body :any & r}] :ret :any}
+  "Decode a response's JSON body, with keyword keys."
+  [resp] (json/decode (resp :body) true))
 
 (def opts
   {:plugins (main/plugins :sqlite)
@@ -115,7 +121,11 @@
   # request never reaches a handler — which is only sound because the
   # answer is the same for everybody (the storefront's HTML is not, and
   # caches its query instead)
-  (defn- price-of [payload sku]
+  (defn- price-of
+    {:params [:any :string] :ret :any}
+    "The price in cents of the item named `sku` in a decoded listing
+    payload."
+    [payload sku]
     (get-in (find |(= sku ($ :sku)) (payload :data)) [:price :cents]))
 
   # The cache sits inside authz (phase 5500), and void/security
@@ -145,7 +155,10 @@
 
   (def minted (auth/issue-token (auth/token-store) (string "customer:" (ada :id))
                                 {:name "api-test"}))
-  (defn as-ada [uri]
+  (defn as-ada
+    {:params [:string] :ret @{:raw :string & r}}
+    "Inject a request at `uri` bearing Ada's minted API token."
+    [uri]
     (test/inject c {:uri uri
                     :headers {"authorization" (string "Bearer " (minted :token))}}))
 

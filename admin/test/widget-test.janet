@@ -58,7 +58,11 @@
 
 # -- resolution order ----------------------------------------------------
 
-(defn- why [desc fname contribs]
+(defn- why
+  {:params [:any :keyword [:any]] :ret [:keyword :keyword]}
+  "Resolve `desc`'s widgets against `contribs` and hand back
+  [widget-name reason] for the field named `fname`."
+  [desc fname contribs]
   (def entries (widget/resolve-all desc contribs))
   (def e (get entries fname))
   [(get-in e [:widget :name]) (e :why)])
@@ -100,7 +104,10 @@
 
 # -- the contract itself -------------------------------------------------
 
-(defn- fails [f]
+(defn- fails
+  {:params [(fn [] :any)] :ret :string}
+  "Call `f`, assert it raises, and hand back its error rendered as a string."
+  [f]
   (def [ok err] (protect (f)))
   (assert (not ok) "expected a refusal")
   (string err))

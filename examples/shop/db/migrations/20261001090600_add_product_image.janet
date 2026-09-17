@@ -8,7 +8,10 @@
 # no images is still a shop: the widget draws an em dash and the
 # storefront falls back to the placeholder.
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Add the nullable image column products carry their storage key in."
+  []
   [{:alter-table "products"
     :add-column [:image :text]}])
 
@@ -16,6 +19,9 @@
 # a single statement, because every engine takes exactly one action per
 # ALTER TABLE.
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop the image column."
+  []
   [{:alter-table "products"
     :drop-column :image}])

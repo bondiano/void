@@ -156,7 +156,11 @@
 
         (redis/del "memo")
         (var calls 0)
-        (defn compute [] (++ calls) {:answer 42})
+        (defn compute
+          {:params [] :ret {:answer :number}}
+          "Count a call and answer a fixed value — the thunk `remember`
+          caches."
+          [] (++ calls) {:answer 42})
         (assert (= 42 ((redis/remember "memo" 30 compute) :answer)))
         (assert (= 42 ((redis/remember "memo" 30 compute) :answer)))
         (assert (= 1 calls) "the second read is the cache")

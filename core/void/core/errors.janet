@@ -48,6 +48,9 @@
 (def- kinds @{})
 
 (defn define!
+  {:params [:keyword (or {:status :number? :doc :string? & r} :nil)]
+   :ret :keyword
+   :throws [:string]}
   ``Declare a kind: its default `:status` (nil for one that has no HTTP
   meaning) and a `:doc` sentence. Re-defining replaces (REPL-friendly).
   Returns the kind.
@@ -65,11 +68,13 @@
   kind)
 
 (defn defined
+  {:params [] :ret @[[:keyword {:status :number? :doc :string?}]]}
   "Every declared kind, sorted, as [kind {:status :doc}] pairs."
   []
   (seq [k :in (sorted (keys kinds))] [k (kinds k)]))
 
 (defn default-status
+  {:params [:keyword] :ret :number?}
   "The declared default status of a kind, or nil."
   [kind]
   (get-in kinds [kind :status]))
@@ -77,11 +82,15 @@
 # -- the envelope --------------------------------------------------------
 
 (defn error?
+  {:params [:any] :ret :boolean :narrows :any}
   "Is this value an envelope — a dictionary carrying `:void/error`?"
   [x]
   (and (dictionary? x) (keyword? (get x key))))
 
 (defn make
+  {:params [:keyword (or :string :nil) (or {:any :any} :nil) (or :number :nil)]
+   :ret {:void/error :keyword :message :string? :data {:any :any} & r}
+   :throws [:string]}
   ``The envelope for a kind. `message` is a string (or nil — the
   kind's name stands in), `data` a dictionary or nil, `status` an
   HTTP status overriding the kind's default. Frozen, so it can be
@@ -104,17 +113,22 @@
   (freeze out))
 
 (defn raise
+  {:params [:keyword (or :string :nil) (or {:any :any} :nil) (or :number :nil)]
+   :ret :never
+   :throws [(or :string {:void/error :keyword :message :string? :data {:any :any} & r})]}
   "Raise an envelope: `(errors/raise :void.db/timeout \"statement cancelled\")`.
   The arguments are `make`'s."
   [kind &opt message data status]
   (error (make kind message data status)))
 
 (defn deadline?
+  {:params [:any] :ret :boolean :narrows :any}
   "Is this caught value the cancellation of an `ev/deadline` task?"
   [x]
   (= deadline-message x))
 
 (defn of
+  {:params [:any] :ret {:void/error :keyword :message :string? :data {:any :any} & r}}
   ``The envelope of whatever a `try` caught:
 
     * an envelope — itself;
@@ -146,11 +160,13 @@
 # -- reading -------------------------------------------------------------
 
 (defn kind
+  {:params [:any] :ret :keyword}
   "The kind of an envelope (of any caught value, through `of`)."
   [e]
   (get (of e) key))
 
 (defn status
+  {:params [:any] :ret :number}
   "The HTTP status an error means: the envelope's, a legacy
   `:http/status`, else 500."
   [e]
@@ -158,11 +174,13 @@
   (or (get env :status) (get env :http/status) 500))
 
 (defn data
+  {:params [:any] :ret {:any :any}}
   "The `:data` of an error, `{}` when it carries none."
   [e]
   (get (of e) :data {}))
 
 (defn message
+  {:params [:any] :ret :string}
   ``The sentence for a human. `(dyn :void.errors/messages)` — a
   dictionary kind -> string or (fn [envelope] string) — wins, the way
   `:void.schema/messages` does for validation; then the envelope's own
@@ -179,12 +197,14 @@
     (string k)))
 
 (defn str
+  {:params [:any] :ret :string}
   "One line for a log: \"kind: message\"."
   [e]
   (def env (of e))
   (string (get env key) ": " (message env)))
 
 (defn kind?
+  {:params [:any (or :keyword @[:keyword] [:keyword])] :ret :boolean :narrows :any}
   "Is `e` an error of this kind (or of any of these kinds)?"
   [e kind-or-kinds]
   (def k (kind e))

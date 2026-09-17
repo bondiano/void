@@ -59,6 +59,7 @@
   :headers)
 
 (defn fields
+  {:params [{:type :keyword :data :string & r}] :ret (or @{:any :any} :nil)}
   ``The form fields out of an htmx `hx-ws:send` message: the decoded
   JSON object without htmx's own `headers` entry. Returns nil when the
   message is not one — a socket is open to whoever holds it, and a
@@ -72,6 +73,7 @@
       out)))
 
 (defn headers
+  {:params [{:type :keyword :data :string & r}] :ret :any}
   ``The `headers` object htmx sends alongside the fields (HX-Request,
   HX-Request-Type, HX-Source, HX-Target and friends), or nil.``
   [message]
@@ -79,7 +81,11 @@
     (when (dictionary? value)
       (get value header-field))))
 
-(defn- oob-marked [node swap]
+(defn- oob-marked
+  {:params [:any (or :string :keyword :nil)] :ret :any :throws [:string]}
+  "Mark hiccup (or a list of it) for an out-of-band swap by id, unless
+  it already carries its own mark."
+  [node swap]
   (cond
     (or (string? node) (buffer? node)) node
     (and (tuple? node) (keyword? (first node)))
@@ -98,12 +104,17 @@
     (indexed? node) (map |(oob-marked $ swap) node)
     (errorf "a websocket fragment is hiccup or ready HTML, got %q" node)))
 
-(defn- rendered [content]
+(defn- rendered
+  {:params [:any] :ret :string}
+  "Hiccup rendered to HTML, or a string/buffer passed through."
+  [content]
   (if (or (string? content) (buffer? content))
     (string content)
     (string (hiccup/render content))))
 
 (defn- control-message
+  {:params [:any {:target :any :swap (or :string :keyword :nil) :select :any & r}]
+   :ret :string}
   "htmx 4's JSON message: the HTML plus where it goes."
   [content spec]
   (def out @{"content" (rendered content)
@@ -113,6 +124,9 @@
   (json/encode out))
 
 (defn fragment
+  {:params [:any (or :string :keyword {:target :any & r} :nil)]
+   :ret :string
+   :throws [:string]}
   ``One htmx-swappable payload, in whichever of the two forms the swap
   argument asks for.
 
@@ -140,11 +154,20 @@
     (rendered (oob-marked content swap))))
 
 (defn send!
+  {:params [{:outbox :any :state :keyword :dropped :number :config @{:keyword :any}
+             :id :number :socket :any :sent :number & r}
+            :any (or :string :keyword {:target :any & r} :nil)]
+   :ret :boolean
+   :throws [:string]}
   "Render a fragment and send it to one connection."
   [c content &opt swap]
   (conn/send! c (fragment content swap)))
 
 (defn broadcast!
+  {:params [:keyword :any (or :string :keyword {:target :any & r} :nil)
+            (or {:except (or {:id :number & r} :nil) :binary :boolean? & r} :nil)]
+   :ret :number
+   :throws [:string]}
   ``Render a fragment once and send it to every connection in a room —
   the rendering happens here, not per member, for the same reason the
   framing does (./rooms).``
@@ -154,6 +177,7 @@
 # -- the attributes on the page ------------------------------------------
 
 (defn connect-attrs
+  {:params [:any :any] :ret @{:string :any} :throws [:string]}
   ``The attribute that opens the socket on an element:
 
       [:div (wshtmx/connect-attrs "/live") ...]
@@ -169,6 +193,7 @@
   (merge @{"hx-ws:connect" url} (hx/attrs ;kvs)))
 
 (defn send-attrs
+  {:params [:any] :ret @{:string :any} :throws [:string]}
   ``The attribute that sends an element's form over the open socket:
 
       [:form (merge (wshtmx/send-attrs) {:id "say"}) ...]

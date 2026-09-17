@@ -82,7 +82,10 @@
 
 (proto/defmessage :cli/Thing {:a [1 :string]})
 
-(defn- captured [f]
+(defn- captured
+  {:params [(fn [] :any)] :ret :string}
+  "Whatever `f` prints, as a string."
+  [f]
   (def out @"")
   (with-dyns [:out out] (f))
   (string out))

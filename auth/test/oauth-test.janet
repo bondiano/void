@@ -37,7 +37,12 @@
 (def calls @{:metadata 0 :jwks 0 :introspect 0})
 (var introspection-answer nil)
 
-(defn- as-handler [req]
+(defn- as-handler
+  {:params [{:path :any :body :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The fake authorization server: metadata, JWKS and introspection, on
+  a real socket so the suite exercises actual HTTP calls."
+  [req]
   (case (req :path)
     "/.well-known/oauth-authorization-server"
     (do (put calls :metadata (inc (calls :metadata)))
@@ -90,7 +95,11 @@
 (def rsa-key (sign/private-key keys/rsa-private))
 (def ec-key (sign/private-key keys/ec-private))
 
-(defn- token-for [&opt claims opts]
+(defn- token-for
+  {:params [(or {:keyword :any} :nil) (or {:keyword :any} :nil)] :ret :string :throws [:string]}
+  "A JWS signed with a real test key, claims and signing options
+  overridable per call — what a real issuer would have minted."
+  [&opt claims opts]
   (default claims {})
   (default opts {})
   (jwt/encode-token (merge {:scope "mcp:tools"} claims)
@@ -103,11 +112,20 @@
 
 # -- the composition -----------------------------------------------------
 
-(defn- oauth-config [extra]
+(defn- oauth-config
+  {:params [{:keyword :any}] :ret @{:keyword :any}}
+  "The [:auth-oauth] slice for this fake issuer, with `extra` merged
+  in to override a setting for one test."
+  [extra]
   (merge {:issuer issuer :audience resource :timeout 2 :refresh-cooldown 0}
          extra))
 
-(defn- options [&opt oauth-extra routes]
+(defn- options
+  {:params [(or {:keyword :any} :nil) :any]
+   :ret {:plugins @[:any] :config {:env @{:any :any} :cli {:keyword :any}}}}
+  "The composition options for this suite: the plugins under test
+  plus whatever route source a test wants composed alongside them."
+  [&opt oauth-extra routes]
   {:plugins (filter identity
               [:void/http :void/crypto :void/auth :void/auth-http :void/auth-oauth routes])
    :config {:env @{}
@@ -172,7 +190,11 @@
 
 # -- from a token to an identity -----------------------------------------
 
-(defn- authenticate [tok]
+(defn- authenticate
+  {:params [:string] :ret (or {:subject :string & r} :nil) :throws [:string]}
+  "Run the :oauth strategy's :authenticate over a bearer request
+  carrying `tok`."
+  [tok]
   ((oauth/strategy :authenticate) @{:headers @{"authorization" (string "Bearer " tok)}}))
 
 (def person (authenticate (token-for)))
@@ -276,8 +298,14 @@
 
 # -- scopes, challenges and the metadata document ------------------------
 
-(defn tools [req] (ring/text 200 "tools"))
-(defn open-page [req] (ring/text 200 "open"))
+(defn tools
+  {:params [{:keyword :any}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A protected route this suite checks the scope enforcement against."
+  [req] (ring/text 200 "tools"))
+(defn open-page
+  {:params [{:keyword :any}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A public route beside the protected one."
+  [req] (ring/text 200 "open"))
 
 (def app
   (plugin/manifest 'oauth/app

@@ -35,7 +35,11 @@
 (assert (= 50 (length ((proto/decode :bench/Order payload) :lines)))
         "the payload the benchmark measures is one that round-trips")
 
-(defn- rate [what n f]
+(defn- rate
+  {:params [:string :number (fn [] :any)] :ret :number}
+  "Run `f` `n` times, print its throughput as `what` and return the
+  measured rate in ops/s."
+  [what n f]
   (def start (os/clock))
   (loop [_ :range [0 n]] (f))
   (def elapsed (max 1e-9 (- (os/clock) start)))

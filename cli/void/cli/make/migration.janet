@@ -51,6 +51,9 @@
   "templates/migration")
 
 (defn migration-spec
+  {:params [:string (or {:migrations-dir :string? :version :string? & r} :nil)]
+   :ret {:slug :string :migrations-dir :string :version :string}
+   :throws [:string]}
   ``The value the template is a function of: a slug and a version.
   `name` is snake_cased the way every migration file in the tree is
   named, and it may arrive as several words — `void make migration add
@@ -75,6 +78,11 @@
            "--dry-run" {:key :dry-run :type :bool :doc "print instead of writing"}}})
 
 (defn create
+  {:params [{:migrations-dir :string? :version :string? :dry-run :boolean?
+             :force :boolean? & r}
+            :string]
+   :ret [:string]
+   :throws [:string]}
   ``The body of `void make migration NAME`. Returns the path written.
   Several words are one name, because `void make migration add users
   index` is what a reader types before they have thought about the

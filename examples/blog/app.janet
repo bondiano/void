@@ -65,6 +65,7 @@
 # -- who is asking -------------------------------------------------------
 
 (defn current-author-id
+  {:params [] :ret :number?}
   ``The id of the signed-in author, or nil. The subject is
   `"author:42"` — `[:auth-db :users :subject-kind]` is the `author`
   half — so this is the one place the application unpacks it.``
@@ -73,12 +74,14 @@
     (scan-number (last (auth/subject-of (id :subject))))))
 
 (defn subject-string
+  {:params [] :ret :string?}
   "The signed-in subject as it goes into the audit trail (`author:42`),
   or nil for a visitor."
   []
   (when-let [id (auth/current-user)] (id :subject)))
 
 (defn article-resource
+  {:params [{:void.db/row :any & r}] :ret :any}
   ``What the policy on the edit routes decides about: the row itself.
   Route metadata carries a function rather than a symbol, because a
   route entry does not keep the environment of the module that
@@ -108,6 +111,7 @@
 # -- reads ---------------------------------------------------------------
 
 (defn recent-articles
+  {:params [] :ret @[@{:any :any}] :throws [:string]}
   ``The article list, through the cache. The read underneath is one
   query plus one batched IN for the authors — `:preload` is explicit
   because the alternative is an N+1 nobody notices until production
@@ -120,17 +124,28 @@
                            :limit 50
                            :preload [:author]}))))
 
-(defn- invalidate-index! []
+(defn- invalidate-index!
+  {:params [] :ret :number}
+  "Drop the cached article list after a write that would stale it."
+  []
   (cache/forget blog-jobs/index-cache-key))
 
 # -- handlers ------------------------------------------------------------
 
 (defn home
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET / — the list, and either the publish form or the way to sign in."
   [req]
   (views/render-index (recent-articles) {}))
 
 (defn create-article
+  {:params [{:form :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /articles — the author is whoever is signed in.
 
   In wave 2 this handler took a name and an email off the form and
@@ -160,6 +175,11 @@
 # -- signing in ----------------------------------------------------------
 
 (defn register
+  {:params [{:form :any & r}]
+   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r}
+            @{:status :number :body :any :headers @{:string :any}})
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /register — an author with a password.
 
   `auth/hash-password` produces a PHC string: the algorithm and its
@@ -187,6 +207,11 @@
                                                        :register-errors errors}))}))
 
 (defn sign-in
+  {:params [{:form :any & r}]
+   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r}
+            @{:status :number :body :any :headers @{:string :any}})
+   :throws [:string]}
   ``POST /sign-in — the password path, and nothing else.
 
   Whatever went wrong, the page says the same thing: `check-password`
@@ -194,7 +219,14 @@
   the same time on both (it hashes even when there is no user), and
   telling the visitor which it was would hand that distinction back.``
   [req]
-  (defn refused [values]
+  (defn refused
+    {:params [:any]
+     :ret @{:status :number :headers @{:string :string} :void.html/content :any
+            :void.html/layout :any :void.html/context {:any :any} & r}
+     :throws [:string]}
+    "Re-render the sign-in form with the same refusal message,
+    whatever went wrong."
+    [values]
     (views/render-index (recent-articles)
                         {:sign-in values
                          :message "Those credentials do not match an account."}))
@@ -208,6 +240,10 @@
      :invalid (fn [values _] (refused values))}))
 
 (defn request-link
+  {:params [{:form :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``POST /sign-in/magic — mail a one-time sign-in link.
 
   The application issues the challenge and says nothing else about
@@ -238,6 +274,11 @@
                                      :message "That does not look like an email address."}))}))
 
 (defn magic-link
+  {:params [{:query (or {:string :any} :nil) & r}]
+   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r}
+            @{:status :number :body :any :headers @{:string :any}})
+   :throws [:string]}
   ``GET /auth/magic?h=&c= — the link from the letter.
 
   `redeem!` takes the challenge out of the store before it checks the
@@ -254,12 +295,17 @@
                         {:message "That sign-in link has expired or has already been used."})))
 
 (defn sign-out
+  {:params [{:session :any & r}] :ret @{:status :number :body :any :headers @{:string :any}}}
   "POST /sign-out — drop the identity and rotate the session id."
   [req]
   (auth-http/logout! req)
   (ring/redirect "/"))
 
 (defn show-article
+  {:params [{:void.db/row :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``GET /articles/:id — the article, its author and its comments. The
   route's `:void.db/load` is the whole of read-the-row-or-404: the id
   is coerced through the entity's key schema, a malformed one never
@@ -269,11 +315,20 @@
   (html/page (views/article-view (req :void.db/row)) {:layout views/layout}))
 
 (defn edit-article
+  {:params [{:void.db/row :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET /articles/:id/edit — the form over the columns save! may touch."
   [req]
   (html/page (views/edit-view (req :void.db/row)) {:layout views/layout}))
 
 (defn update-article
+  {:params [{:void.db/row :any :form :any & r}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r})
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /articles/:id — dirty tracking: the instance is changed in
   place and `save!` writes a partial UPDATE of exactly the columns
   that differ from the snapshot it was loaded with, or no statement at
@@ -300,6 +355,9 @@
                            {:layout views/layout}))}))
 
 (defn delete-article
+  {:params [{:void.db/row :any & r}]
+   :ret @{:headers @{:string :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "DELETE /articles/:id — the comments go with it (ON DELETE CASCADE)."
   [req]
   (def article (req :void.db/row))
@@ -311,6 +369,10 @@
   (htmx/redirect-back req "/"))
 
 (defn create-comment
+  {:params [{:void.db/row :any :form :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /articles/:id/comments — the write is synchronous, the
   bookkeeping is not: the counter on `articles` is recomputed by
   :recount-comments on the maintenance queue, which also drops the

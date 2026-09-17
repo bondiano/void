@@ -25,6 +25,7 @@
 (var fail-times 0)
 
 (defn- read-body
+  {:params [@{:headers @{:any :any} :body (or :string :nil) & r}] :ret :any}
   "JSON decoded, protobuf kept as the bytes it is — the decode is the
   assertion's job."
   [req]
@@ -32,7 +33,13 @@
     (req :body)
     (json/decode (req :body))))
 
-(defn- collector [req]
+(defn- collector
+  {:params [@{:path :string :headers @{:any :any} :body (or :string :nil) & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The test collector: records every export it receives and refuses
+  on demand (`fail-times`), so the exporter's retry and rejection
+  paths have something real to hit."
+  [req]
   (case (req :path)
     "/v1/traces"
     (do
@@ -58,7 +65,13 @@
 (def inst (server/start {:handler collector :port "0" :idle-timeout 2}))
 (def endpoint (string "http://127.0.0.1:" (inst :port)))
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}]
+   :ret @{:endpoint :string :timeout :number :retries :number
+          :traces {:interval :number} :metrics {:enabled :boolean} & r}}
+  "The [:obs-otlp] config for this test's collector, `extra` merged
+  over it."
+  [extra]
   (merge {:endpoint endpoint
           :timeout 2
           :retries 1
@@ -66,10 +79,16 @@
           :metrics {:enabled false}}
          extra))
 
-(defn- traces-of []
+(defn- traces-of
+  {:params [] :ret @[{:signal :keyword :content-type :any :body :any}]}
+  "The received entries that were trace exports."
+  []
   (filter |(= :traces ($ :signal)) received))
 
-(defn- spans-in [entry]
+(defn- spans-in
+  {:params [{:body {:string :any} & r}] :ret (or @[{:string :any}] [{:string :any}])}
+  "The OTLP span objects inside one received traces entry."
+  [entry]
   (get-in entry [:body "resourceSpans" 0 "scopeSpans" 0 "spans"] []))
 
 # -- a span goes out -----------------------------------------------------
@@ -295,7 +314,11 @@
 
 (def plugins ["void/obs/init" "void/obs/otlp"])
 
-(defn- boot-config [extra]
+(defn- boot-config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli @{:log {:level :keyword} & r}}}
+  "A boot :config with `extra` merged into :cli, for the dry-run and
+  start! checks below."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}} extra)})
 
 (def report (plugin/dry-run {:plugins plugins :profile :test

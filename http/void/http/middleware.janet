@@ -90,10 +90,18 @@
   "Every valid stage name."
   (freeze (merge (tabseq [k :keys stage-slots] k true) out-of-chain-stages)))
 
-(defn- response-map? [x]
+(defn- response-map?
+  {:params [:any] :ret :boolean :narrows {:status :any & r}}
+  "Is `x` a response table — a dictionary carrying a non-nil :status?
+  What a request-side hook's return value is checked against to tell
+  a short-circuiting response from a plain nil/request continuation."
+  [x]
   (and (dictionary? x) (not (nil? (x :status)))))
 
 (defn stage-wrapper
+  {:params [:keyword [(or :function :cfunction)]]
+   :ret (or {:name :keyword :phase :number :wrap :function} :nil)
+   :throws [:string]}
   ``The synthetic middleware entry for one in-chain stage of one route
   ({:name :phase :wrap}), or nil when `hooks` (tuple of callables) is
   empty — an empty stage costs nothing.``
@@ -138,6 +146,8 @@
 (def- phase-max 10000)
 
 (defn- placement-of
+  {:params [{:after :keyword? :before :keyword? & r}]
+   :ret (or [:keyword :keyword] :nil)}
   "[:after target] / [:before target] of a contribution value, or nil."
   [v]
   (cond
@@ -145,6 +155,9 @@
     (v :before) [:before (v :before)]))
 
 (defn check-placement
+  {:params [[{:name :keyword :phase :number? :before :keyword? :after :keyword? & r}]]
+   :ret :nil
+   :throws [:string]}
   ``The point's cross-check: every contribution places itself exactly
   one way — a numeric :phase, or one of :before/:after. Runs at boot
   over every value (dry-run included), so a contribution that says
@@ -161,6 +174,9 @@
                 (string/join (map |(string/format "%q" $) ways) " and "))))))
 
 (defn resolve-phases
+  {:params [[{:plugin :keyword :value {:name :keyword :phase :number? :before :keyword? :after :keyword? & r} & r}]]
+   :ret @[{:plugin :keyword :value {:name :keyword :phase :number :before :keyword? :after :keyword? & r} & r}]
+   :throws [:string]}
   ``Contributions ({:plugin :value}) with every :before/:after turned
   into a numeric :phase — the named middleware's phase ∓ 1, clamped to
   the scale. Once per table build. Errors: a target no active plugin
@@ -201,6 +217,8 @@
       c)))
 
 (defn sort-contributions
+  {:params [[{:plugin :keyword :value {:name :keyword :phase :number? & r} & r}]]
+   :ret @[{:plugin :keyword :value {:name :keyword :phase :number? & r} & r}]}
   ``Deterministic chain order for middleware contributions of the shape
   {:plugin <keyword> :value {:name :phase :wrap ...}}: ascending phase,
   ties broken by plugin name, then middleware name. The one sort the
@@ -213,6 +231,9 @@
     contribs))
 
 (defn describe
+  {:params [{:value {:name :keyword :phase :number :before :keyword? :after :keyword? & r}
+             :plugin :keyword :stage :boolean? & r}]
+   :ret {:name :keyword :phase :number :plugin :keyword & r}}
   ``One chain step as data, for explain-route and `void routes --chain`:
   {:name :phase :plugin :stage? :after?/:before?} — :stage true marks a
   synthetic stage wrapper, :after/:before carry the name a relative
@@ -225,6 +246,13 @@
            (if-let [[side target] (placement-of v)] {side target} {}))))
 
 (defn select
+  {:params [[{:plugin :keyword
+              :value {:name :keyword :phase :number? :named :boolean? :when (or :function :cfunction :nil) & r}
+              & r}]
+            {:keyword :any}]
+   :ret {:selected [{:plugin :keyword :value {:name :keyword :phase :number? & r} & r}]
+         :declined [{:name :keyword :phase :number :plugin :keyword :reason :keyword & r}]}
+   :throws [:string]}
   ``The middleware that apply to one route: global (un-:named)
   contributions whose :when predicate (if any) accepts the route's
   merged metadata, plus the :named ones the route lists under
@@ -263,6 +291,8 @@
    :when ":when declined the route's metadata"})
 
 (defn shared-phase-warnings
+  {:params [[{:plugin :keyword :value {:phase :number? & r} :stage :boolean? & r}]]
+   :ret @[:string]}
   ``One warning per phase that two or more *different* plugins occupy
   among `selected` contributions: their order is by plugin name, which
   nobody decided. A stage wrapper is not a contribution and does not
@@ -282,6 +312,10 @@
                                 ", "))))
 
 (defn chain
+  {:params [[{:wrap (or :function :cfunction) :route-aware :boolean? & r}]
+            (or :function :cfunction)
+            (or {:keyword :any} :nil)]
+   :ret (or :function :cfunction)}
   ``Compose selected middleware values around a handler: the lowest
   phase ends up outermost. A value marked :route-aware gets the route's
   merged metadata as the second argument of its :wrap — at build time,

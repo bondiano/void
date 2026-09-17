@@ -93,7 +93,11 @@
                   :security {:signing-key "0123456789abcdef0123456789abcdef"}
                   :admin {:access :staff}}}})
 
-(defn- seed! []
+(defn- seed!
+  {:params [] :ret {:rows @[{:keyword :any}] :count :number}}
+  "Recreate the two tables fresh and load the fixture rows the suite
+  runs its assertions against."
+  []
   (db/execute-sql "DROP TABLE IF EXISTS tags" [] {:kind :write :prepared false})
   (db/execute-sql "DROP TABLE IF EXISTS notes" [] {:kind :write :prepared false})
   (db/execute-sql
@@ -114,9 +118,13 @@
 
 # -- helpers -------------------------------------------------------------
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [{:body :any & r}] :ret :string}
+  "The response body as a string, the shape every assertion below reads."
+  [resp] (test/text resp))
 
 (defn- done?
+  {:params [:number] :ret :boolean}
   ``Is the row marked done? sqlite hands a boolean column back as 0 or
   1, and 0 is truthy in Janet — an assertion written as `(row :done)`
   would pass whatever the value was.``
@@ -124,10 +132,17 @@
   (def v (get (db/find Note id) :done))
   (or (true? v) (= 1 v)))
 
-(defn- csrf-of [resp]
+(defn- csrf-of
+  {:params [{:body :any & r}] :ret :string?}
+  "Pull the CSRF token out of a rendered form's hidden field, or nil
+  when the page carried none."
+  [resp]
   (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
-(defn- location [resp] (get-in resp [:headers "location"]))
+(defn- location
+  {:params [{:headers :any & r}] :ret :any}
+  "The Location header of a redirect response."
+  [resp] (get-in resp [:headers "location"]))
 
 (def kernel-only
   ``Everything the requests need and nothing that opens a port: the
@@ -135,16 +150,27 @@
   the gate is in.``
   [:http/kernel :db/pool :authz/registry :crypto/lib])
 
-(defn- run-suite [label hx]
+(defn- run-suite
+  {:params [:string :boolean] :ret :nil}
+  "Run the whole CRUD suite once, either plain or with the HX-*
+  headers set on every request — `hx` picks which."
+  [label hx]
   (def note (fn [msg] (print "  [" label "] " msg)))
   (def boot (test/start! (merge opts {:only kernel-only})))
   (defer (test/stop! boot)
     (seed!)
     (def c (test/client boot))
-    (defn get* [uri &opt spec]
+    (defn get*
+      {:params [:string (or {:any :any} :nil)] :ret @{:raw :string & r}}
+      "A GET through the client, htmx headers included when `hx` says so."
+      [uri &opt spec]
       (test/inject c (merge {:uri uri :headers (if hx {"hx-request" "true" "hx-request-type" "partial"} {})}
                             (or spec {}))))
-    (defn post [uri token spec]
+    (defn post
+      {:params [:string :string? {:any :any}] :ret @{:raw :string & r}}
+      "A POST through the client, carrying the CSRF token as the
+      x-csrf-token header spec expects."
+      [uri token spec]
       (test/inject c (merge {:method :post :uri uri
                              :headers (merge {"x-csrf-token" token}
                                              (if hx {"hx-request" "true" "hx-request-type" "partial"} {})

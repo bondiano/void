@@ -34,7 +34,11 @@
   component, so it is a var rather than a `system/ambient`."
   nil)
 
-(defn- context []
+(defn- context
+  {:params [] :ret @{:config :any :enabled :boolean :info :any} :throws [:string]}
+  "The running openapi context, or an error when :before-start has not
+  built it yet."
+  []
   (or current-context
       (error "void/openapi is not booted — plugin/start! builds the openapi context at :before-start")))
 
@@ -63,6 +67,7 @@
 # -- route table -> document ---------------------------------------------
 
 (defn- openapi-path
+  {:params [:string] :ret :string}
   "/orders/:id/files/*rest -> /orders/{id}/files/{rest}"
   [pattern]
   (string/join
@@ -74,6 +79,8 @@
     "/"))
 
 (defn- map-entries
+  {:params [:any]
+   :ret (or [[:keyword {:type :keyword :props {:any :any} :children [:any]}]] :nil)}
   "The [key node] entries of a schema form that is (or resolves
   through refs/optional to) a map schema; nil otherwise."
   [form]
@@ -86,7 +93,14 @@
              (map-entries target))
       nil)))
 
-(defn- parameters [rmeta path-params refs]
+(defn- parameters
+  {:params [{:void.schema/params :any :void.schema/query :any :void.schema/headers :any & r}
+            [:keyword] @{:keyword :boolean}]
+   :ret @[@{:string :any}]}
+  "The OpenAPI parameter objects for a route: path params (always
+  required, typed by :void.schema/params when given) followed by query
+  and header params read off the map-schema entries, in that order."
+  [rmeta path-params refs]
   (def out @[])
   # path params: always required; typed by :void.schema/params when given
   (def by-param
@@ -114,16 +128,32 @@
                                refs)})))
   out)
 
-(defn- request-body [rmeta refs]
+(defn- request-body
+  {:params [{:void.schema/body :any & r} @{:keyword :boolean}]
+   :ret (or @{:string :any} :nil)}
+  "The OpenAPI requestBody object for a route's :void.schema/body, or
+  nil when the route declares none."
+  [rmeta refs]
   (when-let [form (rmeta :void.schema/body)]
     @{"required" true
       "content" @{"application/json"
                   @{"schema" (jsonschema/convert form refs)}}}))
 
-(defn- no-content-status? [status node]
+(defn- no-content-status?
+  {:params [:number {:type :keyword :props {:any :any} :children [:any]}]
+   :ret :boolean}
+  "True for a status/response-node pair the document must describe
+  without a body: 204, 304, or a declared :nil schema."
+  [status node]
   (or (= 204 status) (= 304 status) (= :nil (node :type))))
 
-(defn- responses [rmeta refs]
+(defn- responses
+  {:params [{:void.schema/response :any & r} @{:keyword :boolean}]
+   :ret @{:string :any}}
+  "The OpenAPI responses object for a route: one entry per declared
+  :void.schema/response status, or a bare 200 OK when none is
+  declared."
+  [rmeta refs]
   (def declared (rmeta :void.schema/response))
   (if (or (nil? declared) (empty? declared))
     @{"200" @{"description" "OK"}}
@@ -138,7 +168,13 @@
         (put out (string status) entry))
       out)))
 
-(defn- operation [entry refs]
+(defn- operation
+  {:params [{:meta {:any :any} :name :keyword :params [:keyword] & r} @{:keyword :boolean}]
+   :ret @{:string :any}}
+  "The OpenAPI operation object for one route table entry: operationId,
+  responses, and whichever of tags/summary/description/parameters/
+  requestBody its metadata declares."
+  [entry refs]
   (def rmeta (entry :meta))
   (def op
     @{"operationId" (or (rmeta :void.openapi/id)
@@ -157,6 +193,10 @@
   {:get true :post true :put true :patch true :delete true :options true})
 
 (defn spec
+  {:params [{:routes [{:meta {:any :any} :name :keyword :method :keyword
+                       :pattern :string :params [:keyword] & r}] & r}
+            (or {:info :any & r} :nil)]
+   :ret @{:string :any}}
   ``The OpenAPI 3.1 document for a route table — a pure fold over the
   entries and the schema registry, as data (json/encode it to ship):
 
@@ -189,6 +229,10 @@
   doc)
 
 (defn spec-json
+  {:params [{:routes [{:meta {:any :any} :name :keyword :method :keyword
+                       :pattern :string :params [:keyword] & r}] & r}
+            (or {:info :any & r} :nil)]
+   :ret :string}
   "spec, encoded — the /openapi.json body and the export payload."
   [table &opt opts]
   (json/encode (spec table opts)))
@@ -199,6 +243,7 @@
 (def docs-path "The path the Swagger UI is served under." "/docs")
 
 (defn serve-json
+  {:params [:any] :ret @{:status :number :body :any :headers :any}}
   "GET /openapi.json — the live document, or 404 when [:openapi
   :enabled] is off (default outside :dev)."
   [req]
@@ -219,6 +264,7 @@
     `</body></html>`))
 
 (defn serve-docs
+  {:params [:any] :ret @{:status :number :body :any :headers :any}}
   "GET /docs — Swagger UI over /openapi.json (a dev tool: the UI
   assets load from the unpkg CDN), 404 when disabled."
   [req]
@@ -237,6 +283,7 @@
 # -- export --------------------------------------------------------------
 
 (defn export
+  {:params [:string? (or {:info :any & r} :nil)] :ret :string}
   ``Write the current document to a file (the `void openapi export`
   CLI; callable from a REPL against a booted system too):
 
@@ -259,6 +306,8 @@
 # -- context build (:before-start hook) ----------------------------------
 
 (defn build-context
+  {:params [{:config {:values {:openapi :any & r} & r} :profile :keyword & r}]
+   :ret @{:config :any :enabled :boolean :info :any}}
   "Assemble the openapi context from a boot value. Normally called by
   the :before-start hook."
   [boot]

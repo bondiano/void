@@ -24,6 +24,8 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:url :string? :params (or @{:string :string} :nil) & r}}
   ``The [:db-postgres] config slice for the configured server: the
   conninfo goes in as :url when it is one and as :params otherwise,
   since the slice speaks keywords either way.``

@@ -167,7 +167,35 @@
    :log {:count true :sample 1 :min-level obslog/default-min-level}
    :instrument true})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or {:runtime (or {:enabled :boolean? :interval :number? & r} :nil)
+                 :trace (or {:enabled :boolean? :always :boolean?
+                            :sample-rate :number?
+                            :exporter (or (enum :log :none) :nil) & r}
+                           :nil)
+                 :log (or {:count :boolean? :sample :number? :min-level :keyword?
+                          :file (or {:path :string
+                                    :format (or (enum :jdn :json) :nil)
+                                    :buffer :number?}
+                                   :nil)
+                          & r}
+                         :nil)
+                 & r}
+                :nil)]
+   :ret {:enabled :boolean :max-label-sets :number
+         :runtime {:enabled :boolean :interval :number}
+         :trace {:enabled :boolean :always :boolean :sample-rate :number
+                 :exporter (or (enum :log :none) :nil)}
+         :log {:count :boolean :sample :number :min-level :keyword
+               :file (or {:path :string :format (or (enum :jdn :json) :nil)
+                         :buffer :number?}
+                        :nil)}
+         :instrument (or :boolean @[:keyword] [:keyword])
+         & r}}
+  "The [:obs] slice, `cfg0` merged over `defaults` — top-level and,
+  separately, each of :runtime, :trace and :log, so setting one
+  sub-key keeps the rest of that slice's defaults."
+  [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (each k [:runtime :trace :log]
     (put cfg k (merge (defaults k) (get (or cfg0 {}) k {}))))
@@ -191,10 +219,27 @@
    :doc "Keep the boot value: the components read the extension points and the profile out of it"
    :fn (fn capture-boot [boot] (set boot-ref boot))})
 
-(defn- resolved [name]
+(defn- resolved
+  {:params [:keyword] :ret (or @[:any] [:any])}
+  "The resolved contributions of an extension point, off the captured
+  boot value — [] before one has been captured."
+  [name]
   (get-in boot-ref [:extensions name :resolved] []))
 
-(defn- config-slice []
+(defn- config-slice
+  {:params []
+   :ret {:enabled :boolean :max-label-sets :number
+         :runtime {:enabled :boolean :interval :number}
+         :trace {:enabled :boolean :always :boolean :sample-rate :number
+                 :exporter (or (enum :log :none) :nil)}
+         :log {:count :boolean :sample :number :min-level :keyword
+               :file (or {:path :string :format (or (enum :jdn :json) :nil)
+                         :buffer :number?}
+                        :nil)}
+         :instrument (or :boolean @[:keyword] [:keyword])
+         & r}}
+  "The [:obs] slice, read fresh off the captured boot value."
+  []
   (slice (get-in boot-ref [:config :values :obs])))
 
 # -- logs ----------------------------------------------------------------
@@ -228,6 +273,7 @@
            (when count-records? (counter rec))))})
 
 (defn close-file-sink!
+  {:params [] :ret :nil}
   "Close the file sink, if one is open."
   []
   (when-let [s file-sink]
@@ -236,6 +282,7 @@
   nil)
 
 (defn reopen-file-sink!
+  {:params [] :ret :string?}
   ``Reopen the log file — what a rotation that moved the file out from
   under the process needs. There is no CLI command for it on purpose:
   `void obs ...` is a *new* process, and the file to reopen belongs to
@@ -283,7 +330,12 @@
   "The instrumentations applied to this process ({:name :teardown})."
   [])
 
-(defn- wanted-instrumentations [cfg]
+(defn- wanted-instrumentations
+  {:params [{:instrument (or :boolean @[:keyword] [:keyword] :nil) & r}]
+   :ret (or @[:keyword] [:keyword] :nil)}
+  "The instrumentation names to apply: [] for [:instrument] false, the
+  list itself when it names some, nil (meaning all) otherwise."
+  [cfg]
   (def w (get cfg :instrument true))
   (cond
     (= false w) []
@@ -317,6 +369,10 @@
 # -- the span exporter obs ships -----------------------------------------
 
 (defn log-exporter
+  {:params [@{:name :string :trace-id :string :span-id :string
+              :parent-id :string? :kind :keyword :status :keyword
+              :duration :number? :attrs @{:any :any} & r}]
+   :ret :nil}
   ``The exporter of last resort: one record per finished sampled span,
   through the logger that is already configured. It is what makes
   tracing visible in dev before a collector exists, and what makes it
@@ -333,7 +389,13 @@
             :us (math/round (* 1000000 (get span :duration 0)))
             :attrs (span :attrs)))
 
-(defn- exporters [tcfg profile]
+(defn- exporters
+  {:params [{:exporter (or (enum :log :none) :nil) & r} :keyword]
+   :ret @[{:name :keyword :fn (fn [:any] :any) & r}]}
+  "The exporter list a finished sampled span is handed to: every
+  `:void.obs/exporter` contribution, plus the built-in log exporter
+  when [:trace :exporter] resolves to :log."
+  [tcfg profile]
   (def choice (get tcfg :exporter (if (= :dev profile) :log :none)))
   (array ;(resolved :void.obs/exporter)
          ;(if (= :log choice)
@@ -443,6 +505,7 @@
 
 (def with-span* "See trace/with-span* — a span around a thunk." trace/with-span*)
 (defmacro with-span
+  {:params [:any :any :any] :ret :any}
   ``Run `body` inside a span, with its ids bound to the log context —
   see trace/with-span:
 
@@ -455,11 +518,25 @@
 (def observe-lag! "See runtime/observe! — record one lag sample." runtime/observe!)
 
 (defn render
+  {:params [] :ret :string}
   "The Prometheus text exposition of every metric in this process."
   []
   (prometheus/render (metrics/snapshot)))
 
 (defn status
+  {:params []
+   :ret @{:sampling :boolean :interval :number :samples :number
+          :uptime :number :rss :number?
+          :available {:loop-lag :boolean :rss :boolean :heap :boolean}
+          :loop-lag {:last :number? :p50 :number? :p90 :number? :p99 :number?
+                     :max :number?}
+          :metrics :number :series :number :dropped :number
+          :max-label-sets :number
+          :trace {:enabled :boolean :always :boolean :sample-rate :number
+                  :exporters @[:keyword]}
+          :log {:sample :number :min-level :keyword? :file :string?
+                :dropped :number}
+          :instrumented @[:keyword]}}
   ``What obs is seeing: the runtime sampler's distribution, the
   tracer's settings, the instrumentations that installed and the
   registry's own size. The REPL half of `/metrics` — and the thing to
@@ -494,10 +571,18 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- fmt-ms [x]
+(defn- fmt-ms
+  {:params [:any] :ret :string}
+  "A number as milliseconds to three decimals, or an em dash for
+  anything that is not one."
+  [x]
   (if (number? x) (string/format "%.3f ms" x) "—"))
 
-(defn- fmt-bytes [n]
+(defn- fmt-bytes
+  {:params [:any] :ret :string}
+  "A byte count at the largest unit (GiB/MiB/B) that keeps it
+  readable, or an em dash for anything that is not a number."
+  [n]
   (cond
     (not (number? n)) "—"
     (>= n 1073741824) (string/format "%.2f GiB" (/ n 1073741824))
@@ -505,6 +590,18 @@
     (string/format "%d B" n)))
 
 (defn print-status
+  {:params [@{:metrics :number :series :number :dropped :number
+              :max-label-sets :number
+              :loop-lag {:p50 :number? :p99 :number? :max :number? & r}
+              :sampling :boolean :interval :number :samples :number
+              :rss :number? :uptime :number
+              :trace {:enabled :boolean :sample-rate :number
+                      :always :boolean :exporters @[:keyword]}
+              :log {:sample :number :min-level :keyword? :dropped :number
+                    :file :string?}
+              :instrumented @[:keyword]
+              & r}]
+   :ret :nil}
   "Print what `status` knows — the body of `void obs status`."
   [s]
   (printf "metrics         %d (%d series, %d dropped by the cap of %q)"

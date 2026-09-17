@@ -57,6 +57,7 @@
   :request-id)
 
 (defn route-meta
+  {:params [{:keyword :any}] :ret {:keyword :any}}
   ``The matched route's metadata, or an empty table when nothing
   matched — five packages had written this same `get-in` before their
   `:when` or their wrapper could ask a question of it.``

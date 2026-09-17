@@ -75,6 +75,7 @@
 (var- max-label-sets default-max-label-sets)
 
 (defn set-max-label-sets!
+  {:params [:number] :ret :nil}
   "Set the per-metric label-set cap (config [:obs :max-label-sets])."
   [n]
   (set max-label-sets n))
@@ -83,7 +84,11 @@
   "The key of the single series of a metric with no labels."
   [])
 
-(defn- as-key [labels]
+(defn- as-key
+  {:params [:any] :ret :tuple}
+  "A label value (a tuple, a bare value, or nil for `no-labels`) as
+  the tuple key `:values` is indexed by."
+  [labels]
   (cond
     (nil? labels) no-labels
     (tuple? labels) labels
@@ -91,7 +96,13 @@
     # a bare value is the one-label sugar: (inc! m :get)
     [labels]))
 
-(defn- check-spec [name existing kind label-names]
+(defn- check-spec
+  {:params [:keyword @{:kind :keyword :labels :tuple & r} :keyword :tuple]
+   :ret @{:kind :keyword :labels :tuple & r}
+   :throws [:string]}
+  "A redeclaration matches its existing handle's kind and labels, or
+  throws — a metric's shape is fixed the first time it is declared."
+  [name existing kind label-names]
   (unless (= kind (existing :kind))
     (errorf "metric %q is already declared as a %q, not a %q"
             name (existing :kind) kind))
@@ -100,7 +111,17 @@
             name (existing :labels) label-names))
   existing)
 
-(defn- declare! [name kind opts]
+(defn- declare!
+  {:params [:keyword :keyword
+            {:labels (or @[:keyword] [:keyword]) :doc :string
+             :buckets (or @[:number] [:number]) :collect (fn [] :any) & r}]
+   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
+          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :throws [:string]}
+  "The registered handle for `name`, declaring it as `kind` with
+  `opts` if it is new, or checking `opts` against the existing
+  declaration if it is a reload."
+  [name kind opts]
   (unless (keyword? name)
     (errorf "metric name must be a keyword, got %q" name))
   (def label-names (tuple ;(get opts :labels [])))
@@ -124,6 +145,11 @@
       m)))
 
 (defn counter
+  {:params [:keyword (or {:doc :string :labels (or @[:keyword] [:keyword]) & r}
+                         :nil)]
+   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
+          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :throws [:string]}
   ``Declare a counter — a total that only goes up (requests, errors,
   jobs completed):
 
@@ -133,6 +159,12 @@
   (declare! name :counter (or opts {})))
 
 (defn gauge
+  {:params [:keyword (or {:doc :string :labels (or @[:keyword] [:keyword])
+                          :collect (fn [] :any) & r}
+                         :nil)]
+   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
+          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :throws [:string]}
   ``Declare a gauge — a number that goes both ways (in-flight requests,
   pool size, RSS). With `:collect` it is pull-based: the thunk is
   called at scrape time and returns a number or a list of
@@ -141,6 +173,12 @@
   (declare! name :gauge (or opts {})))
 
 (defn histogram
+  {:params [:keyword (or {:doc :string :labels (or @[:keyword] [:keyword])
+                          :buckets (or @[:number] [:number]) & r}
+                         :nil)]
+   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
+          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :throws [:string]}
   ``Declare a histogram — a distribution in bucket counts plus a sum
   (durations, sizes). `:buckets` are upper bounds in seconds
   (`default-buckets`).``
@@ -148,11 +186,17 @@
   (declare! name :histogram (or opts {})))
 
 (defn find-metric
+  {:params [:keyword]
+   :ret (or @{:name :keyword :kind :keyword :doc :string :labels :tuple
+              :values @{:tuple :any} :dropped :number :warned :boolean & r}
+            :nil)}
   "The handle registered under `name`, or nil."
   [name]
   (get registry name))
 
 (defn set-collector!
+  {:params [@{:collect :any & r} (or (fn [] :any) :nil)]
+   :ret @{:collect :any & r}}
   ``Attach (or, with nil, detach) a metric's pull source after
   declaration — how an instrumentation hands a metric a number it does
   not own (`:void.obs/instrument`, ./instrument): the pool exists only
@@ -165,7 +209,14 @@
 
 # -- writing -------------------------------------------------------------
 
-(defn- refuse! [m key]
+(defn- refuse!
+  {:params [@{:name :keyword :labels :tuple :dropped :number :warned :boolean & r}
+            :tuple]
+   :ret :nil}
+  "Count a label set the cap refused, and log it once per metric — a
+  message per dropped observation would be the unbounded write this
+  cap exists to prevent."
+  [m key]
   (update m :dropped inc)
   (unless (m :warned)
     (put m :warned true)
@@ -174,11 +225,23 @@
               :labels (m :labels) :example key))
   nil)
 
-(defn- room? [m key]
+(defn- room?
+  {:params [@{:name :keyword :labels :tuple :values @{:tuple :any}
+              :dropped :number :warned :boolean & r}
+            :tuple]
+   :ret :boolean?
+   :narrows :any}
+  "Is there room for one more label set on `m`, refusing (and
+  counting) it if not?"
+  [m key]
   (or (< (length (m :values)) max-label-sets)
       (refuse! m key)))
 
 (defn inc!
+  {:params [@{:name :keyword :labels :tuple :values @{:tuple :any}
+              :dropped :number :warned :boolean & r}
+            :any? :number?]
+   :ret :nil}
   ``Add to a counter (default 1):
 
       (metrics/inc! requests [route method status])
@@ -195,6 +258,10 @@
   nil)
 
 (defn set!
+  {:params [@{:name :keyword :labels :tuple :values @{:tuple :any}
+              :dropped :number :warned :boolean & r}
+            :any? :number?]
+   :ret :nil}
   "Set a gauge's value for a label set."
   [m &opt labels v]
   (def key (as-key labels))
@@ -204,6 +271,10 @@
   nil)
 
 (defn add!
+  {:params [@{:name :keyword :labels :tuple :values @{:tuple :any}
+              :dropped :number :warned :boolean & r}
+            :any? :number?]
+   :ret :nil}
   "Add to a gauge (a negative number subtracts) — the in-flight idiom."
   [m &opt labels n]
   (def key (as-key labels))
@@ -214,12 +285,21 @@
       (put (m :values) key by)))
   nil)
 
-(defn- new-series [m]
+(defn- new-series
+  {:params [@{:buckets :tuple & r}]
+   :ret @{:buckets @[:number] :sum :number :count :number}}
+  "A fresh, empty series for `m`'s bucket count — the accumulator one
+  label set of a histogram writes into."
+  [m]
   @{:buckets (array/new-filled (length (m :buckets)) 0)
     :sum 0
     :count 0})
 
 (defn observe!
+  {:params [@{:name :keyword :kind :keyword :labels :tuple :buckets :tuple
+              :values @{:tuple :any} :dropped :number :warned :boolean & r}
+            :any? :number?]
+   :ret :nil}
   ``Record one observation in a histogram — `v` in seconds:
 
       (metrics/observe! duration [route method] 0.0031)``
@@ -244,12 +324,18 @@
   nil)
 
 (defn value
+  {:params [@{:values @{:tuple :any} & r} :any?] :ret :any}
   "The current value of one series: a number (counter/gauge) or the
   histogram series table. nil when that label set has none yet."
   [m &opt labels]
   (get (m :values) (as-key labels)))
 
 (defn quantile
+  {:params [@{:kind :keyword :name :keyword :buckets :tuple
+              :values @{:tuple :any} & r}
+            :number :any?]
+   :ret :number?
+   :throws [:string]}
   ``An approximate quantile of a histogram series — the same
   computation `histogram_quantile()` does in Prometheus: find the
   bucket the rank falls into and interpolate linearly inside it.
@@ -289,7 +375,12 @@
 
 # -- reading -------------------------------------------------------------
 
-(defn- collected-series [m]
+(defn- collected-series
+  {:params [@{:name :keyword :collect (fn [] :any) & r}]
+   :ret @[{:labels :tuple :value :number}]}
+  "One metric's series as read from its pull-based `:collect` thunk,
+  logging and answering nothing if the thunk fails."
+  [m]
   (def out @[])
   (def [ok v] (protect ((m :collect))))
   (cond
@@ -310,7 +401,14 @@
       (array/push out {:labels (as-key k) :value n})))
   out)
 
-(defn- series-of [m]
+(defn- series-of
+  {:params [@{:name :keyword :kind :keyword :values @{:tuple :any}
+              :collect (or (fn [] :any) :nil) & r}]
+   :ret @[(or {:labels :tuple :value :number}
+              {:labels :tuple :buckets :tuple :sum :number :count :number})]}
+  "One metric's series as data — collected if it is pull-based,
+  otherwise read off its stored values, sorted by label key."
+  [m]
   (if (m :collect)
     (collected-series m)
     (seq [k :in (sorted (keys (m :values)))]
@@ -323,6 +421,13 @@
         {:labels k :value v}))))
 
 (defn snapshot
+  {:params []
+   :ret @[{:name :keyword :kind :keyword :doc :string :labels :tuple
+           :dropped :number
+           :series @[(or {:labels :tuple :value :number}
+                         {:labels :tuple :buckets :tuple :sum :number
+                          :count :number})]
+           & r}]}
   ``Every metric as data, sorted by name — what an exporter renders
   and what `(obs/metrics)` returns in the REPL. Pull-based gauges are
   collected here, so this is the only place a scrape costs anything.``
@@ -340,6 +445,7 @@
     (table/to-struct out)))
 
 (defn reset!
+  {:params [:keyword?] :ret :nil :throws [:string]}
   ``Drop every recorded value, keeping the declarations — what a test
   calls between cases. Without `name`, every metric.``
   [&opt name]
@@ -351,6 +457,7 @@
   nil)
 
 (defn clear-registry!
+  {:params [] :ret :nil}
   "Forget every declaration — for tests that redeclare metrics with
   different labels. Live handles keep working; they are simply no
   longer in the exposition."

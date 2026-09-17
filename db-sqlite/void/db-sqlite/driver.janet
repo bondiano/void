@@ -71,6 +71,7 @@
   nil)
 
 (defn- lib
+  {:params [] :ret :table :throws [:string]}
   "The sqlite3 module: whatever the application supplied, else required
   once and memoised."
   []
@@ -86,17 +87,35 @@
     (set module result))
   module)
 
-(defn- entry [name]
+(defn- entry
+  {:params [:symbol] :ret :any :throws [:string]}
+  "The value bound to `name` in the sqlite3 module — the C function
+  `open`/`close`/`eval`/`last-insert-rowid` wrap, or an
+  incompatible-version error when this binding lacks it."
+  [name]
   (or (get-in (lib) [name :value])
       (errorf "janet-lang/sqlite3 has no %s — an incompatible version?" name)))
 
 # Named for the calls they stand in for, so the driver below reads as
 # though the module were imported.
-(defn- sqlite3/open [path] ((entry 'open) path))
-(defn- sqlite3/close [conn] ((entry 'close) conn))
-(defn- sqlite3/eval [conn sql &opt params]
+(defn- sqlite3/open
+  {:params [:string] :ret :abstract :throws [:string]}
+  "Open a connection to the file (or \":memory:\"/\"\") at `path`."
+  [path] ((entry 'open) path))
+(defn- sqlite3/close
+  {:params [:abstract] :ret :any :throws [:string]}
+  "Close a connection opened by `sqlite3/open`."
+  [conn] ((entry 'close) conn))
+(defn- sqlite3/eval
+  {:params [:abstract :string (or @[:any] :nil)] :ret @[:table] :throws [:string]}
+  "Compile, bind and step one statement, returning its rows as tables
+  with keyword column keys."
+  [conn sql &opt params]
   (if params ((entry 'eval) conn sql params) ((entry 'eval) conn sql)))
-(defn- sqlite3/last-insert-rowid [conn] ((entry 'last-insert-rowid) conn))
+(defn- sqlite3/last-insert-rowid
+  {:params [:abstract] :ret :number :throws [:string]}
+  "The rowid the last INSERT on this connection assigned."
+  [conn] ((entry 'last-insert-rowid) conn))
 
 (def dialect
   "Builder dialect this driver speaks (registered by void/db/builder)."
@@ -112,6 +131,7 @@
 # -- paths ---------------------------------------------------------------
 
 (defn memory-path?
+  {:params [:string] :ret :boolean :narrows :any}
   ``True for the paths sqlite keeps out of a shared file: ":memory:"
   and the empty string (a private temporary database). Both are
   *per connection* — two connections to ":memory:" are two different
@@ -126,6 +146,7 @@
   (or (= ":memory:" s) (= "" s)))
 
 (defn check-path!
+  {:params [:string] :ret :string :throws [:string]}
   ``Refuse a path this binding would silently misread: a URI, which
   `sqlite3_open` takes for a filename because URI processing is a
   compile-time option it was not built with.``
@@ -138,6 +159,7 @@
   path)
 
 (defn ensure-directory!
+  {:params [:string] :ret :string}
   ``Create the parent directory of a database file, so a configured
   path does not have to be preceded by an mkdir (`void make migration`
   does the same for the migrations directory).``
@@ -160,6 +182,10 @@
   (peg/compile ~(* (some (+ (range "az" "AZ" "09") (set "_-."))) -1)))
 
 (defn pragma-sql
+  {:params [(or :string :keyword)
+            (or :boolean :number :string :buffer :keyword :symbol)]
+   :ret :string
+   :throws [:string]}
   ``One PRAGMA statement. sqlite binds no parameters inside a PRAGMA,
   so both halves are rendered — and therefore restricted to word
   characters: the config is trusted, but a typo must not be able to
@@ -188,6 +214,12 @@
 # -- connections ---------------------------------------------------------
 
 (defn open
+  {:params [:string
+            (or @[[(or :string :keyword)
+                   (or :boolean :number :string :buffer :keyword :symbol)]]
+                :nil)]
+   :ret :abstract
+   :throws [:string]}
   ``Open one connection and apply `pragmas` — [[name value] ...], in
   order — to it. A half-open handle is closed before the failure is
   reported, and both the path and the offending pragma are named.``
@@ -206,12 +238,14 @@
   conn)
 
 (defn close-connection
+  {:params [:abstract] :ret :any :throws [:string]}
   "Close a connection — what the component's :stop calls on the one it
   holds itself, past the driver's own :close."
   [conn]
   (sqlite3/close conn))
 
 (defn file-of
+  {:params [:abstract] :ret :string :throws [:string]}
   ``The file backing a connection's main database, "" when it has none
   (in memory, or a private temporary database). The honest answer to
   \"did that path really stay out of the filesystem\".``
@@ -219,11 +253,13 @@
   (get (first (sqlite3/eval conn "PRAGMA database_list")) :file ""))
 
 (defn version
+  {:params [:abstract] :ret :string :throws [:string]}
   "The sqlite library version behind a connection, as a string."
   [conn]
   (get (first (sqlite3/eval conn "SELECT sqlite_version() AS v")) :v "0"))
 
 (defn supports-returning?
+  {:params [:string] :ret :boolean :narrows :any}
   ``Whether a version string is new enough for INSERT ... RETURNING
   (sqlite 3.35, 2021-03). Without it the entity layer re-reads the
   inserted row by `last_insert_rowid`.``
@@ -249,12 +285,18 @@
 
 # -- execution -----------------------------------------------------------
 
-(defn- bindable? [v]
+(defn- bindable?
+  {:params [:any]
+   :ret :boolean
+   :narrows (or :nil :boolean :number :string :buffer :keyword :symbol)}
+  "True when sqlite's binding can carry `v` directly."
+  [v]
   # sqlite binds nil, booleans, numbers and anything byte-like
   # (strings, buffers, and keywords/symbols by their name)
   (or (nil? v) (boolean? v) (number? v) (bytes? v)))
 
 (defn- unbindable
+  {:params [(or @[:any] :nil)] :ret (or [:number :any] :nil)}
   "[index value] of the first parameter sqlite cannot bind, or nil."
   [params]
   (var found nil)
@@ -285,6 +327,12 @@
    ["unable to open database" "08001"]])
 
 (defn- driver-error
+  {:params [:any :string]
+   :ret {:db/error :keyword
+         :message :string
+         :sqlstate (or :string :nil)
+         :constraint (or :string :nil)
+         :sql :string}}
   ``The contract's error dictionary for a sqlite failure: the binding's
   text as the message, a synthesized :sqlstate, and the constraint's
   name (sqlite spells it "UNIQUE constraint failed: users.email") when
@@ -303,6 +351,7 @@
            :sql sql}))
 
 (defn- busy?
+  {:params [:any] :ret (or :number :nil) :narrows :any}
   "Is this sqlite error SQLITE_BUSY — a lock somebody else holds?"
   [e]
   (def s (util/err-str e))
@@ -310,6 +359,14 @@
       (string/find "database table is locked" s)))
 
 (defn- run
+  {:params [:abstract :string (or @[:any] :nil) :number?]
+   :ret @[:table]
+   :throws [:string
+            {:db/error :keyword
+             :message :string
+             :sqlstate (or :string :nil)
+             :constraint (or :string :nil)
+             :sql :string}]}
   ``One statement on one connection, with a *cooperative* busy wait:
   sqlite's own busy handler spins inside the C call and blocks the
   whole event loop for as long as it waits, so the connection carries
@@ -347,11 +404,38 @@
   res)
 
 (defn- changed
+  {:params [:abstract] :ret :number :throws [:string]}
   "Rows the last INSERT/UPDATE/DELETE on this connection touched."
   [conn]
   (get (first (sqlite3/eval conn "SELECT changes() AS n")) :n 0))
 
 (defn make
+  {:params [(or {:path :string?
+                 :pragmas (or @[[(or :string :keyword)
+                                 (or :boolean :number :string :buffer :keyword :symbol)]]
+                               :nil)
+                 :busy-timeout :number?
+                 :tx-mode :keyword?
+                 :returning :boolean?
+                 :shared (or :abstract :nil)
+                 & r}
+                :nil)]
+   :ret @{:name :keyword
+          :dialect :keyword
+          :path :string
+          :returning :boolean
+          :connect (fn [] :abstract)
+          :close (fn [:abstract] :any)
+          :execute (fn [:abstract :string (or @[:any] :nil) (or {:kind :keyword? & r} :nil)]
+                     {:rows @[:table] :count :number})
+          :ping (fn [:abstract] :boolean)
+          :insert-id (fn [:abstract :any] :number)
+          :begin (fn [:abstract :keyword?] @[:table])
+          :commit (fn [:abstract] @[:table])
+          :rollback (fn [:abstract] @[:table])
+          :savepoint (fn [:abstract :string] @[:table])
+          :release-savepoint (fn [:abstract :string] @[:table])
+          :rollback-to-savepoint (fn [:abstract :string] @[:table])}}
   ``Build the :void/db-driver value. opts:
 
     :path         what `sqlite3/open` receives
@@ -377,7 +461,11 @@
   (def pragmas (get opts :pragmas []))
   (def busy (get opts :busy-timeout 0))
   (def default-mode (get opts :tx-mode :immediate))
-  (defn begin-sql [isolation]
+  (defn begin-sql
+    {:params [:keyword?] :ret :string :throws [:string]}
+    "The BEGIN statement for `isolation` (or the driver's own default
+    mode), by way of `tx-modes`."
+    [isolation]
     (def mode (or isolation default-mode))
     (string "BEGIN "
             (or (get tx-modes mode)

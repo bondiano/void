@@ -10,7 +10,11 @@
 
 (def plugins ["void/http/init" "void/crypto/init" "void/security/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [(or :struct :table)] :ret {:env :table :cli :table}}
+  "The dry-run config for these tests: a quiet logger, a fixed
+  signing key, and whatever `extra` the test layers on top."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}
                 :http {:port 0 :access-log false}

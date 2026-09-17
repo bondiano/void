@@ -1,13 +1,21 @@
 (import ../void/core/extension :as extension)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :any}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error for further assertions."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
           (string name ": message " (string/format "%q" err) " lacks " (string/format "%q" pat)))
   err)
 
-(defn contrib [plugin value] {:plugin plugin :value value})
+(defn contrib
+  {:params [:keyword :any] :ret {:plugin :keyword :value :any}}
+  "Wrap a value as one plugin's contribution, the shape
+  `resolve-point` expects before it strips the wrapper."
+  [plugin value] {:plugin plugin :value value})
 
 # -- point? ---------------------------------------------------------------
 

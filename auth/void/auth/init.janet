@@ -144,7 +144,13 @@
    :token token-mod/defaults
    :challenge challenge-mod/defaults})
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:scrypt @{:keyword :any} :argon2id @{:keyword :any}
+          :token @{:keyword :any} :challenge @{:keyword :any} & r}}
+  "The [:auth] slice, defaulted key by key so an application that
+  overrides one setting keeps the rest."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   (each key [:scrypt :argon2id :token :challenge]
     (put c key (merge (defaults key) (get cfg key {}))))
@@ -161,6 +167,7 @@
 (def claim "See identity/claim." identity-mod/claim)
 (def with-identity* "See identity/with-identity*." identity-mod/with-identity*)
 (defmacro with-identity
+  {:params [:any :any] :ret :tuple}
   "See identity/with-identity — run the body as somebody."
   [id & body]
   ~(,identity-mod/with-identity* ,id (fn [] ,;body)))
@@ -188,12 +195,19 @@
 (def redeem-challenge "See challenge/redeem." challenge-mod/redeem)
 
 (defn deliverers
+  {:params [] :ret (or @[{:name :keyword :fn :function & r}] [{:name :keyword :fn :function & r}])}
   "The :void.auth/deliver contributions this composition resolved, or
   an empty list before it started."
   []
   (get (or (state/active) {}) :deliver []))
 
 (defn challenge!
+  {:params [:string
+            (or {:kind :keyword? :ttl :number? :claims (or {:keyword :any} :nil)
+                 :handle :string? :to :any :channel :any & r}
+                :nil)]
+   :ret {:handle :string :kind :keyword :expires :number :delivered @[:keyword]}
+   :throws [:string :any]}
   ``Issue a magic link (or a one-time code) for `subject` **and get it
   to the person** — the half that waited for a delivery
   to exist (`void/mail-auth` is one, 3.5):
@@ -248,6 +262,11 @@
    :delivered names})
 
 (defn redeem!
+  {:params [:string? :string? (or {:now :number? & r} :nil)]
+   :ret (or {:subject :string :via :keyword :cookie :boolean
+             :claims {:keyword :any} :at :number :expires (or :number :nil)}
+            :nil)
+   :throws [:string]}
   ``Redeem a challenge against the active store — `redeem-challenge`
   without having to name the store. Returns an identity or nil.``
   [handle code &opt opts]
@@ -335,6 +354,7 @@
 # -- the registry component ----------------------------------------------
 
 (defn- resolved
+  {:params [{:keyword :any} :keyword] :ret (or @[:any] [:any])}
   ``One of this package's extension points, as the boot the component
   was started in resolved it.
 

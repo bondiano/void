@@ -55,6 +55,7 @@
 # -- identifiers ---------------------------------------------------------
 
 (defn quote-channel
+  {:params [:any] :ret :string :throws [:string]}
   ``A channel name as a quoted SQL identifier. LISTEN takes no
   parameters — the name is part of the statement — so it is quoted
   rather than interpolated, and a name that cannot be quoted (a NUL
@@ -70,6 +71,26 @@
 # -- the listener --------------------------------------------------------
 
 (defn open
+  {:params [:string (or @{:connect-timeout :any :decode :any :backoff :any
+                          :on-error :any & r}
+                        :nil)]
+   :ret @{:conninfo :string :opts :any
+          :backoff @{:min :number :max :number :factor :number}
+          :conn (or @{:pg (or :pointer :nil) :fds :abstract
+                      :session @{:stmts @{:string :string} :next :number}
+                      :broken :boolean :closed :boolean :in-tx :boolean
+                      :conninfo :string :opts :any :decode :any
+                      :notifications @[{:channel :string :pid :number :payload :string}]
+                      :in-exchange :boolean}
+                    :nil)
+          :wanted @{:string @[:function]}
+          :active @{:string :boolean}
+          :fiber (or :fiber :nil)
+          :wakeup :abstract
+          :running :boolean
+          :stopped :boolean
+          :stats @{:notifications :number :dispatched :number :errors :number
+                   :connects :number :reconnects :number}}}
   ``A listener over `conninfo`, not yet running. opts:
 
     :connect-timeout  seconds for the handshake (as ./conn)
@@ -99,11 +120,19 @@
              :reconnects 0}})
 
 (defn channels
+  {:params [@{:wanted @{:string @[:function]} & r}] :ret @[:string]}
   "The channels this listener has at least one handler for."
   [l]
   (sorted (filter |(not (empty? (get-in l [:wanted $]))) (keys (l :wanted)))))
 
 (defn stats
+  {:params [@{:stats @{:notifications :number :dispatched :number :errors :number
+                       :connects :number :reconnects :number}
+              :conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
+              :running :boolean :wanted @{:string @[:function]} & r}]
+   :ret @{:notifications :number :dispatched :number :errors :number
+          :connects :number :reconnects :number
+          :channels :number :connected :boolean :running :boolean}}
   "Point-in-time counters plus the connection state."
   [l]
   (merge (table/to-struct (l :stats))
@@ -114,6 +143,9 @@
 # -- subscription --------------------------------------------------------
 
 (defn- nudge!
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
+              :wakeup :abstract & r}]
+   :ret :nil}
   ``Wake the listening fiber, whichever way it is parked: on the
   socket (interrupt the wait — the connection itself is untouched) or,
   with no channels and so no connection, on the wakeup channel.
@@ -129,6 +161,12 @@
   nil)
 
 (defn subscribe!
+  {:params [@{:wanted @{:string @[:function]}
+              :conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
+              :wakeup :abstract & r}
+            :any g]
+   :ret g
+   :throws [:string]}
   ``Call `f` with every notification on `channel`:
   {:channel :payload :pid}. Returns `f`, which is also what
   `unsubscribe!` takes back.
@@ -145,6 +183,11 @@
   f)
 
 (defn unsubscribe!
+  {:params [@{:wanted @{:string @[:function]}
+              :conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
+              :wakeup :abstract & r}
+            :any :function?]
+   :ret :nil}
   ``Remove one handler, or every handler of a channel when `f` is
   omitted. The UNLISTEN follows once the channel has no handlers left.``
   [l channel &opt f]
@@ -159,7 +202,16 @@
 
 # -- the listening fiber -------------------------------------------------
 
-(defn- dispatch! [l note]
+(defn- dispatch!
+  {:params [@{:wanted @{:string @[:function]}
+              :stats @{:notifications :number :dispatched :number :errors :number & r}
+              & r}
+            {:channel :string :pid :number :payload :string}]
+   :ret :nil}
+  "Run every handler subscribed to a notification's channel, counting
+  and logging a handler that throws rather than letting it silence
+  the ones after it."
+  [l note]
   (put-in l [:stats :notifications] (inc (get-in l [:stats :notifications])))
   (each f (or (get-in l [:wanted (note :channel)]) [])
     (def [ok err] (protect (f note)))
@@ -172,6 +224,15 @@
                    :err (if (string? err) err (describe err)))))))
 
 (defn- sync-subscriptions!
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :session :any
+                          :broken :boolean :closed :boolean :in-tx :boolean
+                          :conninfo :string :opts :any :decode :any
+                          :notifications @[{:channel :string :pid :number :payload :string}]
+                          :in-exchange :boolean & r}
+                        :nil)
+              :active @{:string :boolean} :wanted @{:string @[:function]} & r}]
+   :ret :nil
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Make the session's LISTENs match what is wanted. Runs in the
   listening fiber, which is the only one allowed to use the
   connection.``
@@ -187,14 +248,32 @@
       (conn/execute c (string "LISTEN " (quote-channel name)))
       (put (l :active) name true))))
 
-(defn- drop-connection! [l]
+(defn- drop-connection!
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :closed :boolean & r} :nil)
+              & r}]
+   :ret :nil}
+  "Close and forget the listener's connection, if it has one — the
+  first step of both an idle turn and a reconnect."
+  [l]
   (when-let [c (l :conn)]
     (put l :conn nil)
     (put l :active @{})
     (protect (conn/close c)))
   nil)
 
-(defn- connect! [l]
+(defn- connect!
+  {:params [@{:conninfo :string :opts :any :conn :any
+              :stats @{:connects :number & r} :wanted @{:string @[:function]} & r}]
+   :ret @{:pg (or :pointer :nil) :fds :abstract
+          :session @{:stmts @{:string :string} :next :number}
+          :broken :boolean :closed :boolean :in-tx :boolean
+          :conninfo :string :opts :any :decode :any
+          :notifications @[{:channel :string :pid :number :payload :string}]
+          :in-exchange :boolean}
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
+  "Open a fresh connection, count it and log it — the reconnect
+  `listen-turn` makes whenever it does not already hold a live one."
+  [l]
   (put l :conn (conn/open (l :conninfo)
                           {:connect-timeout (get-in l [:opts :connect-timeout])
                            :decode (get-in l [:opts :decode] {})}))
@@ -205,7 +284,12 @@
             :channels (length (channels l)))
   (l :conn))
 
-(defn- report! [l stage err]
+(defn- report!
+  {:params [@{:stats @{:errors :number & r} :opts :any & r} :keyword :any]
+   :ret :nil}
+  "Count and log a turn's failure, and tell `:on-error` if the caller
+  gave one."
+  [l stage err]
   (put-in l [:stats :errors] (inc (get-in l [:stats :errors])))
   (log/warn "listener lost its connection" :ns log-ns
             :stage stage :err (if (string? err) err (describe err)))
@@ -214,6 +298,16 @@
   nil)
 
 (defn- listen-turn
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :session :any
+                          :broken :boolean :closed :boolean :in-tx :boolean
+                          :conninfo :string :opts :any :decode :any
+                          :notifications @[{:channel :string :pid :number :payload :string}]
+                          :in-exchange :boolean & r}
+                        :nil)
+              :stats @{:reconnects :number & r} :conninfo :string :opts :any
+              :wanted @{:string @[:function]} :active @{:string :boolean} & r}]
+   :ret :nil
+   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
   "Hold a connection carrying the right LISTENs and park on it until
   the server says something."
   [l]
@@ -232,6 +326,7 @@
     (each note notes (dispatch! l note))))
 
 (defn- idle-turn
+  {:params [@{:conn :any :wakeup :abstract & r}] :ret :any}
   ``Nothing is subscribed: hold no connection and park until something
   is. A listener declared in a composition that never subscribes
   should cost a fiber, not a backend.``
@@ -240,6 +335,10 @@
   (ev/take (l :wakeup)))
 
 (defn- tick
+  {:params [@{:conn :any :stopped :boolean
+              :backoff @{:min :number :max :number :factor :number} & r}
+            :number]
+   :ret :number}
   ``One turn of the loop. Returns the delay to wait before the next
   turn — 0 when all is well, a backoff when the connection has to be
   rebuilt.``
@@ -256,7 +355,13 @@
            (max (get-in l [:backoff :min])
                 (* delay (get-in l [:backoff :factor])))))))
 
-(defn- run [l]
+(defn- run
+  {:params [@{:stopped :boolean :conn :any :running :boolean
+              :backoff @{:min :number :max :number :factor :number} & r}]
+   :ret :nil}
+  "The listening fiber's whole life: tick until stopped, dropping the
+  connection and clearing `:running` on the way out."
+  [l]
   (var delay 0)
   (while (not (l :stopped))
     (set delay (tick l delay))
@@ -267,6 +372,8 @@
   nil)
 
 (defn start!
+  {:params [@{:running :boolean :stopped :boolean :fiber (or :fiber :nil) & r}]
+   :ret @{:running :boolean :stopped :boolean :fiber (or :fiber :nil) & r}}
   ``Run the listener in a fiber of its own. Idempotent; a listener
   that was stopped can be started again.``
   [l]
@@ -277,6 +384,8 @@
   l)
 
 (defn stop!
+  {:params [@{:stopped :boolean :conn :any :wakeup :abstract & r}]
+   :ret @{:stopped :boolean :conn :any :wakeup :abstract & r}}
   ``Stop the listener. Only the listening fiber may touch the
   connection — closing it from here (another fiber) while it is parked
   in `sync-subscriptions!` or `connect!` would free a PGconn out from
@@ -291,6 +400,7 @@
 # -- sending -------------------------------------------------------------
 
 (defn notify-sql
+  {:params [:any :any] :ret [:string [:string :string?]]}
   ``[sql params] for a NOTIFY. `pg_notify` rather than the NOTIFY
   statement: the channel is then a *parameter* — no identifier
   quoting, no way for a name built at runtime to become SQL — and it
@@ -299,6 +409,14 @@
   ["SELECT pg_notify($1, $2)" [(string channel) (when payload (string payload))]])
 
 (defn notify!
+  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
+              :broken :boolean :closed :boolean :in-tx :boolean
+              :conninfo :string :opts :any :decode :any
+              :notifications @[{:channel :string :pid :number :payload :string}]
+              :in-exchange :boolean & r}
+            :any :any]
+   :ret :nil
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Send a notification over an existing connection. From inside a
   transaction it is delivered on COMMIT and not at all on rollback,
   which is what makes NOTIFY safe to pair with the write it announces.``

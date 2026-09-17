@@ -26,6 +26,9 @@
       "not your order"))
 
 (defn resource
+  {:params [{:params {:number :any & r} & r}]
+   :ret (or @{:any :any} :nil)
+   :throws [:string]}
   ``What the policy on an order route decides about: the row itself.
   Route metadata carries a function rather than a symbol, because a
   route entry does not keep the environment of the module that

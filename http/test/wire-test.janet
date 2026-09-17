@@ -98,6 +98,7 @@
 # -- response writing ----------------------------------------------------
 
 (defn fake-conn
+  {:params [] :ret {:out :buffer :write (fn [:any :buffer] :any)}}
   "A connection double capturing everything written to it in :out."
   []
   (def out @"")
@@ -224,7 +225,15 @@
 # UTF-8 arrives unencoded from plenty of tooling. The path part stays
 # strict, and a raw # is a fragment delimiter in either part.
 
-(defn- head-of [target]
+(defn- head-of
+  {:params [:string]
+   :ret (or :nil (enum :error)
+            @{:method :string :path :string :http-version [:number :number]
+              :headers @{:any :any} :head-size :number})}
+  "Parses a bare GET request head for `target`, to check what the
+  request-line grammar accepts and how much of it survives into
+  :path."
+  [target]
   (wire/parse-request-head (buffer "GET " target " HTTP/1.1\r\nHost: t\r\n\r\n")))
 
 (each target ["/s?filter[status]=open" "/s?q=caf\xC3\xA9" "/s?a=1|2"

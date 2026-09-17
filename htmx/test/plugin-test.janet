@@ -9,21 +9,37 @@
 
 # -- an app whose routes answer both full-page and htmx requests ---------
 
-(defn base-layout [content context]
+(defn base-layout
+  {:params [:any :any] :ret @[(or :string :tuple)]}
+  "The shared page shell for this test app: <head><title>orders</title>
+  around whatever view content it wraps."
+  [content context]
   (hiccup/html5
     [:head [:title "orders"]]
     [:body [:main {:id "main"} content]]))
 
-(defn orders [req]
+(defn orders
+  {:params [:any] :ret @{:keyword :any}}
+  "The full-page view for /orders: a one-item widget list inside the
+  shared layout."
+  [req]
   (html/page [:ul {:id "orders"} [:li "widget"]]
              {:layout base-layout}))
 
-(defn create [req]
+(defn create
+  {:params [:any] :ret @{:headers @{:string :any} & r} :throws [:string]}
+  "Answers a write with the created row's fragment, firing
+  :order-created so the client can react to it."
+  [req]
   (htmx/trigger
     (html/page [:li "gadget"] {:layout base-layout})
     :order-created))
 
-(defn plain [req]
+(defn plain
+  {:params [:any] :ret @{:keyword :any}}
+  "A view with no htmx behavior of its own, to prove routes without
+  :void.htmx/partial keep their layout regardless of the request."
+  [req]
   (html/page [:h1 "about"] {:layout base-layout}))
 
 (def app-routes

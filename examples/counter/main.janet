@@ -18,13 +18,18 @@
 # production composition is this one without it, and dropping a plugin
 # from a list is the whole of the change.
 (defn plugins
+  {:params [:keyword] :ret (or @[:keyword] [:keyword])}
   "The composition for a profile."
   [profile]
   (if (= :prod profile)
     (filter |(not= :void/dev $) (app :plugins))
     (app :plugins)))
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret :any}
+  "The executable's entrypoint: reads the profile from the
+  environment, then hands off to the void CLI."
+  [& args]
   # The profile is read here rather than in `app` above: `jpm build`
   # marshals this file's values into the executable, so anything a
   # value computes is computed once, on the machine that built it.

@@ -18,9 +18,17 @@
 
 (log/set-level! nil :error)
 
-(defn hello [req] (ring/text 200 "hello"))
+(defn hello
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A plain handler with nothing obs-shaped about it."
+  [req] (ring/text 200 "hello"))
 
-(defn traced [req]
+(defn traced
+  {:params [@{:trace-id :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Reports the current span's ids (or that there is none) and the
+  request's own :trace-id, for a test to compare them."
+  [req]
   # what the handler sees of the request's own trace, or that there is
   # none — the default composition exports nothing and builds no span
   (def span (trace/current))
@@ -30,7 +38,11 @@
                            " sampled=" (span :sampled))
                    "no span")))
 
-(defn boom [req] (error "handler exploded"))
+(defn boom
+  {:params [:any] :ret :never :throws [:string]}
+  "A handler that always throws, to check the RED counters see the
+  rendered status rather than the raised error."
+  [req] (error "handler exploded"))
 
 (def app-routes
   (router/routes {}
@@ -48,7 +60,12 @@
                   [{:name :test/obs-app :routes app-routes
                     :env (router/env-ref (curenv))}]}))
 
-(defn- start [extra &opt obs-extra]
+(defn- start
+  {:params [{:any :any} (or {:any :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}}
+  "Boot the test app with obs and obs-http composed, config layered
+  under [:obs] on top of runtime sampling off."
+  [extra &opt obs-extra]
   (test/start! {:plugins [:void/http :void/obs :void/obs-http app]
                 :only [:http/kernel :obs/registry :obs/tracer]
                 :config {:cli (merge {:log {:level :error}
@@ -56,7 +73,10 @@
                                                   (or obs-extra {}))}
                                      extra)}}))
 
-(defn- body [resp] (string (or (resp :body) "")))
+(defn- body
+  {:params [{:body :any & r}] :ret :string}
+  "The response body as a string."
+  [resp] (string (or (resp :body) "")))
 
 # -- RED off the route table ---------------------------------------------
 

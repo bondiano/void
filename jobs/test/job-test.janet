@@ -29,13 +29,25 @@
 # late binding: the registry holds the *binding*, not the function
 # value, so redefining the function — which is what reloading the
 # module does — is live for jobs already queued
-(defn welcome-mail [user-id] (string "hello " user-id))
+(defn welcome-mail
+  {:params [:any] :ret :string}
+  "The reloaded body welcome-mail's job binding resolves to below."
+  [user-id]
+  (string "hello " user-id))
 (assert (= "hello 1" ((job/handler (job/lookup :welcome-mail)) 1))
         "a reloaded job runs its new body without anything being re-registered")
 
 # and a job declared where a module binding cannot exist still works,
 # through the value captured at declaration time
-(defn- declare-nested []
+(defn- declare-nested
+  {:params []
+   :ret (or {:name :keyword :opts {:keyword :any} :fn (or :function :nil) :binding :symbol?
+             :env (or {:keyword :any} :nil) :doc :string?
+             :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string}}
+            :nil)}
+  "Declare a job from inside a function, where no module binding can hold it."
+  []
   (job/defjob nested-job [x] (* 10 x))
   (job/lookup :nested-job))
 (assert (= 30 ((job/handler (declare-nested)) 3))

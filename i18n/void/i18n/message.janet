@@ -16,6 +16,10 @@
   text/interpolate)
 
 (defn render
+  {:params [(or :string {:keyword :string})
+            (or {:count :number? & r} :nil)
+            (fn [:number] :keyword)]
+   :ret :string}
   ``One message to a string. A plural table ({:one .. :few .. :other ..})
   selects its form by `(category-of (params :count))` — no :count, or a
   category the table does not carry, falls back to :other (required at

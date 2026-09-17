@@ -17,12 +17,16 @@
   "Default dev socket, relative to the working directory."
   ".void/repl.sock")
 
-(defn- ensure-parent-dir [path]
+(defn- ensure-parent-dir
+  {:params [:string] :ret :nil}
+  "Create `path`'s parent directory if it does not exist yet."
+  [path]
   (def dir (string/join (drop -1 (string/split "/" path)) "/"))
   (unless (or (empty? dir) (os/stat dir))
     (os/mkdir dir)))
 
 (defn make-repl-env
+  {:params [] :ret :table}
   "Build the environment served to netrepl clients."
   []
   (def e (make-env))
@@ -36,7 +40,11 @@
   # the same fallback plugin/inspect and friends make, and the reason
   # for it is a REPL attached to a process that bootstrapped without
   # starting (dry-run, a half-built composition being poked at)
-  (defn repl-boot [] (or (plugin/running-boot) plugin/last-boot))
+  (defn repl-boot
+    {:params [] :ret (or @{:system :any & r} :nil)}
+    "The boot this process is running, else the most recent bootstrap."
+    []
+    (or (plugin/running-boot) plugin/last-boot))
   (put e 'boot
        @{:value repl-boot
          :doc "The boot value of the running system (plugin/start!), else the most recent bootstrap."})
@@ -45,7 +53,11 @@
          :doc "The running system value — (system/restart (sys) :key) etc."})
   e)
 
-(defn- welcome [name]
+(defn- welcome
+  {:params [:string] :ret :string}
+  "The banner printed to a connecting client, naming itself and the
+  REPL tools the shared env exposes."
+  [name]
   (string "void/dev repl — client " name "\n"
           "  (boot)              the running boot value\n"
           "  (sys)               the running system\n"
@@ -56,6 +68,12 @@
   {"127.0.0.1" true "localhost" true "::1" true "loopback" true})
 
 (defn start
+  {:params [{:netrepl (or {:enabled :boolean? :unix :string? :host :string?
+                           :port :number? :allow-remote :boolean?}
+                          :nil)
+             & r}]
+   :ret (or {:disabled :boolean} @{:server :any :host (or :string :keyword) :port :string :env :table})
+   :throws [:string]}
   "Start the netrepl server from the :netrepl slice of the :dev config
   ({:enabled :unix :host :port :allow-remote}); a unix socket is the
   default. A TCP :host beyond loopback is refused unless :allow-remote
@@ -103,6 +121,8 @@
       @{:server server :host host :port port :env env})))
 
 (defn stop
+  {:params [(or {:disabled :boolean} @{:server :any :host (or :string :keyword) :port :string :env :table})]
+   :ret :nil}
   "Close the listener and unlink the unix socket file."
   [inst]
   (when-let [server (get inst :server)]

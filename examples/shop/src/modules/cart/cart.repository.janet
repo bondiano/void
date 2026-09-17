@@ -16,34 +16,54 @@
 # -- carts ---------------------------------------------------------------
 
 (defn find-by-token
+  {:params [:string?]
+   :ret (or @{:id :number :token :string :customer-id :number? :created-at :string
+             :updated-at :string & r} :nil)
+   :throws [:string]}
   "The cart behind a browser's token, or nil."
   [token]
   (when token (db/one model/Cart {:where [:= :token token]})))
 
 (defn create!
+  {:params [:string]
+   :ret @{:id :number :token :string :customer-id :number? :created-at :string
+         :updated-at :string & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Open a cart for a token nobody has used yet."
   [token]
   (def now (values/now))
   (db/insert! model/Cart {:token token :created-at now :updated-at now}))
 
 (defn touch!
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Say that this cart was used, which is what the sweep reads."
   [cart]
   (db/update! model/Cart (cart :id) {:updated-at (values/now)}))
 
 (defn attach-customer!
+  {:params [@{:id :number & r} :number]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Put a name on a cart that had none."
   [cart customer-id]
   (db/update! model/Cart (cart :id) {:customer-id customer-id
                                      :updated-at (values/now)}))
 
 (defn delete!
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Drop the cart itself — what the checkout does with the one it turned
   into an order."
   [cart]
   (db/delete! model/Cart (cart :id)))
 
 (defn delete-stale!
+  {:params [:string]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Delete carts nobody has touched since `cutoff` and that belong to
   nobody, and the lines with them (ON DELETE CASCADE). Returns how many
   went.``
@@ -55,6 +75,9 @@
 # -- lines ---------------------------------------------------------------
 
 (defn lines
+  {:params [@{:id :number & r}]
+   :ret @[@{:id :number :cart-id :number :product-id :number :quantity :number & r}]
+   :throws [:string]}
   "The lines of a cart, each with its product already loaded."
   [cart]
   (db/query model/CartItem {:where [:= :cart-id (cart :id)]
@@ -62,6 +85,9 @@
                             :preload [:product]}))
 
 (defn find-line
+  {:params [@{:id :number & r} :number]
+   :ret (or @{:id :number :cart-id :number :product-id :number :quantity :number & r} :nil)
+   :throws [:string]}
   ``One line, addressed by **product** rather than by its own id. A
   form that posts a line id is a form somebody can post *another*
   cart's line id to, and then the check that it belongs here is a thing
@@ -73,6 +99,9 @@
                                   [:= :product-id product-id]]}))
 
 (defn add-line!
+  {:params [@{:id :number & r} :number :number]
+   :ret @{:id :number :cart-id :number :product-id :number :quantity :number & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "A line that was not there."
   [cart product-id quantity]
   (db/insert! model/CartItem {:cart-id (cart :id)
@@ -80,6 +109,9 @@
                               :quantity quantity}))
 
 (defn set-line-quantity!
+  {:params [@{:id :number & r} :number]
+   :ret (or @{:id :number :cart-id :number :product-id :number :quantity :number & r} :nil)
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``A line that was. `update!` answers with the number of rows it
   wrote, so the row is re-read: a caller that wanted the line and got a
   1 would find that out one layer further away.``
@@ -88,16 +120,25 @@
   (db/find model/CartItem (line :id)))
 
 (defn remove-line!
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "A line the customer set to zero."
   [line]
   (db/delete! model/CartItem (line :id)))
 
 (defn clear-lines!
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Empty a cart without deleting it."
   [cart]
   (db/delete-where! model/CartItem [:= :cart-id (cart :id)]))
 
 (defn count-items
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string]}
   ``How many items a cart holds, without loading a product per line.
   The badge in the header is on every page in the shop, and it has no
   business joining the catalog to render a number.``

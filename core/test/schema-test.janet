@@ -1,14 +1,22 @@
 (import ../void/core/schema :as schema)
 (import ../void/core/errors :as errors)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :string}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error rendered as a string."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
           (string/format "%s: error %q does not mention %q" name (string err) pat))
   (string err))
 
-(defn errors-of [sch value &opt opts]
+(defn errors-of
+  {:params [:any :any (or {:any :any} :nil)] :ret @[{:code :keyword & r}]}
+  "The `:errors` of checking `value` against `sch` — the list a
+  passing check answers empty."
+  [sch value &opt opts]
   ((schema/check sch value opts) :errors))
 
 # -- base types ----------------------------------------------------------
@@ -298,7 +306,11 @@
                           :any [:optional [:map {:closed false} {:k :int}]]}))
 (assert (schema/valid? deep {:db {:pool {:size 1}} :tags [{:name "a"}] :opt {:x 1}
                              :any {:k 1 :extra 2}}))
-(defn- unknown-of [errs] (first (filter |(= :unknown ($ :code)) errs)))
+(defn- unknown-of
+  {:params [(or @[{:code :keyword & r}] [{:code :keyword & r}])] :ret (or {:code :keyword & r} :nil)}
+  "The first :unknown error in a check's error list."
+  [errs]
+  (first (filter |(= :unknown ($ :code)) errs)))
 (assert (= [:db :pool :sizee] (get (unknown-of (errors-of deep {:db {:pool {:sizee 1}}})) :path))
         "a nested typo is caught with its full path")
 (assert (= [:tags 0 :nmae] (get (unknown-of (errors-of deep {:db {:pool {:size 1}} :tags [{:nmae "a"}]})) :path))

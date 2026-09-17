@@ -32,6 +32,7 @@
 (def log-ns "shop.orders.events")
 
 (defn- field
+  {:params [:any :keyword] :ret :any}
   ``One field of a payload, whichever way the codec spelled its keys.
   This application runs `:codec :jdn` (config/default.janet), so they
   come back keywords; under the default `:json` they come back
@@ -41,7 +42,10 @@
   [payload key]
   (if (nil? (get payload key)) (get payload (string key)) (get payload key)))
 
-(defn- order-of [msg]
+(defn- order-of
+  {:params [{:payload :any & r}] :ret (or @{:any :any} :nil) :throws [:string]}
+  "The order a message's payload names, or nil once it is gone."
+  [msg]
   (when-let [id (field (msg :payload) :order)]
     (repo/find-by-id id)))
 

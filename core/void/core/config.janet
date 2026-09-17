@@ -20,6 +20,7 @@
 (import ./util :as util)
 
 (defn- path-str
+  {:params [(or @[:any] [:any])] :ret :string}
   "A config path as it reads in a message: `[:db :pool :size]`."
   [path]
   (string/format "[%s]"
@@ -34,17 +35,20 @@
   (table/weak-keys 8))
 
 (defn secret-spec?
+  {:params [:any] :ret :boolean :narrows {:secret :string & r}}
   "True when a config value is a secret reference like
   {:secret \"DB_PASSWORD\"} (optionally with :file)."
   [x]
   (and (dictionary? x) (string? (get x :secret))))
 
 (defn secret?
+  {:params [:any] :ret :boolean :narrows :table}
   "True when x is a resolved secret box produced by `load`."
   [x]
   (and (table? x) (not (nil? (in secret-store x)))))
 
 (defn reveal
+  {:params [:any] :ret :any :throws [:string]}
   "Return the value held by a secret box — the only way to get it.
   Printing the box shows the reference name, never the value."
   [box]
@@ -53,6 +57,7 @@
   (in secret-store box))
 
 (defn- make-secret
+  {:params [{:secret :string & r} :any] :ret @{:secret :string}}
   "Box a resolved secret: the box carries only the secret's name, the
   value lives in `secret-store` keyed by the box, so a printed config
   never shows it and `reveal` is the one way in."
@@ -62,6 +67,10 @@
   box)
 
 (defn- resolve-secret
+  {:params [{:secret :string :file :string? & r}
+            {:string :string}
+            (or @[(fn [:any] :any)] [(fn [:any] :any)])]
+   :ret [:any :string?]}
   "Resolve one secret spec: custom sources first, then :file, then the
   env table. Returns [value nil] or [nil error-message]."
   [spec env sources]
@@ -77,6 +86,12 @@
         [nil (string/format "secret %s: env var %s is not set" name name)]))))
 
 (defn- resolve-secrets!
+  {:params [@{:any :any}
+            (or @[:any] [:any])
+            {:string :string}
+            (or @[(fn [:any] :any)] [(fn [:any] :any)])
+            @[:string]]
+   :ret :nil}
   "Walk a layer's tree in place, replacing every secret spec with a box
   holding the resolved value; a secret that cannot be resolved is one
   batched error naming its path."
@@ -96,6 +111,7 @@
 # -- layered merge with provenance ---------------------------------------
 
 (defn- collect-leaves
+  {:params [:any (or @[:any] [:any]) @[[:any :any]]] :ret @[[:any :any]]}
   "Flatten a layer into [path value] leaves. Secret specs and empty
   dictionaries are leaves, not subtrees."
   [data path out]
@@ -108,6 +124,7 @@
   out)
 
 (defn- assoc-path!
+  {:params [@{:any :any} (or @[:any] [:any]) :any] :ret :nil}
   "Set `value` at `path` in the nested table `root`, creating the
   tables on the way — and replacing a scalar found there, since the
   later layer wins."
@@ -120,6 +137,8 @@
   (put node (last path) value))
 
 (defn- record!
+  {:params [@{:any @[{:layer :keyword & r}]} (or @[:any] [:any]) {:layer :keyword & r}]
+   :ret :nil}
   "Append `source` to the provenance history of `path` — the layers
   that set it, oldest first; `explain` reads the last one as the
   winner."
@@ -129,6 +148,8 @@
     (put provenance path @[source])))
 
 (defn- apply-layer!
+  {:params [@{:any :any} @{:any @[{:layer :keyword & r}]} :any {:layer :keyword & r}]
+   :ret :nil}
   "Merge one layer's leaves into the values, recording each leaf's
   source. A leaf at the root (an empty path) cannot be set and is
   skipped."
@@ -141,6 +162,7 @@
 # -- env vars ------------------------------------------------------------
 
 (defn- parse-scalar
+  {:params [:string] :ret :any}
   "Coerce an env/CLI string: numbers, true/false/nil, JDN forms
   (keywords, tuples, dictionaries, quoted strings) — anything else
   stays a string."
@@ -157,6 +179,7 @@
     s))
 
 (defn- env-var-path
+  {:params [:string :string] :ret [:keyword]}
   "VOID_DB__POOL__SIZE -> [:db :pool :size], VOID_HTTP__MAX_BODY ->
   [:http :max-body]: strip the prefix, `__` separates nesting levels,
   `_` inside a segment becomes `-`."
@@ -165,6 +188,8 @@
                (string/split "__" (string/slice name (length prefix))))))
 
 (defn- apply-env!
+  {:params [@{:any :any} @{:any @[{:layer :keyword & r}]} {:string :string} :string]
+   :ret :nil}
   "Apply the `prefix`-ed variables of `env`, in sorted order for a
   stable provenance, as the env layer: each becomes the leaf its name
   spells, its string coerced with `parse-scalar`. `<prefix>PROFILE`
@@ -181,6 +206,7 @@
 # -- CLI overrides -------------------------------------------------------
 
 (defn- parse-override
+  {:params [:string] :ret [(or [:keyword] :nil) :any :string?]}
   "\"--database.host=x\" / \"database.host=x\" -> [[:database :host] \"x\" nil],
   or [nil nil error-message]."
   [arg]
@@ -193,6 +219,11 @@
       [path value nil])))
 
 (defn- apply-cli!
+  {:params [@{:any :any}
+            @{:any @[{:layer :keyword & r}]}
+            (or :nil {:any :any} @[:any] [:any])
+            @[:string]]
+   :ret :nil}
   "Apply the CLI layer: a dictionary is merged as it is, a list is
   parsed as `path.to.key=value` overrides one by one; a malformed
   override is a batched error, not a stop."
@@ -218,6 +249,7 @@
 # -- config files --------------------------------------------------------
 
 (defn- read-config-file
+  {:params [:string :keyword] :ret [(or {:any :any} :nil) :string?]}
   "Load one config file: .jdn is parsed as a single JDN value, .janet is
   evaluated in a fresh environment (the profile is available inside as
   (dyn :void/profile)); the result must be a dictionary."
@@ -235,6 +267,7 @@
     [v nil]))
 
 (defn- config-files
+  {:params [:string :keyword (or @[:string] [:string]) @[:string]] :ret @[:string]}
   "The config files to load in order: the four conventional ones under
   `dir` (default, then the profile; .jdn before .janet) when present,
   then every explicit `files` entry — which must exist, or it is an
@@ -260,6 +293,15 @@
    :env true :env-prefix true :cli true :secret-sources true})
 
 (defn- apply-defaults!
+  {:params [@{:any :any}
+            @{:any @[{:layer :keyword & r}]}
+            (or :nil
+                {:any :any}
+                @[{:plugin :any :key :keyword :defaults {:any :any} & r}]
+                [{:plugin :any :key :keyword :defaults {:any :any} & r}])
+            @[{:layer :keyword & r}]
+            @[:string]]
+   :ret :nil}
   "Apply the lowest layer: one dictionary as the defaults layer, or a
   list of per-plugin `{:plugin :key :defaults}` entries (what
   bootstrap builds from the manifests' :config-defaults) as one layer
@@ -287,6 +329,21 @@
                 (string/format ":defaults must be a dictionary or a list of per-plugin entries, got %q" defaults))))
 
 (defn load
+  {:params [(or {:defaults :any
+                 :dir :string?
+                 :files (or @[:string] [:string] :nil)
+                 :profile :keyword?
+                 :env (or {:string :string} :nil)
+                 :env-prefix :string?
+                 :cli :any
+                 :secret-sources (or @[(fn [:any] :any)] [(fn [:any] :any)] :nil)
+                 & r}
+                :nil)]
+   :ret @{:profile :keyword
+          :values @{:any :any}
+          :provenance @{:any @[{:layer :keyword & r}]}
+          :layers @[{:layer :keyword & r}]}
+   :throws [:string]}
   ``Build the application config from layered sources.
 
   Layers in priority order (later wins):
@@ -363,11 +420,13 @@
 # -- inspection ----------------------------------------------------------
 
 (defn value
+  {:params [{:values @{:any :any} & r} :keyword] :ret :any}
   "Get a config value by path: (config/value cfg :database :host)."
   [cfg & path]
   (get-in (cfg :values) path))
 
 (defn describe-source
+  {:params [{:layer :keyword & r}] :ret :string}
   "Human-readable origin of a provenance entry: \"env var VOID_DB__HOST\"."
   [source]
   (case (get source :layer)
@@ -382,6 +441,8 @@
     (string/format "%q" source)))
 
 (defn- child-entries
+  {:params [@{:any @[{:layer :keyword & r}]} (or @[:any] [:any])]
+   :ret @{:any {:layer :keyword & r}}}
   "For a subtree at `path`: every provenance entry strictly below it,
   leaf path -> its winning (last) source — the :children of `explain`
   for a non-leaf path."
@@ -395,6 +456,9 @@
   out)
 
 (defn explain
+  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r} :keyword]
+   :ret (or {:path [:any] :value :any :source {:layer :keyword & r} :history [{:layer :keyword & r}]}
+            {:path [:any] :value :any :children @{:any {:layer :keyword & r}}})}
   ``Where did a config value come from?
 
       (config/explain cfg :database :host)
@@ -419,6 +483,8 @@
      :children (child-entries (cfg :provenance) p)}))
 
 (defn explain-str
+  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r} :keyword]
+   :ret :string}
   "One-line human answer: \"[:database :host] = \\\"10.0.0.5\\\" — from
   env var VOID_DATABASE__HOST (overrides file config/dev.janet)\"."
   [cfg & path]
@@ -450,6 +516,8 @@
 # -- batch validation ----------------------------------------------------
 
 (defn- source-of
+  {:params [{:provenance @{:any @[{:layer :keyword & r}]} & r} (or @[:any] [:any])]
+   :ret (or {:layer :keyword & r} :nil)}
   "The layer that set `path`, for an error message: the winning source
   of the leaf itself or, when the path is a subtree (an unknown key
   whose value is a map, a map where a scalar was expected), that of its
@@ -462,6 +530,7 @@
         (kids k)))))
 
 (defn- attribution
+  {:params [{:plugin :any :component :any & r}] :ret :string}
   "The parenthesised owner of a spec in its error lines: the plugin,
   the component, both or neither."
   [spec]
@@ -472,6 +541,9 @@
   (if (empty? parts) "" (string " (" (string/join parts ", ") ")")))
 
 (defn- data-schema-errors
+  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+            :keyword :any :string]
+   :ret [:string]}
   "A data schema's failures on slice `k`, one string each: the path
   from the config root, the message (with the did-you-mean of a closed
   map) and the layer that set the value, so a typo reads as
@@ -492,6 +564,7 @@
                      (if src (string/format " (from %s)" (describe-source src)) "")))))
 
 (defn- callable-schema-errors
+  {:params [{:values @{:any :any} & r} :keyword (fn [:any] :any) :string] :ret [:string]}
   "A validator function's verdict on slice `k` as error strings: none,
   one for a false return, one for a throw."
   [cfg k f who]
@@ -504,6 +577,10 @@
     []))
 
 (defn validate
+  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+            (or @[{:key :keyword :schema :any :plugin :any :component :any & r}]
+                [{:key :keyword :schema :any :plugin :any :component :any & r}])]
+   :ret @[:string]}
   ``Validate config slices against their specs — all of them, not
   first-fail. specs is indexed of {:key <config-key> :schema <schema>
   :plugin <kw, optional> :component <kw, optional>}; :schema is a
@@ -529,6 +606,11 @@
   errors)
 
 (defn validate!
+  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+            (or @[{:key :keyword :schema :any :plugin :any :component :any & r}]
+                [{:key :keyword :schema :any :plugin :any :component :any & r}])]
+   :ret {:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+   :throws [:string]}
   "Like `validate`, but throws a single error listing every failure.
   Returns the config on success."
   [cfg specs]

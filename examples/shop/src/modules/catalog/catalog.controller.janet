@@ -27,11 +27,18 @@
 (import ./catalog.view :as view)
 
 (defn storefront
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+         :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET / — the catalog, out of the cache."
   [req]
   (layout/page (view/catalog-view (service/listing))))
 
 (defn show-product
+  {:params [{:void.db/row :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+         :void.html/layout :any :void.html/context {:any :any} & r}}
   ``GET /products/:id — the product the route's `:void.db/load` put on
   the request, whatever its status (an archived product still has a
   page; it just cannot be bought).``

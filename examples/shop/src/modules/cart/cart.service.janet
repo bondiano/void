@@ -13,6 +13,10 @@
 (def log-ns "shop.cart")
 
 (defn find-by-token
+  {:params [:string?]
+   :ret (or @{:id :number :token :string :customer-id :number? :created-at :string
+             :updated-at :string & r} :nil)
+   :throws [:string]}
   ``The cart behind a token, or nil. A read: a page that shows an empty
   basket must not create a row for every crawler that walks the
   catalog.``
@@ -20,6 +24,11 @@
   (repo/find-by-token token))
 
 (defn open!
+  {:params []
+   :ret {:cart @{:id :number :token :string :customer-id :number? :created-at :string
+                :updated-at :string & r}
+         :token :string}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "A brand-new cart, and the token the browser will hold it by."
   []
   (def token (values/token))
@@ -28,6 +37,9 @@
   {:cart cart :token token})
 
 (defn adopt!
+  {:params [(or @{:id :number :customer-id :number? & r} :nil) :number]
+   :ret :number?
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Attach a cart to whoever just signed in. The reason the cart
   survives the login: the row was already there, it just did not have a
   name on it yet.``
@@ -36,11 +48,17 @@
     (repo/attach-customer! cart customer-id)))
 
 (defn lines
+  {:params [@{:id :number & r}]
+   :ret @[@{:id :number :cart-id :number :product-id :number :quantity :number & r}]
+   :throws [:string]}
   "The lines of a cart, with their products."
   [cart]
   (repo/lines cart))
 
 (defn add!
+  {:params [@{:id :number & r} @{:id :number & r} :number]
+   :ret (or @{:id :number :cart-id :number :product-id :number :quantity :number & r} :nil)
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Put `quantity` of a product in the cart, or raise the line that is
   already there. Returns the line.
 
@@ -58,6 +76,9 @@
   line)
 
 (defn set-quantity!
+  {:params [@{:id :number & r} :number :number]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Set one line's quantity; 0 removes it. Returns the new quantity."
   [cart product-id quantity]
   (when-let [line (repo/find-line cart product-id)]
@@ -68,6 +89,9 @@
   quantity)
 
 (defn clear!
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Empty a cart — what the checkout does with the one it turned into an
   order."
   [cart]
@@ -75,23 +99,31 @@
   (repo/touch! cart))
 
 (defn discard!
+  {:params [@{:id :number & r}]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Empty it and delete it. The checkout's last act."
   [cart]
   (repo/clear-lines! cart)
   (repo/delete! cart))
 
 (defn item-count
+  {:params [(or @{:id :number & r} :nil)] :ret :number :throws [:string]}
   "How many items a cart holds — the number in the header's badge."
   [cart]
   (if cart (repo/count-items cart) 0))
 
 (defn line-total
+  {:params [@{:quantity :number & r}] :ret :number :throws [:string]}
   "What one line costs, in cents."
   [line]
   (* (get line :quantity 0)
      (get (db/rel line :product) :price-cents 0)))
 
 (defn summary
+  {:params [(or @[@{:quantity :number & r}] [@{:quantity :number & r}])]
+   :ret {:count :number :subtotal-cents :number}
+   :throws [:string]}
   ``What the header shows and what the checkout re-computes: the number
   of items and what they come to. A pure function of the lines, so a
   test asserts on it without a request anywhere.``
@@ -100,6 +132,9 @@
    :subtotal-cents (sum (map line-total lines))})
 
 (defn sweep-stale!
+  {:params [:number]
+   :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Delete carts nobody has touched in `max-age` seconds and that
   belong to nobody. Returns how many went.``
   [max-age]

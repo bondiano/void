@@ -99,10 +99,20 @@
   (ev/go
     (fn smtp-server []
       (with [conn (net/accept smtp-listener)]
-        (defn talk [stream script]
+        (defn talk
+          {:params [:any [[(or :string :nil) :string]]] :ret :nil}
+          "Run one side of a scripted SMTP exchange over `stream`:
+          read a line, check it against `expect` when given, write
+          `reply`, and swallow a DATA body up to the lone \".\"."
+          [stream script]
           (def buf @"")
           (var pos 0)
-          (defn line []
+          (defn line
+            {:params [] :ret (or :string :nil)}
+            "Read and consume one CRLF-terminated line already
+            buffered or read off `stream`; nil on EOF before a
+            newline arrives."
+            []
             (var at (string/find "\n" buf pos))
             (while (nil? at)
               (unless (:read stream 4096 buf 5) (break))

@@ -27,18 +27,23 @@
   "The problem+json media type."
   "application/problem+json")
 
-(defn- escape-pointer-token [t]
+(defn- escape-pointer-token
+  {:params [:any] :ret :string}
+  "One JSON pointer segment (RFC 6901), reference tokens escaped."
+  [t]
   (->> (string t)
        (string/replace-all "~" "~0")
        (string/replace-all "/" "~1")))
 
 (defn pointer
+  {:params [[:any]] :ret :string}
   ``A schema error path as a JSON pointer (RFC 6901):
   [:tags 3] -> "/tags/3", [] -> "".``
   [path]
   (string/join (map |(string "/" (escape-pointer-token $)) path) ""))
 
 (defn body
+  {:params [:number (or {:string :any} :nil)] :ret @{:string :any}}
   ``The problem members table for a status: {"type" "about:blank"
   "title <status message>" "status" N} merged with the extension (and
   standard-member override) table `ext`.``
@@ -49,6 +54,8 @@
          (or ext @{})))
 
 (defn response
+  {:params [:number (or {:string :any} :nil) (or {:string :any} :nil)]
+   :ret @{:status :number :body :any :headers :any}}
   ``An application/problem+json response:
 
       (problem/response 404)
@@ -60,6 +67,7 @@
                         (or headers @{}))))
 
 (defn validation-errors
+  {:params [[{:path [:any] & r}]] :ret @[@{:string :any}]}
   "Schema errors as the conventional \"errors\" extension member:
   [{\"pointer\" \"/tags/3\" \"detail\" \"expected :keyword...\"} ...]."
   [errors]
@@ -68,6 +76,8 @@
        errors))
 
 (defn validation
+  {:params [:number :keyword [{:path [:any] & r}]]
+   :ret @{:status :number :body :any :headers :any}}
   ``The problem for a batch of schema/check errors. `in` names the
   request part that failed (:body :query :params :headers) and lands in
   "detail" plus each error entry.``
@@ -78,6 +88,8 @@
                             (validation-errors errors))}))
 
 (defn from-error
+  {:params [:any {:status :number :dev :boolean & r}]
+   :ret @{:status :number :body :any :headers :any}}
   ``Map a caught error value onto a problem response — the renderer
   side of void/http/errors: an envelope (or a v1 `(abort 422 "msg")`)
   keeps its status and message, a :problem member (on the value, or

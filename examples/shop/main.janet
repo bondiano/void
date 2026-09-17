@@ -77,6 +77,7 @@
    :postgres (fn [] (require "void/db-postgres/init") :void/db-postgres)})
 
 (defn- s3-plugins
+  {:params [] :ret [:keyword :keyword]}
   ``The bucket, when this deployment has one. Required rather than
   imported, for the reason the driver is: a laptop keeping product
   pictures in ./storage never loads a signer, and never opens the TLS
@@ -87,6 +88,7 @@
   [:void/storage-s3 :void/tls])
 
 (defn- redis-plugins
+  {:params [] :ret [:keyword :keyword :keyword]}
   ``The three plugins that move state out of the process: sessions
   (:redis session store), the cache, and nothing else — the queue and
   the bus stay in the database on purpose, because both of them have
@@ -98,6 +100,9 @@
   [:void/redis :void/redis-http :void/cache-redis])
 
 (defn plugins
+  {:params [:keyword (or {:redis :any :s3 :any & r} :nil)]
+   :ret [:keyword]
+   :throws [:string]}
   ``The composition, as a function of the three things a deployment
   changes. Everything else is the same list on a laptop and in the
   compose file.``
@@ -199,6 +204,7 @@
    :shop/app])
 
 (defn database
+  {:params [] :ret :keyword}
   ``Which database this process boots on: :sqlite (the default — a
   file, nothing to install) or :postgres. `VOID_SHOP_DB=postgres void
   dev` is the whole of the change; the connection itself is
@@ -207,6 +213,7 @@
   (keyword (or (os/getenv "VOID_SHOP_DB") "sqlite")))
 
 (defn redis?
+  {:params [] :ret :boolean}
   ``Whether this process keeps its sessions and its cache in redis.
   Off on a laptop (one process, nothing to install), on in the compose
   file, where the web tier is more than one process and an in-memory
@@ -217,6 +224,7 @@
              (and v (not (index-of v ["" "0" "false" "no"]))))))
 
 (defn s3?
+  {:params [] :ret :boolean}
   ``Whether product pictures live in a bucket. Off on a laptop (a
   directory, nothing to install), on in the compose file, where minio
   is the bucket and the web tier is more than one process — a picture
@@ -227,6 +235,7 @@
              (and v (= "s3" (string/ascii-lower v))))))
 
 (defn profile
+  {:params [] :ret :keyword}
   "The profile this process runs under."
   []
   (keyword (or (os/getenv "VOID_PROFILE") "dev")))
@@ -250,7 +259,12 @@
   {:plugins-for (fn [_] (plugins (database) {:redis (redis?) :s3 (s3?)}))
    :profile (profile)})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret :any :throws [:string]}
+  "Binscript entrypoint: `args` as janet passes them (program name
+  first). With none, boots the shop; with some, is the `void` CLI
+  against this composition (see `cli/app-main`)."
+  [& args]
   # every one of these is read *now*, in the process that is starting,
   # rather than in a value that a build would have frozen
   (def prof (profile))

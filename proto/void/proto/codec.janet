@@ -43,11 +43,19 @@
 
 # -- values in -----------------------------------------------------------
 
-(defn- fail [path msg & args]
+(defn- fail
+  {:params [@[:keyword] :string :any] :ret :never}
+  "Raise a proto error naming the field path a value went wrong at."
+  [path msg & args]
   (errorf "proto: %s: %s" (string/join (map string path) ".")
           (string/format msg ;args)))
 
-(defn- int-value [path f v]
+(defn- int-value
+  {:params [@[:keyword] {:type :keyword & r} (or :number :abstract)]
+   :ret (or :number :abstract) :throws [:string]}
+  "Check `v` fits the integer type of field `f` — its width and, for
+  an unsigned type, its sign — and return it unchanged."
+  [path f v]
   (unless (wire/integer-value? v)
     (fail path "%q is not an integer, and %q is" v (f :type)))
   (def spec (desc/scalars (f :type)))
@@ -60,13 +68,21 @@
     (fail path "%q is negative, and %q is not" v (f :type)))
   v)
 
-(defn- string-value [path v]
+(defn- string-value
+  {:params [@[:keyword] :any] :ret :string :throws [:string]}
+  "A `string` field's value as a string: bytes as themselves, a
+  keyword or symbol by its name."
+  [path v]
   (cond
     (bytes? v) (string v)
     (or (keyword? v) (symbol? v)) (string v)
     (fail path "%q is not a string" v)))
 
-(defn- enum-number [path fname v]
+(defn- enum-number
+  {:params [@[:keyword] (or :keyword :string :buffer) :any] :ret :number :throws [:string]}
+  "The wire number of an enum value given as either a name or a
+  number."
+  [path fname v]
   (def e (desc/enum! fname))
   (cond
     (number? v) v
@@ -79,6 +95,8 @@
 (varfn encode-message [d value buf path depth] nil)
 
 (defn- default-value?
+  {:params [@[:keyword] {:type :keyword :ref :keyword? :name :keyword & r} :any] :ret :boolean
+   :throws [:string]}
   ``Is this the value proto3 leaves off the wire? A default is not
   written, which is what makes {:qty 0} and {} the same message. An
   enum is compared by number, so the zero value counts whether the
@@ -94,7 +112,11 @@
     (and (wire/integer-value? v) (compare= v 0))))
 
 
-(defn- encode-scalar [buf path f t v]
+(defn- encode-scalar
+  {:params [:buffer @[:keyword] {:type :keyword & r} :keyword :any] :ret :buffer
+   :throws [:string]}
+  "Append one scalar value of wire type `t`, without its tag."
+  [buf path f t v]
   (case t
     :bool (wire/encode-varint buf (if v 1 0))
     :string (wire/encode-bytes buf (string-value path v))
@@ -114,6 +136,8 @@
         :fixed64 (wire/encode-fixed64 buf n)))))
 
 (defn- encode-value
+  {:params [:buffer @[:keyword] {:type :keyword :ref :keyword? & r} :any :number] :ret :buffer
+   :throws [:string]}
   "One field value, without its tag."
   [buf path f v depth]
   (if (= :ref (f :type))
@@ -127,13 +151,23 @@
           (wire/encode-bytes buf inner))))
     (encode-scalar buf path f (f :type) v)))
 
-(defn- entry-wire-type [f]
+(defn- entry-wire-type
+  {:params [{:type :keyword :ref :keyword? & r}] :ret :keyword :throws [:string]}
+  "The wire type of a map's key or value field — an enum entry
+  travels as a varint, a message entry as length-delimited bytes."
+  [f]
   (if (= :ref (f :type))
     (let [d (desc/resolve (f :ref) (f :name))]
       (if (= :enum (d :kind)) :varint :length))
     (get-in desc/scalars [(f :type) :wire])))
 
-(defn- encode-map-entry [buf path f k v depth]
+(defn- encode-map-entry
+  {:params [:buffer @[:keyword]
+            {:key {:type :keyword & r} :value {:type :keyword & r} :name :keyword :number :number & r}
+            :any :any :number]
+   :ret :buffer :throws [:string]}
+  "Append one map field's [key value] entry, tag and all."
+  [buf path f k v depth]
   (def entry @"")
   (def kf (merge (f :key) {:name (f :name) :number 1 :label :singular}))
   (def vf (merge (f :value) {:name (f :name) :number 2 :label :singular}))
@@ -198,6 +232,8 @@
   buf)
 
 (defn encode
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any} :buffer?]
+   :ret :buffer :throws [:string]}
   ``Encode `value` (a dictionary) against a message descriptor or the
   name of one. Returns a buffer:
 
@@ -211,7 +247,12 @@
 
 # -- values out ----------------------------------------------------------
 
-(defn- decode-scalar [f t bytes idx path]
+(defn- decode-scalar
+  {:params [{:type :keyword & r} :keyword (or :string :buffer) :number @[:keyword]]
+   :ret [(or :boolean :string :number :abstract) :number]
+   :throws [:string]}
+  "Read one scalar value of wire type `t` at `idx`: [value next-idx]."
+  [f t bytes idx path]
   (case t
     :bool (let [[v next] (wire/decode-varint bytes idx)]
             [(not (and (number? v) (zero? v))) next])
@@ -240,7 +281,12 @@
 
 (varfn decode-fields [d bytes start stop into path depth] nil)
 
-(defn- decode-value [f bytes idx path depth]
+(defn- decode-value
+  {:params [{:type :keyword :ref :keyword? & r} (or :string :buffer) :number @[:keyword] :number]
+   :ret [:any :number] :throws [:string]}
+  "Read one field value (scalar, enum or message) at `idx`: [value
+  next-idx]."
+  [f bytes idx path depth]
   (if (= :ref (f :type))
     (let [dd (desc/resolve (f :ref) (f :name))]
       (if (= :enum (dd :kind))
@@ -257,7 +303,12 @@
           [(decode-fields dd bytes next stop @{} path (inc depth)) stop])))
     (decode-scalar f (f :type) bytes idx path)))
 
-(defn- decode-map-entry [f bytes idx path depth]
+(defn- decode-map-entry
+  {:params [{:key {:type :keyword & r} :value {:type :keyword & r} :name :keyword & r}
+            (or :string :buffer) :number @[:keyword] :number]
+   :ret [:any :any :number] :throws [:string]}
+  "Read one map entry at `idx`: [key value stop-idx]."
+  [f bytes idx path depth]
   (def [len next] (wire/decode-varint bytes idx))
   (def stop (+ next len))
   (def kf (merge (f :key) {:name (f :name) :number 1 :label :singular}))
@@ -276,6 +327,7 @@
   [k v stop])
 
 (defn- blank
+  {:params [{:fields [:any] & r} @{:keyword :any}] :ret @{:keyword :any}}
   ``A fresh message: proto3 says a decoded message has a value for
   every field, so the defaults are here before a byte is read.
   Everything with explicit presence — a message field, an `optional`
@@ -357,6 +409,9 @@
   into)
 
 (defn decode-into
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) (or :string :buffer)
+            @{:keyword :any}]
+   :ret @{:keyword :any} :throws [:string]}
   ``Decode `bytes` into an existing message table — protobuf's merge:
   repeated fields accumulate, singular ones take the last value and
   nested messages merge. Concatenating two encodings and decoding the
@@ -367,6 +422,8 @@
   (decode-fields d bytes 0 (length bytes) into [(d :name)] 0))
 
 (defn decode
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer) (or :string :buffer)]
+   :ret @{:keyword :any} :throws [:string]}
   ``Decode `bytes` against a message descriptor or the name of one:
 
       (codec/decode :example/Order payload)

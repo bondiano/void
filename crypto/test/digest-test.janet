@@ -5,7 +5,11 @@
 
 (lib/load!)
 
-(defn- hex-of [algo data] (encode/hex (digest/digest algo data)))
+(defn- hex-of
+  {:params [:keyword (or :string :buffer)] :ret :string :throws [:string]}
+  "Hash `data` with `algo` and spell the result in hex, for comparing
+  against a test vector."
+  [algo data] (encode/hex (digest/digest algo data)))
 
 # -- FIPS 180-4 / RFC 6234 vectors ---------------------------------------
 

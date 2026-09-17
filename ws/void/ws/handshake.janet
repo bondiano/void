@@ -32,24 +32,31 @@
   "13")
 
 (defn accept-key
+  {:params [:string] :ret :string}
   "The `Sec-WebSocket-Accept` value for a client's `Sec-WebSocket-Key`
   (step 5): base64(sha1(key + guid))."
   [key]
   (base64/encode (sha1/digest (string key guid))))
 
 (defn- header-tokens
+  {:params [:any] :ret (or @[:string] [:string])}
   "A comma-separated header value as lowercase trimmed tokens."
   [value]
   (if (nil? value)
     []
     (map |(string/ascii-lower (string/trim $)) (string/split "," (string value)))))
 
-(defn- has-token? [req name token]
+(defn- has-token?
+  {:params [{:headers :any & r} :string :string] :ret :number?}
+  "Does the request's `name` header carry `token` among its
+  comma-separated values?"
+  [req name token]
   (def v (get-in req [:headers name]))
   (def values (if (indexed? v) v [v]))
   (some |(index-of token (header-tokens $)) values))
 
 (defn valid-key?
+  {:params [:any] :ret :boolean :narrows :string}
   ``Is this a `Sec-WebSocket-Key`? §4.1 says 16 random bytes,
   base64-encoded — so 24 characters that decode to 16 bytes. A server
   that skips the check answers a nonce it never read.``
@@ -60,6 +67,7 @@
          (and ok (= 16 (length raw))))))
 
 (defn requested-protocols
+  {:params [{:headers :any & r}] :ret @[:string]}
   "The subprotocols the client offered (`Sec-WebSocket-Protocol`), in
   its order of preference."
   [req]
@@ -68,6 +76,8 @@
   (filter |(not (empty? $)) (mapcat header-tokens values)))
 
 (defn negotiate-protocol
+  {:params [{:headers :any & r} (or :nil @[:string] [:string])]
+   :ret (or :string :keyword :nil)}
   ``Pick a subprotocol: the first one the *server* offers that the
   client also named — the server's preference wins, which is the
   choice §4.2.2 leaves to it.
@@ -88,6 +98,9 @@
             :none)))))
 
 (defn check
+  {:params [{:method :any :headers :any & r} (or @[:string] [:string] :nil)]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            {:key :string :protocol (or :string :keyword :nil)})}
   ``Read the upgrade request. Returns `{:key ... :protocol ...}` when
   it is one, or a response table to send back when it is not:
 
@@ -134,6 +147,7 @@
             {:key key1 :protocol protocol}))))))
 
 (defn response-headers
+  {:params [:string (or :string :keyword :nil)] :ret @{:string :string}}
   "The 101 headers for an accepted handshake."
   [key &opt protocol]
   (def h @{"upgrade" "websocket"
@@ -146,6 +160,7 @@
 # -- the client side of the same handshake -------------------------------
 
 (defn client-key
+  {:params [] :ret :string}
   "A fresh `Sec-WebSocket-Key`: 16 random bytes, base64. The randomness
   is `os/cryptorand`, which Janet has built in — see ./sha1 on why this
   package needs nothing else."
@@ -153,13 +168,18 @@
   (base64/encode (string (os/cryptorand 16))))
 
 (defn check-response
+  {:params [{:status :number :message :string? :headers :any & r} :string]
+   :ret :string?}
   ``Validate a server's handshake answer against the key that was
   sent. Returns nil when it is good, an error string when it is not —
   a client that skips this will happily talk frames to something that
   never agreed to speak them.``
   [head key]
   (def headers (get head :headers {}))
-  (defn one [name]
+  (defn one
+    {:params [:string] :ret :any}
+    "One header value out of `headers`, first of an array."
+    [name]
     (def v (get headers name))
     (if (indexed? v) (first v) v))
   (cond

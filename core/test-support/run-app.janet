@@ -4,7 +4,11 @@
 (import ../void/core/plugin :as plugin)
 (import ../void/core/system :as system)
 
-(defn- say [& xs]
+(defn- say
+  {:params [:any] :ret :nil}
+  "Print one lifecycle line and flush immediately, so the parent
+  process sees it as soon as it happens, not when a buffer fills."
+  [& xs]
   (print ;xs)
   (flush))
 

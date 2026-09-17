@@ -27,6 +27,7 @@
 (import ../modules/cart/cart.session :as cart-session)
 
 (defn notice
+  {:params [{:message :any & r}] :ret (or :tuple :nil)}
   ``The one-line message a page carries back from a write. Every
   module's view calls it, which is why it is here and not in three
   places.``
@@ -45,7 +46,10 @@
   string is how they start disagreeing."
   "text-sm font-medium text-slate-600 no-underline transition hover:text-slate-900")
 
-(defn- nav-cart [count]
+(defn- nav-cart
+  {:params [:number] :ret :tuple}
+  "The cart link, badged with how many items are in it."
+  [count]
   [:a {:class (string nav-link " inline-flex items-center gap-2") :href "/cart"}
    "Cart"
    [:span {:id "cart-badge"
@@ -53,6 +57,7 @@
     (string count)]])
 
 (defn staff?
+  {:params [] :ret :boolean}
   ``Does whoever is asking hold the staff role?
 
   `authz/has-role?` over a bare context rather than `(authz/can?
@@ -66,7 +71,10 @@
   []
   (authz/has-role? (authz/make-context) :staff))
 
-(defn- who-bar []
+(defn- who-bar
+  {:params [] :ret :tuple}
+  "Who's signed in, with a way to sign out — or a sign-in link when nobody is."
+  []
   (if (auth/current-user)
     [:span {:class "flex items-center gap-2 text-sm text-slate-500"}
      [:span {:class "font-medium text-slate-900"}
@@ -77,6 +85,7 @@
     [:a {:class nav-link :href "/sign-in"} "Sign in"]))
 
 (defn layout
+  {:params [:any {:request :any & r}] :ret @[:any]}
   ``The one page frame.
 
   The htmx script comes from a CDN, which is why config/default.janet
@@ -113,6 +122,10 @@
       [:a {:class "text-indigo-600 no-underline hover:underline" :href "/health"} "health"]]]))
 
 (defn page
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``A view, rendered into the frame. Every HTML handler in this
   application ends in this call and nothing else — which is what keeps
   `:layout` out of eleven handlers.``

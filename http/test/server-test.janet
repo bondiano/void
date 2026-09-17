@@ -7,7 +7,12 @@
 
 (var sse-released false)
 
-(defn- app [req]
+(defn- app
+  {:params [@{:path :string :body :any :query @{:string :any} & r}] :ret @{:status :number & r}}
+  "The counterpart server the whole suite drives over real sockets:
+  keep-alive, pipelining, chunked and SSE bodies, timeouts and
+  malformed input, all dispatched by path."
+  [req]
   (case (req :path)
     "/hello" (ring/text 200 "hello")
     "/sse-forever" (ring/sse (coro
@@ -45,7 +50,10 @@
 (def port (string (inst :port)))
 (assert (pos? (inst :port)) "ephemeral port resolved")
 
-(defn- connect [] (net/connect "127.0.0.1" port))
+(defn- connect
+  {:params [] :ret :any}
+  "A fresh connection to the test server."
+  [] (net/connect "127.0.0.1" port))
 
 (def cbuf
   "Client-side read buffer for the persistent connection below —
@@ -54,6 +62,10 @@
   @"")
 
 (defn- read-response
+  {:params [:any :buffer?]
+   :ret [@{:status :number :message :string :http-version [:number :number]
+           :headers @{:any :any} :head-size :number}
+         :string?]}
   "Read one response off the connection: [head body-string]. Consumes
   the response from `buf` (default cbuf), leaving any pipelined rest."
   [conn &opt buf]
@@ -75,6 +87,11 @@
   [head body])
 
 (defn- fetch
+  {:params [:string]
+   :ret [(or :nil (enum :error)
+             @{:status :number :message :string :http-version [:number :number]
+               :headers @{:any :any} :head-size :number})
+         :string?]}
   "One-shot request on its own connection; returns [head raw-rest]."
   [raw]
   (def conn (net/connect "127.0.0.1" port))
@@ -332,6 +349,10 @@
 (def drip-port (string (drip :port)))
 
 (defn- drip-until-response
+  {:params [:string :string]
+   :ret (or @{:status :number :message :string :http-version [:number :number]
+              :headers @{:any :any} :head-size :number}
+            :nil)}
   "Write first-bytes, then drip one filler byte every ~50 ms until the
   server answers (returns the response head) or the drip runs out (nil)."
   [first-bytes filler]

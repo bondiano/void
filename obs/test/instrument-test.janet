@@ -252,11 +252,20 @@
 (set trace/enabled true)
 
 (defn- var-of
+  {:params [:string :symbol] :ret :any}
   "The current value of a module's var — what `module-var!` writes."
   [path name]
   (in (get-in (require path) [name :ref] @[nil]) 0))
 
-(defn- span-named [name]
+(defn- span-named
+  {:params [:string]
+   :ret (or @{:name :string :trace-id :string :span-id :string
+              :parent-id :string? :remote :boolean :kind :keyword
+              :sampled :boolean :start :number :started-at :number
+              :attrs @{:any :any} :status :keyword & r}
+            :nil)}
+  "The exported test span named `name`, or nil."
+  [name]
   (first (filter |(= name ($ :name)) spans)))
 
 (assert (trace/consuming?)

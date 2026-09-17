@@ -5,7 +5,11 @@
 (import ../void/core/log :as log)
 (import ../void/core/config :as config)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :string}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error rendered as a string."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))
@@ -207,7 +211,11 @@
 
 # -- :void.core/config-source: a plugin's secret source reaches config/load --
 
-(defn- vault-plugin [name priority answer]
+(defn- vault-plugin
+  {:params [:symbol :number :string] :ret :any}
+  "A plugin contributing one `:void.core/config-source` that answers
+  `answer` for the secret named VAULT_KEY, at `priority`."
+  [name priority answer]
   (plugin/manifest name
     :contributes {:void.core/config-source
                   [{:name (keyword name) :priority priority
@@ -432,7 +440,11 @@
 
 # -- :provides conflict caught by dry-run --------------------------------
 
-(defn store-comp [key]
+(defn store-comp
+  {:params [:keyword] :ret :any}
+  "A component providing `:test/store`, so several of them can
+  collide on the same interface."
+  [key]
   (system/component key :provides [:test/store] :start (fn [d c] key)))
 
 (def multi-store

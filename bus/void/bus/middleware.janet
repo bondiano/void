@@ -90,6 +90,10 @@
 (def phase/response (phases :response))
 
 (defn normalize
+  {:params [:any]
+   :ret {:name :keyword :wrap (fn [:any :any] :any) :phase :number
+         :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}
+   :throws [:string]}
   "Validate a `:void.bus/middleware` contribution and fill in its
   defaults."
   [c]
@@ -109,6 +113,12 @@
   (table/to-struct (merge @{:doc nil :named false :when nil} c {:phase phase})))
 
 (defn sort-contributions
+  {:params [(or @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
+                   :when :any & r}]
+                [{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
+                  :when :any & r}])]
+   :ret @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
+           :when :any & r}]}
   "Deterministic chain order: ascending phase, ties broken by the
   contributing plugin's name, then the middleware name."
   [contribs]
@@ -119,6 +129,14 @@
     contribs))
 
 (defn select
+  {:params [(or @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
+                   :when (or :nil (fn [:any] :boolean)) & r}]
+                [{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
+                  :when (or :nil (fn [:any] :boolean)) & r}])
+            {:name :any :middleware (or :nil [:keyword]) & r}]
+   :ret @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
+           :when (or :nil (fn [:any] :boolean)) & r}]
+   :throws [:string]}
   ``The middleware that apply to one handler: the global ones whose
   `:when` predicate accepts the handler's options, plus the `:named`
   ones the handler lists under `:middleware`. An unknown name is an
@@ -138,6 +156,12 @@
     c))
 
 (defn chain
+  {:params [(or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+                   :named :boolean :when :any & r}]
+                [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+                  :named :boolean :when :any & r}])
+            (fn [:any] :any) (or :nil {:keyword :any})]
+   :ret (fn [:any] :any)}
   ``Compose selected middleware around a handler: the lowest phase
   ends up outermost. `opts` is the handler's own options, handed to
   every `:wrap` (see the module docstring).``
@@ -151,6 +175,7 @@
 # -- the built-ins -------------------------------------------------------
 
 (defn panic-guard
+  {:params [] :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Log a failed delivery with everything needed to find it again —
   the handler, the topic, the message id, the correlation id — and
   re-raise, because what a failure *means* is the backend's declared
@@ -175,6 +200,7 @@
            (propagate err fib)))))})
 
 (defn correlation
+  {:params [] :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Bind the message's correlation and causation onto the fiber and
   into the log context, so that everything the handler does — every
   log line, every message it publishes in turn — carries the same
@@ -198,6 +224,8 @@
            (handler msg)))))})
 
 (defn tracing
+  {:params [{:parse (fn [:any] :any) :with-span (fn [:any :any :any] :any) & r}]
+   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Continue the publisher's trace in the consumer: the `:traceparent`
   the message carries becomes the remote parent of a span around the
   handler, so a request that published and a worker that consumed are
@@ -230,7 +258,14 @@
                    :messaging.operation "process"}}
          (fn traced-body [] (handler msg)))))})
 
-(defn- backoff-delay [cfg attempt]
+(defn- backoff-delay
+  {:params [{:base :number? :max :number? :jitter :number? :strategy :keyword? & r} :number]
+   :ret :number}
+  "The delay before the next retry attempt, with jitter: `cfg`'s
+  `:strategy` (`:fixed`, `:linear` or the exponential default), capped
+  at `:max` and nudged by a random fraction of `:jitter` so retries
+  from many consumers do not all wake up on the same tick."
+  [cfg attempt]
   (def base (get cfg :base 0.2))
   (def cap (get cfg :max 30))
   (def jitter (get cfg :jitter 0.25))
@@ -243,6 +278,9 @@
   (+ capped (* capped jitter (math/random))))
 
 (defn retry
+  {:params [{:attempts :number? :base :number? :max :number? :jitter :number?
+             :strategy :keyword? & r}]
+   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Try the rest of the chain again, `:attempts` times, with backoff
   and jitter. On the last failure the error is re-raised, which is
   what puts the message in front of the poison middleware and, under
@@ -277,6 +315,8 @@
        out))})
 
 (defn poison
+  {:params [{:max-attempts :number? :topic :keyword? & r} (fn [:any :any :any] :any)]
+   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Take a message that has been redelivered too often out of the
   rotation: publish it on the poison topic and ack it. `publish` is
   the broker's own, so a poisoned message is an ordinary message —
@@ -319,6 +359,8 @@
            nil))))})
 
 (defn validate
+  {:params [] :ret {:name :keyword :phase :number :doc :string
+                     :when (fn [:any] :boolean) :wrap (fn [:any :any] :any)}}
   ``Check a message's payload against the schema its handler declared
   (`{:topic :order/paid :schema OrderPaid}`) before the handler sees
   it. A payload that does not match is an error like any other — it
@@ -353,6 +395,8 @@
        (handler (merge @{} msg {:payload res}))))})
 
 (defn dedup
+  {:params [{:window :number? & r}]
+   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Deliver a message id once per window. The seen-set is a table in
   this process's heap with a coarse two-generation expiry: ids move
   into a cold half when the window turns and are dropped when it turns
@@ -390,6 +434,8 @@
            (handler msg)))))})
 
 (defn throttle
+  {:params [{:max :number? :window :number? & r}]
+   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
   ``Hold a consumer to `:max` messages per `:window` seconds, by
   sleeping before the handler rather than by dropping: a bus consumer
   that is being paced has somewhere to wait — the log it is reading

@@ -19,7 +19,11 @@
 
 # the fixture is a Janet long-string and so carries no trailing
 # newline; everything before it is compared byte for byte
-(defn- same-pem? [a b] (= (string/trimr a) (string/trimr b)))
+(defn- same-pem?
+  {:params [:string :string] :ret :boolean :narrows :any}
+  "Two PEM blocks, ignoring the trailing newline a Janet long-string
+  carries and OpenSSL's own output does not."
+  [a b] (= (string/trimr a) (string/trimr b)))
 
 (assert (same-pem? keys/rsa-public ((by-kid "rsa-1") :pem))
         "the RSA JWK encodes to exactly the PEM OpenSSL wrote for that key")
@@ -70,7 +74,11 @@
 # Both directions are here because getting either wrong produces a PEM
 # that parses and a signature that never verifies.
 
-(defn- der-of [pem]
+(defn- der-of
+  {:params [:string] :ret :string :throws [:string]}
+  "The raw DER bytes inside a PEM block — strip the armor and decode
+  the base64."
+  [pem]
   (string (encode/base64-decode
             (string/join (filter |(not (string/has-prefix? "-----" $))
                                  (string/split "\n" pem))))))

@@ -34,6 +34,10 @@
 (import ./catalog.dto :as dto)
 
 (defn products-index
+  {:params [{:query :any & r}]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
   "GET /api/products — the catalog, paged and sortable."
   [req]
   (def paging (pagination/params req {:allowed-sort [:sku :name :price-cents]}))
@@ -46,6 +50,10 @@
                                   (merge paging {:total (result :total)}))))
 
 (defn product-show
+  {:params [{:params {:id :any & r} & r}]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
   "GET /api/products/:id"
   [req]
   (if-let [p (service/on-sale (get-in req [:params :id]))]

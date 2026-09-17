@@ -48,6 +48,8 @@
    :cross-origin-opener-policy :permissions-policy :x-dns-prefetch-control])
 
 (defn hsts-value
+  {:params [(or {:max-age :number? :include-subdomains :boolean? :preload :boolean?} :nil)]
+   :ret :string?}
   ``The Strict-Transport-Security value for `{:max-age :include-subdomains
   :preload}`, or nil when it is not configured.``
   [cfg]
@@ -58,6 +60,7 @@
             (if (get cfg :preload) "; preload" ""))))
 
 (defn compute
+  {:params [(or {:enabled :boolean? :hsts :any & r} :nil)] :ret {:string :string}}
   ``The header table for a configuration — name -> value, ready to
   stamp. Built once at boot: these values never depend on the
   request, and recomputing them per response would be the kind of
@@ -76,6 +79,7 @@
   (freeze out))
 
 (defn apply!
+  {:params [a {:string :string}] :ret a}
   ``Stamp `headers` onto a response, without overwriting anything the
   handler set: a response that chose its own `x-frame-options` had a
   reason, and this is a floor rather than a policy.``

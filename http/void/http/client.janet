@@ -80,6 +80,7 @@
   nil)
 
 (defn tls-available?
+  {:params [] :ret :boolean}
   "Can this process open https:// connections? What the boot gates of
   void/oauth and void/obs-otlp ask."
   []
@@ -120,6 +121,10 @@
     :bytes-out 0 :bytes-in 0 :request-us 0})
 
 (defn stats
+  {:params []
+   :ret {:requests :number :responses :number :failures :number :timeouts :number
+         :connects :number :reconnects :number :redirects :number
+         :bytes-out :number :bytes-in :number :request-us :number}}
   "What this process's HTTP clients have done: requests, responses,
   failures, connections opened, sockets reopened under a reused
   keep-alive, redirects followed, bytes each way and total time in
@@ -128,17 +133,28 @@
   (table/to-struct counters))
 
 (defn reset-stats!
+  {:params [] :ret :nil}
   "Zero the counters — for a test that asserts on them."
   []
   (eachk k counters (put counters k 0))
   nil)
 
-(defn- count! [key n]
+(defn- count!
+  {:params [:keyword :number]
+   :ret @{:requests :number :responses :number :failures :number :timeouts :number
+          :connects :number :reconnects :number :redirects :number
+          :bytes-out :number :bytes-in :number :request-us :number}}
+  "Add `n` to one counter."
+  [key n]
   (put counters key (+ (get counters key 0) n)))
 
 # -- urls ----------------------------------------------------------------
 
 (defn parse-url
+  {:params [:string]
+   :ret {:scheme :string :host :string :port :string? :target :string
+         :userinfo :string?}
+   :throws [:string]}
   ``Split an absolute URL into `{:scheme :host :port :target
   :userinfo}`. `:port` is a string (what `net/connect` takes) and
   `:target` is the request target — path and query, `/` when the URL
@@ -187,12 +203,20 @@
    :target target
    :userinfo userinfo})
 
-(defn- authority-str [host port scheme]
+(defn- authority-str
+  {:params [:string (or :string :number) :string] :ret :string}
+  "The host[:port] a request's Host header and an absolute URL both
+  need: the port is left out when it is the scheme's implied one."
+  [host port scheme]
   (def implied (get default-ports scheme))
   (def h (if (string/find ":" host) (string "[" host "]") host))
   (if (= (string port) implied) h (string h ":" port)))
 
 (defn url
+  {:params [{:scheme :string? :host :string :port (or :string :number :nil)
+             :path :string? :query (or @{:any :any} :string :nil) & r}]
+   :ret :string
+   :throws [:string]}
   ``Compose a URL out of its parts — the inverse of `parse-url`:
 
       (client/url {:host "example.test" :port 4318 :path "/v1/traces"
@@ -216,6 +240,7 @@
           (if qs (string "?" qs) "")))
 
 (defn resolve-url
+  {:params [:string :string] :ret :string :throws [:string]}
   ``Resolve a `Location` against the URL it came from, the way a
   browser does: an absolute URL as it is, `//host/path` keeping the
   scheme, `/path` keeping the authority, anything else relative to the
@@ -243,6 +268,7 @@
 # -- writing a request ---------------------------------------------------
 
 (defn- lower-keys
+  {:params [(or @{:any :any} :nil)] :ret @{:string :any}}
   "Header names as the wire wants to compare them: lowercase strings."
   [headers]
   (def out @{})
@@ -250,10 +276,18 @@
     (put out (string/ascii-lower (string k)) v))
   out)
 
-(defn- method-str [method]
+(defn- method-str
+  {:params [:any] :ret :string}
+  "A request method as the wire wants it: an uppercase string, :get
+  when none is given."
+  [method]
   (string/ascii-upper (string (if (keyword? method) method (or method :get)))))
 
 (defn format-request
+  {:params [{:method :any :target :string? :headers (or @{:any :any} :nil)
+             :body (or :string :nil) :authority :string? :close :boolean?
+             :user-agent :string? & r}]
+   :ret :buffer}
   ``The bytes of one request: head, blank line and body. Pure — a test
   asserts on the string, and `send!` is the only thing that writes
   it.
@@ -289,6 +323,7 @@
 # -- reading a response --------------------------------------------------
 
 (defn- read-more!
+  {:params [:any :buffer :number?] :ret (or :buffer :nil) :throws [:any]}
   "Grow buf from the socket. Returns buf, or nil at EOF; throws
   :void.http/timeout on a read timeout."
   [conn buf timeout]
@@ -303,17 +338,32 @@
         (wire/peer-gone? kind) nil
         (error res)))))
 
-(defn- header-str [headers name]
+(defn- header-str
+  {:params [@{:any :any} :string] :ret :any}
+  "One response header's value, first of an array when the header
+  repeated."
+  [headers name]
   (def v (get headers name))
   (if (indexed? v) (first v) v))
 
-(defn- bodyless? [status method]
+(defn- bodyless?
+  {:params [:number :string] :ret :boolean :narrows :any}
+  "Does this status/method pair rule out a response body regardless of
+  what framing headers say?"
+  [status method]
   (or (= "HEAD" method)
       (= 204 status)
       (= 304 status)
       (and (>= status 100) (< status 200))))
 
-(defn- read-head! [conn buf timeout]
+(defn- read-head!
+  {:params [:any :buffer :number?]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :head-size :number}
+   :throws [(or {:void.http/closed :boolean :message :string}
+                {:void.http/protocol :boolean :message :string})]}
+  "Read and parse the response head, growing buf until it has one."
+  [conn buf timeout]
   (var head (wire/parse-response-head buf))
   (while (nil? head)
     (unless (read-more! conn buf timeout)
@@ -324,7 +374,13 @@
     (error {:void.http/protocol true :message "malformed response head"}))
   head)
 
-(defn- read-sized! [conn buf head len max-body timeout]
+(defn- read-sized!
+  {:params [:any :buffer {:head-size :number & r} :number :number :number?]
+   :ret [:string :number]
+   :throws [(or {:void.http/too-large :boolean :message :string}
+                {:void.http/closed :boolean :message :string})]}
+  "Read a Content-Length-framed body of exactly `len` bytes."
+  [conn buf head len max-body timeout]
   (when (> len max-body)
     (error {:void.http/too-large true
             :message (string/format "response body of %d bytes is past :max-body" len)}))
@@ -335,6 +391,11 @@
   [(string/slice buf (head :head-size) need) need])
 
 (defn- chunked-response!
+  {:params [:any :buffer {:head-size :number & r} :number :number?]
+   :ret [:string :number]
+   :throws [(or {:void.http/closed :boolean :message :string}
+                {:void.http/too-large :boolean :message :string}
+                {:void.http/protocol :boolean :message :string})]}
   "Decode a chunked response with wire's decoder — the server's reader,
   driven from this side: the body is bounded by :max-body, a short
   read is a closed connection, and a decoder failure is a protocol
@@ -354,14 +415,30 @@
       (error {:void.http/protocol true :message (st :message)})))
   [(st :body) (st :pos)])
 
-(defn- read-to-eof! [conn buf head max-body timeout]
+(defn- read-to-eof!
+  {:params [:any :buffer {:head-size :number & r} :number :number?]
+   :ret [:string :number]
+   :throws [{:void.http/too-large :boolean :message :string}]}
+  "Read an unframed body until the peer closes the connection."
+  [conn buf head max-body timeout]
   (while (read-more! conn buf timeout)
     (when (> (- (length buf) (head :head-size)) max-body)
       (error {:void.http/too-large true
               :message "response body is past :max-body"})))
   [(string/slice buf (head :head-size)) (length buf)])
 
-(defn- read-response! [conn buf opts method]
+(defn- read-response!
+  {:params [:any :buffer {:read-timeout :number? :max-body :number? & r} :string]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+   :throws [(or {:void.http/closed :boolean :message :string}
+                {:void.http/protocol :boolean :message :string}
+                {:void.http/too-large :boolean :message :string})]}
+  "Read one whole response off conn: the head, then the body by
+  whichever framing the headers name (chunked, Content-Length, or
+  read-to-EOF), plus whether the peer said to close the connection
+  after it."
+  [conn buf opts method]
   (def timeout (opts :read-timeout))
   (def max-body (get opts :max-body (defaults :max-body)))
   (def head (read-head! conn buf timeout))
@@ -407,6 +484,8 @@
 # through one implementation of each format.
 
 (defn target-of
+  {:params [{:target :string? :path :string? :query (or @{:any :any} :string :nil) & r}]
+   :ret :string}
   ``The request target of a request table: `:target` (or `:path`) with
   `:query` appended. `:query` is a dictionary or a ready query string,
   and it *adds* to a query the target already carries rather than
@@ -425,6 +504,9 @@
     (string base "?" qs)))
 
 (defn- body-of
+  {:params [{:body :any :form (or @{:any :any} :nil) :multipart :any & r}]
+   :ret [:any :string?]
+   :throws [:string]}
   ``The body bytes and the content type they imply. Exactly one of
   `:body`, `:form` and `:multipart` may be given: a request with two
   bodies is a mistake the wire cannot represent, and picking one of
@@ -442,6 +524,16 @@
 # -- the client ----------------------------------------------------------
 
 (defn open
+  {:params [(or {:url :string? :host :string? :port (or :string :number :nil)
+                 :headers (or @{:any :any} :nil) :cookies (or @{:any :any} :nil)
+                 :timeout :number? :connect-timeout :number? :max-body :number?
+                 :keep-alive :boolean? & r}
+                :nil)]
+   :ret @{:host :string :port :string :scheme :string :authority :string
+          :headers @{:any :any} :cookies @{:any :any} :timeout :number?
+          :connect-timeout :number? :max-body :number :keep-alive :boolean
+          :conn (or :abstract :nil) :buf :buffer}
+   :throws [:string]}
   ``A client for one host. Options: `:url` (any URL on the host — its
   scheme, host and port are what is kept), or `:host` and `:port`
   directly, plus the `defaults` above and `:headers` sent with every
@@ -473,6 +565,7 @@
     :buf @""})
 
 (defn close!
+  {:params [{:conn (or :abstract :nil) :buf :buffer & r}] :ret :nil}
   "Close the client's socket, if it has one open. A client stays
   usable — the next `send!` opens a new one."
   [client]
@@ -482,7 +575,14 @@
   (buffer/clear (client :buf))
   nil)
 
-(defn- connect! [client]
+(defn- connect!
+  {:params [{:host :string :port :string :scheme :string :authority :string
+             :connect-timeout :number? :conn (or :abstract :nil) :buf :buffer & r}]
+   :ret :abstract
+   :throws [:string]}
+  "Open the client's socket (or hand off to `tls-connect` for https),
+  counting it and clearing the read buffer for the new connection."
+  [client]
   (def [ok conn]
     (protect
       (if (= "https" (client :scheme))
@@ -504,6 +604,7 @@
   conn)
 
 (defn- with-deadline*
+  {:params [:number? (fn [] :any)] :ret :any :throws [:any]}
   ``Run `f` as its own task under a deadline: the cancellation lands
   on the task and not on the caller's fiber (see the module
   docstring). Without a timeout there is no task and no channel — a
@@ -512,7 +613,11 @@
   [seconds f]
   (deadline/call seconds f (fn [] (error {:void.http/timeout true}))))
 
-(defn- write! [conn bytes]
+(defn- write!
+  {:params [:any :buffer] :ret :nil :throws [:any]}
+  "Write bytes to conn, translating a peer hangup into
+  :void.http/closed the way a stuck read already does."
+  [conn bytes]
   (def [ok err] (protect (:write conn bytes)))
   (unless ok
     # a peer that closed the socket while it was parked reads as a
@@ -523,7 +628,17 @@
       (error err)))
   nil)
 
-(defn- exchange! [client bytes method]
+(defn- exchange!
+  {:params [{:host :string :port :string :scheme :string :authority :string
+             :headers @{:any :any} :cookies @{:any :any} :timeout :number?
+             :connect-timeout :number? :max-body :number :keep-alive :boolean
+             :conn (or :abstract :nil) :buf :buffer & r}
+            :buffer :string]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+   :throws [:any]}
+  "One connect-if-needed, write, read cycle on the client's socket."
+  [client bytes method]
   (def conn (or (client :conn) (connect! client)))
   (write! conn bytes)
   (count! :bytes-out (length bytes))
@@ -551,6 +666,14 @@
   nil)
 
 (defn- send-prepared!
+  {:params [{:host :string :port :string :scheme :string :authority :string
+             :headers @{:any :any} :cookies @{:any :any} :timeout :number?
+             :connect-timeout :number? :max-body :number :keep-alive :boolean
+             :conn (or :abstract :nil) :buf :buffer & r}
+            :string :string @{:any :any} (or :string :nil) :boolean?]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+   :throws [:any]}
   ``The exchange: format the head with the headers as they now are,
   write it, read the answer, and reopen-and-repeat once when the
   keep-alive socket turns out to have been closed by the peer.``
@@ -604,6 +727,17 @@
   out)
 
 (defn send!
+  {:params [{:host :string :port :string :scheme :string :authority :string
+             :headers @{:any :any} :cookies @{:any :any} :timeout :number?
+             :connect-timeout :number? :max-body :number :keep-alive :boolean
+             :conn (or :abstract :nil) :buf :buffer & r}
+            {:method :any :close :boolean? :headers (or @{:any :any} :nil)
+             :target :string? :path :string? :query (or @{:any :any} :string :nil)
+             :body :any :form (or @{:any :any} :nil) :multipart :any
+             :cookies (or @{:any :any} :nil) & r}]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+   :throws [:any]}
   ``Send one request on this client and return the response:
 
       (client/send! c {:method :post :target "/v1/traces"
@@ -648,6 +782,7 @@
 # header, the cookies the server set, and where a 30x points.
 
 (defn header
+  {:params [{:headers @{:any :any} & r} :string] :ret :any}
   ``One response header by lowercase name. Repeated headers arrive as
   arrays (`wire/parse-response-head`); this returns the first, and
   `(resp :headers)` still holds all of them — the same contract
@@ -657,6 +792,7 @@
   (if (indexed? v) (first v) v))
 
 (defn header-values
+  {:params [{:headers @{:any :any} & r} :string] :ret @[:any]}
   "Every value of one response header, as an array — `set-cookie` is
   the header this exists for."
   [resp name]
@@ -667,6 +803,11 @@
     @[v]))
 
 (defn cookies
+  {:params [{:headers @{:any :any} & r}]
+   :ret @[@{:name :string :value :string :path (or :string :nil)
+            :domain (or :string :nil) :expires (or :string :nil)
+            :max-age (or :number :nil) :secure :boolean? :http-only :boolean?
+            :same-site (or :keyword :string :nil)}]}
   ``The cookies a response set, parsed whole:
 
       [{:name "session" :value "abc" :path "/" :max-age 3600
@@ -680,6 +821,7 @@
   (filter truthy? (map wire/parse-set-cookie (header-values resp "set-cookie"))))
 
 (defn cookie-values
+  {:params [{:headers @{:any :any} & r}] :ret @{:string :string}}
   "The response's cookies as a name -> value table — what to hand back
   to `:cookies` on the next request."
   [resp]
@@ -699,12 +841,24 @@
   {301 :maybe-get 302 :maybe-get 303 :get 307 :keep 308 :keep})
 
 (defn redirect?
+  {:params [{:status :number :headers @{:any :any} & r}] :ret :boolean :narrows :any}
   "Does this response point somewhere else (a 30x with a Location)?"
   [resp]
   (truthy? (and (get redirect-statuses (resp :status))
                 (header resp "location"))))
 
 (defn follow-target
+  {:params [{:status :number :headers @{:any :any} & r}
+            :string
+            {:method :any :headers (or @{:any :any} :nil) :cookies (or @{:any :any} :nil)
+             :body :any :form (or @{:any :any} :nil) :multipart :any :timeout :number?
+             :connect-timeout :number? :max-body :number? :user-agent :string?
+             :follow :number? & r}]
+   :ret (or :nil
+            @{:url :string :method :keyword :headers @{:any :any}
+              :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
+              :multipart :any :timeout :number? :connect-timeout :number?
+              :max-body :number? :user-agent :string? :follow :number?})}
   ``Where a redirect leads, as the request that would go there:
   `{:url :method :body :headers}` — or nil when the response is not a
   redirect. `base` is the URL this response answered.
@@ -759,6 +913,15 @@
 # -- one-shot requests ---------------------------------------------------
 
 (defn request
+  {:params [{:url :string? :method :any :follow :number?
+             :headers (or @{:any :any} :nil) :cookies (or @{:any :any} :nil) :body :any
+             :form (or @{:any :any} :nil) :multipart :any :timeout :number?
+             :connect-timeout :number? :max-body :number? :keep-alive :boolean?
+             :close :boolean? & r}]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   ``One request to an absolute URL, on a connection of its own:
 
       (client/request {:method :post :url "http://127.0.0.1:4318/v1/traces"
@@ -814,26 +977,76 @@
 # — `(client/get url)`.
 
 (defn get
+  {:params [:string
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   "GET an absolute URL — `request` with the method filled in."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :get})))
 
 (defn head
+  {:params [:string
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   "HEAD an absolute URL — the headers of a GET without its body."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :head})))
 
 (defn options
+  {:params [:string
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   "OPTIONS an absolute URL — what the server says it will accept."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :options})))
 
 (defn delete
+  {:params [:string
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   "DELETE an absolute URL."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :delete})))
 
 (defn post
+  {:params [:string (or :string :buffer :nil)
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   ``POST a body to an absolute URL. `body` is bytes; a form or an
   upload goes through `:form` / `:multipart` in `opts`, and passing
   both is an error rather than a silent choice.``
@@ -841,11 +1054,31 @@
   (request (merge (or opts {}) {:url url :method :post :body body})))
 
 (defn put
+  {:params [:string (or :string :buffer :nil)
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   "PUT a body to an absolute URL."
   [url body &opt opts]
   (request (merge (or opts {}) {:url url :method :put :body body})))
 
 (defn patch
+  {:params [:string (or :string :buffer :nil)
+            (or {:follow :number? :headers (or @{:any :any} :nil)
+                 :cookies (or @{:any :any} :nil) :form (or @{:any :any} :nil)
+                 :multipart :any :timeout :number? :connect-timeout :number?
+                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
+                :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
+          :url :string :redirects :tuple}
+   :throws [:string]}
   "PATCH a body to an absolute URL."
   [url body &opt opts]
   (request (merge (or opts {}) {:url url :method :patch :body body})))

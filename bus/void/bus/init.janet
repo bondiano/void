@@ -167,7 +167,19 @@
    :throttle {:max 0 :window 1}
    :memory memory/defaults})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or :nil {:keyword :any})]
+   :ret @{:backend :keyword :codec :keyword :group :keyword :consume :boolean
+          :retry @{:enabled :boolean :attempts :number :strategy :keyword
+                   :base :number :max :number :jitter :number}
+          :poison @{:enabled :boolean :max-attempts :number :topic :keyword}
+          :dedup @{:enabled :boolean :window :number}
+          :throttle @{:max :number :window :number}
+          :memory @{:buffer :number :keep :number}}}
+  "The [:bus] config slice, defaults filled in — including inside its
+  five nested slices, which a plain top-level merge would otherwise
+  overwrite whole rather than field by field."
+  [cfg0]
   (def cfg (merge @{} defaults (or cfg0 {})))
   (each k [:retry :poison :dedup :throttle :memory]
     (put cfg k (merge @{} (defaults k) (get (or cfg0 {}) k {}))))
@@ -222,6 +234,14 @@
         {:topic :order/paid}
         [msg]
         (shipping/schedule (get-in msg [:payload "order_id"])))``
+  {:params [:symbol :any]
+   :ret {:name :any :topic :keyword
+         :opts {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+                :retry :any :schema :any :timeout :number? :name :any}
+         :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}}
   [name & more]
   (router/defhandler-form name more))
 
@@ -247,6 +267,7 @@
       (bus/defevent account-debited
         {:topic :account/debited
          :schema {:account :string :amount :number}})``
+  {:params [:symbol :any] :ret {:name :any :topic :keyword :schema :any :doc :any}}
   [name & more]
   (cqrs/defevent-form name more))
 
@@ -258,6 +279,14 @@
         {:event :account-debited}
         [msg]
         (mail/send (msg :payload)))``
+  {:params [:symbol :any]
+   :ret {:name :any :topic :keyword
+         :opts {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+                :retry :any :schema :any :timeout :number? :name :any}
+         :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}}
   [name & more]
   (cqrs/defevent-handler-form name more))
 
@@ -268,6 +297,11 @@
         {:schema {:account :string :amount [:number {:min 0}]}}
         [cmd]
         (accounts/debit! (cmd :account) (cmd :amount)))``
+  {:params [:symbol :any]
+   :ret {:name :any :schema :any :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}}
   [name & more]
   (cqrs/defcommand-form name more))
 
@@ -294,6 +328,8 @@
   nil)
 
 (defn recent
+  {:params [:number?] :ret @[@{:id :any :topic :any :payload :any :meta @{:keyword :any}}]
+   :throws [:string]}
   ``The last messages the in-process backend saw, oldest first — an
   inspection buffer for a test and for `void bus tail`, never a replay
   log (see void/bus/memory).``
@@ -305,18 +341,35 @@
 # -- the broker component ------------------------------------------------
 
 (defn- extension
+  {:params [:any :keyword] :ret :any}
   "One of this package's extension points, as the boot the broker was
   started in resolved it."
   [boot name]
   (get-in boot [:extensions name :resolved]))
 
-(defn- resolve-backend [boot cfg]
+(defn- resolve-backend
+  {:params [:any {:backend :keyword & r}]
+   :ret {:name :keyword :encoded? :boolean :stats :function :health (or :nil :function)
+         :close :function :publish! :function :consume! :function :stop! :function
+         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
+                      :shared :boolean} & r}
+   :throws [:string]}
+  "The backend named by [:bus :backend], resolved out of what this
+  boot's :void.bus/backend point collected and normalized."
+  [boot cfg]
   (def factories (or (extension boot :void.bus/backend) @{}))
   (def name (cfg :backend))
   (def factory (backend/find-factory factories name))
   (backend/normalize ((factory :make) cfg)))
 
-(defn- resolve-codec [boot cfg]
+(defn- resolve-codec
+  {:params [:any {:codec :keyword & r}]
+   :ret {:name :keyword :bytes? :boolean :doc :any :encode :function :decode :function & r}
+   :throws [:string]}
+  "The codec named by [:bus :codec], resolved out of what this boot's
+  :void.bus/codec point collected, or the built-ins when there was no
+  bootstrap to collect them."
+  [boot cfg]
   (def cs (or (extension boot :void.bus/codec)
               # started outside a bootstrap (a REPL, a unit test): the
               # built-ins are what the point would have resolved to
@@ -419,7 +472,12 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- with-broker [br f]
+(defn- with-broker
+  {:params [:any (fn [] :any)] :ret :any}
+  "Run `f` with `br` bound as the active broker — what every CLI
+  command here does, since a CLI process is not bootstrapped as a
+  running component."
+  [br f]
   (with-dyns [state/broker-dyn br] (f)))
 
 (plugin/contribute! :void.core/cli

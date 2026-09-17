@@ -24,7 +24,10 @@
 
 (def attrs (otlp/attributes {:service.name "shop" :port 8080 :ratio 0.25
                              :debug false :level :warn}))
-(defn- attr [as key]
+(defn- attr
+  {:params [@[{:string :any}] :string] :ret (or {:string :any} :nil)}
+  "The OTLP attribute value keyed by `key`, or nil."
+  [as key]
   (get (find |(= key ($ "key")) as) "value"))
 
 (assert (= {"stringValue" "shop"} (attr attrs "service.name")))
@@ -105,7 +108,10 @@
 
 (def payload (otlp/metrics-request (metrics/snapshot) resource 1756400000 1756400060))
 (def exported (get-in payload ["resourceMetrics" 0 "scopeMetrics" 0 "metrics"]))
-(defn- by-name [name] (find |(= name ($ "name")) exported))
+(defn- by-name
+  {:params [:string] :ret (or {:string :any} :nil)}
+  "The exported OTLP metric object named `name`, or nil."
+  [name] (find |(= name ($ "name")) exported))
 
 (def counter (by-name "void_http_requests_total"))
 (assert counter "the exported name is the Prometheus one — a series must not be called two things")

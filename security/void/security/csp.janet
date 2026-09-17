@@ -56,7 +56,12 @@
    :object-src [:none]
    :img-src [:self "data:"]})
 
-(defn- source-str [source nonce]
+(defn- source-str
+  {:params [(or :keyword :string :buffer) :string?] :ret :string? :throws [:string]}
+  "One source spelled the way a CSP header wants: `'self'` for a
+  known keyword, a host string as-is, or the `'nonce-...'` form for
+  `:nonce` (nil when there is no nonce to substitute)."
+  [source nonce]
   (cond
     (= :nonce source)
     (if nonce (string/format "'nonce-%s'" nonce) nil)
@@ -73,6 +78,9 @@
     (errorf "CSP source must be a keyword or a string, got %q" source)))
 
 (defn validate
+  {:params [{:keyword (or [(or :keyword :string :buffer)] :boolean)}]
+   :ret {:keyword (or [(or :keyword :string :buffer)] :boolean)}
+   :throws [:string]}
   "Check a policy map; throws on an unknown directive or source."
   [policy]
   (eachp [directive sources] policy
@@ -89,6 +97,8 @@
   policy)
 
 (defn render
+  {:params [{:keyword (or [(or :keyword :string :buffer)] :boolean)} :string?]
+   :ret :string :throws [:string]}
   ``The header value for a policy, with `nonce` substituted for
   `:nonce` sources. Directives are emitted in a stable order so that
   two processes produce the same header — a diff between two machines
@@ -106,6 +116,7 @@
   (string/join parts "; "))
 
 (defn needs-nonce?
+  {:params [{:keyword (or [(or :keyword :string :buffer)] :boolean)}] :ret :boolean}
   "Does this policy mention :nonce anywhere? Only then is one
   generated — a nonce nobody uses is 16 random bytes per request."
   [policy]
@@ -114,6 +125,7 @@
           (values policy))))
 
 (defn header-name
+  {:params [:boolean?] :ret :string}
   "Which header carries the policy: enforcing, or reporting only."
   [report-only?]
   (if report-only?

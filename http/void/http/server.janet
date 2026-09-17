@@ -42,11 +42,17 @@
    :max-connections 1024
    :yield-budget 0.002})
 
-(defn- now [] (os/clock :monotonic))
+(defn- now
+  {:params [] :ret :number}
+  "The monotonic clock every timeout and deadline in this file is
+  measured against."
+  [] (os/clock :monotonic))
 
 # -- low-level writes ----------------------------------------------------
 
 (defn- write-simple
+  {:params [:abstract :buffer :number :string? (or {:string :any} :nil)]
+   :ret :any}
   "An owned early response (400/408/413/431/503...): always closes."
   [conn wbuf status &opt body headers]
   (def hs (merge @{"connection" "close"
@@ -58,6 +64,11 @@
                    (or body (string status " " (get wire/status-messages status "")))))
 
 (defn- write-response
+  {:params [(or :abstract @{:write :function & r}) :buffer
+            @{:method :keyword :http-version [:number :number] & r}
+            @{:status :number? :headers (or {:string :any} :nil) :body :any & r}
+            :boolean]
+   :ret :any}
   "Write a handler response. HEAD and 1xx/204/304 stay bodyless (HEAD
   keeps the Content-Length a GET would have sent); every other empty
   body is framed as Content-Length: 0, so a keep-alive client knows the
@@ -104,6 +115,10 @@
     (wire/write-body conn wbuf body)))
 
 (defn serialize-response
+  {:params [@{:method :keyword :http-version [:number :number] & r}
+            @{:status :number? :headers (or {:string :any} :nil) :body :any & r}
+            :any]
+   :ret :buffer}
   ``The exact bytes write-response would put on the socket, into a
   buffer — the inject path's fidelity contract. Fiber bodies (chunked/SSE)
   are drained into the buffer as their frames.``
@@ -116,6 +131,9 @@
 # -- reads ---------------------------------------------------------------
 
 (defn- read-more
+  {:params [:abstract :buffer :number]
+   :ret (or :buffer :nil (enum :timeout))
+   :throws [:string]}
   "Grow buf from the socket: buf on data, nil on EOF, :timeout."
   [conn buf timeout]
   (def [ok res] (protect (net/read conn 8192 buf timeout)))
@@ -129,6 +147,7 @@
         (error res)))))
 
 (defn- consume!
+  {:params [:buffer :number] :ret :buffer}
   "Drop the first `n` bytes of buf (the finished request) so leftover
   pipelined bytes start the next one."
   [buf n]
@@ -139,15 +158,24 @@
       (buffer/clear buf)
       (buffer/push buf rest))))
 
-(defn- header-str [headers name]
+(defn- header-str
+  {:params [{:string (or :string @[:string])} :string] :ret :string?}
+  "One header value by name, taking the first of a repeated header."
+  [headers name]
   (def v (get headers name))
   (if (indexed? v) (first v) v))
 
 # markers thrown to abort one request/connection with an owned response
-(defn- reject! [status &opt message]
+(defn- reject!
+  {:params [:number :string?] :ret :never :throws [{:reject :number :message :string?}]}
+  "Abort the current request/connection with an owned response of
+  this status — caught by the connection loop's own protect, never a
+  handler's."
+  [status &opt message]
   (error {:reject status :message message}))
 
 (defn- deadline-clock
+  {:params [{:read-timeout :number & r} :number] :ret (fn [] :number)}
   ``Per-read timeouts under a cumulative cap: each call yields the next
   read's timeout — the smaller of the per-read timeout and what is left
   of `total` — and rejects 408 once the cap is spent. A read timeout
@@ -161,6 +189,11 @@
     (min (opts :read-timeout) remaining)))
 
 (defn- read-head
+  {:params [:abstract :buffer @{:arrived :number? :busy :boolean? & r}
+            {:head-timeout :number :max-header :number :idle-timeout :number & r}]
+   :ret @{:method :string :path :string :http-version [:number :number]
+          :headers {:string (or :string @[:string])} :head-size :number}
+   :throws [(or {:reject :number :message :string?} {:hangup :boolean})]}
   ``Fill buf until a full head is there. Returns the parsed head; throws
   {:reject ...} on limits/parse errors, {:hangup true} on EOF/idle
   timeout between requests.
@@ -178,7 +211,11 @@
   # the cumulative :head-timeout arms at the request's first bytes —
   # idle keep-alive waiting is the idle timeout's business, not this
   (var clock nil)
-  (defn arm! []
+  (defn arm!
+    {:params [] :ret (or (fn [] :number) :nil)}
+    "Start the cumulative head-timeout clock on the first bytes of this
+    head, once."
+    []
     (when (and (nil? clock) (pos? (length buf)))
       (set clock (deadline-clock opts (opts :head-timeout)))))
   (put info :arrived (when (pos? (length buf)) (now)))
@@ -212,6 +249,9 @@
   head)
 
 (defn- fill!
+  {:params [:abstract :buffer :number (fn [] :number) :string]
+   :ret :nil
+   :throws [{:reject :number :message :string?}]}
   "Make buf hold at least `need` bytes, each read under the clock's
   timeout: a short read is a 400 carrying `cut-short`, a timeout (or
   a spent body clock) a 408."
@@ -222,7 +262,13 @@
       (nil? r) (reject! 400 cut-short)
       (= :timeout r) (reject! 408))))
 
-(defn- read-content-length-body [conn buf head len max-body clock]
+(defn- read-content-length-body
+  {:params [:abstract :buffer @{:head-size :number & r} :number :number (fn [] :number)]
+   :ret [:string :number]
+   :throws [{:reject :number :message :string?}]}
+  "Read a Content-Length-framed body: reject 413 over `max-body`, else
+  fill the buffer to the end of the body and slice it out."
+  [conn buf head len max-body clock]
   (when (> len max-body)
     (reject! 413))
   (def need (+ (head :head-size) len))
@@ -230,6 +276,10 @@
   [(string/slice buf (head :head-size) need) need])
 
 (defn- chunked-request-body
+  {:params [:abstract :buffer @{:head-size :number & r} :number
+            {:max-header :number & r} (fn [] :number)]
+   :ret [:string :number]
+   :throws [{:reject :number :message :string?}]}
   "Decode a chunked body with wire's decoder, pulling bytes under the
   body clock. The chunk-size line and the trailer section are bounded
   by :max-header, the body by the route's max-body; a body past it is
@@ -247,6 +297,11 @@
   [(st :body) (st :pos)])
 
 (defn- read-body
+  {:params [:abstract :buffer
+            @{:headers {:string (or :string @[:string])} :head-size :number & r}
+            :number {:max-header :number :body-timeout :number & r}]
+   :ret [:string? :number]
+   :throws [{:reject :number :message :string?}]}
   "Read the request body per its framing headers. Returns [body
   consumed-total]. Rejects smuggling-shaped framing: transfer-encoding
   together with content-length, unknown codings, conflicting duplicate
@@ -283,7 +338,15 @@
 
 # -- one connection ------------------------------------------------------
 
-(defn- keep-alive? [head resp state]
+(defn- keep-alive?
+  {:params [@{:headers {:string (or :string @[:string])} :http-version [:number :number] & r}
+            :any
+            @{:draining :boolean & r}]
+   :ret :boolean}
+  "Should this connection stay open for another request: not
+  draining, the response did not ask for close, and HTTP/1.1 defaults
+  to keep-alive where HTTP/1.0 must ask for it."
+  [head resp state]
   (def conn-h (when-let [c (header-str (head :headers) "connection")]
                 (string/ascii-lower c)))
   (and (not (state :draining))
@@ -294,13 +357,27 @@
          (= "keep-alive" conn-h))))
 
 (defn- peer-address
+  {:params [:abstract] :ret :string?}
   "The peer's address of a socket, or nil when it has none to give (a
   unix socket, a closed one)."
   [conn]
   (def [ok peer] (protect (net/peername conn)))
   (when (and ok (indexed? peer)) (first peer)))
 
-(defn- build-request [head body info]
+(defn- build-request
+  {:params [@{:path :string :method :string :headers {:string (or :string @[:string])}
+              :http-version [:number :number] & r}
+            :any
+            @{:arrived :number? :remote-addr :string? & r}]
+   :ret @{:method :keyword :path :string :raw-path :string :query-string :string?
+          :query {:string :any} :headers {:string (or :string @[:string])}
+          :http-version [:number :number] :body :any :received :number
+          :arrived :number? :remote-addr :string?}}
+  "Build the request table dispatch and every middleware read: the
+  path split from its query string, the query parsed, and the two
+  bases (:received wall clock, :arrived queue-time) later stages
+  measure from."
+  [head body info]
   (def raw (head :path))
   (def [path qs] (wire/split-path raw))
   @{:method (keyword (string/ascii-lower (head :method)))
@@ -319,6 +396,11 @@
     :remote-addr (get info :remote-addr)})
 
 (defn- run-handler
+  {:params [(or :function :cfunction)
+            @{:method :keyword :path :string & r}
+            :number?
+            (or :function :cfunction :nil)]
+   :ret @{:status :number :headers {:string :any} :body :any & r}}
   "Run the handler; with a :void.http/timeout it runs as its own task
   so the deadline cancels the handler, never the connection fiber —
   ev/with-deadline cancels the *root task*, and cancelling a long-lived
@@ -335,7 +417,23 @@
                     :headers @{"content-type" "text/plain; charset=utf-8"}
                     :body "503 handler timeout"})))
 
-(defn- serve-connection [state conn opts]
+(defn- serve-connection
+  {:params [@{:conns @{:abstract :any} :draining :boolean & r}
+            :abstract
+            {:handler (or :function :cfunction)
+             :limits-fn (or (fn [:keyword :string] (or {:max-body :number? :timeout :number?} :nil)) :nil)
+             :yield-budget :number?
+             :on-response (or (fn [:any :any] :any) :nil)
+             :on-timeout (or :function :cfunction :nil)
+             :head-timeout :number :max-header :number :idle-timeout :number
+             :body-timeout :number :max-body :number :read-timeout :number
+             & r}]
+   :ret :nil}
+  "Serve one accepted connection until it hangs up, is rejected, or
+  stops asking to be kept alive: read-head -> read-body -> dispatch ->
+  write-response -> keep-alive decision, looping for the next
+  pipelined or keep-alive request."
+  [state conn opts]
   (def buf @"")
   (def wbuf @"")
   (def info @{:busy true :remote-addr (peer-address conn)})
@@ -440,6 +538,23 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn start
+  {:params [{:host :string? :port (or :number :string :nil)
+             :max-header :number? :max-body :number?
+             :read-timeout :number? :idle-timeout :number?
+             :head-timeout :number? :body-timeout :number?
+             :drain-timeout :number? :max-connections :number? :yield-budget :number?
+             :handler (or :function :cfunction)
+             :limits-fn (or (fn [:keyword :string] (or {:max-body :number? :timeout :number?} :nil)) :nil)
+             :on-response (or (fn [:any :any] :any) :nil)
+             :on-timeout (or :function :cfunction :nil)
+             & r}]
+   :ret @{:listener :abstract
+          :state @{:conns @{:abstract :any} :draining :boolean}
+          :accept-fiber :fiber
+          :host :string
+          :port :number
+          :config {:keyword :any}}
+   :throws [:string]}
   ``Start the server. Options (defaults in default-config):
     :handler         (fn [request] response) — required; compose 404s,
                      panic guards and routing before handing it here
@@ -485,15 +600,27 @@
     :config opts})
 
 (defn connections
+  {:params [@{:state @{:conns @{:abstract :any} & r} & r}] :ret :number}
   "Live connection count."
   [inst]
   (length (get-in inst [:state :conns])))
 
 (defn draining?
+  {:params [@{:state @{:draining :boolean & r} & r}] :ret :boolean}
+  "Is the server past `stop` and refusing new connections?"
   [inst]
   (get-in inst [:state :draining]))
 
 (defn stop
+  {:params [@{:listener :abstract
+              :state @{:conns @{:abstract :any} :draining :boolean & r}
+              :config {:drain-timeout :number & r}
+              & r}
+            :number?]
+   :ret @{:listener :abstract
+          :state @{:conns @{:abstract :any} :draining :boolean & r}
+          :config {:drain-timeout :number & r}
+          & r}}
   ``Graceful drain: close the listener so nothing new is
   accepted, drop idle keep-alive connections, give in-flight requests
   up to :drain-timeout seconds (their responses already carry

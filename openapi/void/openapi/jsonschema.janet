@@ -18,19 +18,34 @@
 (import void/core/schema :as schema)
 
 (defn ref-path
+  {:params [:keyword] :ret :string}
   "The components pointer for a registered schema name."
   [name]
   (string "#/components/schemas/" name))
 
-(defn- plain [v]
+(defn- plain
+  {:params [:any] :ret :any}
+  "A literal enum/const value as JSON Schema wants it: a keyword
+  becomes its bare name, everything else passes through unchanged."
+  [v]
   (if (keyword? v) (string v) v))
 
-(defn- bounds [out props min-key max-key]
+(defn- bounds
+  {:params [@{:string :any} {:min :any :max :any & r} :string :string]
+   :ret @{:string :any}}
+  "Copy a type's :min/:max props onto `out` under the JSON Schema key
+  names for this kind (minLength/maxLength, minimum/maximum, ...)."
+  [out props min-key max-key]
   (when-let [m (props :min)] (put out min-key m))
   (when-let [m (props :max)] (put out max-key m))
   out)
 
-(defn- string-node [props]
+(defn- string-node
+  {:params [{:min :any :max :any :format :any :pattern :any & r}]
+   :ret @{:string :any}}
+  "The JSON Schema for a string-shaped type (:string/:bytes/:buffer):
+  length bounds, format and a bytes pattern when present."
+  [props]
   (def out @{"type" "string"})
   (bounds out props "minLength" "maxLength")
   (when-let [f (props :format)] (put out "format" (string f)))
@@ -40,7 +55,13 @@
 
 (var- convert* nil)
 
-(defn- map-node [node refs]
+(defn- map-node
+  {:params [{:type :keyword :props {:any :any} :children [:any]} @{:keyword :boolean}]
+   :ret @{:string :any}}
+  "The JSON Schema `object` for a normalized :map node: one property
+  per child, required listing the non-optional ones, closed maps add
+  additionalProperties: false."
+  [node refs]
   (def out @{"type" "object"})
   (def properties @{})
   (def required @[])
@@ -55,6 +76,7 @@
   out)
 
 (defn convert
+  {:params [:any @{:keyword :boolean}] :ret @{:string :any}}
   ``One normalized node (sugar accepted) as JSON Schema data; every
   [:ref name] encountered is recorded into the mutable `refs` set.``
   [sch refs]
@@ -103,12 +125,14 @@
 (set convert* convert)
 
 (defn json-schema
+  {:params [:any] :ret @{:string :any}}
   "convert without the ref bookkeeping — the :openapi projection
   surface: (schema/project :openapi Order)."
   [sch]
   (convert sch @{}))
 
 (defn components
+  {:params [@{:keyword :boolean}] :ret @{:string @{:string :any}}}
   ``Resolve a refs set (name -> true) through the schema registry to a
   fixpoint: {"Order" {...} ...} covering every schema the seeds
   mention, transitively. An unregistered name converts to an annotated

@@ -7,7 +7,11 @@
 (import ../void/core/plugin :as plugin)
 (import ../void/core/schema :as schema)
 
-(defn- capture-sink [buf]
+(defn- capture-sink
+  {:params [@[:any]] :ret (fn [:any] @[:any])}
+  "A sink that freezes and appends every record to `buf`, for
+  asserting on what a logger emitted."
+  [buf]
   (fn [rec] (array/push buf (freeze rec))))
 
 # -- levels: prefix tree + lazy args -------------------------------------

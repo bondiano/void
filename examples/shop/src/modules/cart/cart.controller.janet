@@ -16,6 +16,10 @@
 (import ./cart.view :as view)
 
 (defn- rendered
+  {:params [@{:keyword :any} (or {:tone :string? :message :string? & r} :nil)]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "The cart page for this request, with an optional message on it."
   [req &opt state]
   (def cart (session/current req))
@@ -23,11 +27,19 @@
   (layout/page (view/cart-view lines (service/summary lines) (or state {}))))
 
 (defn show-cart
+  {:params [@{:keyword :any}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET /cart — the lines, with their products preloaded."
   [req]
   (rendered req))
 
 (defn add-to-cart
+  {:params [@{:keyword :any}]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
   ``POST /cart/items — put something in the basket.
 
   No identity is required and none is invented: the cart belongs to
@@ -45,6 +57,10 @@
      :invalid (fn [_ _] (errors/abort 400))}))
 
 (defn update-line
+  {:params [@{:keyword :any}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /cart/items/:id — set a line's quantity (0 removes it).
 
   Answers htmx with the cart fragment alone (`:void.htmx/partial`),
@@ -60,6 +76,10 @@
      :invalid (fn [_ _] (rendered req))}))
 
 (defn checkout-refused
+  {:params [@{:keyword :any} :string]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``The cart page, with the reason a checkout did not become an order.
   The orders module renders its refusals through this function because
   the page a refused checkout lands on *is* the cart — and the cart

@@ -101,11 +101,25 @@
   driver's own when it is this driver underneath.``
   nil)
 
-(defn- driver-now []
+(defn- driver-now
+  {:params []
+   :ret @{:connect :function :close :function :ping :function :cancel! :function
+          :connection-info :function :pipelined :function
+          :keeper :any
+          :capabilities @{:libpq (or [:number :number] :nil) :path :string?
+                          :pipeline :boolean :cancel :boolean}
+          :describe @{:host :string? :port :string? :database :string?
+                      :user :string? :sslmode :string? :application-name :string?}
+          & r}
+   :throws [:string]}
+  "The started driver component's value, or an error naming what to
+  start."
+  []
   (or current
       (error "void/db-postgres is not started — no :db.postgres/driver component")))
 
 (defn- with-checkout
+  {:params [(fn [a] b)] :ret b :throws [:any]}
   ``Run (f handle) on the connection this fiber already holds, or on
   one taken from void/db's pool for the call — the same scope
   `db/with-conn` opens, so inside a transaction these run on the
@@ -114,6 +128,12 @@
   (db-state/with-conn* (fn [entry] (f (entry :conn)))))
 
 (defn pipeline
+  {:params [@[[:string (or @[:any] [:any] :nil)]]]
+   :ret @[{:rows @[@{:keyword :any}] :count :number :insert-oid :number?}]
+   :throws [:string
+            {:index :number
+             :results [{:rows @[@{:keyword :any}] :count :number :insert-oid :number?}]
+             & r}]}
   ``Send several statements without waiting for each answer — one
   round trip instead of N (libpq 14+). `statements` are [sql params]
   pairs; the result is one {:rows :count} each, in order.
@@ -130,6 +150,7 @@
   (with-checkout (fn [h] ((drv :pipelined) h statements))))
 
 (defn cancel!
+  {:params [:any] :ret :any :throws [:string]}
   ``Ask the server to abort whatever `h` — a checked-out connection,
   as `db/with-conn` binds it — is running. The request travels over a
   socket of its own, so this is the one operation safe to call from a
@@ -143,6 +164,11 @@
   (((driver-now) :cancel!) h))
 
 (defn connection-info
+  {:params [:any]
+   :ret (or {:server-version [:number :number] :backend-pid :number
+             :transaction :keyword :generation :number :prepared :number}
+            {:generation :number :transaction :keyword})
+   :throws [:string]}
   "What a checked-out connection is: server version, backend pid,
   transaction state, how many times it has been replaced."
   [h]
@@ -208,12 +234,16 @@
   nil)
 
 (defn listener-now
+  {:params []
+   :ret @{:running :boolean :stopped :boolean :fiber (or :fiber :nil) & r}
+   :throws [:string]}
   "The running listener component, or an error naming what to add."
   []
   (or current-listener
       (error "void/db-postgres's listener is not started — no :db.postgres/listener component")))
 
 (defn subscribe!
+  {:params [:any g] :ret g :throws [:string]}
   ``Call `f` with every notification on `channel`
   ({:channel :payload :pid}). Returns `f`, which `unsubscribe!` takes
   back.
@@ -230,11 +260,15 @@
   (listener/subscribe! (listener-now) channel f))
 
 (defn unsubscribe!
+  {:params [:any :function?] :ret :nil :throws [:string]}
   "Remove one handler, or all of a channel's when `f` is omitted."
   [channel &opt f]
   (listener/unsubscribe! (listener-now) channel f))
 
 (defn notify!
+  {:params [:any :any]
+   :ret :nil
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Send a notification through void/db's pool. Inside `db/with-tx` it
   is delivered on COMMIT and not at all on rollback, which is what
   makes it safe to announce a write with.``

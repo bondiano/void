@@ -57,6 +57,7 @@
 (def- fnv-prime (int/u64 "0x100000001b3"))
 
 (defn fnv1a
+  {:params [:string] :ret :string}
   "FNV-1a 64 of a byte sequence, as sixteen hex digits."
   [bytes]
   (var h fnv-offset)
@@ -65,6 +66,7 @@
   (string/format "%016x" h))
 
 (defn- fn-label
+  {:params [(or :function :cfunction)] :ret :string}
   ``What names a function in the digest: its name, or — for an
   anonymous one — the module it was compiled in (`anonymous in
   void/http`), so two lambdas from two plugins are two things rather
@@ -81,6 +83,7 @@
         (if-let [o (bind/origin f)] (string "anonymous in " o) "anonymous"))))
 
 (defn canonical
+  {:params [:any] :ret :string}
   ``One spelling per value, so that two processes that resolved the
   same composition write the same bytes: dictionary keys sorted by
   their own rendering, sequences in order, functions reduced to their
@@ -100,6 +103,7 @@
     (string "#" (type x))))
 
 (defn digest
+  {:params [:any] :ret :string}
   "The fingerprint of any value: FNV-1a 64 over its canonical
   rendering."
   [x]
@@ -108,6 +112,7 @@
 # -- the composition, as a value -----------------------------------------
 
 (defn- contribution-name
+  {:params [:any] :ret :any}
   "How one contribution is named in the file. Most points give their
   contributions a `:name`; the ones that do not are positional and say
   so."
@@ -116,7 +121,16 @@
     (dictionary? value) (get value :name (get value :key :anonymous))
     :anonymous))
 
-(defn- plugin-entry [boot name]
+(defn- plugin-entry
+  {:params [{:manifests :any :active :any :plugins :any :extensions :any
+             :profile :any :deploy :any :system :any & r}
+            :keyword]
+   :ret {:name :keyword :version :string? :active :boolean
+         :components [:keyword] :contributes {:keyword @[:any]} :hash :string}}
+  "One plugin's record in the lock: its manifest version, whether it
+  is active in this profile, the components it declares and every
+  contribution it makes, each reduced to what names it."
+  [boot name]
   (def m (get-in boot [:manifests name]))
   (def contributes
     (tabseq [[p vs] :pairs (get m :contributes {})] p (map contribution-name vs)))
@@ -129,7 +143,16 @@
                   :components (tuple ;(map |($ :key) (get m :components [])))
                   :contributes (get m :contributes {})})})
 
-(defn- point-entry [boot name]
+(defn- point-entry
+  {:params [{:manifests :any :active :any :plugins :any :extensions :any
+             :profile :any :deploy :any :system :any & r}
+            :keyword]
+   :ret {:name :keyword :owner :any :cardinality :any
+         :contributions [[:keyword :any]] :hash :string}}
+  "One extension point's record in the lock: who owns it, its
+  cardinality, and the chain of contributions in the order they
+  resolved."
+  [boot name]
   (def e (get-in boot [:extensions name]))
   (def cs (get e :contributions []))
   {:name name
@@ -139,6 +162,15 @@
    :hash (digest (map |{:plugin ($ :plugin) :value ($ :value)} cs))})
 
 (defn composition
+  {:params [{:manifests :any :active :any :plugins :any :extensions :any
+             :profile :any :deploy :any :system :any & r}]
+   :ret {:lock-version :number :void :string :profile :any :deploy :any
+         :components [:any]
+         :plugins [{:name :keyword :version :string? :active :boolean
+                    :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+         :points [{:name :keyword :owner :any :cardinality :any
+                   :contributions [[:keyword :any]] :hash :string}]
+         :hash :string}}
   ``The composition of a bootstrapped app, as the plain value the lock
   file holds and `check` compares. Everything in it comes off the boot
   — nothing is re-derived, so the file describes what would actually
@@ -177,10 +209,18 @@
 # editing this.
 ``)
 
-(defn- emit-value [x]
+(defn- emit-value
+  {:params [:any] :ret :string}
+  "One value as the lock file spells it — `%q`, so a string, a keyword
+  and a symbol each round-trip through `parse`."
+  [x]
   (string/format "%q" x))
 
-(defn- emit-map [m order indent]
+(defn- emit-map
+  {:params [{:keyword :any} [:keyword] :number] :ret :string}
+  "One record as a `{...}` literal, keys in a fixed `order`, indented
+  so a diff of two of these reads like a diff of two records."
+  [m order indent]
   (def pad (string/repeat " " indent))
   (def lines
     (seq [k :in order :when (not (nil? (get m k)))]
@@ -191,6 +231,14 @@
 (def- point-keys [:name :owner :cardinality :hash :contributions])
 
 (defn render
+  {:params [{:lock-version :number :void :string :profile :any :deploy :any
+             :components [:any]
+             :plugins [{:name :keyword :version :string? :active :boolean
+                        :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+             :points [{:name :keyword :owner :any :cardinality :any
+                       :contributions [[:keyword :any]] :hash :string}]
+             :hash :string}]
+   :ret :string}
   ``The lock file as text. One record per line, keys in a fixed order,
   so that a diff of two of these reads like a diff of two
   compositions rather than of two hash tables.``
@@ -218,6 +266,15 @@
   (string out))
 
 (defn read-lock
+  {:params [:string]
+   :ret {:lock-version :number :void :string :profile :any :deploy :any
+         :components [:any]
+         :plugins [{:name :keyword :version :string? :active :boolean
+                    :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+         :points [{:name :keyword :owner :any :cardinality :any
+                   :contributions [[:keyword :any]] :hash :string}]
+         :hash :string}
+   :throws [:string]}
   "Read a lock file back as data. A file that is not one, or is a
   version this build does not know, is an error naming the fix."
   [path]
@@ -234,19 +291,43 @@
 
 # -- the diff ------------------------------------------------------------
 
-(defn- by-name [entries]
+(defn- by-name
+  {:params [[{:name :keyword & r}]] :ret @{:keyword {:name :keyword & r}}}
+  "A tuple of records, keyed by their own :name — plugin and point
+  entries alike."
+  [entries]
   (tabseq [e :in entries] (e :name) e))
 
 (defn- contribution-line
+  {:params [[:keyword :any]] :ret :string}
   "One contribution in a chain: `void/http:void.http/session` — the
   plugin that contributed it and the name the point knows it by."
   [c]
   (string/format "%s:%s" (c 0) (c 1)))
 
-(defn- chain [cs]
+(defn- chain
+  {:params [[[:keyword :any]]] :ret :string}
+  "A point's contributions, in order, as one line — `(none)` when
+  there are none."
+  [cs]
   (if (empty? cs) "(none)" (string/join (map contribution-line cs) " -> ")))
 
 (defn diff
+  {:params [{:lock-version :number :void :string :profile :any :deploy :any
+             :components [:any]
+             :plugins [{:name :keyword :version :string? :active :boolean
+                        :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+             :points [{:name :keyword :owner :any :cardinality :any
+                       :contributions [[:keyword :any]] :hash :string}]
+             :hash :string}
+            {:lock-version :number :void :string :profile :any :deploy :any
+             :components [:any]
+             :plugins [{:name :keyword :version :string? :active :boolean
+                        :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+             :points [{:name :keyword :owner :any :cardinality :any
+                       :contributions [[:keyword :any]] :hash :string}]
+             :hash :string}]
+   :ret @[:string]}
   ``What changed between a locked composition and the current one, as
   a list of lines. Empty means they are the same composition.
 
@@ -318,6 +399,16 @@
 # -- the commands --------------------------------------------------------
 
 (defn write-lock
+  {:params [{:manifests :any :active :any :plugins :any :extensions :any
+             :profile :any :deploy :any :system :any & r}
+            (or {:path :string? & r} :nil)]
+   :ret {:lock-version :number :void :string :profile :any :deploy :any
+         :components [:any]
+         :plugins [{:name :keyword :version :string? :active :boolean
+                    :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+         :points [{:name :keyword :owner :any :cardinality :any
+                   :contributions [[:keyword :any]] :hash :string}]
+         :hash :string}}
   ``The body of `void plugins lock`: write the current composition to
   `void.lock` (or `--out PATH`). Returns the composition.``
   [boot &opt opts]
@@ -331,6 +422,11 @@
   comp)
 
 (defn check-lock
+  {:params [{:manifests :any :active :any :plugins :any :extensions :any
+             :profile :any :deploy :any :system :any & r}
+            (or {:path :string? & r} :nil)]
+   :ret :boolean
+   :throws [:string]}
   ``The body of `void plugins check`: compare the lock file against the
   composition this checkout resolves to now. Prints nothing but the
   verdict when they agree; prints the differences and returns false
@@ -352,6 +448,15 @@
       false)))
 
 (defn show
+  {:params [{:manifests :any :active :any :plugins :any :extensions :any
+             :profile :any :deploy :any :system :any & r}]
+   :ret {:lock-version :number :void :string :profile :any :deploy :any
+         :components [:any]
+         :plugins [{:name :keyword :version :string? :active :boolean
+                    :components [:keyword] :contributes {:keyword @[:any]} :hash :string}]
+         :points [{:name :keyword :owner :any :cardinality :any
+                   :contributions [[:keyword :any]] :hash :string}]
+         :hash :string}}
   ``The body of `void plugins`: the composition as the lock file sees
   it, without writing anything. The same value, so what it prints is
   what a lock would record.``

@@ -25,10 +25,25 @@
 (import ../backend :as backend)
 (import ../record :as record)
 
-(defn- pending [job &opt extra]
+(defn- pending
+  {:params [:keyword (or {:keyword :any} :nil)]
+   :ret @{:id :string :job :keyword :args [:any] :queue :keyword :priority :number
+          :state :keyword :attempt :number :max-attempts :number
+          :backoff (or {:strategy :keyword :base :number :max :number :jitter :number} :nil)
+          :timeout :number? :run-at :number :enqueued-at :number
+          :started-at :nil :finished-at :nil
+          :unique-key :string? :unique-until :number? :group :string?
+          :parent :string? :children-left :number?
+          :children (or @[{:id :string :job :keyword :result :any}] :nil)
+          :result :nil :error :nil :failures @[:any] :token :nil :traceparent :string?}}
+  "A fresh :pending record for `job`, with `extra` fields merged in."
+  [job &opt extra]
   (record/make (merge {:job job :queue :default} (or extra {}))))
 
-(defn- claim [b &opt opts]
+(defn- claim
+  {:params [{:claim! (fn [& :any] :any) & r} (or {:keyword :any} :nil)] :ret :any}
+  "Claim from queue :default as \"w1\", unless `opts` says otherwise."
+  [b &opt opts]
   ((b :claim!) (merge {:queues [:default] :now (os/clock :realtime) :token "w1"}
                       (or opts {}))))
 
@@ -36,6 +51,7 @@
   ``Assert that `b` behaves like a `:void/jobs-backend`. `name` names
   the store in the failure messages, because "a claim came back twice"
   is a different bug in each of them.``
+  {:params [:string {:keyword :any}] :ret :boolean}
   [name b0]
   (def b (backend/normalize b0))
   (defn note [msg] (string name ": " msg))

@@ -18,6 +18,9 @@
 (import ./customers.view :as view)
 
 (defn- start-session!
+  {:params [{:session :any & r} {:subject :string :via :keyword & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
   "Sign this browser in, and give it back the cart it was holding."
   [req who]
   (auth-http/login! req who)
@@ -25,11 +28,18 @@
   (ring/redirect "/cart"))
 
 (defn sign-in-page
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET /sign-in — three ways in."
   [req]
   (layout/page (view/sign-in-view)))
 
 (defn register
+  {:params [{:form (or {:any :any} :nil) :session :any & r}]
+   :ret :any
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "POST /register — an account, and the cart that was already in hand."
   [req]
   (form/submit dto/Registration (req :form)
@@ -45,12 +55,21 @@
                                                  :register-errors errors})))}))
 
 (defn sign-in
+  {:params [{:form (or {:any :any} :nil) :session :any & r}]
+   :ret :any
+   :throws [:string]}
   ``POST /sign-in — the password path, and nothing else.
 
   Whatever went wrong, the page says the same thing (see
   ./customers.service).``
   [req]
-  (defn refused [values]
+  (defn refused
+    {:params [:any]
+     :ret @{:status :number :headers @{:string :string} :void.html/content :any
+            :void.html/layout :any :void.html/context {:any :any} & r}
+     :throws [:string]}
+    "The same refusal, rendered back onto the sign-in page."
+    [values]
     (layout/page (view/sign-in-view
                    {:sign-in values
                     :tone "bad"
@@ -63,6 +82,9 @@
      :invalid (fn [values _] (refused values))}))
 
 (defn request-link
+  {:params [{:form (or {:any :any} :nil) & r}]
+   :ret :any
+   :throws [:string :any]}
   ``POST /sign-in/magic — mail a one-time sign-in link.
 
   The application issues the challenge and says nothing else about it,
@@ -80,6 +102,11 @@
                                 :message "That does not look like an email address."})))}))
 
 (defn magic-link
+  {:params [{:query (or {:any :any} :nil) :session :any & r}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r})
+   :throws [:string]}
   "GET /auth/magic?h=&c= — the link from the letter."
   [req]
   (def query (or (req :query) {}))
@@ -93,6 +120,8 @@
                     :message "That sign-in link has expired or has already been used."}))))
 
 (defn sign-out
+  {:params [{:session :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   "POST /sign-out — drop the identity and rotate the session id."
   [req]
   (auth-http/logout! req)

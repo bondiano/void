@@ -45,10 +45,18 @@
    :otp-digits 6
    :link-bytes 32})
 
-(defn- digest-of [handle code]
+(defn- digest-of
+  {:params [:string :string] :ret :string}
+  "The digest stored for a handle/code pair — never the code itself."
+  [handle code]
   (encode/hex (digest/sha256 (string handle ":" code))))
 
 (defn issue
+  {:params [{:put :function & r} :string
+            (or {:kind :keyword? :ttl :number? :now :number? :handle :string?
+                 :claims (or {:keyword :any} :nil) :digits :number? :bytes :number? & r}
+                :nil)]
+   :ret {:handle :string :code :string :kind :keyword :expires :number}}
   ``Create a challenge for `subject` and store its digest. Returns
   `{:handle :code :kind :expires}` — the code exists here and nowhere
   else, so whatever delivers it must be called with this value.
@@ -94,6 +102,12 @@
   {:handle handle :code code :kind kind :expires (+ now ttl)})
 
 (defn redeem
+  {:params [{:take :function & r} :string? :string?
+            (or {:now :number? & r} :nil)]
+   :ret (or {:subject :string :via :keyword :cookie :boolean
+             :claims {:keyword :any} :at :number :expires (or :number :nil)}
+            :nil)
+   :throws [:string]}
   ``Redeem a challenge. Returns an identity on success and nil on
   anything else — wrong code, expired, already used, never issued.
 

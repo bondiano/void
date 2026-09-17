@@ -13,12 +13,19 @@
 
 (def counter @{:n 0})
 
-(defn page-view []
+(defn page-view
+  {:params [] :ret :tuple}
+  "The live page, re-rendered from the shared `counter` on every
+  poke."
+  []
   (hiccup/html5
     [:head [:title (string "count " (counter :n))]]
     [:body [:main {:id "main"} (string "count: " (counter :n))]]))
 
-(defn live [req]
+(defn live
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The morph-stream route: keeps the page live in the :counter room."
+  [req]
   (datastar/morph-stream req page-view {:rooms [:counter]}))
 
 (def app-manifest
@@ -76,7 +83,11 @@
   # process died.
 
   (def reg (get-in boot [:system :instances :datastar/registry]))
-  (defn- streams [] (sum (map length (values (reg :rooms)))))
+  (defn- streams
+    {:params [] :ret :number}
+    "The number of streams currently parked in any room of `reg`."
+    []
+    (sum (map length (values (reg :rooms)))))
   (def before (streams))
   (def resp2 (http/with-request {:uri "/live"
                                  :headers {"datastar-request" "true"}}))

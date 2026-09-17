@@ -27,7 +27,11 @@
 (def sandbox (string (os/cwd) "/.tmp-bus-db-" (os/time) "-" (os/getpid)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove the sandbox directory this suite's sqlite file
+  lives in."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))

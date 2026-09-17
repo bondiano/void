@@ -10,7 +10,10 @@
 
 (log/set-level! "void" :fatal)
 
-(defn- settle [] (ev/sleep 0.03))
+(defn- settle
+  {:params [] :ret :nil}
+  "A fixed pause for the async paths this suite exercises."
+  [] (ev/sleep 0.03))
 
 # -- events: a name, a topic and a shape ---------------------------------
 

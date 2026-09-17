@@ -84,9 +84,13 @@
    :safe-methods [:get :head :options :trace]
    :cookie-opts {:path "/" :same-site :lax :http-only false}})
 
-(defn- now [] (os/time))
+(defn- now
+  {:params [] :ret :number}
+  "The current unix time, as an issued-at stamp."
+  [] (os/time))
 
 (defn issue
+  {:params [(or :string :buffer) :number?] :ret :string :throws [:string]}
   ``A token bound to `binding`. The binding is whatever identifies the
   browser session — a session id, or the value of the CSRF cookie —
   and it is *not* in the token: it is in the signature, so a token
@@ -99,6 +103,7 @@
   (string nonce "." stamp "." (crypto/base64url mac)))
 
 (defn verify
+  {:params [:any :any (or {:max-age :number? :now :number? & r} :nil)] :ret :boolean :throws [:string]}
   "Is this a token this process (or a process with one of its keys)
   issued for this binding, and not too old?"
   [token binding &opt opts]
@@ -119,6 +124,7 @@
                             (secret/valid? (string nonce "." stamp "." binding) raw)))))))))
 
 (defn binding-of
+  {:params [@{:headers {:string (or :string @[:string])} & r} {:cookie :string? & r}] :ret :string?}
   ``What this request's token is bound to: the value of the CSRF
   cookie. nil when the browser has not been given one yet — the
   middleware then mints one and sets it on this response, so the token
@@ -127,11 +133,14 @@
   (get (ring/cookies req) (get cfg :cookie (defaults :cookie))))
 
 (defn safe-method?
+  {:params [:keyword {:safe-methods (or [:keyword] :nil) & r}] :ret :boolean}
   "Is this method one that is not supposed to change anything?"
   [method cfg]
   (truthy? (index-of method (get cfg :safe-methods (defaults :safe-methods)))))
 
 (defn cookie-borne?
+  {:params [@{:headers {:string (or :string @[:string])} & r} {:session-cookie :string? & r}]
+   :ret :boolean}
   ``Did this request's credential arrive on a cookie? True when an
   identity says so (`void/auth` sets `:cookie` on the identity it
   built — the strategy is the only thing that knows), or when the
@@ -143,6 +152,10 @@
                     (get cfg :session-cookie (defaults :session-cookie))))))
 
 (defn applies?
+  {:params [@{:method :keyword :headers {:string (or :string @[:string])} & r}
+            {:void.security/csrf :boolean? & r}
+            {:enabled :boolean? :safe-methods (or [:keyword] :nil) :session-cookie :string? & r}]
+   :ret :boolean}
   ``Should this request be checked? Unsafe method, and either a
   cookie-borne credential or a route that asked for the check
   unconditionally (`:void.security/csrf true`).``
@@ -153,6 +166,9 @@
            (cookie-borne? req cfg))))
 
 (defn presented
+  {:params [@{:form :any :parsed-body :any :headers {:string (or :string @[:string])} & r}
+            {:field :string? :header :string? & r}]
+   :ret :any}
   "The token the request carries: the form field, then the header."
   [req cfg]
   (or (get-in req [:form (get cfg :field (defaults :field))])
@@ -160,6 +176,10 @@
       (ring/request-header req (get cfg :header (defaults :header)))))
 
 (defn token-for
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}
+            {:cookie :string? & r}]
+   :ret :string :throws [:string]}
   ``The token to hand this request's page, minted once per request and
   memoized: a page with three forms should carry one token, not three,
   and every one of them must verify.``
@@ -171,6 +191,11 @@
         token)))
 
 (defn field-markup
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}
+            {:field :string? :cookie :string? & r}]
+   :ret [:keyword {:type :string :name :string :value :string}]
+   :throws [:string]}
   ``The hidden input, as hiccup. This is what the `(dyn keys/csrf-field)`
   slot splices into every non-GET form (void/html has had the slot
   since wave 1 and rendered nothing until now).``
@@ -180,6 +205,11 @@
            :value (token-for req cfg)}])
 
 (defn meta-markup
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}
+            {:header :string? :cookie :string? & r}]
+   :ret [[:keyword {:name :string :content :string}]]
+   :throws [:string]}
   ``The `<meta>` tag plus the `hx-headers` attribute htmx needs, as
   hiccup:
 
@@ -195,6 +225,11 @@
    [:meta {:name "csrf-header" :content header}]])
 
 (defn hx-headers
+  {:params [@{:headers {:string (or :string @[:string])} :void.security/token :string?
+             :void.security/fresh-binding :string? & r}
+            {:header :string? :cookie :string? & r}]
+   :ret {:hx-headers:inherited :string}
+   :throws [:string]}
   ``The attribute map to merge onto `<body>` so every htmx request
   carries the token.
 

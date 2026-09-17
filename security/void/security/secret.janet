@@ -42,7 +42,12 @@
   "Signing keys, newest first. The first signs; any of them verifies."
   @[])
 
-(defn- reveal [value]
+(defn- reveal
+  {:params [:any] :ret :string? :throws [:string]}
+  "Turn a configured key value — a plain string, an env reference
+  `config/secret?` resolves, or nil — into the raw bytes, or throw on
+  anything else."
+  [value]
   (cond
     (nil? value) nil
     (config/secret? value) (config/reveal value)
@@ -50,6 +55,8 @@
     (errorf "[:security :signing-key] must be a string or an env reference like {:secret \"VOID_SECRET\"}, got %q" value)))
 
 (defn configure!
+  {:params [{:signing-key :any :previous-keys (or @[:any] :nil) & r} :keyword?]
+   :ret :number :throws [:string]}
   ``Install the signing keys from the [:security] slice for `profile`.
   `:signing-key` is the current one, `:previous-keys` the ones still
   accepted. Returns the number of keys installed.``
@@ -81,17 +88,20 @@
   (length keys))
 
 (defn signing-key
+  {:params [] :ret :string :throws [:string]}
   "The key new signatures are made with."
   []
   (or (first keys)
       (error "void/security has no signing key — configure! has not run")))
 
 (defn sign
+  {:params [(or :string :buffer)] :ret :string :throws [:string]}
   "MAC of `data` under the current key."
   [data]
   (crypto/hmac-sha256 (signing-key) data))
 
 (defn valid?
+  {:params [(or :string :buffer) (or :string :buffer)] :ret :boolean :throws [:string]}
   ``Does `mac` match `data` under **any** configured key? Constant-time
   per key, so a rotation costs one comparison more and leaks nothing.``
   [data mac]
@@ -102,6 +112,7 @@
   ok)
 
 (defn rotated?
+  {:params [] :ret :boolean}
   "Is there more than one key — that is, is a rotation in progress?"
   []
   (> (length keys) 1))

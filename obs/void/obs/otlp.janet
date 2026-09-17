@@ -106,6 +106,7 @@
   nil)
 
 (defn use-module!
+  {:params [@{:symbol {:value :any & r}}] :ret :nil}
   ``Hand the exporter the `void/obs/otlp-proto` module instead of
   letting it `require` one. There is exactly one caller: a single
   binary (docs/DEPLOY.md) composing `[:obs-otlp :encoding] :protobuf`,
@@ -116,6 +117,7 @@
   (set proto-module m))
 
 (defn- proto-encoder
+  {:params [] :ret (fn [{:string :any}] :buffer) :throws [:string]}
   "The encode-payload function of ./otlp-proto, requiring the module
   on first use. Called from start! too, so a composition that chose
   :protobuf fails at boot rather than at the first flush."
@@ -135,6 +137,7 @@
 # -- timestamps ----------------------------------------------------------
 
 (defn nano-str
+  {:params [:number] :ret :string}
   ``Seconds since the epoch as OTLP's `unixNano`: a **string** of
   integer nanoseconds.
 
@@ -159,6 +162,7 @@
 # -- attributes ----------------------------------------------------------
 
 (defn attr-value
+  {:params [:any] :ret {:string :any}}
   ``One attribute value in OTLP's tagged form. Janet's types map onto
   the four scalars OTLP has; anything else (a struct an application
   put on a span, an error value) is printed the way `%q` would, which
@@ -176,6 +180,7 @@
     {"stringValue" (string/format "%q" v)}))
 
 (defn attributes
+  {:params [(or @{:any :any} {:any :any} :nil)] :ret @[{:string :any}]}
   ``A dictionary as OTLP's `[{key, value}]`. Keys go out as their
   string form, so `:db.system` is `db.system` and the semantic
   conventions can be written the way they are spelled.``
@@ -193,7 +198,11 @@
   "void's span kinds as OTLP's enum."
   {:internal 1 :server 2 :client 3 :producer 4 :consumer 5})
 
-(defn- span-status [span]
+(defn- span-status
+  {:params [@{:status :keyword :attrs @{:any :any} & r}] :ret {:string :any}}
+  "A span's status as OTLP's {\"code\" ...}, UNSET unless the span was
+  marked failed."
+  [span]
   # UNSET (0) unless the span was marked failed. OTLP reserves OK (1)
   # for a status an application set deliberately, and void sets :ok as
   # the *absence* of an error — reporting that as OK would tell a
@@ -204,6 +213,11 @@
     {"code" 0}))
 
 (defn span->otlp
+  {:params [@{:name :string :trace-id :string :span-id :string
+              :parent-id :string? :kind :keyword :started-at :number
+              :duration :number? :attrs @{:any :any} :status :keyword
+              :tracestate :string? & r}]
+   :ret {:string :any}}
   "One finished span as an OTLP span object."
   [span]
   (def start (get span :started-at 0))
@@ -221,6 +235,17 @@
   out)
 
 (defn traces-request
+  {:params [(or @[@{:name :string :trace-id :string :span-id :string
+                    :parent-id :string? :kind :keyword :started-at :number
+                    :duration :number? :attrs @{:any :any} :status :keyword
+                    :tracestate :string? & r}]
+                [@{:name :string :trace-id :string :span-id :string
+                   :parent-id :string? :kind :keyword :started-at :number
+                   :duration :number? :attrs @{:any :any} :status :keyword
+                   :tracestate :string? & r}]
+                :nil)
+            @[{:string :any}]]
+   :ret {:string :any}}
   ``A batch of finished spans as an `ExportTraceServiceRequest`.
   Pure: spans and a resource in, data out — `encode` turns it into
   bytes and the exporter is the only thing that sends any.``
@@ -233,6 +258,7 @@
 # -- metrics -------------------------------------------------------------
 
 (defn metric-unit
+  {:params [:keyword] :ret :string}
   ``The UCUM unit of a metric, read off its name. void measures in
   Prometheus base units everywhere, so the suffix a metric already carries
   for the scraper is the unit for OTLP too — and a metric that carries
@@ -246,18 +272,33 @@
     (string/has-suffix? "-bytes-total" s) "By"
     ""))
 
-(defn- point-attributes [label-names label-values]
+(defn- point-attributes
+  {:params [:tuple :tuple] :ret @[{:string :any}]}
+  "One data point's `attributes`: a metric's declared label names
+  paired positionally with one series's label values."
+  [label-names label-values]
   (seq [i :range [0 (length label-names)]]
     {"key" (string (in label-names i))
      "value" (attr-value (get label-values i ""))}))
 
-(defn- number-point [m s start now]
+(defn- number-point
+  {:params [{:labels :tuple & r} {:value :any :labels :tuple & r} :string :string]
+   :ret {:string :any}}
+  "One counter/gauge series as an OTLP data point."
+  [m s start now]
   {"startTimeUnixNano" start
    "timeUnixNano" now
    "asDouble" (let [v (s :value)] (if (number? v) v 0))
    "attributes" (point-attributes (m :labels) (s :labels))})
 
-(defn- histogram-point [m s start now]
+(defn- histogram-point
+  {:params [{:labels :tuple :buckets :tuple & r}
+            {:buckets @[:number] :count :number :sum :number :labels :tuple & r}
+            :string :string]
+   :ret {:string :any}}
+  "One histogram series as an OTLP data point, with the implicit
+  +Inf bucket OTLP wants and the registry only knows as a difference."
+  [m s start now]
   (def counts (get s :buckets []))
   (def total (get s :count 0))
   (def in-buckets (sum counts))
@@ -275,6 +316,13 @@
    "attributes" (point-attributes (m :labels) (s :labels))})
 
 (defn metric->otlp
+  {:params [{:name :keyword :kind :keyword :doc :string :labels :tuple
+             :series @[(or {:labels :tuple :value :number}
+                           {:labels :tuple :buckets :tuple :sum :number
+                            :count :number})]
+             & r}
+            :string :string]
+   :ret (or {:string :any} :nil)}
   ``One entry of `metrics/snapshot` as an OTLP metric object, or nil
   for a metric with no series — a metric that has never fired is
   announced in the Prometheus exposition (a scraper wants to see that
@@ -299,6 +347,14 @@
       nil)))
 
 (defn metrics-request
+  {:params [@[{:name :keyword :kind :keyword :doc :string :labels :tuple
+               :series @[(or {:labels :tuple :value :number}
+                             {:labels :tuple :buckets :tuple :sum :number
+                              :count :number})]
+               & r}]
+            @[{:string :any}]
+            :number :number]
+   :ret {:string :any}}
   ``A `metrics/snapshot` as an `ExportMetricsServiceRequest`. The
   second projection promised of the same snapshot the text
   exposition renders — same values, same names, same units.
@@ -316,6 +372,9 @@
                                         (map |(metric->otlp $ start-ns now-ns) snapshot))}]}]})
 
 (defn encode
+  {:params [{:string :any} (or (enum :json :protobuf) :nil)]
+   :ret (or :string :buffer)
+   :throws [:string]}
   "A request payload as bytes — the one place the encoding is chosen.
   Both branches read the same payload data: protobuf is a second
   projection of it (./otlp-proto), not a second payload builder."
@@ -326,6 +385,7 @@
     (errorf "obs otlp: unknown encoding %q (:json or :protobuf)" encoding)))
 
 (defn data-points
+  {:params [{:string :any}] :ret :number}
   "How many data points a metrics payload carries — what the exporter
   reports as exported, since a 'metric' is a name and a point is a
   number."
@@ -428,7 +488,26 @@
             :max-batch 512 :queue 2048 :interval 5}
    :metrics {:enabled true :path "/v1/metrics" :interval 60}})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or {:traces (or {:enabled :boolean? :path :string?
+                              :max-batch :number? :queue :number?
+                              :interval :number? & r}
+                             :nil)
+                 :metrics (or {:enabled :boolean? :path :string?
+                              :interval :number? & r}
+                             :nil)
+                 & r}
+                :nil)]
+   :ret {:enabled :boolean :endpoint :string :encoding (enum :json :protobuf)
+         :timeout :number :retries :number
+         :traces {:enabled :boolean :path :string :max-batch :number
+                  :queue :number :interval :number}
+         :metrics {:enabled :boolean :path :string :interval :number}
+         & r}}
+  "The [:obs-otlp] slice, `cfg0` merged over `defaults` — top-level
+  and, separately, each of :traces and :metrics, so a caller who sets
+  one batching number keeps the rest of the defaults."
+  [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (each k [:traces :metrics]
     (put cfg k (merge (defaults k) (get (or cfg0 {}) k {}))))
@@ -436,13 +515,17 @@
 
 # -- the resource --------------------------------------------------------
 
-(defn- loopback? [host]
+(defn- loopback?
+  {:params [:string] :ret :boolean :narrows :any}
+  "Is `host` loopback — localhost, ::1, 0.0.0.0 or 127.x?"
+  [host]
   (or (= "localhost" host)
       (= "::1" host)
       (= "0.0.0.0" host)
       (string/has-prefix? "127." host)))
 
 (defn display-endpoint
+  {:params [:string] :ret :string}
   ``The endpoint with its userinfo cut out. `http://user:token@host/`
   is a supported spelling (client/parse-url reads the credentials
   off), and every place the endpoint is *shown* — the startup line,
@@ -464,6 +547,12 @@
     s))
 
 (defn resource-attributes
+  {:params [{:service (or {:name :string? :version :string? :namespace :string?
+                           :instance :string?}
+                          :nil)
+             :resource (or {:keyword :any} :nil) & r}
+            :string?]
+   :ret @[{:string :any}]}
   ``The resource every payload carries: what this process *is*, as
   opposed to what it measured. `service.name` is the one attribute a
   backend genuinely needs — without it every process in the system is
@@ -526,13 +615,18 @@
 (def- stop-token :void.obs.otlp/stop)
 (def- flush-token :void.obs.otlp/flush)
 
-(defn- backoff [attempt]
+(defn- backoff
+  {:params [:number] :ret :number}
+  "Seconds to wait before retry `attempt`: half a second, doubling,
+  with jitter."
+  [attempt]
   # half a second, doubling, with jitter — the same shape void/jobs
   # retries with, and for the same reason: a collector coming back up
   # must not be hit by every process at once
   (* 0.5 (math/exp2 attempt) (+ 0.75 (* 0.5 (math/random)))))
 
 (defn- post!
+  {:params [:keyword :string {:string :any}] :ret (enum :ok :rejected :failed)}
   ``POST one payload to the collector. Returns :ok, :rejected (the
   collector said no in a way repeating will not fix) or :failed.
   Retries only what is worth retrying — a timeout, a refused
@@ -585,6 +679,16 @@
   out)
 
 (defn export-spans!
+  {:params [(or @[@{:name :string :trace-id :string :span-id :string
+                    :parent-id :string? :kind :keyword :started-at :number
+                    :duration :number? :attrs @{:any :any} :status :keyword
+                    :tracestate :string? & r}]
+                [@{:name :string :trace-id :string :span-id :string
+                   :parent-id :string? :kind :keyword :started-at :number
+                   :duration :number? :attrs @{:any :any} :status :keyword
+                   :tracestate :string? & r}]
+                :nil)]
+   :ret (or (enum :ok :rejected :failed) :nil)}
   ``Send one batch of finished spans. Public so a test — and a REPL
   during an incident — can push a span without waiting for the flush
   interval.``
@@ -598,6 +702,7 @@
     outcome))
 
 (defn export-metrics!
+  {:params [] :ret (or (enum :ok :rejected :failed) :nil)}
   "Send the registry as it is right now. The same snapshot `/metrics`
   renders, projected the other way."
   []
@@ -613,6 +718,7 @@
     outcome))
 
 (defn span-exporter
+  {:params [:any] :ret :nil}
   ``The `:void.obs/exporter` contribution: one bounded `ev/give` on
   the fiber that finished the span, and nothing else. A full queue
   drops the span and counts it — the alternative is a request fiber
@@ -635,6 +741,7 @@
    :fn span-exporter})
 
 (defn- drain-worker
+  {:params [] :ret :nil}
   "The batching fiber: take spans, send when the batch is full or a
   flush ticks, and flush what is left on the way out."
   []
@@ -672,7 +779,11 @@
 # cancellation arrives inside the fiber as an error: caught here, so a
 # shutdown is a shutdown and not a stack trace on stderr.
 
-(defn- flush-ticker []
+(defn- flush-ticker
+  {:params [] :ret :nil}
+  "Give the drain worker a flush token every :traces :interval
+  seconds, until cancelled."
+  []
   (def interval (get-in state [:cfg :traces :interval]))
   (try
     (forever
@@ -682,7 +793,11 @@
         (ev/give q flush-token)))
     ([_] nil)))
 
-(defn- metrics-ticker []
+(defn- metrics-ticker
+  {:params [] :ret :nil}
+  "Export the registry every :metrics :interval seconds, until
+  cancelled."
+  []
   (def interval (get-in state [:cfg :metrics :interval]))
   (try
     (forever
@@ -691,6 +806,7 @@
     ([_] nil)))
 
 (defn flush!
+  {:params [] :ret :nil}
   "Ask the exporter to send what it is holding. Returns immediately —
   the batch leaves on the exporter's own fiber."
   []
@@ -700,7 +816,15 @@
 
 # -- component -----------------------------------------------------------
 
-(defn- check-endpoint! [cfg]
+(defn- check-endpoint!
+  {:params [{:endpoint :string :headers (or @{:string :string} :nil) & r}]
+   :ret {:scheme :string :host :string :port :string? :target :string
+         :userinfo :string?}
+   :throws [:string]}
+  "Parse and validate the configured endpoint at start time: credentials
+  in [:obs-otlp :headers] over a plaintext non-loopback endpoint are
+  refused, and a non-loopback non-https endpoint is logged."
+  [cfg]
   (def endpoint (get cfg :endpoint))
   # parsing here rather than at the first export: an https:// endpoint
   # or a typo should fail the boot, not the flush five seconds into
@@ -724,6 +848,19 @@
   u)
 
 (defn start!
+  {:params [(or {:traces (or {:enabled :boolean? :path :string?
+                              :max-batch :number? :queue :number?
+                              :interval :number? & r}
+                             :nil)
+                 :metrics (or {:enabled :boolean? :path :string?
+                              :interval :number? & r}
+                             :nil)
+                 & r}
+                :nil)
+            :string?]
+   :ret {:endpoint :string :encoding (enum :json :protobuf)
+         :traces :boolean :metrics :boolean}
+   :throws [:string]}
   ``Start exporting. Separate from the component's `:start` so a test
   can drive the exporter without a boot — everything a component
   gives it is in `cfg`.``
@@ -766,6 +903,7 @@
    :metrics (get mcfg :enabled true)})
 
 (defn stop!
+  {:params [] :ret :nil}
   ``Stop exporting, after one last flush of what is queued — a
   process that is shutting down holds the spans of the requests it
   just finished, and they are the interesting ones.
@@ -797,6 +935,11 @@
   nil)
 
 (defn status
+  {:params []
+   :ret {:running :boolean :endpoint :string
+         :encoding (or (enum :json :protobuf) :nil)
+         :queued :number? :queue-capacity :number?
+         :exported @{:keyword :number} :dropped @{:tuple :number}}}
   "What the exporter is doing — the REPL half of the numbers it
   reports about itself."
   []

@@ -10,12 +10,31 @@
 # funnel's "db query failed" line out of the test log
 (log/set-level! "void.db.query" :fatal)
 
-(defn- setup [&opt opts]
+(defn- setup
+  {:params [(or {:dialect :keyword?
+                 :returning :boolean?
+                 :insert-id :any
+                 :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+                 :stream :boolean?
+                 :gate :any
+                 :connect-hook (or (fn [:any] :any) :nil)
+                 & r} :nil)]
+   :ret [@{:driver {:connect (fn [] :any) :close (fn [:any] :any) & r} & r}
+         @{:log @[{:sql :string :params [:any] :conn :number}]
+           :conns :number :closed :number
+           :open @[@{:id :number :in-exchange :boolean & r}]
+           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           & r}]}
+  "A pool over a fresh fake driver, and the state it records into."
+  [&opt opts]
   (def [drv st] (fake/make (or opts {})))
   [(pool/make (driver/normalize drv) {:size 2 :checkout-timeout 1}) st])
 
 # every scope below runs against its own pool through the dyn override
-(defmacro- with-db [p & body]
+(defmacro- with-db
+  {:params [:any :any] :ret :any}
+  "Run the body with `p` bound as the active pool for this scope."
+  [p & body]
   ~(with-dyns [db/pool-dyn ,p] ,;body))
 
 # -- statements ----------------------------------------------------------

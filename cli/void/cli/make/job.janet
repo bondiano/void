@@ -94,7 +94,18 @@
 (print "{{name}}-job-test ok")
 ```)
 
-(defn- substitutions [spec]
+(defn- substitutions
+  {:params [{:name :string :project :string :plugin :string :dir :string
+             :module-path :string :test-dir :string :queue :any
+             :max-attempts :number :schedule :any
+             :fields [{:name :keyword :type :keyword :optional? :boolean
+                       :entity :keyword? :rel :keyword? :table :string?}]}]
+   :ret {:name :string :title :string :project :string :plugin :string
+         :module-path :string :queue :string :max-attempts :string
+         :params :string :log-args :string :sample-args :string :schedule :string}}
+  "The template holes job-template and schedule-template read, built
+  from a job spec."
+  [spec]
   (def fields (spec :fields))
   (def names (map |(f/kebab (string ($ :name))) fields))
   {:name (spec :name)
@@ -127,6 +138,18 @@
   "templates/job")
 
 (defn job-spec
+  {:params [:string
+            @[{:name :keyword :type :keyword :optional? :boolean
+               :entity :keyword? :rel :keyword? :table :string?}]
+            (or {:dir :string? :project :string? :test-dir :string?
+                 :queue :any :max-attempts :number? :schedule :any & r}
+                :nil)]
+   :ret {:name :string :project :string :plugin :string :dir :string
+         :module-path :string :test-dir :string :queue :any
+         :max-attempts :number :schedule :any
+         :fields [{:name :keyword :type :keyword :optional? :boolean
+                   :entity :keyword? :rel :keyword? :table :string?}]}
+   :throws [:string]}
   ``The value both templates are a pure function of. `:fields` are the
   job's *arguments* — a job takes values, not a row or a closure,
   because the record it is enqueued as has to survive a restart.``
@@ -167,6 +190,13 @@
            "--dry-run" {:key :dry-run :type :bool :doc "print instead of writing"}}})
 
 (defn create
+  {:params [{:dir :string? :project :string? :test-dir :string?
+             :queue :any :max-attempts :number? :schedule :any
+             :dry-run :boolean? :force :boolean? & r}
+            :string
+            :string]
+   :ret [:string]
+   :throws [:string]}
   ``The body of `void make job NAME [arg:type ...]`. Returns the tuple
   of paths written — or, under `--dry-run`, the paths it would have
   written.``

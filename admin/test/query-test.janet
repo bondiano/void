@@ -37,12 +37,21 @@
                 :per-page 10
                 :scope (fn [req] [:= :owner-id (get-in req [:query "who"] 7)])))
 
-(defn- req [query]
+(defn- req
+  {:params [{:string :any}]
+   :ret @{:method :keyword :path :string :query @{:string :string} :params @{:any :any}}}
+  "A minimal request carrying `query` as the URL's own query string —
+  every value stringified, the way a real one arrives."
+  [query]
   @{:method :get :path "/admin/posts"
     :query (tabseq [[k v] :pairs query] k (string v))
     :params @{}})
 
-(defn- sql [clause]
+(defn- sql
+  {:params [:any] :ret (or [:string :tuple] :nil)}
+  "Compile a where-clause into [sql params], or nil when there is no
+  clause at all — a :scope that never narrows."
+  [clause]
   (when clause
     (def [text params] (builder/format {:select [:id] :from "posts" :where clause}))
     [text params]))

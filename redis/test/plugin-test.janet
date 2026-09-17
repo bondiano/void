@@ -12,7 +12,12 @@
 
 (def plugins ["void/redis/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [(or {:keyword :any} @{:keyword :any})]
+   :ret {:env @{:any :any} :cli @{:any :any}}}
+  "A boot config with `extra` merged into the :cli slice, log level
+  pinned to :error so a dry-run stays quiet."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}} extra)})
 
@@ -33,7 +38,12 @@
 # the codec point's duplicate sentence lists every repeated name at
 # once, which is why it keeps a :validate of its own instead of :key
 (def codec-point (get-in plugin/manifest-registry [:void/redis :extension-points :void.redis/codec]))
-(defn- a-codec [name] {:plugin :test :value {:name name :encode string :decode string}})
+(defn- a-codec
+  {:params [:keyword]
+   :ret {:plugin :keyword :value {:name :keyword :encode :cfunction :decode :cfunction}}}
+  "A fake :void.redis/codec contribution named `name`, for exercising
+  the point's duplicate-name resolution."
+  [name] {:plugin :test :value {:name name :encode string :decode string}})
 (def [_ dup-errors]
   (extension/resolve-point :void.redis/codec codec-point
                            (map a-codec [:b :a :b :c :a])))

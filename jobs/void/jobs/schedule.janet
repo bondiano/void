@@ -73,7 +73,12 @@
 
 (def- allowed-spec-keys {:every true :cron true :local true})
 
-(defn- parse-spec [name spec]
+(defn- parse-spec
+  {:params [:keyword :any]
+   :ret {:kind :keyword :source :string :cron :any? :every :number? :local :boolean?}
+   :throws [:string]}
+  "Validate and normalize a schedule's rule: a crontab string, {:cron ...} or {:every seconds}."
+  [name spec]
   (when (and (dictionary? spec) (not (indexed? spec)))
     (eachk k spec
       (unless (in allowed-spec-keys k)
@@ -118,6 +123,13 @@
   per process, not once per fleet: each replica's start is its own
   slot), and the enqueue keys :queue :priority :max-attempts :backoff
   :timeout :group.``
+  {:params [:keyword :any :keyword (or {:keyword :any} :nil)]
+   :ret @{:name :keyword :job :keyword :args (or @[:any] [:any]) :enabled :boolean
+          :on-start :boolean
+          :enqueue {:queue :keyword? :priority :number? :max-attempts :number? :backoff :any
+                    :timeout :number? :group :any & r}
+          :kind :keyword :source :string :cron :any? :every :number? :local :boolean?}
+   :throws [:string]}
   [name spec job-name &opt opts0]
   (unless (keyword? name)
     (errorf "schedule name must be a keyword, got %q" name))
@@ -150,6 +162,7 @@
   s)
 
 (defn defschedule-form
+  {:params [:symbol :any :any [:any]] :ret :tuple}
   "The expansion of `defschedule`, as a function — so that the macro
   can exist both here and on `void/jobs` without being written twice."
   [name spec job-name opts]
@@ -165,15 +178,18 @@
   The name of the schedule is the name of the binding as a keyword;
   the binding itself is the schedule, which is what `void jobs
   schedules` prints and what a test fires by hand.``
+  {:params [:symbol :any :any :any] :ret :tuple}
   [name spec job-name & opts]
   (defschedule-form name spec job-name opts))
 
 (defn forget!
+  {:params [:keyword] :ret :nil}
   "Drop a schedule — for tests, and for a REPL that renamed one."
   [name]
   (put registry name nil))
 
 (defn defined
+  {:params [] :ret @[:keyword]}
   "Names of every registered schedule."
   []
   (sorted (keys registry)))
@@ -181,6 +197,7 @@
 # -- slots ---------------------------------------------------------------
 
 (defn next-slot
+  {:params [{:kind :keyword :every :number? :cron :any? :local :boolean? & r} :number] :ret :number}
   ``The first occurrence strictly after `after`. For :every rules that
   is the next multiple of the interval; for cron rules it is what
   spork/cron computes, at second resolution.``
@@ -190,6 +207,8 @@
     (cron/next-timestamp (s :cron) (math/floor after) (s :local))))
 
 (defn due-slot
+  {:params [{:kind :keyword :every :number? :cron :any? :local :boolean? & r} :number :number]
+   :ret (or [:number :number] :nil)}
   ``The most recent occurrence in (after, now], with how many earlier
   ones were skipped: [slot skipped], or nil when none is due. A
   scheduler that has been asleep fires once and says how much it
@@ -211,6 +230,8 @@
   (when slot [slot skipped]))
 
 (defn next-fire
+  {:params [{:kind :keyword :every :number? :cron :any? :local :boolean? & r} :number?]
+   :ret :number}
   "When this schedule fires next, as a timestamp — what `void jobs
   schedules` prints."
   [s &opt from]
@@ -218,10 +239,17 @@
 
 # -- firing --------------------------------------------------------------
 
-(defn- lock-name [s slot]
+(defn- lock-name
+  {:params [{:name :keyword & r} :number] :ret :string}
+  "The lease name a slot's occurrence fires under."
+  [s slot]
   (string "jobs:schedule:" (s :name) ":" (math/floor slot)))
 
 (defn fire!
+  {:params [{:name :keyword :job :keyword :args (or @[:any] [:any])
+             :enqueue {:keyword :any} & r}
+            :number (or {:keyword :any} :nil)]
+   :ret (or @{:keyword :any} :nil)}
   ``Enqueue this schedule's job for `slot`, if the lease on that slot
   can be taken. Returns the record, or nil when somebody else got
   there first (or the backend refused the lease). The slot is passed
@@ -252,6 +280,7 @@
   declared `:on-start`, which fires once right there.
 
   Returns the records it enqueued.``
+  {:params [@{:keyword :number} (or {:keyword :any} :nil)] :ret [:any]}
   [cursors &opt opts]
   (def o (or opts {}))
   (def now (get o :now (os/clock :realtime)))
@@ -278,6 +307,9 @@
 # -- the loop ------------------------------------------------------------
 
 (defn make
+  {:params [:any (or {:keyword :any} :nil)]
+   :ret @{:queue :any :interval :number :lock-ttl :number :token :string
+          :cursors @{:keyword :number} :stopped :boolean :stop-chan :nil :fired :number}}
   "Build a scheduler value over the active queue. Nothing runs until
   `start!`."
   [q &opt opts]
@@ -292,6 +324,7 @@
     :fired 0})
 
 (defn- wait-or-stop
+  {:params [{:stop-chan :any :stopped :boolean & r} :number?] :ret :nil}
   "Sleep for `seconds`, or until the scheduler is told to stop —
   whichever comes first (the worker's `wait-or-stop`, including its
   reading of a nil or non-positive wait as \"poll again\" rather than
@@ -305,6 +338,14 @@
   nil)
 
 (defn start!
+  {:params [@{:stopped :boolean :stop-chan :any
+              :queue {:backend {:shared-locks? :any :name :any & r} & r}
+              :interval :number :cursors @{:keyword :number} :lock-ttl :number
+              :token :string :fired :number & r}]
+   :ret @{:stopped :boolean :stop-chan :any
+          :queue {:backend {:shared-locks? :any :name :any & r} & r}
+          :interval :number :cursors @{:keyword :number} :lock-ttl :number
+          :token :string :fired :number & r}}
   "Start the scheduler fiber."
   [sc]
   (unless (sc :stopped) (break sc))
@@ -335,6 +376,8 @@
   sc)
 
 (defn stop!
+  {:params [@{:stopped :boolean :stop-chan :any :fired :number & r}]
+   :ret @{:stopped :boolean :stop-chan :any :fired :number & r}}
   "Stop the scheduler fiber."
   [sc]
   (when (sc :stopped) (break sc))
@@ -345,6 +388,9 @@
   sc)
 
 (defn status
+  {:params [:number?]
+   :ret @[{:name :keyword :job :keyword :spec :string :enabled :boolean
+           :next :number :in :number}]}
   ``Every schedule with when it fires next — what `void jobs
   schedules` prints.``
   [&opt from]

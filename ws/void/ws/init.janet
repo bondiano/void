@@ -62,6 +62,7 @@
                   :from :void/ws :component :ws/registry))
 
 (defn registry
+  {:params [] :ret :any :throws [:string]}
   "The running registry, or a readable error."
   []
   (system/active current-registry))
@@ -132,6 +133,8 @@
    :send-queue true :overflow true :close-timeout true})
 
 (defn- origin-allowed?
+  {:params [@{:headers {:string (or :string @[:string])} & r} (or @[:string] [:string])]
+   :ret :boolean?}
   ``Is the request's Origin on the allowed list (case-insensitive)? A
   missing Origin fails a configured list too: a non-browser client can
   forge anything, but the header's whole value is that a *browser*
@@ -143,6 +146,21 @@
     (truthy? (some |(= v (string/ascii-lower (string $))) origins))))
 
 (defn accept
+  {:params [{:keyword :any}
+            (or {:on-open (or (fn [a] :any) :nil)
+                :on-message (or (fn [a b] :any) :nil)
+                :on-close (or (fn [a b] :any) :nil)
+                :protocols (or @[:string] [:string] :nil)
+                :rooms (or @[:keyword] [:keyword] :nil)
+                :origins (or @[:string] [:string] :nil)
+                :max-frame :number? :max-message :number?
+                :send-queue :number? :overflow :keyword?
+                :close-timeout :number?}
+               :nil)]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
   ``Answer a websocket handshake from inside an ordinary route
   handler. Returns the response to return: the 101 that hands the
   socket over, or the refusal the handshake earned (405/400/426, 403
@@ -220,6 +238,17 @@
                         leftover)))))))
 
 (defn handler
+  {:params [(or {:on-open (or (fn [a] :any) :nil)
+                :on-message (or (fn [a b] :any) :nil)
+                :on-close (or (fn [a b] :any) :nil)
+                :protocols (or @[:string] [:string] :nil)
+                :rooms (or @[:keyword] [:keyword] :nil)
+                :origins (or @[:string] [:string] :nil)
+                :max-frame :number? :max-message :number?
+                :send-queue :number? :overflow :keyword?
+                :close-timeout :number?}
+               :nil)]
+   :ret (fn [a] :any)}
   ``A route handler from a spec — `accept` with the spec already
   bound, for the common case where the socket is the whole route:
 
@@ -239,11 +268,17 @@
 (def stats "See conn/stats — what this process's sockets have done." conn/stats)
 
 (defn send-json!
+  {:params [{:outbox :any :state :keyword :dropped :number
+             :config @{:keyword :any} :id :number :socket :any
+             :sent :number & r}
+            :any]
+   :ret :boolean}
   "Encode a value as JSON and send it as one text message."
   [c value]
   (conn/send! c (json/encode value)))
 
 (defn json-body
+  {:params [{:type :keyword :data :string & r}] :ret :any}
   ``The JSON value in a message, or nil when it is not JSON. A socket
   that carries JSON carries text somebody else wrote, so a payload
   that does not parse is a message to ignore rather than an exception
@@ -256,16 +291,24 @@
 # -- what a handler says to a room ---------------------------------------
 
 (defn join!
+  {:params [{:id :number :rooms @{:keyword :any} & r} :any]
+   :ret {:id :number :rooms @{:keyword :any} & r}
+   :throws [:string]}
   "Put a connection in a room."
   [c name]
   (rooms/join! (registry) c name))
 
 (defn leave!
+  {:params [{:id :number :rooms @{:keyword :any} & r} :keyword]
+   :ret {:id :number :rooms @{:keyword :any} & r}}
   "Take a connection out of a room."
   [c name]
   (rooms/leave! (registry) c name))
 
 (defn broadcast!
+  {:params [:keyword (or :string :buffer)
+            (or {:except (or {:id :number & r} :nil) :binary :boolean? & r} :nil)]
+   :ret :number}
   ``Send a message to every connection in a room; returns how many
   took it. Options: :except <conn>, :binary. The message is framed
   once for the whole room (./rooms).``
@@ -273,31 +316,43 @@
   (rooms/broadcast! (registry) name message opts))
 
 (defn broadcast-json!
+  {:params [:keyword :any
+            (or {:except (or {:id :number & r} :nil) :binary :boolean? & r} :nil)]
+   :ret :number}
   "Broadcast a value as JSON."
   [name value &opt opts]
   (rooms/broadcast! (registry) name (json/encode value) opts))
 
 (defn broadcast-all!
+  {:params [(or :string :buffer)
+            (or {:except (or {:id :number & r} :nil) :binary :boolean? & r} :nil)]
+   :ret :number}
   "Broadcast to every connection of this process."
   [message &opt opts]
   (rooms/broadcast-all! (registry) message opts))
 
 (defn members
+  {:params [:keyword] :ret [:any]}
   "The connections in a room."
   [name]
   (rooms/members (registry) name))
 
 (defn room-names
+  {:params [] :ret [:keyword]}
   "Every room with a member in this process."
   []
   (rooms/room-names (registry)))
 
 (defn connections
+  {:params [] :ret [:any]}
   "Every websocket connection this process holds."
   []
   (rooms/connections (registry)))
 
 (defn status
+  {:params [] :ret {:connections :number :peak :number :total :number
+                    :limit :number :rooms {:keyword :number}
+                    :sweeping :boolean :pid :number}}
   "What this process's socket layer looks like right now."
   []
   (rooms/status (registry)))

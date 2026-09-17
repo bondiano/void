@@ -19,11 +19,17 @@
 (conformance/run! "memory" (fn [] (memory/store (memory/make))) {:settle 0.05})
 (log/set-level! "void.bus" :info)
 
-(defn- env [topic payload]
+(defn- env
+  {:params [:any :any] :ret @{:id :string :topic :any :body :any :meta-body :string :meta :table}}
+  "A minimal envelope for `:publish!`, identified by its payload."
+  [topic payload]
   @{:id (string "id-" payload) :topic topic :body payload :meta-body "{}"
     :meta @{}})
 
-(defn- settle [] (ev/sleep 0.02))
+(defn- settle
+  {:params [] :ret :nil}
+  "A fixed pause for the async paths this suite exercises."
+  [] (ev/sleep 0.02))
 
 # -- one group, in order -------------------------------------------------
 

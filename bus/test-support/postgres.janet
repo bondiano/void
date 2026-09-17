@@ -33,6 +33,7 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
+  {:params [(or :nil {:keyword :any})] :ret @{:keyword :any}}
   ``The [:db-postgres] config slice for the configured server: the
   conninfo goes in as :url when it is one and as :params otherwise,
   since the slice speaks keywords either way.``
@@ -48,6 +49,7 @@
   (merge base (or extra {})))
 
 (defn- fetch
+  {:params [{:symbol :any} :symbol] :ret :any :throws [:string]}
   "The value of one binding in a module loaded at runtime."
   [mod sym]
   (def entry (get mod sym))
@@ -56,6 +58,17 @@
   (get entry :value))
 
 (defn driver
+  {:params [(or :nil {:keyword :any})]
+   :ret {:name :string :dialect :keyword :connect (fn [] :any) :close (fn [:any] :any)
+         :execute (fn [:any :string [:any] {:kind :keyword & r}] {:rows [:any] :count :number})
+         :returning :boolean :prepare (or :function :nil)
+         :execute-prepared (or :function :nil) :ping (or :function :nil)
+         :insert-id (or :function :nil)
+         :stream (fn [:any :string [:any] (fn [:any] :any)] :number)
+         :reusable? (fn [:any] :boolean) :begin :function :commit :function
+         :rollback :function :savepoint :function :release-savepoint :function
+         :rollback-to-savepoint :function :streams? :boolean & r}
+   :throws [:string]}
   ``The normalized void/db driver for the configured server, with
   libpq loaded. Resolved through `require` so that nothing native is
   touched unless there is a server to talk to.``
@@ -65,6 +78,7 @@
     ((fetch (require "void/db-postgres/driver") 'from-config) (config extra))))
 
 (defn listener
+  {:params [(or :nil {:keyword :any})] :ret :any :throws [:string]}
   ``An opened and started void/db-postgres listener for the configured
   server, or nil. What makes the NOTIFY path testable: the bus backend
   finds it through `void/db-postgres/init`'s module-level

@@ -72,6 +72,8 @@
    "note" "leave at the door"})
 
 (defn echo
+  {:params [@{:parsed-body :any & r}]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
   "POST /echo — the validated body straight back out (B1's handler)."
   [req]
   (rest/json (req :parsed-body)))
@@ -89,7 +91,11 @@
                                  :void.schema/response {200 Order}}))
                     :env (router/env-ref (curenv))}]}))
 
-(defn- plugins-for [mode]
+(defn- plugins-for
+  {:params [:string] :ret [(or :keyword {:name :keyword & r})]}
+  "The plugin list for one probe mode: plain, obs-core (obs without
+  obs-http) or the full obs+obs-http stack."
+  [mode]
   (case mode
     "plain" [:void/http :void/rest app]
     # void/obs without void/obs-http: what the plugin costs a request
@@ -97,7 +103,11 @@
     "obs-core" [:void/http :void/rest :void/obs app]
     [:void/http :void/rest :void/obs :void/obs-http app]))
 
-(defn- start [mode &opt log-cfg]
+(defn- start
+  {:params [:string (or {:level :keyword? :sink :keyword? & r} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}}
+  "Boot a test system in one probe mode, tracing on only for \"obs\"."
+  [mode &opt log-cfg]
   (def obs? (not= "plain" mode))
   (test/start!
     {:plugins (plugins-for mode)
@@ -106,14 +116,24 @@
                     :obs {:runtime {:interval 0.1}
                           :trace {:enabled (= "obs" mode)}}}}}))
 
-(defn- run [c n]
+(defn- run
+  {:params [@{:boot :any :kernel :any :cookies @{:string :string}
+              :headers @{:string :any} & r}
+            :number]
+   :ret :number}
+  "Send `n` requests through `c` and return the elapsed seconds."
+  [c n]
   (def t (os/clock :monotonic))
   (loop [_ :range [0 n]] (test/inject c {:method :post :uri "/echo" :json order}))
   (- (os/clock :monotonic) t))
 
-(defn- median [xs] (in (sorted xs) (math/floor (/ (length xs) 2))))
+(defn- median
+  {:params [(or @[:number] [:number])] :ret :number}
+  "The middle value of `xs`, sorted."
+  [xs] (in (sorted xs) (math/floor (/ (length xs) 2))))
 
 (defn measure
+  {:params [:string :number? :number?] :ret :number}
   ``Median microseconds per request over `rounds` rounds of `n`. With
   VOID_OBS_PROBE_LOG=1 the access log is on and writing JDN lines to
   stderr, which is the shape a :prod process actually runs in (send
@@ -131,7 +151,11 @@
     (run c 500)                                   # warmup
     (* 1000000 (/ (median (seq [_ :range [0 rounds]] (run c n))) n))))
 
-(defn main [_ &opt mode n rounds]
+(defn main
+  {:params [:any :string? :string? :string?] :ret :nil}
+  "The `janet test-support/overhead-probe.janet <mode> [n] [rounds]`
+  entry point: print the measured microseconds per request."
+  [_ &opt mode n rounds]
   (printf "%-12s %6.2f us/request"
           (or mode "plain")
           (measure (or mode "plain")

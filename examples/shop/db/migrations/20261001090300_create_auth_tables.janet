@@ -7,8 +7,14 @@
 
 (import void/auth/db :as auth-db)
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create void/auth-db's tables — API tokens and magic-link challenges."
+  []
   [;(auth-db/tables)])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop void/auth-db's tables."
+  []
   [;(auth-db/drop-tables)])

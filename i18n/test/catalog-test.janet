@@ -127,7 +127,11 @@
                     ": " plain " vs " through))))
 
 # and the same errors speak Russian under the :ru table
-(defn- ru-str [e]
+(defn- ru-str
+  {:params [{:keyword :any}] :ret :string}
+  "The core's `error-str` for `e`, rendered under the :ru
+  schema-message table."
+  [e]
   (with-dyns [:void.schema/messages (catalog/schema-messages :ru)]
     (schema/error-str e)))
 (assert (string/find "обязательное поле отсутствует"

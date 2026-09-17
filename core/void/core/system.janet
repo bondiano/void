@@ -43,6 +43,7 @@
   :void/boot)
 
 (defn- plugin-of
+  {:params [{:plugin :keyword? & r}] :ret :string}
   "The plugin a component definition came from, for a message; a
   component built outside a manifest has none."
   [comp]
@@ -55,6 +56,8 @@
 (def- ambient-marker :void.system/ambient)
 
 (defn ambient
+  # janet-zed: untyped on purpose — `&named` is not read as variadic, so no
+  # :params both fits this parameter list and accepts a call with options
   ``Declare an ambient value: what a running component holds, a dyn
   that overrides it for a scope, and a reader that explains the
   absence.
@@ -94,11 +97,16 @@
    :hold (fn hold-value [v] (set held v) v)})
 
 (defn ambient?
+  {:params [:any] :ret :boolean
+   :narrows {:void.system/ambient :boolean :dyn :keyword :of :string
+             :from :keyword? :component :keyword?
+             :held (fn [] :any) :hold (fn [:any] :any)}}
   "Is this an ambient declaration?"
   [a]
   (and (dictionary? a) (truthy? (get a ambient-marker))))
 
 (defn current
+  {:params [{:dyn :keyword :held (fn [] :any) & r}] :ret :any}
   "The ambient value in force: the dyn override, else what the running
   component holds; nil when neither is set."
   [a]
@@ -106,6 +114,9 @@
   (if (nil? v) ((a :held)) v))
 
 (defn active
+  {:params [{:dyn :keyword :held (fn [] :any)
+             :of :string :from :keyword? :component :keyword? & r}]
+   :ret :any :throws [:string]}
   "The ambient value in force, or an error naming what is not running
   — `current` for the callers who cannot go on without it."
   [a]
@@ -121,6 +132,7 @@
               (a :dyn))))
 
 (defn hold!
+  {:params [{:hold (fn [:any] :any) & r} :any] :ret :any}
   "Put a value in the ambient. The system does this for a component's
   `:ambient`; a REPL or a test standing a value up without a system is
   the only other caller."
@@ -128,11 +140,13 @@
   ((a :hold) value))
 
 (defn release!
+  {:params [{:hold (fn [:any] :any) & r}] :ret :nil}
   "Empty the ambient — the counterpart of `hold!`."
   [a]
   ((a :hold) nil))
 
 (defmacro with-ambient
+  {:params [:any :any :any] :ret :any}
   ``Run the body with the ambient bound to `value` for this scope — the
   dyn override, so it is per-fiber and it nests:
 
@@ -146,6 +160,14 @@
 # -- component definitions -----------------------------------------------
 
 (defn component
+  {:params [:keyword :any]
+   :ret {:key :keyword :deps [:keyword] :provides [:keyword] :doc :string? :plugin :keyword?
+         :ambient (or {:hold (fn [:any] :any) & r} :nil)
+         :config (or {:key :keyword & r} :nil)
+         :start (fn [:any :any] :any)
+         :stop (or (fn [:any] :any) :nil)
+         :health (or (fn [:any] :any) :nil)}
+   :throws [:string]}
   ``Build and validate a component definition (a plain struct).
 
   Options:
@@ -215,6 +237,7 @@
   :void.system/registry)
 
 (defn registry
+  {:params [] :ret @{:keyword :any}}
   "Create an empty component registry."
   []
   @{})
@@ -224,6 +247,7 @@
   (registry))
 
 (defn register!
+  {:params [{:key :keyword & r} (or @{:keyword :any} :nil)] :ret {:key :keyword & r}}
   "Put a component definition into a registry (default: the current
   `registry-dyn` registry). Re-registering a key replaces the previous
   definition — REPL-friendly; cross-plugin duplicate detection happens
@@ -234,6 +258,13 @@
   comp)
 
 (defmacro defcomponent
+  {:params [:any :any]
+   :ret {:key :keyword :deps [:keyword] :provides [:keyword] :doc :string? :plugin :keyword?
+         :ambient (or {:hold (fn [:any] :any) & r} :nil)
+         :config (or {:key :keyword & r} :nil)
+         :start (fn [:any :any] :any)
+         :stop (or (fn [:any] :any) :nil)
+         :health (or (fn [:any] :any) :nil)}}
   ``Declare a component and register it in the current registry.
 
       (defcomponent :db/pool
@@ -250,6 +281,10 @@
 # -- graph validation ----------------------------------------------------
 
 (defn- collect-components
+  {:params [(or [{:key :keyword :plugin :keyword? & r}]
+                {:keyword {:key :keyword :plugin :keyword? & r}})]
+   :ret @{:keyword {:key :keyword :plugin :keyword? & r}}
+   :throws [:string]}
   "Component definitions -> key -> definition, refusing a duplicate key
   and naming both plugins; a dictionary is taken as already keyed."
   [components]
@@ -277,6 +312,7 @@
             components)))
 
 (defn- interface-providers
+  {:params [{:keyword {:provides [:keyword] & r}}] :ret @{:keyword @[:keyword]}}
   "Interface -> the keys of the components that :provide it, in key
   order."
   [comps]
@@ -287,6 +323,9 @@
   out)
 
 (defn- resolve-ref
+  {:params [{:keyword {:plugin :keyword? & r}} {:keyword @[:keyword]}
+            {:keyword (or {:impl :keyword? & r} :nil) & r} :string :keyword]
+   :ret :keyword :throws [:string]}
   "Resolve a dependency ref (component key or interface) to a component
   key. `who` describes the depending side for error messages."
   [comps providers config who ref]
@@ -322,6 +361,8 @@
             who ref)))
 
 (defn- topo-sort
+  {:params [{:keyword :any} {:keyword {:keyword :keyword}}]
+   :ret @[:keyword] :throws [:string]}
   "The start order: a depth-first walk over the resolved dependencies,
   keys visited in sorted order so the result is stable; a cycle is an
   error printing the path around it."
@@ -329,7 +370,12 @@
   (def order @[])
   (def state @{})
   (def path @[])
-  (defn visit [k]
+  (defn visit
+    {:params [:keyword] :ret :any :throws [:string]}
+    "Depth-first visit of one key: marks it :visiting, recurses into
+    its resolved dependencies, then marks it :done and appends it to
+    the order — or raises on a cycle back through :visiting."
+    [k]
     (case (get state k)
       :done nil
       :visiting
@@ -351,6 +397,10 @@
   order)
 
 (defn- check-component-config
+  {:params [{:keyword {:plugin :keyword?
+                       :config (or {:key :keyword? :schema :any & r} :nil) & r}}
+            {:keyword :any}]
+   :ret :nil :throws [:string]}
   "Validate every component's deprecated `:config :schema` against its
   slice of `config` — all of them, one error listing every failure —
   through config/validate, the same call bootstrap makes for a
@@ -371,6 +421,23 @@
             (string/join errors "\n  - "))))
 
 (defn init
+  {:params [(or [{:key :keyword :plugin :keyword? & r}]
+                {:keyword {:key :keyword :plugin :keyword? & r}})
+            (or {:keyword :any} :nil)]
+   :ret @{:components {:keyword {:key :keyword :plugin :keyword? :deps [:keyword] :provides [:keyword]
+                                 :ambient (or {:hold (fn [:any] :any) & r} :nil)
+                                 :config (or {:key :keyword & r} :nil)
+                                 :start (fn [:any :any] :any)
+                                 :stop (or (fn [:any] :any) :nil)
+                                 :health (or (fn [:any] :any) :nil)}}
+         :providers {:keyword @[:keyword]}
+         :resolution {:keyword {:keyword :keyword}}
+         :order [:keyword]
+         :config {:keyword :any}
+         :instances @{:keyword :any}
+         :states @{:keyword (enum :running :stopped)}
+         & r}
+   :throws [:string]}
   ``Validate component definitions and build a system value.
 
   `components` is a registry table (key -> definition) or an indexed
@@ -434,6 +501,7 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn- component-config
+  {:params [{:config (or {:key :keyword & r} :nil) & r} {:keyword :any}] :ret :any}
   "The config slice a component declared with :config {:key}; nil for
   a component without one. Validated already — by `init` for a
   deprecated :config :schema, by bootstrap phase 2 for the manifest's."
@@ -442,6 +510,12 @@
     (get config (spec :key))))
 
 (defn- resolved-deps
+  {:params [{:resolution {:keyword {:keyword :keyword}}
+             :instances {:keyword :any}
+             :components {:keyword {:deps [:keyword] & r}}
+             :boot :any? & r}
+            :keyword]
+   :ret {:keyword :any} :throws [:string]}
   "Build the deps struct passed to :start. Every ref is the instance of
   the component it resolved to, except `boot-ref`, which is the boot
   the system was attached to — a system started outside a bootstrap has
@@ -461,6 +535,21 @@
   (table/to-struct out))
 
 (defn- start-instance
+  {:params [{:components {:keyword {:key :keyword :plugin :keyword? :deps [:keyword] :provides [:keyword]
+                                    :ambient (or {:hold (fn [:any] :any) & r} :nil)
+                                    :config (or {:key :keyword & r} :nil)
+                                    :start (fn [:any :any] :any)
+                                    :stop (or (fn [:any] :any) :nil)
+                                    :health (or (fn [:any] :any) :nil)}}
+             :providers {:keyword @[:keyword]}
+             :resolution {:keyword {:keyword :keyword}}
+             :order [:keyword]
+             :config {:keyword :any}
+             :instances @{:keyword :any}
+             :states @{:keyword (enum :running :stopped)}
+             & r}
+            :keyword]
+   :ret :any :throws [:string]}
   "Call the component's :start with its resolved deps and config slice,
   put the instance in the component's `:ambient` when it declares one,
   and return it."
@@ -472,6 +561,11 @@
   inst)
 
 (defn- forget-instance
+  {:params [{:components {:keyword {:ambient (or {:hold (fn [:any] :any) & r} :nil) & r}}
+             :instances @{:keyword :any}
+             :states @{:keyword (enum :running :stopped)} & r}
+            :keyword]
+   :ret @{:keyword (enum :running :stopped)}}
   "Drop what the system remembers about a stopped component: the
   instance, the state, and the `:ambient` cell — the last one because a
   package's module-level functions read it, and an ambient left full
@@ -482,6 +576,12 @@
   (put (sys :states) k :stopped))
 
 (defn- stop-instance
+  {:params [{:components {:keyword {:stop (or (fn [:any] :any) :nil)
+                                    :ambient (or {:hold (fn [:any] :any) & r} :nil) & r}}
+             :instances @{:keyword :any}
+             :states @{:keyword (enum :running :stopped)} & r}
+            :keyword]
+   :ret :any}
   "Call the component's :stop with its instance, when it declares one —
   the ambient is still full while it runs, since a :stop that closes
   what it built often goes through the package's own functions — then
@@ -493,12 +593,20 @@
       (stop-fn (get-in sys [:instances k])))))
 
 (defn needed-keys
+  {:params [{:components {:keyword :any} :resolution {:keyword {:keyword :keyword}} & r}
+            [:keyword]]
+   :ret @{:keyword :boolean} :throws [:string]}
   "Expand a set of component keys to their transitive dependency
   closure — the minimal subset that can start on its own (the CLI
   bootstraps command :needs through this). Unknown keys are an error."
   [sys ks]
   (def wanted @{})
-  (defn visit [k]
+  (defn visit
+    {:params [:keyword] :ret :nil :throws [:string]}
+    "Add `k` to `wanted` (unless already there) and recurse into every
+    key it resolves a dependency to; raises on a key not in the
+    system's components."
+    [k]
     (unless (get-in sys [:components k])
       (errorf "unknown component %q (known: %s)"
               k (string/join (map |(string/format "%q" $)
@@ -512,6 +620,19 @@
   wanted)
 
 (defn start
+  {:params [{:components {:keyword {:ambient (or {:hold (fn [:any] :any) & r} :nil)
+                                    :config (or {:key :keyword & r} :nil)
+                                    :start (fn [:any :any] :any) & r}}
+             :resolution {:keyword {:keyword :keyword}}
+             :order [:keyword]
+             :config {:keyword :any}
+             :instances @{:keyword :any}
+             :states @{:keyword (enum :running :stopped)}
+             & r}
+            (or [:keyword] :nil)]
+   :ret {:order [:keyword] :instances @{:keyword :any}
+         :states @{:keyword (enum :running :stopped)} & r}
+   :throws [:any]}
   ``Start components in dependency order — all of them, or, with
   `subset` (component keys), only those plus their transitive
   dependencies (partial bootstrap for CLI commands and fixtures).
@@ -543,6 +664,15 @@
   sys)
 
 (defn stop
+  {:params [{:components {:keyword {:stop (or (fn [:any] :any) :nil)
+                                    :ambient (or {:hold (fn [:any] :any) & r} :nil) & r}}
+             :order [:keyword]
+             :instances @{:keyword :any}
+             :states @{:keyword (enum :running :stopped)} & r}
+            :number?]
+   :ret {:components {:keyword :any} :order [:keyword] :instances @{:keyword :any}
+         :states @{:keyword (enum :running :stopped)} & r}
+   :throws [:string]}
   "Stop running components in reverse dependency order. With `timeout`
   (seconds) each component's :stop runs under ev/with-deadline — a hung
   stop is cancelled and reported instead of blocking shutdown. A stop
@@ -564,6 +694,8 @@
   sys)
 
 (defn- dependents-of
+  {:params [{:resolution {:keyword {:keyword :keyword}} :order [:keyword] & r} :keyword]
+   :ret @[:keyword]}
   "Transitive dependents of `k`, in start (topological) order."
   [sys k]
   (def rdeps @{})
@@ -571,7 +703,11 @@
     (each rk (values res)
       (put rdeps rk (array/push (get rdeps rk @[]) c))))
   (def affected @{})
-  (defn visit [j]
+  (defn visit
+    {:params [:keyword] :ret :nil}
+    "Mark `j` (unless already marked) as an affected dependent and
+    recurse into everything that in turn depends on it."
+    [j]
     (each d (get rdeps j @[])
       (unless (in affected d)
         (put affected d true)
@@ -580,6 +716,16 @@
   (filter |(in affected $) (sys :order)))
 
 (defn stop-key
+  {:params [{:components {:keyword {:stop (or (fn [:any] :any) :nil)
+                                    :ambient (or {:hold (fn [:any] :any) & r} :nil) & r}}
+             :states @{:keyword (enum :running :stopped)}
+             :order [:keyword]
+             :resolution {:keyword {:keyword :keyword}}
+             :instances @{:keyword :any} & r}
+            :keyword]
+   :ret {:components {:keyword :any} :states @{:keyword (enum :running :stopped)}
+         :order [:keyword] :resolution {:keyword :any} :instances @{:keyword :any} & r}
+   :throws [:string]}
   ``Stop component `k` and its transitive dependents, in reverse
   dependency order — the counterpart of a subset `start`, and what a
   caller needs when it opened part of the graph for one piece of work
@@ -603,6 +749,20 @@
   sys)
 
 (defn restart
+  {:params [{:components {:keyword {:start (fn [:any :any] :any) :stop (or (fn [:any] :any) :nil)
+                                    :ambient (or {:hold (fn [:any] :any) & r} :nil) & r}}
+             :states @{:keyword (enum :running :stopped)}
+             :order [:keyword]
+             :resolution {:keyword {:keyword :keyword}}
+             :instances @{:keyword :any}
+             :config {:keyword :any}
+             :boot :any?
+             :restart-pending (or {:keyword :boolean} :nil) & r}
+            :keyword]
+   :ret {:components {:keyword :any} :states @{:keyword (enum :running :stopped)}
+         :order [:keyword] :resolution {:keyword :any} :instances @{:keyword :any}
+         :config {:keyword :any} :restart-pending (or {:keyword :boolean} :nil) & r}
+   :throws [:any]}
   ``Stop component `k` and its transitive dependents, then start them
   again — the reloaded workflow.
 
@@ -644,6 +804,11 @@
 # -- inspection ----------------------------------------------------------
 
 (defn health
+  {:params [{:components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+             :order [:keyword]
+             :states @{:keyword (enum :running :stopped)}
+             :instances @{:keyword :any} & r}]
+   :ret {:status (enum :up :down) :components {:keyword {:status :any & r}}}}
   ``Aggregate component health: {:status :up|:down :components {...}}.
   A running component without a :health function reports {:status :up};
   the aggregate is :down if any component reports :down.
@@ -666,6 +831,10 @@
    :components (table/to-struct out)})
 
 (defn instance
+  {:params [{:components {:keyword :any} :providers {:keyword @[:keyword]}
+             :config {:keyword :any} :instances @{:keyword :any} & r}
+            :keyword]
+   :ret :any :throws [:string]}
   "Return the running instance for a component key or interface ref."
   [sys ref]
   (def comps (sys :components))
@@ -691,6 +860,7 @@
   (ambient boot-ref :of "the running boot" :from :void/core))
 
 (defn attach-boot!
+  {:params [@{:keyword :any} :any] :ret @{:keyword :any}}
   ``Give `sys` its boot and make it the process's running boot.
 
   Two things at once, because they are one fact: from here until
@@ -705,6 +875,7 @@
   sys)
 
 (defn detach-boot!
+  {:params [:any] :ret :any}
   "Release the process's running boot — what `plugin/shutdown!` and
   `test/stop!` do after the graph is down. The system keeps its own
   `:boot`, so a stopped system can still be inspected."

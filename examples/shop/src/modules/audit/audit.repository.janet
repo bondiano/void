@@ -7,17 +7,26 @@
 (import ./audit.model :as model)
 
 (defn record!
+  {:params [{:keyword :any}]
+   :ret @{:any :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Write one line. Raises on a duplicate `message-id`, which is the
   point — see ./audit.consumer.``
   [event]
   (db/insert! model/AuditEvent event))
 
 (defn recorded?
+  {:params [:string]
+   :ret :boolean
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Has this message already been written?"
   [message-id]
   (truthy? (db/one model/AuditEvent {:where [:= :message-id message-id]})))
 
 (defn trail
+  {:params [(or {:limit :number? :correlation-id :string? :match :string? & r} :nil)]
+   :ret @[@{:any :any}]
+   :throws [:string]}
   ``The trail, newest first — what the admin desk shows and what a test
   reads. Options: :limit (100), :correlation-id (one request's lines),
   :match (a substring the detail must carry — the row a history tab is

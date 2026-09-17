@@ -36,6 +36,15 @@
   [:email :username :subject :id])
 
 (defn check
+  {:params [{:find :function :secret :function :subject :function
+             :claims :function & r}
+            (or {:any :any} :nil)
+            (or {:now :number? & r} :nil)]
+   :ret {:identity (or {:subject :string & r} :nil)
+         :needs-rehash :boolean
+         :record (or {:keyword :any} :nil)
+         :reason :keyword}
+   :throws [:string]}
   ``Verify credentials against a user store. Returns
 
       {:identity id|nil :needs-rehash bool :record rec|nil :reason kw}
@@ -109,6 +118,9 @@
            :reason :ok})))))
 
 (defn strategy
+  {:params [{:find :function :secret :function :subject :function
+             :claims :function & r}]
+   :ret {:name :keyword :doc :string :verify :function}}
   ``The :password strategy over a user store — `:verify` only, so it
   is never in the per-request chain.``
   [store]

@@ -18,7 +18,12 @@
   {:outer true :inner true :replace true :prepend true
    :append true :before true :after true :remove true})
 
-(defn- mode-name [mode]
+(defn- mode-name
+  {:params [(or :string :keyword)] :ret :string :throws [:string]}
+  "The wire name of a patch mode: a string passes through, a known
+  keyword stringifies, anything else is an error naming the known
+  modes."
+  [mode]
   (cond
     (string? mode) mode
     (if (get modes mode)
@@ -27,11 +32,19 @@
               mode
               (util/names-str (keys modes))))))
 
-(defn- push-lines [out field value]
+(defn- push-lines
+  {:params [@[:string] :string :any] :ret :nil}
+  "Push `field value` onto `out` as one line per line of `value` — how
+  Datastar spells a multi-line field (`elements`, `signals`)."
+  [out field value]
   (each line (string/split "\n" (string value))
     (array/push out (string field " " line))))
 
 (defn patch-elements
+  {:params [(or :string :buffer :nil)
+            (or {:selector :string? :mode (or :string :keyword :nil) :use-view-transition :boolean?} :nil)]
+   :ret {:event :string :data :string}
+   :throws [:string]}
   ``The `datastar-patch-elements` event: `html` is ready markup (the
   rendering side lives in ./init), morphed into the DOM by top-level
   element id unless opts say otherwise:
@@ -61,6 +74,8 @@
    :data (string/join out "\n")})
 
 (defn patch-signals
+  {:params [(or {:keyword :any} :string) (or {:only-if-missing :boolean?} :nil)]
+   :ret {:event :string :data :string}}
   ``The `datastar-patch-signals` event: `signals` is a dictionary
   (JSON-encoded here) or a ready JSON string; a signal set to nil in a
   dictionary is removed on the page, per the protocol. opts:
@@ -77,6 +92,7 @@
    :data (string/join out "\n")})
 
 (defn remove-elements
+  {:params [:string] :ret {:event :string :data :string}}
   "Remove the elements a CSS selector matches — patch-elements with
   :mode :remove and no markup."
   [selector]

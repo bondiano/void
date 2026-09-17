@@ -11,16 +11,22 @@
 (import ./customers.model :as model)
 
 (defn find-by-id
+  {:params [:number] :ret (or @{:any :any} :nil) :throws [:string]}
   "One customer by primary key, or nil."
   [id]
   (db/find model/Customer id))
 
 (defn find-by-email
+  {:params [:string] :ret (or @{:any :any} :nil) :throws [:string]}
   "One customer by address, or nil."
   [email]
   (db/one model/Customer {:where [:= :email email]}))
 
 (defn create!
+  {:params [{:name :string :email :string :role :string?
+             :password-hash :string? & r}]
+   :ret @{:any :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Insert a customer. The caller passes a **hash**, never a password:
   hashing is a decision about cost and algorithm, and it belongs in
   ./customers.service where it is made once.``

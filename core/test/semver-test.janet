@@ -1,6 +1,10 @@
 (import ../void/core/semver :as semver)
 
-(defn expect-error [name pat thunk]
+(defn expect-error
+  {:params [:string :string (fn [] :any)] :ret :any}
+  "Run `thunk`, asserting it throws and that its error mentions `pat`;
+  answers the caught error for further assertions."
+  [name pat thunk]
   (def [ok err] (protect (thunk)))
   (assert (not ok) (string name ": expected an error"))
   (assert (string/find pat (string err))

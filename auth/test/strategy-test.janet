@@ -5,7 +5,14 @@
 
 (log/set-level! "void.auth.strategy" :error)
 
-(defn- id-for [subject] (identity/make subject {:via :test}))
+(defn- id-for
+  {:params [(or :string :buffer)]
+   :ret {:subject :string :via :keyword :cookie :boolean
+         :claims {:keyword :any} :at :number :expires (or :number :nil)}
+   :throws [:string]}
+  "A throwaway identity for `subject`, marked as this suite's own
+  strategy."
+  [subject] (identity/make subject {:via :test}))
 
 # -- the shape -----------------------------------------------------------
 

@@ -44,6 +44,9 @@
   "session:")
 
 (defn store
+  {:params [(or {:prefix :any & r} @{:prefix :any & r} :nil)]
+   :ret {:name :keyword :load (fn [a] :any) :save (fn [a] :any)
+         :delete (fn [a] :any) :sweep (fn [] :any)}}
   ``A session store over the running redis client. Everything it needs
   — which server, which database, which key prefix, which session
   prefix ([:redis :session :prefix]) — is read from the client at
@@ -52,7 +55,11 @@
   the configured session prefix.``
   [&opt opts]
   (default opts {})
-  (defn session-key [sid]
+  (defn session-key
+    {:params [:any] :ret :string}
+    "The redis key a session id is stored under, prefixed by `opts`'
+    :prefix or the client's own [:redis :session :prefix]."
+    [sid]
     (def prefix (or (get opts :prefix)
                     (get (state/active-client) :session-prefix default-prefix)))
     (state/prefixed (string prefix sid)))

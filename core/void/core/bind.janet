@@ -52,6 +52,7 @@
   {:doc "a symbol standing in for a function does not name one — where it is declared or the table is built (fail fast), or after a reload, at the call; :data carries :what and :symbol"})
 
 (defn- refuse
+  {:params [:string :any :string :any] :ret :never :throws [:struct]}
   "Raise `:void.bind/unresolvable` for `sym`: the formatted sentence as
   the message, `{:what :symbol}` as the data every caller can branch on."
   [what sym fmt & args]
@@ -60,6 +61,7 @@
                 {:what what :symbol sym}))
 
 (defn- unwrap-env
+  {:params [:any] :ret :any}
   "An env given as a closure (`router/env-ref`, because a manifest is
   frozen and freezing an env table walks the module graph) is called;
   a table is itself."
@@ -69,6 +71,7 @@
 # -- symbols -------------------------------------------------------------
 
 (defn qualified
+  {:params [:symbol] :ret (or [:string :symbol] :nil)}
   ``The [module-path name] of a qualified symbol — `'my-app.orders/show`
   is binding `show` in module "my-app/orders" — or nil for a bare one.``
   [sym]
@@ -78,6 +81,7 @@
      (symbol (string/slice s (inc i)))]))
 
 (defn- module-env
+  {:params [:symbol :string :string] :ret :table :throws [:struct]}
   "The env of a qualified symbol's module, `require`d; a module that
   cannot be loaded is the symbol's fault as far as the reader is
   concerned, so the error names both."
@@ -89,6 +93,7 @@
   env)
 
 (defn- locate
+  {:params [:symbol :any :string] :ret [:table :symbol] :throws [:struct]}
   "[env name] a symbol resolves through; raises when the binding is
   not a function *now* — which, for a declaration, is fail fast."
   [sym env what]
@@ -106,6 +111,7 @@
   [menv nm])
 
 (defn- read-now
+  {:params [:table :symbol :symbol :string] :ret (or :function :cfunction) :throws [:struct]}
   "The function behind a located binding, read at the call: the env
   is live, so a binding a reload dropped or turned into something
   else says so here rather than as a call of nil."
@@ -119,6 +125,10 @@
 # -- resolving -----------------------------------------------------------
 
 (defn resolve
+  {:params [(or :function :cfunction :symbol) :any :string?]
+   :ret {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+         :name :symbol? :env :table? :what :string}
+   :throws [:struct]}
   ``Resolve a handler declaration — a symbol or a function — to a
   *binding*:
 
@@ -153,6 +163,9 @@
     (refuse what x "%s must be a function or a symbol, got %q" what x)))
 
 (defn current
+  {:params [{:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+             :name :symbol? :env :table? :what :string}]
+   :ret (or :function :cfunction) :throws [:struct]}
   ``The function a binding stands for *right now* — the module binding
   for a symbol (what `explain-route` and a worker want to show or
   call), the literal itself otherwise. Raises `:void.bind/unresolvable`
@@ -163,6 +176,10 @@
     (b :call)))
 
 (defn declared
+  {:params [{:binding :symbol? :env :any :fn (or :function :cfunction :nil) & r} :string]
+   :ret {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+         :name :symbol? :env :table? :what :string}
+   :throws [:struct]}
   ``The binding of a `{:binding 'sym :env <env> :fn <function>}`
   declaration — the shape `defjob`, `defhandler` and `defcommand`
   record, both halves of the handler at once. The symbol in its env
@@ -191,6 +208,7 @@
   "short-fn")
 
 (defn fn-name
+  {:params [(or :function :cfunction)] :ret :string?}
   "The name of a function value, or nil for an anonymous one — read
   off its bytecode rather than `(string f)`, which prints an address
   for the anonymous and would put that address into a digest. A `|`
@@ -205,6 +223,7 @@
     nil))
 
 (defn- template-prefix
+  {:params [:string] :ret (or [:string :string] :nil)}
   "The literal part of a module/paths template before `:all:`, with
   `:sys:` expanded; nil for templates relative to the requiring file
   or a dyn, which do not describe a module's location."
@@ -216,6 +235,7 @@
        (string/slice tpl (+ i 5))])))
 
 (defn- candidate
+  {:params [:string :string :string] :ret :string?}
   "The module name `src` has under one template prefix/suffix pair, or
   nil: a name is relative (an absolute path is a template that did
   not really match, `.:all:.janet` against an absolute source), and a
@@ -231,6 +251,7 @@
         name))))
 
 (defn- candidates
+  {:params [:string] :ret @[[:number :string]]}
   "Every [prefix-length name] a source path has across module/paths:
   one per template that accounts for it, in the order of the paths."
   [src]
@@ -248,6 +269,7 @@
     [(length pre) name]))
 
 (defn- module-name-of
+  {:params [:string] :ret :string?}
   ``Invert module/paths: the module name a source path was found under,
   or nil when no template accounts for it. Several templates may:
   `void` run at the repository root (cli/init's `add-project-paths!`)
@@ -261,6 +283,7 @@
   (get (extreme (fn more-specific? [a b] (> (a 0) (b 0))) (candidates src)) 1))
 
 (defn origin
+  {:params [:any] :ret :string?}
   ``The module a function was compiled from, as its module name
   (`"void/http"`, `"main"`) — the function's source path inverted
   through module/paths, so it reads the same on every machine that
@@ -273,6 +296,7 @@
         (module-name-of src)))))
 
 (defn describe
+  {:params [:any] :ret :string}
   ``One string for a handler declaration in a table: a symbol as
   written, a named function as `<fn name>`, an anonymous one as
   `<fn>` — never an address.``

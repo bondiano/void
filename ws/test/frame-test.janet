@@ -3,7 +3,11 @@
 
 # -- the examples in the specification (RFC 6455 §5.7) -------------------
 
-(defn- bytes [& bs] (string/from-bytes ;bs))
+(defn- bytes
+  {:params [:number] :ret :string}
+  "The bytes given, as the string frame/parse and frame/encode speak."
+  [& bs]
+  (string/from-bytes ;bs))
 
 (def unmasked-hello (bytes 0x81 0x05 0x48 0x65 0x6c 0x6c 0x6f))
 (def masked-hello
@@ -46,7 +50,12 @@
 
 # -- what the protocol forbids -------------------------------------------
 
-(defn- refused [buf opts]
+(defn- refused
+  {:params [(or :string :buffer) (or {:expect-mask :boolean? :max-frame :number? & r} :nil)]
+   :ret :number?}
+  "Parse `buf` expecting the protocol to refuse it, and answer the
+  close code it was refused with."
+  [buf opts]
   (def [ok err] (protect (frame/parse buf 0 (merge {:expect-mask false} opts))))
   (assert (not ok) "the frame is refused")
   (get err :ws/close))

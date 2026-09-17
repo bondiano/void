@@ -14,10 +14,23 @@
 (import void/http/router :as router)
 (import void/http/ring :as ring)
 
-(defn alpha [req] (ring/text 200 "alpha"))
-(defn beta [req] (ring/text 200 "beta"))
+(defn alpha
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "The route present from boot — stays reachable across the reload
+  this suite drives, unlike beta."
+  [req] (ring/text 200 "alpha"))
+(defn beta
+  {:params [:any] :ret @{:status :number :body :string & r}}
+  "The route added only by the grown manifest — 404 until the
+  :void.dev/reloaded hook rebuilds the table, live afterward."
+  [req] (ring/text 200 "beta"))
 
-(defn- app-manifest [routes]
+(defn- app-manifest
+  {:params [:any] :ret :any}
+  "Wraps `routes` in a fresh test/reload-app manifest — called twice
+  with a grown route table to simulate what a reloaded module's
+  re-run defplugin does: re-register the same name with new content."
+  [routes]
   (plugin/manifest 'test/reload-app
     :version "0.1.0"
     :requires {:void/http ">=0.0.1"}

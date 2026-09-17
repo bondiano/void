@@ -93,6 +93,7 @@
   ["postgresql://" "postgres://"])
 
 (defn url?
+  {:params [:string] :ret :boolean :narrows :any}
   "Does this string look like a Postgres connection URI?"
   [s]
   (def t (string s))
@@ -105,6 +106,7 @@
     (table/to-struct t)))
 
 (defn percent-decode
+  {:params [:string] :ret :string :throws [:string]}
   ``Undo the %XX escaping of a URI component. A stray % that does not
   introduce two hex digits is a typo in a connection string, and
   saying so beats connecting somewhere unintended.``
@@ -124,17 +126,26 @@
       (do (buffer/push-byte out c) (++ i))))
   (string out))
 
-(defn- split-once [s sep]
+(defn- split-once
+  {:params [:string :string] :ret [:string (or :string :nil)]}
+  "The string split at the first occurrence of `sep`, or [s nil] when
+  `sep` does not appear."
+  [s sep]
   (if-let [i (string/find sep s)]
     [(string/slice s 0 i) (string/slice s (+ i (length sep)))]
     [s nil]))
 
-(defn- split-last [s sep]
+(defn- split-last
+  {:params [:string :string] :ret [(or :string :nil) :string]}
+  "The string split at the last occurrence of `sep`, or [nil s] when
+  `sep` does not appear."
+  [s sep]
   (if-let [i (last (string/find-all sep s))]
     [(string/slice s 0 i) (string/slice s (+ i (length sep)))]
     [nil s]))
 
 (defn- host-port
+  {:params [:string] :ret [:string (or :string :nil)] :throws [:string]}
   ``One entry of a URI's host list as [host port]. An IPv6 literal is
   bracketed, which is the whole reason this is not a split on ":".``
   [entry]
@@ -148,6 +159,10 @@
     (let [[h p] (split-once entry ":")] [h p])))
 
 (defn parse-url
+  {:params [:string]
+   :ret @{:user :string? :password :string? :host :string? :port :string?
+          :database :string? :params (or @{:string :string} :nil)}
+   :throws [:string]}
   ``A Postgres connection URI as the libpq keywords it stands for:
 
       (parse-url "postgres://void:s3cret@db:6432/app?sslmode=require")
@@ -198,6 +213,7 @@
 # -- keyword strings -----------------------------------------------------
 
 (defn quote-value
+  {:params [:any] :ret :string}
   ``One conninfo value, always single-quoted. libpq only *needs* the
   quotes around a value with a space or an equals sign in it, and
   quoting unconditionally means never having to decide which values
@@ -242,6 +258,11 @@
   (peg/compile ~(* (some (+ (range "az" "AZ" "09") (set "_-.,:+$\"'"))) -1)))
 
 (defn settings
+  {:params [(or {:statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil) & r}
+                :nil)]
+   :ret @[[:string :any]]}
   ``The server-side settings of a config slice as [name value] pairs,
   in a stable order: the named ones first, then whatever [:settings]
   adds. These become libpq's `options` keyword.``
@@ -256,6 +277,12 @@
   out)
 
 (defn options-value
+  {:params [(or {:statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil) & r}
+                :nil)]
+   :ret :string?
+   :throws [:string]}
   ``The `options` keyword: `-c name=value` per setting, or nil when
   there are none.
 
@@ -279,6 +306,16 @@
     " "))
 
 (defn keywords
+  {:params [(or {:url :string? :params (or {:keyword :any} :nil)
+                 :host :any :port :any :database :any :user :any
+                 :password :any :application-name :any :sslmode :any
+                 :sslrootcert :any :sslcert :any :sslkey :any
+                 :statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil) & r}
+                :nil)]
+   :ret @[[:string :string]]
+   :throws [:string]}
   ``The full libpq keyword list of a config slice, as [keyword value]
   pairs in a stable order: what the URL says, then the explicit keys
   (which override it), then [:params], then the assembled `options`.``
@@ -306,6 +343,16 @@
   out)
 
 (defn conninfo
+  {:params [(or {:url :string? :params (or {:keyword :any} :nil)
+                 :host :any :port :any :database :any :user :any
+                 :password :any :application-name :any :sslmode :any
+                 :sslrootcert :any :sslcert :any :sslkey :any
+                 :statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil) & r}
+                :nil)]
+   :ret :string
+   :throws [:string]}
   ``The connection string for a [:db-postgres] slice. Everything it
   does not mention is libpq's to resolve from the environment.``
   [cfg]
@@ -319,6 +366,16 @@
   {"password" true "sslpassword" true})
 
 (defn safe-conninfo
+  {:params [(or {:url :string? :params (or {:keyword :any} :nil)
+                 :host :any :port :any :database :any :user :any
+                 :password :any :application-name :any :sslmode :any
+                 :sslrootcert :any :sslcert :any :sslkey :any
+                 :statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil) & r}
+                :nil)]
+   :ret :string
+   :throws [:string]}
   ``The same string with every secret replaced — what gets logged. The
   keywords stay: \"which parameters did it connect with\" is the
   question a log line is there to answer.``
@@ -329,6 +386,17 @@
     " "))
 
 (defn describe
+  {:params [(or {:url :string? :params (or {:keyword :any} :nil)
+                 :host :any :port :any :database :any :user :any
+                 :password :any :application-name :any :sslmode :any
+                 :sslrootcert :any :sslcert :any :sslkey :any
+                 :statement-timeout :any :lock-timeout :any
+                 :idle-in-transaction-timeout :any :search-path :any
+                 :timezone :any :settings (or {:keyword :any} :nil) & r}
+                :nil)]
+   :ret {:host :string? :port :string? :database :string? :user :string?
+         :sslmode :string? :application-name :string?}
+   :throws [:string]}
   ``The connection as a handful of values for a log line or a health
   report: {:host :port :database :user :sslmode :application-name},
   with no secret among them. A key libpq will resolve from the
@@ -345,6 +413,8 @@
 # -- driver behaviour ----------------------------------------------------
 
 (defn decode-opts
+  {:params [(or {:json :boolean? :arrays :boolean? & r} :nil)]
+   :ret {:json :boolean? :arrays :boolean?}}
   ``The ./types decoding options a slice asks for: :json false leaves
   json/jsonb as text, :arrays false leaves array columns as their
   literal.``

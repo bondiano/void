@@ -21,13 +21,20 @@
                       (* "0" (? (* "." (between 0 3 :d)))))
                    -1)))
 
-(defn- split-media [s]
+(defn- split-media
+  {:params [:string] :ret [:string :string]}
+  "Split a media type into [type sub]; a bare type with no `/` is
+  treated as `type/*`."
+  [s]
   (if-let [i (string/find "/" s)]
     [(string/ascii-lower (string/slice s 0 i))
      (string/ascii-lower (string/slice s (inc i)))]
     [(string/ascii-lower s) "*"]))
 
 (defn parse-accept
+  {:params [(or :string :nil)]
+   :ret (or [{:type :string :sub :string :q :number :specificity :number}]
+            @[{:type :string :sub :string :q :number :specificity :number}])}
   ``Parse an Accept header into entries sorted by preference:
   [{:type "text" :sub "html" :q 1 :specificity 2} ...]. nil or an
   unparseable header means "anything" ([{:type "*" :sub "*" :q 1}]).``
@@ -51,11 +58,19 @@
         (sorted-by (fn [e] [(- (e :q)) (- (e :specificity))]) entries))
       [{:type "*" :sub "*" :q 1 :specificity 0}])))
 
-(defn- entry-matches? [entry [t sub]]
+(defn- entry-matches?
+  {:params [{:type :string :sub :string & r} [:string :string]] :ret :boolean :narrows :any}
+  "Does a parsed Accept entry cover a [type sub] media pair — exactly,
+  or through one of its `*` wildcards?"
+  [entry [t sub]]
   (and (or (= "*" (entry :type)) (= t (entry :type)))
        (or (= "*" (entry :sub)) (= sub (entry :sub)))))
 
 (defn- match-q
+  {:params [(or [{:type :string :sub :string :q :number :specificity :number}]
+                @[{:type :string :sub :string :q :number :specificity :number}])
+            [:string :string]]
+   :ret :number?}
   "The q of the most specific Accept entry matching a media type
   (RFC 9110: text/html;q=1 beats text/*;q=0 for text/html), or nil
   when nothing matches."
@@ -68,12 +83,14 @@
   (when best-e (best-e :q)))
 
 (defn accepts?
+  {:params [(or :string :nil) :string] :ret :boolean :narrows :any}
   "Would this Accept header take the given media type?"
   [accept-header mime]
   (def q (match-q (parse-accept accept-header) (split-media mime)))
   (and q (> q 0) true))
 
 (defn best
+  {:params [(or :string :nil) [:string]] :ret :string?}
   ``The best of the offered media types for an Accept header, or nil
   when none is acceptable:
 
@@ -95,6 +112,7 @@
   best-offer)
 
 (defn negotiate
+  {:params [{:headers {:any :any} & r} [:string]] :ret :string?}
   "best over a request table — reads the accept header."
   [req offers]
   (def accept (get-in req [:headers "accept"]))

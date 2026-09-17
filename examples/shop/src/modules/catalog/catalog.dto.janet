@@ -29,6 +29,10 @@
    :page [:ref :Page]})
 
 (defn product-view
+  {:params [@{:id :number :sku :string :name :string :description :string
+             :price-cents :number :stock :number & r}]
+   :ret {:id :number :sku :string :name :string :description :string
+         :price {:cents :number :currency :string} :in-stock :number}}
   "One product row, in the shape :ProductView describes."
   [p]
   {:id (p :id)

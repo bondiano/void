@@ -49,6 +49,7 @@
   (peg/compile ~(* (<- (some (if-not "_" 1))) "_" (<- (some 1)) -1)))
 
 (defn parse-name
+  {:params [:string] :ret (or {:version :string :name :string} :nil)}
   "Split a migration filename into {:version :name}, or nil when it is
   not a migration file."
   [filename]
@@ -59,6 +60,9 @@
     {:version version :name name}))
 
 (defn files
+  {:params [:string?]
+   :ret @[{:version :string :name :string :path :string}]
+   :throws [:string]}
   ``Every migration in a directory, ordered by version:
   [{:version :name :path} ...].``
   [&opt dir]
@@ -83,6 +87,8 @@
              [:applied-at :string]]})
 
 (defn ensure-table!
+  {:params [:string?] :ret :nil
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Create the version table when missing (idempotent)."
   [&opt table]
   (default table default-table)
@@ -91,6 +97,8 @@
   nil)
 
 (defn applied
+  {:params [:string?] :ret @[:string]
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Versions already applied, oldest first."
   [&opt table]
   (default table default-table)
@@ -100,12 +108,18 @@
                      :order-by [[:version :asc]]})))
 
 (defn pending
+  {:params [:string? :string?]
+   :ret @[{:version :string :name :string :path :string}]
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Migrations in `dir` not yet recorded in the version table."
   [&opt dir table]
   (def done (tabseq [v :in (applied table)] v true))
   (filter |(not (in done ($ :version))) (files dir)))
 
 (defn status
+  {:params [:string? :string?]
+   :ret @[{:version :string :name :string :applied :boolean & r}]
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Every migration with its state: [{:version :name :applied bool}
   ...], plus rows recorded in the table whose file has disappeared
   (:missing true) — the drift that bites when a branch is switched.``
@@ -140,12 +154,14 @@
 # already refuses (`ready no — the store is per-process`).
 
 (defn lock-name
+  {:params [:string] :ret :string}
   "The name the migration lock is taken under — the version table, so
   two applications sharing a database do not wait for each other."
   [table]
   (string "void_migrate:" table))
 
 (defn- with-lock*
+  {:params [:string (fn [] :any)] :ret :any :throws [:any]}
   "Run (f) holding the migration lock, on one connection."
   [table f]
   (def dialect ((state/driver) :dialect))
@@ -174,6 +190,12 @@
 # -- running -------------------------------------------------------------
 
 (defn- load-migration
+  {:params [{:version :string :name :string :path :string}]
+   :ret {:version :string :name :string :path :string
+         :up (or (fn [] :any) :string :buffer @[:any] [:any] :nil)
+         :down (or (fn [] :any) :string :buffer @[:any] [:any] :nil)
+         :transaction? :boolean}
+   :throws [:any]}
   "Load a migration file and read its up/down/transaction? bindings."
   [m]
   (def env (dofile (m :path)))
@@ -183,7 +205,14 @@
             :down (binding 'down)
             :transaction? (let [v (binding 'transaction?)] (if (nil? v) true v))}))
 
-(defn- run-sql [v]
+(defn- run-sql
+  {:params [(or :string :buffer {:keyword :any} @[:any] [:any] :nil)]
+   :ret (or {:rows @[{:keyword :any}] :count :number} :nil)
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  "Execute what a migration step evaluated to: a raw SQL string, a
+  statement map for the builder, a tuple of either run in order, or
+  nothing when the step already did its own work through db/*."
+  [v]
   (cond
     (bytes? v) (state/execute-sql (string v) [] {:kind :write :prepared false})
     # a statement map is SQL as data (void/db/builder), DDL included:
@@ -196,7 +225,17 @@
     # returns — only SQL values are executed
     nil))
 
-(defn- run-step [m dir-key]
+(defn- run-step
+  {:params [{:version :string :name :string
+             :up (or (fn [] :any) :string :buffer @[:any] [:any] :nil)
+             :down (or (fn [] :any) :string :buffer @[:any] [:any] :nil)
+             & r}
+            (enum :up :down)]
+   :ret (or {:rows @[{:keyword :any}] :count :number} :nil)
+   :throws [:any]}
+  "Run one direction of a migration — a function, a bare SQL value, or
+  a tuple of either — and refuse a step that names neither."
+  [m dir-key]
   (def step (get m dir-key))
   (cond
     (nil? step)
@@ -212,22 +251,46 @@
     (errorf "migration %s_%s: %q must be a function, a SQL string or a tuple of them, got %q"
             (m :version) (m :name) dir-key step)))
 
-(defn- utc-string [&opt at]
+(defn- utc-string
+  {:params [:number?] :ret :string}
+  "The applied-at timestamp, ISO 8601 UTC — the record format for
+  every engine's :string column, independent of its own date type."
+  [&opt at]
   (def d (os/date (or at (os/time)) true))
   (string/format "%04d-%02d-%02dT%02d:%02d:%02dZ"
                  (d :year) (inc (d :month)) (inc (d :month-day))
                  (d :hours) (d :minutes) (d :seconds)))
 
-(defn- record! [table m]
+(defn- record!
+  {:params [:string {:version :string :name :string & r}] :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  "Record a migration as applied."
+  [table m]
   (state/execute! {:insert table
                    :values {:version (m :version)
                             :name (m :name)
                             :applied-at (utc-string)}}))
 
-(defn- forget! [table m]
+(defn- forget!
+  {:params [:string {:version :string & r}] :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  "Remove a migration's applied record, on rollback."
+  [table m]
   (state/execute! {:delete table :where {:version (m :version)}}))
 
-(defn- apply-one [table m dir-key]
+(defn- apply-one
+  {:params [:string
+            {:version :string :name :string
+             :up (or (fn [] :any) :string :buffer @[:any] [:any] :nil)
+             :down (or (fn [] :any) :string :buffer @[:any] [:any] :nil)
+             :transaction? :boolean & r}
+            (enum :up :down)]
+   :ret :number
+   :throws [:any]}
+  "Run one migration's step and record (or unrecord) it, wrapped in a
+  transaction unless the migration opted out with `(def transaction?
+  false)`."
+  [table m dir-key]
   (def run
     (fn []
       (run-step m dir-key)
@@ -237,6 +300,9 @@
     (run)))
 
 (defn up!
+  {:params [(or {:dir :string? :table :string? :step :number? :to :string? & r} :nil)]
+   :ret @[{:version :string :name :string :path :string}]
+   :throws [:any]}
   ``Apply pending migrations, oldest first. opts: :dir, :table, :step
   (apply at most N), :to (stop after this version). Returns the
   applied migrations.``
@@ -266,6 +332,9 @@
       done)))
 
 (defn down!
+  {:params [(or {:dir :string? :table :string? :step :number? :to :string? & r} :nil)]
+   :ret @[{:version :string :name :string :path :string}]
+   :throws [:any]}
   ``Roll the newest applied migrations back through their `down`.
   opts: :dir, :table, :step (default 1), :to (roll back everything
   after this version). Returns the reverted migrations.``

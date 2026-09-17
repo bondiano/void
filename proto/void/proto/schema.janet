@@ -42,7 +42,10 @@
 
 # -- the two integer types -----------------------------------------------
 
-(defn- int64-in-range? [v lo hi]
+(defn- int64-in-range?
+  {:params [:any (or :number :abstract) (or :number :abstract)] :ret :boolean}
+  "Is `v` a whole number between `lo` and `hi`, inclusive?"
+  [v lo hi]
   (and (wire/integer-value? v) (compare<= lo v) (compare<= v hi)))
 
 (def int64-min (int/s64 "-9223372036854775808"))
@@ -84,7 +87,11 @@
    :uint64 :proto/uint64 :fixed64 :proto/uint64
    :bool :boolean :string :string :bytes :bytes})
 
-(defn- type-schema [f entry]
+(defn- type-schema
+  {:params [:any {:type :keyword :ref :keyword? & r}] :ret (or :keyword [:any]) :throws [:string]}
+  "The void schema type one field entry (a field, or a map's key or
+  value) projects onto."
+  [f entry]
   (if (= :ref (entry :type))
     # a reference to something not registered yet is a reference all
     # the same: the schema registry resolves [:ref ...] when a value is
@@ -102,6 +109,8 @@
         (errorf "proto schema: no schema for %q" (entry :type)))))
 
 (defn schema-of
+  {:params [(or {:kind :keyword & r} :keyword :string :buffer)] :ret @{:keyword :any}
+   :throws [:string]}
   ``A message descriptor as a void schema. Repeated
   becomes `[:vector ...]`, a map becomes `[:map-of ...]`, a message
   field and an `optional` one become `[:optional ...]` — because those
@@ -124,6 +133,7 @@
   out)
 
 (defn register-schema!
+  {:params [{:kind :keyword & r}] :ret :any :throws [:string]}
   ``Register a descriptor's schema under the descriptor's own name, so
   the rest of void sees a protobuf message as an ordinary schema.
   Enums register as their own `[:enum ...]`; services have no shape
@@ -142,13 +152,20 @@
    :proto/int64 :int64 :proto/uint64 :uint64})
 
 (defn annotations
+  {:params [:any] :ret {:schema {:keyword :any} :fields {:keyword {:keyword :any}}}}
   ``The `:proto/*` props of a schema — `(schema/annotations sch "proto/")`:
   stored on the nodes, never consulted by validation. Returns
   {:schema {...} :fields {key {...}}}.``
   [sch]
   (schema/annotations sch "proto/"))
 
-(defn- entry-type [name key node]
+(defn- entry-type
+  {:params [:any :keyword {:type :keyword :props (or {:keyword :any} :nil) & r}] :ret :any
+   :throws [:string]}
+  "The protobuf type one schema node names: its own `:proto/type`
+  annotation, the descriptor a `:ref` points to, or the scalar its
+  void type implies."
+  [name key node]
   (def props (node :props))
   (or (get props (keyword "proto/type"))
       (case (node :type)
@@ -164,6 +181,11 @@
                     name key (node :type))))))
 
 (defn descriptor-of
+  {:params [:any (or {:name :keyword? :proto-name :string? :doc :string? & r} :nil)]
+   :ret {:kind :keyword :name :keyword :proto-name :string :fields [:any]
+         :by-number @{:number :any} :by-name @{:keyword :any} :by-json @{:string :any}
+         :oneofs @{:keyword :any} :reserved [:string] :doc (or :string :nil)}
+   :throws [:string]}
   ``A void schema as a message descriptor — the `:proto` projection.
 
       (defschema Order

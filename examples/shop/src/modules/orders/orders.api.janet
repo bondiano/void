@@ -21,6 +21,9 @@
 (import ./orders.repository :as repo)
 
 (defn orders-index
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}
+   :throws [:string]}
   "GET /api/orders — the caller's own orders, newest first."
   [req]
   (rest/json
@@ -28,6 +31,10 @@
              (dto/order-view o (repo/items-of (o :id))))}))
 
 (defn order-show
+  {:params [{:params {:number :any & r} & r}]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
   "GET /api/orders/:number — one order."
   [req]
   (if-let [order (repo/find-by-number (get-in req [:params :number]))]

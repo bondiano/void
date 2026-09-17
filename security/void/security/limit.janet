@@ -43,6 +43,11 @@
    :message "too many requests"})
 
 (defn memory-store
+  {:params [(or {:sweep-every :number? & r} :nil)]
+   :ret @{:name :keyword :shared? :boolean :entries @{:any :any}
+          :get (fn [:any] :any) :put (fn [:any :any :any] :any)
+          :incr (fn [:any :any :any] :number) :delete (fn [:any] :boolean)
+          :clear (fn [:string] :number) :sweep (fn [] :nil) :atomic-incr :boolean}}
   ``An in-process store with the `:void/cache-store` shape — enough of
   it for a counter. Per process, and that is the whole of its
   arithmetic: N processes counting separately let N times the
@@ -85,12 +90,18 @@
     :atomic-incr true})
 
 (defn window-of
+  {:params [:number :number] :ret [:number :number]}
   "The window index and how far into it `now` is."
   [now window]
   (def index (math/floor (/ now window)))
   [index (- now (* index window))])
 
 (defn check!
+  {:params [{:get (fn [:any] :any) :incr (fn [:any :any :any] :any) & r}
+            :string
+            {:limit :number? :window :number? :now :number? :prefix :string? :on-error :keyword? & r}]
+   :ret {:allowed :boolean :limit :number :remaining :number :reset :number
+         :count :number :error :string?}}
   ``Count one request against `key` and answer whether it may proceed:
 
       {:allowed true :limit 60 :remaining 41 :reset 37 :count 19.4}
@@ -131,6 +142,8 @@
        :count counted})))
 
 (defn headers-for
+  {:params [{:limit :number :remaining :number :reset :number :allowed :boolean & r}]
+   :ret @{:string :string}}
   ``The IETF draft `RateLimit-*` headers for a result, plus
   `Retry-After` when it is a refusal. A client that is told how long
   to wait is a client that stops making it worse.``

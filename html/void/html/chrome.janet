@@ -207,6 +207,7 @@ form.vd-inline { display:inline; }
 # -- a URL under a mount prefix ------------------------------------------
 
 (defn url-under
+  {:params [:string :string (or {:string :any} :nil)] :ret :string}
   ``A URL under a prefix: (url-under "/admin" "/jobs"), (url-under
   "/dash" "/why" {"key" "http/server"}). Query is a table of already-
   stringable values; nil and empty values drop out, which is what
@@ -249,6 +250,7 @@ form.vd-inline { display:inline; }
    :script "text/javascript; charset=utf-8"})
 
 (defn served-asset
+  {:params [:string :string?] :ret (or {:file :string :body :string} :nil)}
   "One served file as data — `{:file <fingerprinted name> :body}` — or
   nil for an empty body, so a plugin with no script links none."
   [logical body]
@@ -256,6 +258,7 @@ form.vd-inline { display:inline; }
     {:file (assets/fingerprint logical body) :body body}))
 
 (defn asset-href
+  {:params [:string (or {:file :string & r} :nil)] :ret :string?}
   "Where a served asset lives under `prefix`, or nil when there is
   none: (asset-href \"/admin\" (bundle :style))."
   [prefix asset]
@@ -263,6 +266,13 @@ form.vd-inline { display:inline; }
     (string prefix asset-prefix (asset :file))))
 
 (defn asset-route
+  {:params [:keyword (or {:file :string :body :string} :nil)
+            (or {:name :keyword? :meta (or {:keyword :any} :nil)
+                 :wrap (or (fn [a] a) :nil) & r} :nil)]
+   :ret (or {:route :boolean :method :keyword :pattern :string
+             :handler (or :symbol :function) :meta {:keyword :any}}
+            :nil)
+   :throws [:string]}
   ``The route serving one asset — `half` is :style or :script, `asset`
   a `served-asset` — as a router/route value, or nil when there is
   nothing to serve. opts: :name (the route name), :meta (route
@@ -274,7 +284,12 @@ form.vd-inline { display:inline; }
     (def type (or (content-types half)
                   (errorf "asset half must be :style or :script, got %q" half)))
     (def body (asset :body))
-    (defn serve [_req]
+    (defn serve
+      {:params [:any] :ret {:status :number :headers @{:string :string} :body :string}}
+      "The handler for a served asset: the same headers and body on
+      every request, in a fresh table so downstream middleware can
+      add its own headers without touching a shared value."
+      [_req]
       # a fresh mutable table per request, never a shared struct: the
       # edge middlewares (CSRF's cookie, the security headers) add
       # headers to whatever a handler returns, and a struct here

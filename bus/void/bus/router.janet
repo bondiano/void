@@ -55,6 +55,10 @@
    :timeout true})
 
 (defn normalize-opts
+  {:params [:string :any]
+   :ret {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+         :retry :any :schema :any :timeout :number?}
+   :throws [:string]}
   ``Validate a handler's options. Nothing is filled in — what a
   handler does not say is decided by the [:bus] slice when the chain
   is built, so a default changed in a config file reaches handlers
@@ -91,6 +95,16 @@
   @{})
 
 (defn define!
+  {:params [:any :any
+            {:binding :symbol? :env :any :fn (or :function :cfunction :nil) & r}]
+   :ret {:name :any :topic :keyword
+         :opts {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+                :retry :any :schema :any :timeout :number? :name :any}
+         :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}
+   :throws [:string]}
   ``Register a handler definition (the runtime half of `defhandler`).
   The function is named either by :binding + :env — the late-binding
   form — or by :fn, which is what a handler defined at the REPL or
@@ -132,22 +146,35 @@
   d)
 
 (defn lookup
+  {:params [:keyword]
+   :ret (or :nil {:name :any :topic :keyword
+                  :opts {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+                         :retry :any :schema :any :timeout :number? :name :any}
+                  :fn (or :function :cfunction :nil) :binding :symbol?
+                  :env :any :doc :any
+                  :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                            :name :symbol? :env :table? :what :string}})}
   "The definition registered under `name`, or nil."
   [name]
   (get registry name))
 
 (defn defined
+  {:params [] :ret @[:keyword]}
   "Names of every registered handler."
   []
   (sorted (keys registry)))
 
 (defn forget!
+  {:params [:keyword] :ret @{:keyword :any}}
   "Drop a handler definition — for tests, and for a REPL that renamed
   one."
   [name]
   (put registry name nil))
 
 (defn handler-fn
+  {:params [{:handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string} & r}]
+   :ret (or :function :cfunction) :throws [:struct]}
   ``The function behind a definition, resolved now rather than when it
   was declared: a `defhandler` whose module has been reloaded runs the
   new body, and one whose binding has stopped being a function says so
@@ -156,6 +183,9 @@
   (bind/current (d :handler)))
 
 (defn for-group
+  {:params [:keyword :keyword]
+   :ret @[{:name :any :topic :keyword :opts :any :fn :any :binding :any
+           :env :any :doc :any :handler :any}]}
   ``Every handler belonging to consumer group `group` — the ones that
   named it, plus the ones that named nothing when `group` is the
   composition's default. In name order, which is the order a message
@@ -167,6 +197,7 @@
     d))
 
 (defn groups
+  {:params [:keyword] :ret @[:keyword]}
   "Every consumer group the declared handlers ask for."
   [default-group]
   (def seen @{})
@@ -175,6 +206,7 @@
   (sorted (keys seen)))
 
 (defn topics
+  {:params [(or @[{:topic :keyword & r}] [{:topic :keyword & r}])] :ret @[:keyword]}
   "The topic patterns a set of handler definitions covers."
   [defs]
   (def seen @{})
@@ -182,6 +214,7 @@
   (sorted (keys seen)))
 
 (defn exact-topics
+  {:params [(or @[{:topic :keyword & r}] [{:topic :keyword & r}])] :ret (or :nil @[:keyword])}
   ``The topics of `defs` when every one of them is exact, else nil —
   what lets a backend narrow its read to `topic IN (...)`. A single
   wildcard among them makes the whole set unnarrowable, which is the
@@ -192,6 +225,8 @@
   (when (all message/exact? ts) ts))
 
 (defn matches
+  {:params [(or @[{:topic :any & r}] [{:topic :any & r}]) :any]
+   :ret @[{:topic :any & r}]}
   "The handlers of `defs` whose pattern matches `topic`, in name
   order."
   [defs topic]
@@ -209,6 +244,14 @@
   The *function* is still resolved per message, so a reload is live
   while the chain is not rebuilt: a handler whose middleware changed
   needs a restart, and a handler whose body changed does not.``
+  {:params [{:name :any :topic :any :opts :any
+             :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                       :name :symbol? :env :table? :what :string} & r}
+            (or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+                   :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+                [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+                  :named :boolean :when (or :nil (fn [:any] :boolean)) & r}])]
+   :ret {:name :any :topic :any :fn (fn [:any] :any)}}
   [d contribs]
   (def call
     (fn call-handler [msg]
@@ -237,11 +280,21 @@
          wrapped)})
 
 (defn compile-group
+  {:params [(or @[{:name :any :topic :any :opts :any :handler :any & r}]
+                [{:name :any :topic :any :opts :any :handler :any & r}])
+            (or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+                   :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
+                [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
+                  :named :boolean :when (or :nil (fn [:any] :boolean)) & r}])]
+   :ret [{:name :any :topic :any :fn (fn [:any] :any)}]}
   "Compile every handler of a group, keeping them in name order."
   [defs contribs]
   (tuple ;(map |(compile $ contribs) defs)))
 
 (defn dispatch
+  {:params [(or @[{:topic :any :fn (fn [:any] :any) & r}] [{:topic :any :fn (fn [:any] :any) & r}])
+            {:topic :any :id :any & r}]
+   :ret :number}
   ``Run a message through every compiled handler whose pattern
   matches. Returns the number of handlers that saw it.
 
@@ -263,6 +316,7 @@
 # -- the macro -----------------------------------------------------------
 
 (defn defhandler-form
+  {:params [:symbol :tuple] :ret :tuple :throws [:string]}
   ``The expansion of `defhandler`, as a function — so that the macro
   can exist both here and on `void/bus` (which is what applications
   import) without being written twice.``
@@ -311,5 +365,14 @@
   Declare handlers at the top level of a module. One declared inside a
   function still works, but its body is then the value captured right
   there rather than a module binding, so a reload does not reach it.``
+  {:params [:symbol :any]
+   :ret {:name :any :topic :keyword
+         :opts {:topic :keyword :group :keyword? :middleware (or :nil [:keyword])
+                :retry :any :schema :any :timeout :number? :name :any}
+         :fn (or :function :cfunction :nil) :binding :symbol?
+         :env :any :doc :any
+         :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+                   :name :symbol? :env :table? :what :string}}
+   :throws [:string]}
   [name & more]
   (defhandler-form name more))

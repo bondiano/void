@@ -40,6 +40,13 @@
   keys/identity)
 
 (defn make
+  {:params [(or :string :buffer)
+            (or {:via :keyword? :cookie :any :claims (or {:keyword :any} :nil)
+                 :at :number? :expires :number? & r}
+                :nil)]
+   :ret {:subject :string :via :keyword :cookie :boolean
+         :claims {:keyword :any} :at :number :expires (or :number :nil)}
+   :throws [:string]}
   ``Build an identity. `subject` is required and is a string —
   "user:42", "service:billing", "token:9f3c". Options: :via :cookie
   :claims :at :expires.``
@@ -56,11 +63,13 @@
      :expires (get opts :expires)}))
 
 (defn identity?
+  {:params [:any] :ret :boolean :narrows {:subject :string & r}}
   "Is this an identity value?"
   [x]
   (and (dictionary? x) (string? (get x :subject))))
 
 (defn expired?
+  {:params [:any :number?] :ret :boolean :narrows :any}
   "Has this identity's :expires passed? An identity without one never
   expires on its own — the session or the token behind it does."
   [id &opt now]
@@ -70,6 +79,7 @@
        (<= (id :expires) now)))
 
 (defn current
+  {:params [] :ret (or {:subject :string & r} :nil)}
   "The identity bound to this fiber, or nil when the request is
   anonymous. Anonymous is nil, never an empty identity: `(if
   (auth/current-user) ...)` is the question every caller asks."
@@ -77,16 +87,19 @@
   (dyn dyn-key))
 
 (defn authenticated?
+  {:params [] :ret :boolean}
   "Is there an identity on this fiber?"
   []
   (not (nil? (current))))
 
 (defn subject
+  {:params [] :ret :string?}
   "The current subject string, or nil."
   []
   (when-let [id (current)] (id :subject)))
 
 (defn claim
+  {:params [:keyword :any (or {:subject :string & r} :nil)] :ret :any}
   ``One claim of the current identity (or of a given one), with a
   default. Claims are what the strategy could prove — a session's
   stored roles, a JWT's payload — and nothing else: an attribute that
@@ -96,6 +109,7 @@
   (if i (get-in i [:claims key] default) default))
 
 (defn subject-of
+  {:params [:string] :ret [:keyword :string]}
   ``Split a subject into [kind id]: "user:42" -> [:user "42"]. A
   subject without a colon is [:unknown subject], because a convention
   is not a schema and void does not get to reject somebody else's
@@ -107,11 +121,13 @@
     [:unknown s]))
 
 (defn with-identity*
+  {:params [:any (fn [] :any)] :ret :any}
   "Run `thunk` with `id` as the current identity."
   [id thunk]
   (with-dyns [dyn-key id] (thunk)))
 
 (defmacro with-identity
+  {:params [:any :any] :ret :tuple}
   ``Run the body as `id` — what the middleware does around a handler,
   and what a job or a test does to answer "and what would this user
   see?".``

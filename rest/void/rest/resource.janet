@@ -37,7 +37,16 @@
 (def- allowed-opt-keys
   {:id-schema true :meta true})
 
-(defn- action-route [rname action spec id-schema]
+(defn- action-route
+  {:params [:keyword :keyword {:handler :any :method :any :path :any :meta :any & r} :any]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "One action's spec turned into a router/route: the conventional
+  method/path fill in for the five standard actions, a custom action
+  states its own, and the :params/:query/:body/:headers/:response keys
+  land on the route as :void.schema/* metadata."
+  [rname action spec id-schema]
   (unless (dictionary? spec)
     (errorf "resource %q action %q: expected an action table, got %q"
             rname action spec))
@@ -65,6 +74,9 @@
   (router/route method path handler rmeta))
 
 (defn resource
+  {:params [:keyword :string (or {:any :any} :nil) (or {:any :any} :nil)]
+   :ret {:group :boolean :prefix :string :meta {:keyword :any} :children [:any]}
+   :throws [:string]}
   ``A REST resource as a router/group — drop it into a route source
   next to plain routes:
 
@@ -107,6 +119,8 @@
                                  (opts :id-schema)))))
 
 (defmacro defresource
+  {:params [:symbol :any :any]
+   :ret {:group :boolean :prefix :string :meta {:keyword :any} :children [:any]}}
   ``Define `name` as a resource group (sugar over `resource`):
 
       (defresource orders "/orders"

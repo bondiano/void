@@ -68,6 +68,7 @@
   "void.obs.instrument")
 
 (defn- module-fn
+  {:params [:string :symbol] :ret :any}
   ``The public binding `name` of module `path`, or nil when that
   package is not on this process's module path. This is the seam that
   keeps obs free of a dependency on the packages it instruments (see
@@ -77,6 +78,12 @@
   (when ok (get-in env [name :value])))
 
 (defn- instance-of
+  {:params [{:system {:components {:keyword :any}
+                      :providers {:keyword @[:keyword]}
+                      :config {:keyword :any} :instances @{:keyword :any} & r}
+             & r}
+            :keyword]
+   :ret :any}
   "The running instance behind a component key or interface, or nil
   when this composition has none (or it is not running)."
   [boot ref]
@@ -84,6 +91,14 @@
   (when ok inst))
 
 (defn- reader
+  {:params [{:system {:components {:keyword :any}
+                      :providers {:keyword @[:keyword]}
+                      :config {:keyword :any} :instances @{:keyword :any} & r}
+             & r}
+            :keyword
+            (fn [:any] :any)
+            (or (fn [:any] :any) :nil)]
+   :ret (fn [] (or {:keyword :any} :nil))}
   ``A thunk returning the stats dictionary, or nil when it cannot be
   read.
 
@@ -105,6 +120,9 @@
         (when (and ok (dictionary? s)) s)))))
 
 (defn- from
+  {:params [(fn [] (or {:keyword :any} :nil)) :keyword
+            (or :number (fn [:any] :any) :nil)]
+   :ret (fn [] :any)}
   ``A collector reading `key` out of a stats reader; nil (an absent
   key) becomes no series rather than a zero.
 
@@ -120,12 +138,14 @@
         (number? v) (if scale (* scale v) v)))))
 
 (defn- how-many
+  {:params [:any] :ret :number?}
   "A list of names as its length — what a gauge wants out of
   `{:channels [...]}`."
   [v]
   (when (indexed? v) (length v)))
 
 (defn- flag
+  {:params [:any] :ret :number?}
   "A yes/no as 1 or 0, and an absent one as no series."
   [v]
   (unless (nil? v) (if v 1 0)))
@@ -232,11 +252,20 @@
   (metrics/histogram :void.jobs/queue-delay-seconds
     {:doc "Seconds between a job becoming runnable and a worker starting it"}))
 
-(defn- job-labels [payload]
+(defn- job-labels
+  {:params [{:job {:queue :any :job :any & r} & r}] :ret [:string :string]}
+  "A job payload's [queue job] label pair, `\"-\"` for either that is
+  missing."
+  [payload]
   [(string (get-in payload [:job :queue] "-"))
    (string (get-in payload [:job :job] "-"))])
 
 (defn job-event!
+  {:params [{:event :keyword
+             :job {:run-at :any :enqueued-at :any :started-at :any
+                   :finished-at :any :queue :any :job :any & r}
+             & r}]
+   :ret :nil}
   "Record one `:void.jobs/event` payload. Public so a test does not
   need a worker to check what the instrumentation counts."
   [payload]
@@ -380,6 +409,7 @@
    [listener-channels :channels] [listener-connected :connected flag]])
 
 (defn- module-var!
+  {:params [:string :symbol :any] :ret (or (fn [] :nil) :nil)}
   ``Set the var `name` of module `path` to `value`, and return the
   thunk that puts back what was there. nil when that package is not on
   this process's module path, or when the binding is not a var — the
@@ -395,6 +425,7 @@
       (fn restore [] (put ref 0 previous)))))
 
 (defn- teardowns
+  {:params [(or (fn [] :any) :nil)] :ret (or (fn [] :nil) :nil)}
   "One teardown thunk out of several, ignoring the nils an install
   step returns when it had nothing to do."
   [& thunks]
@@ -427,6 +458,7 @@
    "SET" true "SHOW" true "EXPLAIN" true "ANALYZE" true "VACUUM" true})
 
 (defn- sql-operation
+  {:params [(or :string :buffer)] :ret :string}
   "The leading verb of a statement, or OTHER."
   [sql]
   (def s (string/trim (string sql)))
@@ -435,6 +467,7 @@
   (if (get sql-operations word) word "OTHER"))
 
 (defn traced-statement
+  {:params [(or :string :buffer) {:dialect :any & r} (fn [] :any)] :ret :any}
   ``The `void/db/state` seam: the statement's duration, always, and a
   span around it when there is something to read one. Public so a test
   can drive it without a database behind it.
@@ -461,6 +494,7 @@
       (run))))
 
 (defn traced-command
+  {:params [(or :string :nil) (fn [] :any)] :ret :any}
   ``The `void/redis/state` seam: one span per command attempt. The
   label is the command word, which is bounded in practice by the
   command set; the registry's own label cap is what holds if a caller
@@ -476,6 +510,7 @@
       (run))))
 
 (defn- path-of
+  {:params [:any] :ret :string}
   "A request target without its query — a query string carries values,
   and a span attribute is not the place for a token somebody put in a
   URL."
@@ -484,6 +519,8 @@
   (if-let [i (string/find "?" s)] (string/slice s 0 i) s))
 
 (defn traced-request
+  {:params [{:host :any :port :any & r} :any :any @{:string :any} (fn [] :any)]
+   :ret :any}
   ``The `void/http/client` seam: the request's duration, a span around
   it, and the `traceparent` that goes out with it. This is the
   injection point the client's own docstring has been waiting for —
@@ -514,6 +551,7 @@
       (run))))
 
 (defn queued-in
+  {:params [] :ret :string?}
   ``The `void/jobs/state` seam: the trace a job is being queued in, as
   a `traceparent` for the record to carry. nil outside a span, which
   is what a job queued by a cron tick or a CLI command gets.``
@@ -521,6 +559,10 @@
   (when-let [span (trace/current)] (trace/traceparent span)))
 
 (defn traced-job
+  {:params [{:traceparent :any :job :any :queue :any :id :any
+             :attempt :any & r}
+            (fn [] :any)]
+   :ret :any}
   ``The `void/jobs/worker` seam: one span around running a job, from
   the claim to the settle. The worker's own log lines land inside it,
   which is how a job's records come to carry trace ids.
@@ -547,6 +589,8 @@
 # -- applying an instrumentation -----------------------------------------
 
 (defn- kafka-consumer-totals
+  {:params [(fn [:any] :any) (or @[:any] [:any] :nil)]
+   :ret @{:received :number :delivered :number :errors :number}}
   ``The consumers of one client added up. A process runs as many as it
   subscribed to groups, and a series per group would split three
   numbers an operator reads as one — the group is what a log line and
@@ -560,6 +604,8 @@
   out)
 
 (defn- attach!
+  {:params [(or @[[:any]] [[:any]]) (fn [] (or {:keyword :any} :nil))]
+   :ret (fn [] :nil)}
   "Point a list of [metric stats-key scale?] triples at one reader.
   Returns the thunk that detaches them again."
   [pairs read]
@@ -705,6 +751,17 @@
                  (module-var! "void/jobs/state" 'trace-context queued-in)))}])
 
 (defn install!
+  {:params [{:system {:components {:keyword :any}
+                      :providers {:keyword @[:keyword]}
+                      :config {:keyword :any} :instances @{:keyword :any} & r}
+             & r}
+            (or @[{:name :keyword :needs (or @[:keyword] [:keyword] :nil)
+                   :install (fn [:any & :any] :any) & r}]
+                [{:name :keyword :needs (or @[:keyword] [:keyword] :nil)
+                  :install (fn [:any & :any] :any) & r}]
+                :nil)
+            (or @[:keyword] [:keyword] :nil)]
+   :ret [{:name :keyword :teardown (or (fn [] :any) :nil)}]}
   ``Apply the instrumentations that can be applied. `contribs` are the
   resolved `:void.obs/instrument` contributions; `wanted`, when it is
   a list of names, keeps only those (config `[:obs :instrument]`).
@@ -731,6 +788,10 @@
   (tuple ;installed))
 
 (defn remove!
+  {:params [(or @[{:name :keyword :teardown (or (fn [] :any) :nil) & r}]
+                [{:name :keyword :teardown (or (fn [] :any) :nil) & r}]
+                :nil)]
+   :ret :nil}
   "Run the teardowns of `install!`'s entries — a stopped pool stops
   reporting series rather than reporting the numbers it had when it
   stopped."

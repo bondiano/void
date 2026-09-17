@@ -32,6 +32,10 @@
    :delete true :options true :any true})
 
 (defn route
+  {:params [:keyword :string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
   "Build one route declaration: method, pattern, handler (symbol for
   late binding — a function literal works but is :no-reload), metadata."
   [method pattern handler &opt rmeta]
@@ -46,16 +50,68 @@
   {:route true :method method :pattern pattern :handler handler
    :meta (or rmeta {})})
 
-(defn GET [pattern handler &opt rmeta] (route :get pattern handler rmeta))
-(defn HEAD [pattern handler &opt rmeta] (route :head pattern handler rmeta))
-(defn POST [pattern handler &opt rmeta] (route :post pattern handler rmeta))
-(defn PUT [pattern handler &opt rmeta] (route :put pattern handler rmeta))
-(defn PATCH [pattern handler &opt rmeta] (route :patch pattern handler rmeta))
-(defn DELETE [pattern handler &opt rmeta] (route :delete pattern handler rmeta))
-(defn OPTIONS [pattern handler &opt rmeta] (route :options pattern handler rmeta))
-(defn ANY [pattern handler &opt rmeta] (route :any pattern handler rmeta))
+(defn GET
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A :get route declaration."
+  [pattern handler &opt rmeta] (route :get pattern handler rmeta))
+(defn HEAD
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A :head route declaration."
+  [pattern handler &opt rmeta] (route :head pattern handler rmeta))
+(defn POST
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A :post route declaration."
+  [pattern handler &opt rmeta] (route :post pattern handler rmeta))
+(defn PUT
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A :put route declaration."
+  [pattern handler &opt rmeta] (route :put pattern handler rmeta))
+(defn PATCH
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A :patch route declaration."
+  [pattern handler &opt rmeta] (route :patch pattern handler rmeta))
+(defn DELETE
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A :delete route declaration."
+  [pattern handler &opt rmeta] (route :delete pattern handler rmeta))
+(defn OPTIONS
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "An :options route declaration."
+  [pattern handler &opt rmeta] (route :options pattern handler rmeta))
+(defn ANY
+  {:params [:string (or :symbol :function) (or {:keyword :any} :nil)]
+   :ret {:route :boolean :method :keyword :pattern :string
+         :handler (or :symbol :function) :meta {:keyword :any}}
+   :throws [:string]}
+  "A route declaration matching every method, used as the fallback
+  when nothing more specific does."
+  [pattern handler &opt rmeta] (route :any pattern handler rmeta))
 
 (defn group
+  {:params [:string (or {:keyword :any} :nil) :any]
+   :ret {:group :boolean :prefix :string :meta {:keyword :any} :children [:any]}
+   :throws [:string]}
   "Group child routes under a path prefix and a metadata layer."
   [prefix gmeta & children]
   (unless (string? prefix)
@@ -63,6 +119,9 @@
   {:group true :prefix prefix :meta (or gmeta {}) :children children})
 
 (defn routes
+  {:params [{:keyword :any} :any]
+   :ret {:routes :boolean :global {:keyword :any} :children [:any]}
+   :throws [:string]}
   "A route source: a global metadata layer over child routes/groups."
   [global & children]
   (unless (dictionary? global)
@@ -70,6 +129,7 @@
   {:routes true :global global :children children})
 
 (defn env-ref
+  {:params [:table] :ret (fn [] :table)}
   ``Wrap a module environment for a route-source :env inside a plugin
   manifest: manifests are frozen, and freezing a raw env table would
   walk the entire module graph (cycles included). The closure freezes
@@ -95,6 +155,7 @@
    'DELETE :delete 'OPTIONS :options 'ANY :any})
 
 (defn- bare-handler
+  {:params [:any] :ret :symbol?}
   "The module-local handler symbol behind `home` or `'home`; a
   qualified symbol (`my-app.orders/show`, an import alias) or any other
   expression gives nil and is passed through untouched."
@@ -106,7 +167,14 @@
       nil))
   (when (and sym (not (string/find "/" (string sym)))) sym))
 
-(defn- expand-route-form [form]
+(defn- expand-route-form
+  {:params [:any] :ret :any}
+  "Rewrite one form of a `defroutes` body: a bare `(GET ...)`-shaped
+  call becomes a `route` call (its handler quoted when it is a bare
+  symbol, named from that symbol when :name is not given), `(group
+  ...)` recurses over its children, and anything else passes through
+  untouched as ordinary spliced data."
+  [form]
   (def head (when (and (tuple? form) (not (empty? form))) (first form)))
   (def method (when (symbol? head) (get method-keywords head)))
   (cond
@@ -134,6 +202,10 @@
     form))
 
 (defmacro defroutes
+  {:params [:keyword :any]
+   :ret {:name :keyword
+         :routes {:routes :boolean :global {:keyword :any} :children [:any]}
+         :env (fn [] :table)}}
   ``This module's route source: the :void.http/route-source
   contribution folded into the `defplugin` manifest later in the file —
   sugar for `contribute!` + `routes` + `env-ref`:
@@ -164,6 +236,9 @@
 # -- pattern compilation -------------------------------------------------
 
 (defn compile-pattern
+  {:params [:string]
+   :ret {:params [:keyword] :peg (or :abstract :nil) :static :string?}
+   :throws [:string]}
   ``Compile "/orders/:id/files/*path" into {:params [:id :path] :peg
   <compiled> :static <path or nil>}. `:seg` captures one non-empty
   segment, `*seg` (terminal only) captures the rest including slashes;
@@ -207,18 +282,34 @@
 
 # -- flattening sources --------------------------------------------------
 
-(defn- join-prefix [prefix pattern]
+(defn- join-prefix
+  {:params [:string :string] :ret :string}
+  "Concatenate a group prefix and a child pattern; an empty prefix and
+  the bare \"/\" pattern each drop out rather than double a slash."
+  [prefix pattern]
   (cond
     (empty? prefix) pattern
     (= "/" pattern) prefix
     (string prefix pattern)))
 
 (defn- flatten-source
+  {:params [:keyword :any (or :function :table :nil)
+            @[{:method :keyword :pattern :string :handler (or :symbol :function)
+               :layers [[[:keyword (or :keyword :string)] {:keyword :any}]]
+               :env (or :function :table :nil) :source :keyword}]
+            @[:string]]
+   :ret :any}
   "Walk one route source into flat declarations, each carrying its
   metadata layers [[label dict] ...] (global -> groups -> route) and
   the full pattern."
   [source-name form env out errors]
-  (defn walk [node prefix layers]
+  (defn walk
+    {:params [:any :string [[[:keyword (or :keyword :string)] {:keyword :any}]]]
+     :ret :any}
+    "Recurse one node of a route source (a route, a group, a routes
+    wrapper, or a tuple of any of those) into `out`/`errors`, carrying
+    the path prefix and the metadata layers accumulated so far."
+    [node prefix layers]
     (cond
       (indexed? node)
       (each child node (walk child prefix layers))
@@ -260,6 +351,10 @@
    :stage-hooks true})
 
 (defn- stage-hooks-for
+  {:params [{:keyword [(or :function :cfunction)]} {:keyword :any} (or :function :table :nil)]
+   :ret {:wrappers @[{:name :keyword :phase :number :wrap :function}]
+         :out {:keyword [(or :function :cfunction)]}}
+   :throws [:string]}
   ``Per-route lifecycle hooks: combine the global stage
   hooks (`global` — stage -> tuple of resolved callables, from the
   :void.http/hook point) with the route's :void.http/hooks metadata
@@ -291,6 +386,20 @@
   {:wrappers wrappers :out (freeze out)})
 
 (defn build-table
+  {:params [{:sources (or [{:name :keyword :routes :any :env (or :function :table :nil)}] :nil)
+             :meta-keys :any
+             :middleware (or [{:plugin :keyword :value {:keyword :any}}] :nil)
+             :strict :boolean?
+             :stage-hooks (or {:keyword [(or :function :cfunction)]} :nil)}]
+   :ret {:routes [@{:name :keyword :method :keyword :pattern :string :params [:keyword]
+                     :peg (or :abstract :nil) :static :string? :handler (or :symbol :function)
+                     :no-reload :boolean :meta {:keyword :any} :provenance {:keyword :any}
+                     :warnings [:string] :chain :function :middleware [:keyword]
+                     :steps [:any] :declined [:any] :hooks {:keyword :any} :source :keyword}]
+         :by-name {:keyword :any}
+         :static {:keyword :any}
+         :dynamic {:keyword :any}}
+   :throws [:string]}
   ``Build an immutable route table from route sources
   (every failure across every route lands in one batched
   error):
@@ -435,7 +544,14 @@
 
 # -- matching and dispatch -----------------------------------------------
 
-(defn- match-method [table method path]
+(defn- match-method
+  {:params [{:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}
+            :keyword :string]
+   :ret (or [@{:peg (or :abstract :nil) :params [:keyword] & r} {:keyword :string}] :nil)}
+  "Match one method (no HEAD/:any fallback) against the table: a
+  static lookup first, then an ordered PEG scan of the dynamic
+  entries for that method."
+  [table method path]
   (or (when-let [e (get-in table [:static method path])]
         [e {}])
       (label found
@@ -447,6 +563,9 @@
         nil)))
 
 (defn match
+  {:params [{:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}
+            :keyword :string]
+   :ret (or [@{:peg (or :abstract :nil) :params [:keyword] & r} {:keyword :string}] :nil)}
   ``Match method + path against the table. Returns [entry params] or
   nil. :head falls back to :get (automatic HEAD), any method falls back
   to :any routes.``
@@ -456,6 +575,9 @@
       (match-method table :any path)))
 
 (defn allowed-methods
+  {:params [{:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}
+            :string]
+   :ret [:keyword]}
   "The methods that would match this path — the 405 Allow list. Empty
   means 404."
   [table path]
@@ -467,6 +589,12 @@
   (freeze out))
 
 (defn dispatch
+  {:params [{:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}]
+   :ret (or @{:status :number :body :any :headers {:string (or :string @[:string])} & r} :nil)}
   ``Match the request and run it through the route's precompiled chain.
   The entry lands in (req :void/route), captures in (req :params).
   Returns the response, or nil when no route matches.``
@@ -479,6 +607,10 @@
 # -- reverse routing -----------------------------------------------------
 
 (defn url-for
+  {:params [{:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}
+            :keyword (or {:keyword :any} :nil) (or {:keyword :any} :nil)]
+   :ret :string
+   :throws [:string]}
   ``Reverse routing by route name:
 
       (url-for table :orders/show {:id "42"})          # "/orders/42"
@@ -521,6 +653,8 @@
 # -- explain -------------------------------------------------------------
 
 (defn step-str
+  {:params [{:name :keyword :phase :number :stage :boolean? :after :any :before :any & r}]
+   :ret :string}
   "One chain step as `name@phase` (plus `stage` or the placement it
   resolved from) — the spelling explain-route and `void routes --chain`
   share."
@@ -533,12 +667,22 @@
                    "")))
 
 (defn declined-str
+  {:params [{:name :keyword :phase :number :plugin :keyword :reason :keyword & r}]
+   :ret :string}
   "One declined contribution as `name@phase (plugin) — reason`."
   [d]
   (string/format "%s (%q) — %s" (step-str d) (d :plugin)
                  (get mw/reasons (d :reason) (string (d :reason)))))
 
 (defn explain-route
+  {:params [{:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}
+            :string :keyword?]
+   :ret (or {:name :keyword :method :keyword :pattern :string :params {:keyword :string}
+             :handler (or :symbol :function) :no-reload :boolean :meta {:keyword :any}
+             :layers {:keyword :any} :source :keyword :middleware [:keyword]
+             :chain [:any] :declined [:any] :hooks {:keyword :any}
+             :warnings [:string] :text :string}
+            :nil)}
   ``The routing verdict for a path — the matched entry plus the origin
   of every metadata value by layer:
 
@@ -598,18 +742,28 @@
 # -- atomic swap ---------------------------------------------------------
 
 (defn cell
+  {:params [(or {:routes :any :by-name {:keyword :any} :static {:keyword :any}
+                 :dynamic {:keyword :any}} :nil)]
+   :ret @{:table (or {:routes :any :by-name {:keyword :any} :static {:keyword :any}
+                      :dynamic {:keyword :any}} :nil)}}
   "A one-slot holder for the current route table — the running server
   reads it per request; `swap!` replaces the table atomically."
   [&opt table]
   @{:table table})
 
 (defn swap!
+  {:params [@{:table :any}
+            {:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}]
+   :ret {:routes :any :by-name {:keyword :any} :static {:keyword :any} :dynamic {:keyword :any}}}
   "Atomically replace the table a cell holds. Returns the new table."
   [c table]
   (put c :table table)
   table)
 
 (defn current
+  {:params [@{:table :any}]
+   :ret (or {:routes :any :by-name {:keyword :any} :static {:keyword :any}
+             :dynamic {:keyword :any}} :nil)}
   "The table a cell currently holds."
   [c]
   (c :table))

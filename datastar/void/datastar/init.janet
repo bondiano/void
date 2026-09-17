@@ -46,6 +46,8 @@
   "sha384-NE/0J/WohApRHTAW47TIaqfDAzJuxnm3hT6ffCjkgj5rHhxc7MR+XVafripnCwF8")
 
 (defn script-tag
+  {:params [(or {:src :string? :integrity :string?} :nil)]
+   :ret [:keyword {:type :string :src :string & r}]}
   ``The <script> that loads Datastar, as hiccup for a layout's <head>:
   the pinned file with its integrity hash, as a module (which is how
   the bundle is built). Options: :src for a file served elsewhere (a
@@ -65,11 +67,15 @@
 # -- request side --------------------------------------------------------
 
 (defn request?
+  {:params [{:headers {:string :any} & r}] :ret :boolean}
   "Did Datastar issue this request (Datastar-Request: true)?"
   [req]
   (= "true" (ring/request-header req "datastar-request")))
 
 (defn signals
+  {:params [{:method :keyword :query {:string :any} :body :any & r}]
+   :ret (or {:keyword :any} :nil)
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``The signals Datastar sent with the request: the `datastar` query
   parameter on a GET, the JSON body otherwise (keyword keys, the way
   every other decoded body in void arrives). nil when the request
@@ -89,6 +95,7 @@
 # -- rendering and events ------------------------------------------------
 
 (defn- render-content
+  {:params [:any :any] :ret :string}
   ``Markup from whatever a view answered: ready bytes pass through, a
   lazy `html/page` response is rendered *here* (`html/render-now`), and
   anything else goes through the hiccup pipeline.
@@ -106,6 +113,9 @@
     (hiccup/render-string content)))
 
 (defn patch-elements
+  {:params [:any (or {:selector :string? :mode (or :string :keyword :nil) :use-view-transition :boolean?} :nil)]
+   :ret {:event :string :data :string}
+   :throws [:string]}
   "proto/patch-elements over hiccup: content renders through the
   hiccup pipeline, a lazy html/page response renders now, a string or
   buffer passes through untouched."
@@ -118,6 +128,8 @@
 (def remove-elements "See proto/remove-elements." proto/remove-elements)
 
 (defn events
+  {:params [(or @[{:event :string :data :string}] :fiber) (or {:string :string} :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``An SSE response of Datastar events — the builders here already
   return what ring/sse-event frames, so this is ring/sse with the
   vocabulary attached:
@@ -126,7 +138,9 @@
   [evs &opt headers]
   (ring/sse evs headers))
 
-(defn- slice-tag [html tag]
+(defn- slice-tag
+  {:params [:string :string] :ret :string?}
+  [html tag]
   # "<tag ...>...</tag>" inclusive, or nil. Enough HTML awareness for a
   # page this plugin's own render produced; a page that puts "<body"
   # inside a comment before its body element deserves what it gets (named
@@ -140,6 +154,7 @@
     (string/slice html open-at (+ close-at (length close-tag)))))
 
 (defn page-events
+  {:params [:any] :ret @[{:event :string :data :string}]}
   ``A rendered page as the events that morph it in place: the <title>
   and the <body>, each patched by selector — the only two pieces of a
   document Datastar's id-matching cannot reach. Markup without a
@@ -164,7 +179,11 @@
    :doc "Answer a Datastar request with the rendered page as morph events (title + body over SSE) instead of an HTML document"
    :merge :replace})
 
-(defn- html-response? [resp]
+(defn- html-response?
+  {:params [:any] :ret :boolean}
+  "True when `resp` is a ready HTML response: a dictionary with a
+  bytes body and a text/html content-type header."
+  [resp]
   (and (dictionary? resp)
        (bytes? (get resp :body))
        (let [ct (get-in resp [:headers "content-type"])]
@@ -195,12 +214,23 @@
   (system/ambient :void.datastar/registry :of "the morph-stream registry"
                   :from :void/datastar :component :datastar/registry))
 
-(defn- registry [] (system/active current-registry))
+(defn- registry
+  {:params [] :ret @{:rooms @{:any @{:any :boolean}}}}
+  "The running morph-stream registry."
+  []
+  (system/active current-registry))
 
-(defn- join! [reg rooms conn]
+(defn- join!
+  {:params [@{:rooms @{:any @{:any :boolean}}} (or @[:any] [:any]) @{:chan :abstract}] :ret :nil}
+  "Add `conn` as a member of every room in `rooms`."
+  [reg rooms conn]
   (each r rooms (put-in reg [:rooms r conn] true)))
 
-(defn- leave! [reg rooms conn]
+(defn- leave!
+  {:params [@{:rooms @{:any @{:any :boolean}}} (or @[:any] [:any]) @{:chan :abstract}] :ret :nil}
+  "Remove `conn` from every room in `rooms`, dropping a room entirely
+  once its last member leaves."
+  [reg rooms conn]
   (each r rooms
     (when-let [members (get-in reg [:rooms r])]
       (put members conn nil)
@@ -208,6 +238,7 @@
         (put (reg :rooms) r nil)))))
 
 (defn poke!
+  {:params [:any] :ret :nil}
   ``Wake every stream in the named rooms: each re-renders its own view
   and pushes the morph. A member whose wake-up is already pending is
   skipped — two pokes before a render still mean one render, which is
@@ -221,6 +252,8 @@
         (ev/give ch :poke)))))
 
 (defn stream-url
+  {:params [{:query (or {:string :any} :nil) & r} :string (or {:string :any} :nil)]
+   :ret :string}
   ``Where a page opens its morph stream: `path`, carrying the query the
   page itself was rendered with.
 
@@ -247,6 +280,8 @@
     (string path "?" (wire/encode-query kept))))
 
 (defn morph-stream
+  {:params [:any (fn [] :any) (or {:rooms (or @[:any] [:any] :nil) :initial :boolean?} :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``The long-lived side of the idiom — a route the page opens with
   (ds/load (ds/action :get (datastar/stream-url req "/live"))):
 

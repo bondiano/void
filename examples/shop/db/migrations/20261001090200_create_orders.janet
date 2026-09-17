@@ -5,7 +5,12 @@
 # was sold and for how much. `product_id` stays as a nullable link,
 # for the reporting query rather than for the receipt.
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Create the orders, order_items and payments tables, and the
+  indexes the storefront's own-orders page and the capture job read
+  by."
+  []
   [{:create-table "orders"
     :columns [[:id :serial {:primary-key true}]
               [:number :text {:null false :unique true}]
@@ -43,7 +48,10 @@
    {:create-index "order_items_order_idx" :on "order_items" :columns [:order-id]}
    {:create-index "payments_order_idx" :on "payments" :columns [:order-id]}])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop the payments, order_items and orders tables."
+  []
   [{:drop-table "payments"}
    {:drop-table "order_items"}
    {:drop-table "orders"}])

@@ -15,6 +15,7 @@
   (peg/compile '(* (between 1 8 (range "az" "09")) (any (* "-" (between 1 8 (range "az" "09")))) -1)))
 
 (defn normalize
+  {:params [:any] :ret :keyword?}
   ``A locale as a lowercase keyword: "ru_RU", "ru-RU", :RU -> :ru-ru;
   nil, empty or anything but subtags of [a-z0-9] -> nil.``
   [x]
@@ -24,6 +25,7 @@
       (keyword s))))
 
 (defn primary
+  {:params [:keyword] :ret :keyword}
   "The primary language of a locale: :en-us -> :en."
   [loc]
   (def s (string loc))
@@ -40,6 +42,7 @@
       :main (* :entry (any (* "," :entry)) -1)}))
 
 (defn parse-accept-language
+  {:params [:string?] :ret @[{:tag :string :q :number}]}
   ``Parse an Accept-Language header into entries sorted by preference:
   [{:tag "en-us" :q 1} ...]. Tags are lowercased; nil or an
   unparseable header means "no preference" ([]).``
@@ -63,6 +66,7 @@
       [])))
 
 (defn negotiate
+  {:params [:string? (or @[:keyword] [:keyword])] :ret :keyword?}
   ``The best of `available` (normalized locale keywords) for an
   Accept-Language value, or nil when nothing matches: exact tag, then
   "en-us" against :en, then "en" against :en-us, in preference order.``

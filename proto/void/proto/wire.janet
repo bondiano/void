@@ -40,12 +40,17 @@
   "The tag bits of each wire type."
   {:varint 0 :fixed64 1 :length 2 :fixed32 5})
 
-(defn- eof [idx]
+(defn- eof
+  {:params [:number] :ret :never}
+  "Raise the truncated-message error naming the byte a reader ran off
+  the end at."
+  [idx]
   (errorf "proto wire: message ends inside a value at byte %d" idx))
 
 # -- integers, in and out ------------------------------------------------
 
 (defn- as-u64
+  {:params [(or :number :abstract)] :ret :abstract :throws [:string]}
   ``The unsigned 64-bit reading of a Janet integer value: a negative
   number is its two's complement, which is what protobuf writes for a
   negative int32/int64 (ten bytes of varint, the format's own famous
@@ -63,6 +68,7 @@
     (errorf "proto wire: %q is not an integer" v)))
 
 (defn narrow
+  {:params [(or :number :abstract)] :ret (or :number :abstract)}
   ``A 64-bit integer as a plain number when one can hold it exactly,
   and untouched when it cannot. The one place the "number, or an
   int/s64 past 2^53" policy is spelled. A value that is already a
@@ -74,6 +80,7 @@
     v))
 
 (defn integer-value?
+  {:params [:any] :ret :boolean :narrows (or :number :abstract)}
   "Is this a value the integer writers accept — a whole number, an
   int/s64 or an int/u64?"
   [v]
@@ -87,6 +94,7 @@
 # -- varint --------------------------------------------------------------
 
 (defn encode-varint
+  {:params [:buffer (or :number :abstract)] :ret :buffer :throws [:string]}
   ``Append `v` to `buf` as a base-128 varint. Numbers below 2^53 take
   the arithmetic path and allocate nothing; anything negative or truly
   64-bit goes through int/u64, where a negative value is ten bytes.``
@@ -107,6 +115,7 @@
   buf)
 
 (defn decode-varint
+  {:params [(or :string :buffer) :number] :ret [(or :number :abstract) :number] :throws [:string]}
   ``Read a varint at `idx`. Returns [value next-idx] with the value as
   a plain number when it fits in one and as an int/u64 when it does
   not — see `narrow`.``
@@ -139,6 +148,7 @@
   [(if big (narrow big) acc) i])
 
 (defn skip-varint
+  {:params [(or :string :buffer) :number] :ret :number :throws [:string]}
   "Step over a varint without building its value."
   [bytes idx]
   (def n (length bytes))
@@ -150,6 +160,7 @@
 # -- zigzag (sint32 / sint64) --------------------------------------------
 
 (defn zigzag
+  {:params [(or :number :abstract)] :ret (or :number :abstract)}
   "The zigzag encoding of a signed integer: small magnitudes become
   small varints whichever side of zero they are on."
   [v]
@@ -159,6 +170,7 @@
       (int/u64 (bxor (blshift s 1) (brshift s 63))))))
 
 (defn unzigzag
+  {:params [(or :number :abstract)] :ret (or :number :abstract)}
   "The signed integer behind a zigzag varint."
   [v]
   (if (and (number? v) (< v max-exact))
@@ -170,6 +182,7 @@
 # -- fixed width ---------------------------------------------------------
 
 (defn encode-fixed32
+  {:params [:buffer (or :number :abstract)] :ret :buffer}
   "Append the low 32 bits of `v`, little-endian."
   [buf v]
   (var n (if (number? v)
@@ -181,6 +194,7 @@
   buf)
 
 (defn decode-fixed32
+  {:params [(or :string :buffer) :number] :ret [:number :number] :throws [:string]}
   "Read four little-endian bytes as an unsigned 32-bit number."
   [bytes idx]
   (when (> (+ idx 4) (length bytes)) (eof idx))
@@ -191,12 +205,14 @@
    (+ idx 4)])
 
 (defn encode-fixed64
+  {:params [:buffer (or :number :abstract)] :ret :buffer}
   "Append eight little-endian bytes of `v`."
   [buf v]
   (buffer/push buf (int/to-bytes (as-u64 v) :le))
   buf)
 
 (defn decode-fixed64
+  {:params [(or :string :buffer) :number] :ret [:abstract :number] :throws [:string]}
   "Read eight little-endian bytes as an int/u64."
   [bytes idx]
   (when (> (+ idx 8) (length bytes)) (eof idx))
@@ -213,7 +229,11 @@
 # not depend on the host's endianness or on a native module, and the
 # suite can assert on the bit patterns the standard prints.
 
-(defn- float-bits [x mantissa-bits exponent-bits]
+(defn- float-bits
+  {:params [:number :number :number] :ret [:number :number :number]}
+  "The sign, biased exponent and mantissa of `x` in an IEEE 754 format
+  with these field widths."
+  [x mantissa-bits exponent-bits]
   (def bias (dec (blshift 1 (dec exponent-bits))))
   (def max-exp (dec (blshift 1 exponent-bits)))
   (def mant-scale (math/pow 2 mantissa-bits))
@@ -240,7 +260,11 @@
               [unbiased scaled]))))))
   [sign e m])
 
-(defn- float-value [sign e m mantissa-bits exponent-bits]
+(defn- float-value
+  {:params [:number :number :number :number :number] :ret :number}
+  "The number an IEEE 754 sign, biased exponent and mantissa name, in
+  a format with these field widths."
+  [sign e m mantissa-bits exponent-bits]
   (def bias (dec (blshift 1 (dec exponent-bits))))
   (def max-exp (dec (blshift 1 exponent-bits)))
   (def mant-scale (math/pow 2 mantissa-bits))
@@ -252,12 +276,14 @@
   (if (zero? sign) magnitude (- magnitude)))
 
 (defn encode-float
+  {:params [:buffer :number] :ret :buffer}
   "Append `x` as a 32-bit IEEE 754 float, little-endian."
   [buf x]
   (def [sign e m] (float-bits x 23 8))
   (encode-fixed32 buf (+ (* sign 2147483648) (* e 8388608) m)))
 
 (defn decode-float
+  {:params [(or :string :buffer) :number] :ret [:number :number] :throws [:string]}
   "Read four little-endian bytes as a 32-bit IEEE 754 float."
   [bytes idx]
   (def [bits next] (decode-fixed32 bytes idx))
@@ -267,6 +293,7 @@
   [(float-value sign e m 23 8) next])
 
 (defn encode-double
+  {:params [:buffer :number] :ret :buffer}
   "Append `x` as a 64-bit IEEE 754 double, little-endian."
   [buf x]
   (def [sign e m] (float-bits x 52 11))
@@ -276,6 +303,7 @@
   (encode-fixed64 buf bits))
 
 (defn decode-double
+  {:params [(or :string :buffer) :number] :ret [:number :number] :throws [:string]}
   "Read eight little-endian bytes as a 64-bit IEEE 754 double."
   [bytes idx]
   (def [bits next] (decode-fixed64 bytes idx))
@@ -287,6 +315,7 @@
 # -- tags and length-delimited bytes -------------------------------------
 
 (defn encode-tag
+  {:params [:buffer :number :keyword] :ret :buffer :throws [:string]}
   "Append the tag of field `number` with wire type `wtype`."
   [buf number wtype]
   (def bits (or (wire-type-numbers wtype)
@@ -294,6 +323,7 @@
   (encode-varint buf (+ (* number 8) bits)))
 
 (defn decode-tag
+  {:params [(or :string :buffer) :number] :ret [:number :keyword :number] :throws [:string]}
   ``Read a tag: [field-number wire-type next-idx]. A field number of
   zero, or one of the two group wire types, is refused here rather
   than three layers up — groups were removed from the language in
@@ -315,6 +345,7 @@
   [number wtype next])
 
 (defn encode-bytes
+  {:params [:buffer (or :string :buffer)] :ret :buffer}
   "Append `bs` length-delimited."
   [buf bs]
   (encode-varint buf (length bs))
@@ -322,6 +353,7 @@
   buf)
 
 (defn decode-bytes
+  {:params [(or :string :buffer) :number] :ret [:string :number] :throws [:string]}
   "Read a length-delimited run: [string next-idx]."
   [bytes idx]
   (def [len next] (decode-varint bytes idx))
@@ -332,6 +364,7 @@
   [(string/slice bytes next stop) stop])
 
 (defn skip-value
+  {:params [(or :string :buffer) :number :keyword] :ret :number :throws [:string]}
   ``Step over one value of `wtype` at `idx` and return the index after
   it — what a decoder does with a field number it has never heard of.``
   [bytes idx wtype]

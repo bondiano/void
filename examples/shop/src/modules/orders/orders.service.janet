@@ -56,6 +56,9 @@
 (def log-ns "shop.orders")
 
 (defn place!
+  {:params [(or @{:id :number & r} :nil) @{:id :number :email :string & r}]
+   :ret (or {:ok :boolean :order @{:any :any}} {:ok :boolean :reason :keyword & r})
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Turn a cart into an order.
 
   Returns `{:ok true :order <order>}`, or `{:ok false :reason …}` with
@@ -145,6 +148,7 @@
       {:ok false :reason :rolled-back})))
 
 (defn restock!
+  {:params [:number] :ret :number :throws [:string]}
   ``Put an order's units back on the shelf, and drop the cached
   listing. A **compensation**: the checkout already took the stock, so
   cancelling an order is not "do nothing", it is "undo that".``
@@ -155,6 +159,10 @@
   (catalog/forget-listing!))
 
 (defn settle-paid!
+  {:params [@{:id :number :number :string :total-cents :number :email :string & r}
+            @{:id :number & r} :string :number]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "The card was charged: the payment, the order and the fact, together."
   [order payment reference attempts]
   (db/with-tx
@@ -169,6 +177,10 @@
                       :at (values/now)})))
 
 (defn settle-cancelled!
+  {:params [@{:id :number :number :string :email :string & r}
+            @{:id :number & r} :string :number]
+   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "It was not, and will not be: the order goes, and the stock comes
   back."
   [order payment reason attempts]
@@ -184,17 +196,22 @@
                       :at (values/now)})))
 
 (defn awaiting-shipment
+  {:params [] :ret :number :throws [:string]}
   "How many paid orders are waiting for the courier — one number on the
   desk's front page, and the queue the desk works through."
   []
   (repo/count-by-status "paid"))
 
 (defn unsettled
+  {:params [] :ret :number :throws [:string]}
   "How many orders have been placed and not yet paid or cancelled."
   []
   (repo/count-placed))
 
 (defn ship!
+  {:params [@{:id :number :status :string :number :string :email :string & r}]
+   :ret :boolean?
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Mark a paid order shipped, and say whether it happened.
 
   Only a paid order can ship, and the check is here rather than in the

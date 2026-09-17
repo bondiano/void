@@ -45,6 +45,7 @@
    :none "none"})
 
 (defn swap-style
+  {:params [(or :string :keyword)] :ret :string :throws [:string]}
   "The htmx spelling of a swap style: a known keyword is translated
   (:outer-html -> \"outerHTML\"), a string passes through — modifiers
   like \"outerHTML swap:1s\" stay verbatim."
@@ -59,13 +60,19 @@
                              " ")))))
 
 (defn- base-key
+  {:params [(or :string :keyword)] :ret (or :string :keyword)}
   "The attribute name before its htmx 4 suffix: :swap:inherited -> :swap."
   [k]
   (if-let [i (string/find ":" k)]
     (keyword (string/slice k 0 i))
     k))
 
-(defn- attr-value [k v]
+(defn- attr-value
+  {:params [(or :string :keyword) :any] :ret :string :throws [:string]}
+  "The string form of one attribute value: a dictionary JSON-encodes,
+  a boolean renders as \"true\"/\"false\", a :swap or :swap-oob value
+  translates via `swap-style`, and everything else stringifies plain."
+  [k v]
   (def base (base-key k))
   (cond
     (dictionary? v) (json/encode v)
@@ -74,6 +81,7 @@
     (string v)))
 
 (defn attrs
+  {:params [:any] :ret @{:string :string} :throws [:string]}
   ``htmx attributes from key-value pairs:
 
       (hx/attrs :get "/orders" :target "#list" :swap :outer-html)
@@ -99,6 +107,7 @@
   out)
 
 (defn inherited
+  {:params [:any] :ret @{:string :string} :throws [:string]}
   ``The same attributes, marked to reach descendants. htmx 4 does not
   inherit implicitly: an attribute applies to the element it sits on
   unless its name carries the `:inherited` suffix.
@@ -114,6 +123,10 @@
     (string name ":inherited") v))
 
 (defn status
+  {:params [(or :number :string :keyword)
+            (or {:swap (or :string :keyword :nil) & r} :string)]
+   :ret @{:string :string}
+   :throws [:string]}
   ``Per-status-code handling (htmx 4 `hx-status:CODE`): a response with
   that status is swapped the way the spec says instead of the way the
   element otherwise would. The code is exact (422) or a wildcard
@@ -136,26 +149,42 @@
       (string spec)))
   @{(string "hx-status:" code) value})
 
-(defn- verb-attrs [verb url kvs]
+(defn- verb-attrs
+  {:params [:keyword :string [:any]] :ret @{:string :string} :throws [:string]}
+  "hx-VERB plus any extra attribute pairs — the one body every verb
+  helper below shares."
+  [verb url kvs]
   (attrs verb url ;kvs))
 
-(defn get* "hx-get plus extra attrs: (hx/get* \"/x\" :target \"#y\")."
+(defn get*
+  {:params [:string :any] :ret @{:string :string} :throws [:string]}
+  "hx-get plus extra attrs: (hx/get* \"/x\" :target \"#y\")."
   [url & kvs] (verb-attrs :get url kvs))
-(defn post "hx-post plus extra attrs."
+(defn post
+  {:params [:string :any] :ret @{:string :string} :throws [:string]}
+  "hx-post plus extra attrs."
   [url & kvs] (verb-attrs :post url kvs))
-(defn put* "hx-put plus extra attrs."
+(defn put*
+  {:params [:string :any] :ret @{:string :string} :throws [:string]}
+  "hx-put plus extra attrs."
   [url & kvs] (verb-attrs :put url kvs))
-(defn patch "hx-patch plus extra attrs."
+(defn patch
+  {:params [:string :any] :ret @{:string :string} :throws [:string]}
+  "hx-patch plus extra attrs."
   [url & kvs] (verb-attrs :patch url kvs))
-(defn delete "hx-delete plus extra attrs."
+(defn delete
+  {:params [:string :any] :ret @{:string :string} :throws [:string]}
+  "hx-delete plus extra attrs."
   [url & kvs] (verb-attrs :delete url kvs))
 (defn query
+  {:params [:string :any] :ret @{:string :string} :throws [:string]}
   ``hx-query plus extra attrs — htmx 4's QUERY verb: a read that sends
   its parameters in the body instead of the URL, for filters too long
   or too private for a query string.``
   [url & kvs] (verb-attrs :query url kvs))
 
 (defn oob
+  {:params [:tuple (or :string :keyword :nil)] :ret :tuple :throws [:string]}
   ``Mark a hiccup element for an out-of-band swap: adds hx-swap-oob
   (\"true\" by default, or a swap style / selector string):
 
@@ -175,6 +204,9 @@
     [(first node) {:hx-swap-oob v} ;(tuple/slice node 1)]))
 
 (defn partial
+  {:params [(or {:target :string? :swap (or :string :keyword :nil) & r} :string) :any]
+   :ret :tuple
+   :throws [:string]}
   ``An `<hx-partial>` element — htmx 4's out-of-band swap with the full
   swapping vocabulary instead of an id match. The wrapper is not part
   of the document: htmx reads its target and swap style, swaps the

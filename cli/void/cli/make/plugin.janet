@@ -143,7 +143,14 @@
 (print "{{name}}-plugin-test ok")
 ```)
 
-(defn- substitutions [spec]
+(defn- substitutions
+  {:params [{:name :string :project :string :plugin :string
+             :module-path :string & r}]
+   :ret {:name :string :title :string :project :string :plugin :string
+         :module-path :string}}
+  "The template holes plugin-template and test-template read, built
+  from a plugin spec."
+  [spec]
   {:name (spec :name)
    :title (f/title (spec :name))
    :project (spec :project)
@@ -164,6 +171,10 @@
   "templates/plugin")
 
 (defn plugin-spec
+  {:params [:string (or {:dir :string? :project :string? :test-dir :string? & r} :nil)]
+   :ret {:name :string :project :string :plugin :string :dir :string
+         :module-path :string :test-dir :string}
+   :throws [:string]}
   "The value both templates are a pure function of."
   [name &opt opts]
   (default opts {})
@@ -194,6 +205,11 @@
            "--dry-run" {:key :dry-run :type :bool :doc "print instead of writing"}}})
 
 (defn create
+  {:params [{:dir :string? :project :string? :test-dir :string?
+             :dry-run :boolean? :force :boolean? & r}
+            :string]
+   :ret [:string]
+   :throws [:string]}
   ``The body of `void make plugin NAME`. Returns the tuple of paths
   written — or, under `--dry-run`, the paths it would have written.``
   [opts name]

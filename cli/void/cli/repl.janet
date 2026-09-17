@@ -14,6 +14,9 @@
   ".void/repl.sock")
 
 (defn connect
+  {:params [{:unix :string? :host :string? :port :any & r} (or (fn [] :any) :nil)]
+   :ret :any
+   :throws [:string]}
   ``Connect a repl to the running application:
 
       void repl                     # unix socket from config, else .void/repl.sock

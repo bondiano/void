@@ -29,12 +29,16 @@
   {:replace true :concat true :deep-merge true :restrict true})
 
 (defn namespaced?
+  {:params [:any] :ret :boolean :narrows :keyword}
   "True when a metadata key is namespaced: :void.http/timeout, :app/x.
   Every key except :name must be."
   [k]
   (and (keyword? k) (not (nil? (string/find "/" (string k))))))
 
 (defn declare-key
+  {:params [:keyword :any]
+   :ret {:key :keyword :merge (enum :replace :concat :deep-merge :restrict) & r}
+   :throws [:string]}
   ``Declare a metadata key (the substrate for the
   :void.http/route-meta-key extension point):
 
@@ -77,6 +81,9 @@
   (freeze (merge-into @{} opts {:key key :merge strat})))
 
 (defn declarations
+  {:params [(or @[:any] [:any] {:keyword :any})]
+   :ret @{:keyword {:key :keyword :merge :keyword & r}}
+   :throws [:string]}
   "Build a key -> declaration table from an indexed of declarations
   (see `declare-key`) or a dictionary key -> declaration/options.
   A key declared twice is an error (the conflict surfaces at start)."
@@ -110,6 +117,7 @@
 # -- merge ---------------------------------------------------------------
 
 (defn- deep-merge*
+  {:params [:any :any] :ret :any}
   "Recursive merge of two dictionaries, `new` winning at the leaves;
   anything but two dictionaries is replaced by `new`."
   [old new]
@@ -122,6 +130,9 @@
     new))
 
 (defn- merge-key
+  {:params [{:merge :keyword :allow? (or (fn [:any :any] :boolean) :nil) & r}
+            :keyword :any :any :any @[:string]]
+   :ret :any}
   "Fold one declared key's `inner` (the more specific layer) into
   `outer` (the enclosing one) by the declaration's :merge strategy —
   :replace, :concat, :deep-merge or :restrict. A strategy violation is
@@ -192,6 +203,7 @@
               outer))))))
 
 (defn- record!
+  {:params [@{:keyword @[{:source :any :value :any}]} :keyword :any :any] :ret :nil}
   "Append `{:source :value}` to the provenance history of key `k`,
   oldest first."
   [provenance k source v]
@@ -201,6 +213,13 @@
     (put provenance k @[entry])))
 
 (defn merge-layers
+  {:params [(or @[:any] [:any] {:keyword :any})
+            (or @[:any] [:any])
+            (or {:strict :boolean? & r} :nil)]
+   :ret @{:value @{:keyword :any}
+          :provenance @{:keyword @[{:source :any :value :any}]}
+          :errors [:string]
+          :warnings [:string]}}
   ``Merge metadata layers, least specific first (global -> group -> route). Each layer is a metadata dictionary or a
   [source dictionary] pair — the source labels provenance and error
   messages (defaults to the layer index).
@@ -284,6 +303,11 @@
     :warnings (tuple ;warnings)})
 
 (defn merge-layers!
+  {:params [(or @[:any] [:any] {:keyword :any})
+            (or @[:any] [:any])
+            (or {:strict :boolean? & r} :nil)]
+   :ret @{:keyword :any}
+   :throws [:string]}
   "Like `merge-layers`, but throws one error listing every failure —
   the table-build fail-fast path. Returns the merged metadata table."
   [decls layers &opt opts]
@@ -295,6 +319,11 @@
 # -- inspection ----------------------------------------------------------
 
 (defn explain
+  {:params [{:value @{:keyword :any}
+             :provenance @{:keyword @[{:source :any :value :any}]}
+             & r}
+            :keyword]
+   :ret {:key :keyword :value :any :history [{:source :any :value :any}]}}
   "Provenance of one key after `merge-layers`: {:key :value :history
   [{:source :value} ...]} — the substrate for explain-route."
   [result key]
@@ -303,6 +332,11 @@
    :history (tuple ;(get-in result [:provenance key] []))})
 
 (defn explain-str
+  {:params [{:value @{:keyword :any}
+             :provenance @{:keyword @[{:source :any :value :any}]}
+             & r}
+            :keyword]
+   :ret :string}
   "One-line human answer: \":void.http/timeout = 5 — from layer :route
   (layers also contributing: :global)\"."
   [result key]

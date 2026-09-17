@@ -61,14 +61,23 @@
                   :void.admin/new-one "Новая {singular}"
                   :demo/title "Заголовок"}}]}))
 
-(defn- seed! []
+(defn- seed!
+  {:params [] :ret {:rows @[{:keyword :any}] :count :number}}
+  "Recreate the notes table fresh, empty — the pages under test read
+  it through :void.admin/nothing-here, not through fixture rows."
+  []
   (db/execute-sql "DROP TABLE IF EXISTS notes" [] {:kind :write :prepared false})
   (db/execute-sql
     (string "CREATE TABLE notes (id integer primary key autoincrement, "
             "title text not null, done integer not null default 0)")
     [] {:kind :write :prepared false}))
 
-(defn- opts [plugins i18n-slice]
+(defn- opts
+  {:params [@[:any] (or {:any :any} :nil)]
+   :ret {:plugins @[:any] :profile :keyword :config {:any :any} :only @[:keyword]}}
+  "The boot options for one composition: the given plugins plus,
+  when `i18n-slice` is given, its [:i18n ...] config slice."
+  [plugins i18n-slice]
   {:plugins plugins
    :profile :test
    :config {:env @{}
@@ -106,7 +115,10 @@
 (defer (test/stop! translated)
   (seed!)
   (def c (test/client translated))
-  (defn page [uri lang]
+  (defn page
+    {:params [:string :string] :ret :string}
+    "The rendered body of `uri`, requested in the given Accept-Language."
+    [uri lang]
     (test/text (test/inject c {:uri uri :headers {"accept-language" lang}})))
 
   (def list-ru (page "/admin/notes" "ru"))

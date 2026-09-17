@@ -39,13 +39,18 @@
   :void.cli/interactive)
 
 (defn interactive?
+  {:params [] :ret :boolean :narrows :any}
   "Is a human answering? True when stdin is a terminal, unless the
   `interactive-dyn` dyn says otherwise."
   []
   (def forced (dyn interactive-dyn))
   (if (nil? forced) (truthy? (rawterm/isatty)) (truthy? forced)))
 
-(defn- say [& xs]
+(defn- say
+  {:params [:any] :ret :nil}
+  "Write to stderr and flush — every prompt is drawn there, so a
+  redirect of stdout never swallows the question that produced it."
+  [& xs]
   (each x xs (eprin x))
   (eflush))
 
@@ -57,6 +62,7 @@
   :void.cli/input)
 
 (defn- read-line-plain
+  {:params [] :ret :string?}
   "One line of input without raw mode — the non-interactive answer to
   every question here. `nil` at EOF, which every caller reads as
   \"take the default\"."
@@ -69,6 +75,7 @@
 # -- raw-mode key reading ------------------------------------------------
 
 (defn- read-key
+  {:params [] :ret (or :number (enum :up :down :left :right :enter :backspace :cancel :eof))}
   ``One keystroke in raw mode, as a byte or one of :up :down :left
   :right :enter :backspace :cancel :eof. An escape sequence is read as
   a unit: a bare ESC is `:cancel`, because a user who presses it wants
@@ -97,6 +104,7 @@
         c))))
 
 (defn- with-raw*
+  {:params [(fn [] :any)] :ret :any}
   "Run `f` with stdin in raw mode, restoring the terminal whatever
   happens — including a throw and including Ctrl-C."
   [f]
@@ -104,6 +112,7 @@
   (defer (rawterm/end) (f)))
 
 (defn cancelled
+  {:params [] :ret :never :throws [:string]}
   "The error a prompt throws when the user asks to leave (Ctrl-C, ESC).
   A generator catches nothing: `void: cancelled` and exit 1 is the
   whole of the intended behaviour."
@@ -112,12 +121,18 @@
 
 # -- ask -----------------------------------------------------------------
 
-(defn- label [question default]
+(defn- label
+  {:params [:string :any] :ret :string}
+  "The line a question is drawn on: the question, and the default in
+  brackets when there is a non-empty one."
+  [question default]
   (if (and default (not (empty? (string default))))
     (string/format "%s [%s]: " question default)
     (string/format "%s: " question)))
 
 (defn- validated
+  {:params [:string (or {:validate (or (fn [:string] :string?) :nil) & r} :nil)]
+   :ret :string?}
   "Apply an optional :validate — (fn [answer] nil | \"why not\") — and
   return the answer or nil after reporting the reason."
   [answer opts]
@@ -129,6 +144,9 @@
       answer)))
 
 (defn ask
+  {:params [:string (or {:default :any :validate (or (fn [:string] :string?) :nil) & r} :nil)]
+   :ret :string
+   :throws [:string]}
   ``Ask for one line of text:
 
       (prompt/ask "Table" {:default "users"})
@@ -178,11 +196,28 @@
 
 # -- choose --------------------------------------------------------------
 
-(defn- option-label [o] (if (dictionary? o) (get o :label (string (o :value))) (string o)))
-(defn- option-value [o] (if (dictionary? o) (get o :value (o :label)) o))
-(defn- option-doc [o] (if (dictionary? o) (get o :doc "") ""))
+(defn- option-label
+  {:params [(or :string {:label :any :value :any :doc :string? & r})] :ret :string}
+  "What an option is shown as: its own :label, or the option itself
+  when it is a bare string or value."
+  [o] (if (dictionary? o) (get o :label (string (o :value))) (string o)))
+(defn- option-value
+  {:params [(or :string {:label :any :value :any :doc :string? & r})] :ret :any}
+  "What choosing an option answers with: its :value, or the option
+  itself when it is a bare string or value."
+  [o] (if (dictionary? o) (get o :value (o :label)) o))
+(defn- option-doc
+  {:params [(or :string {:label :any :value :any :doc :string? & r})] :ret :string}
+  "An option's one-line explanation, or \"\" when it has none."
+  [o] (if (dictionary? o) (get o :doc "") ""))
 
-(defn- draw-options [options cursor]
+(defn- draw-options
+  {:params [(or @[(or :string {:label :any :value :any :doc :string? & r})]
+                [(or :string {:label :any :value :any :doc :string? & r})])
+            :number]
+   :ret :nil}
+  "Print the option list once, `>` marking the option at `cursor`."
+  [options cursor]
   (each [i o] (pairs options)
     (def doc (option-doc o))
     (eprintf " %s %-12s %s"
@@ -191,10 +226,20 @@
              doc))
   (eflush))
 
-(defn- erase-options [n]
+(defn- erase-options
+  {:params [:number] :ret :nil}
+  "Move the cursor up `n` lines and clear to the end of the screen —
+  how the option list is redrawn in place."
+  [n]
   (say (string/format "\e[%dA\e[0J" n)))
 
 (defn choose
+  {:params [:string
+            (or @[(or :string {:label :any :value :any :doc :string? & r})]
+                [(or :string {:label :any :value :any :doc :string? & r})])
+            (or {:default :any & r} :nil)]
+   :ret :any
+   :throws [:string]}
   ``Pick one of a list:
 
       (prompt/choose "Type" [{:label "string" :value :string :doc "short text"}
@@ -262,6 +307,7 @@
 # -- confirm -------------------------------------------------------------
 
 (defn confirm
+  {:params [:string :boolean?] :ret :boolean :throws [:string]}
   ``A yes/no question. `default` (true by default) is what Enter and
   EOF mean, and it is the one shown in capitals.``
   [question &opt dflt]

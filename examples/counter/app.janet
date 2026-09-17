@@ -18,7 +18,10 @@
 
 # -- views (plain functions returning hiccup) ----------------------------
 
-(defn layout [content context]
+(defn layout
+  {:params [:any :any] :ret @[:any]}
+  "Wrap `content` in the page shell: head, stylesheet, datastar script."
+  [content context]
   (html/html5 {:lang "en"}
     [:head
      [:meta {:charset "utf-8"}]
@@ -47,6 +50,7 @@
           "active:scale-95"))
 
 (defn counter-view
+  {:params [] :ret :tuple}
   "The page: signals declare the step, data-init opens the live
   stream, and the buttons post to handlers that return this same view."
   []
@@ -82,10 +86,17 @@
 
 # -- handlers ------------------------------------------------------------
 
-(defn- page []
+(defn- page
+  {:params []
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "Render the current count through the shared layout."
+  []
   (html/page (counter-view) {:layout layout}))
 
 (defn- step-of
+  {:params [(or {:keyword :any} :nil)] :ret :number}
   "The :by signal Datastar sent with the action, as a number; a page
   without signals (a plain request) steps by 1."
   [sig]
@@ -93,30 +104,47 @@
   (def n (if (bytes? by) (scan-number (string by)) by))
   (if (number? n) n 1))
 
-(defn- add! [d]
+(defn- add!
+  {:params [:number] :ret :nil}
+  "Apply a delta to the shared count and wake every live stream so
+  each tab re-renders and converges."
+  [d]
   (put state :n (+ (state :n) d))
   # wake every live stream: each re-renders its own page
   (datastar/poke! :counter))
 
 (defn home
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET / — the full page; a Datastar request on the same route gets it
   as morph events (:void.datastar/morph on the route)."
   [req]
   (page))
 
 (defn inc-count
+  {:params [{:method :keyword :query {:string :any} :body :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "POST /inc — mutate, poke the room, return the same page."
   [req]
   (add! (step-of (datastar/signals req)))
   (page))
 
 (defn dec-count
+  {:params [{:method :keyword :query {:string :any} :body :any & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "POST /dec — the mirror of /inc."
   [req]
   (add! (- (step-of (datastar/signals req))))
   (page))
 
 (defn live
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "GET /live — the long-lived side: the stream re-renders the full
   page on every poke! and pushes the same two morph events."
   [req]

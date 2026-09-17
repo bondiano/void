@@ -30,21 +30,37 @@
 (def sandbox (string (os/cwd) "/.tmp-bus-outbox-" (os/time) "-" (os/getpid)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :nil}
+  "Recursively remove the sandbox directory this suite's sqlite file
+  lives in."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))
     nil nil
     (os/rm path)))
 
-(defn- pending [b]
+(defn- pending
+  {:params [{:outbox-count :function & r}] :ret :any}
+  "How many outbox rows this backend still owes a forwarder."
+  [b]
   (db/with-conn ((b :outbox-count))))
 
-(defn- log-size [table]
+(defn- log-size
+  {:params [:string] :ret :number}
+  "How many rows the message log table holds."
+  [table]
   (db/with-conn
     (get (first (db/query [(string "SELECT count(*) AS n FROM " table) []])) :n 0)))
 
-(defn run-suite! [label table settle]
+(defn run-suite!
+  {:params [:string :string :number] :ret :boolean :throws [:string]}
+  "The outbox claim, run against whichever engine `table` lives on:
+  nothing is on the bus while the transaction is open, a commit is not
+  lost, a rollback is not published, and the one window the outbox
+  does leave is a duplicate rather than a loss."
+  [label table settle]
   (def b (backend/normalize (busdb/store {:table table :poll-interval 0.05})))
   (def delivered @[])
   (each n (router/defined) (router/forget! n))

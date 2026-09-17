@@ -25,7 +25,11 @@
 
 # -- DER -----------------------------------------------------------------
 
-(defn- der-len [n]
+(defn- der-len
+  {:params [:number] :ret :string}
+  "The DER length octets for a content of `n` bytes — short form
+  under 128, else a leading length-of-length byte."
+  [n]
   (if (< n 128)
     (string/from-bytes n)
     (do
@@ -36,10 +40,15 @@
         (set v (brshift v 8)))
       (string/from-bytes (bor 0x80 (length bytes)) ;bytes))))
 
-(defn- tlv [tag content]
+(defn- tlv
+  {:params [:number :string] :ret :string}
+  "One DER tag-length-value: `tag` followed by `content`'s length and
+  the content itself."
+  [tag content]
   (string (string/from-bytes tag) (der-len (length content)) content))
 
 (defn- der-integer
+  {:params [(or :string :buffer)] :ret :string}
   ``A DER INTEGER from an unsigned big-endian number: leading zeroes
   dropped, one added back when the top bit is set (the value is
   positive and DER integers are signed).``
@@ -52,10 +61,22 @@
               (string "\0" trimmed)
               trimmed)))
 
-(defn- der-sequence [& parts] (tlv 0x30 (string ;parts)))
-(defn- der-oid [content] (tlv 0x06 content))
-(defn- der-null [] "\x05\0")
-(defn- der-bitstring [content] (tlv 0x03 (string "\0" content)))
+(defn- der-sequence
+  {:params [:string] :ret :string}
+  "A DER SEQUENCE wrapping the concatenation of `parts`."
+  [& parts] (tlv 0x30 (string ;parts)))
+(defn- der-oid
+  {:params [:string] :ret :string}
+  "A DER OBJECT IDENTIFIER over its already-encoded arc bytes."
+  [content] (tlv 0x06 content))
+(defn- der-null
+  {:params [] :ret :string}
+  "The DER NULL, for an algorithm identifier with no parameters."
+  [] "\x05\0")
+(defn- der-bitstring
+  {:params [:string] :ret :string}
+  "A DER BIT STRING with a zero unused-bits byte, wrapping `content`."
+  [content] (tlv 0x03 (string "\0" content)))
 
 (def- oid-rsa
   "1.2.840.113549.1.1.1 — rsaEncryption."
@@ -75,7 +96,10 @@
 
 # -- PEM -----------------------------------------------------------------
 
-(defn- pem [der]
+(defn- pem
+  {:params [:string] :ret :string}
+  "Wrap a DER SubjectPublicKeyInfo in the PEM armor libcrypto expects."
+  [der]
   # spork's encoder rather than `crypto/encode/base64`: that one drops
   # padding on purpose (PHC strings say so), and PEM is the other
   # convention — RFC 7468 wants the `=` and OpenSSL writes it
@@ -89,7 +113,10 @@
           (string/join lines "\n")
           "\n-----END PUBLIC KEY-----\n"))
 
-(defn- decode-part [jwk key]
+(defn- decode-part
+  {:params [{:keyword :any} :keyword] :ret :string :throws [:string]}
+  "One base64url field of a JWK, decoded to raw bytes."
+  [jwk key]
   (def v (get jwk key))
   (unless (bytes? v)
     (errorf "JWK is missing %q (or it is not a string)" key))
@@ -97,7 +124,10 @@
   (unless ok (errorf "JWK %q is not base64url" key))
   (string bytes))
 
-(defn- pad-left [bytes width]
+(defn- pad-left
+  {:params [(or :string :buffer) :number] :ret :string :throws [:string]}
+  "Left-pad a coordinate with zero bytes to its curve's fixed width."
+  [bytes width]
   (def b (string bytes))
   (cond
     (= (length b) width) b
@@ -109,6 +139,7 @@
 # -- the two key types ---------------------------------------------------
 
 (defn algorithm
+  {:params [{:keyword :any}] :ret :keyword?}
   ``The JWS algorithm this key can verify: its own `alg` when it
   declares one, otherwise the one its type implies — RSA keys default
   to RS256, EC keys are decided by their curve. nil when the key is
@@ -123,6 +154,7 @@
     nil))
 
 (defn public-pem
+  {:params [{:keyword :any}] :ret :string :throws [:string]}
   ``One JWK as a PEM public key, ready for `crypto/sign/public-key`.
   RSA keys (`n`, `e`) and EC keys on the P-curves (`crv`, `x`, `y`);
   anything else is an error naming what was asked for, because a
@@ -154,6 +186,8 @@
             kty)))
 
 (defn signing-keys
+  {:params [{:keyword :any}]
+   :ret [{:kid :string? :alg :keyword :pem :string :jwk {:keyword :any}}]}
   ``The usable verification keys of a JWKS document, as
   `[{:kid :alg :pem :jwk} ...]`.
 

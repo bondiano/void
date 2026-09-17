@@ -17,12 +17,21 @@
 # there is nothing to remember.
 (import void/auth/db :as auth-db)
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "Add the password column authors sign in with, and bring in
+  void/auth-db's own tables since this application composes its
+  stores rather than migrating them separately."
+  []
   [{:alter-table "authors"
     :add-column [:password-hash :text]}
    ;(auth-db/tables)])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop void/auth-db's tables and the password column, in that order
+  since neither depends on the other."
+  []
   [;(auth-db/drop-tables)
    {:alter-table "authors"
     :drop-column :password-hash}])

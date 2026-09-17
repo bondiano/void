@@ -27,7 +27,10 @@
 (def sandbox (string (os/cwd) "/.tmp-jobs-db-" (os/time) "-" (os/getpid)))
 (os/mkdir sandbox)
 
-(defn- rimraf [path]
+(defn- rimraf
+  {:params [:string] :ret :any}
+  "Recursively remove a directory — cleanup for the sandbox this suite builds."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each f (os/dir path) (rimraf (string path "/" f)))
                    (os/rmdir path))

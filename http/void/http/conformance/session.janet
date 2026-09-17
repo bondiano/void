@@ -38,12 +38,20 @@
   "The four functions a session store is."
   [:load :save :delete :sweep])
 
-(defn- missing-keys [store]
+(defn- missing-keys
+  {:params [:any] :ret (or @[:keyword] [:keyword])}
+  "The contract functions `store` is missing: every key whose value is
+  not callable, or the whole contract when `store` is not even a
+  dictionary."
+  [store]
   (if (dictionary? store)
     (seq [k :in contract-keys :when (not (util/callable? (get store k)))] k)
     contract-keys))
 
 (defn run!
+  {:params [:string :any (or {:ttl :number? :wait :number? & r} :nil)]
+   :ret :boolean
+   :throws [:string]}
   ``Assert that `store` behaves like a `:void.http/session-store`.
   `name` names the store in the failure messages, because "an expired
   session still loaded" is a different bug in each of them.
@@ -64,13 +72,23 @@
     :wait  seconds to wait for that to happen (default :ttl + 0.75)``
   [name store &opt opts]
   (default opts {})
-  (defn note [msg] (string name ": " msg))
+  (defn note
+    {:params [:any] :ret :string}
+    "Prefix a failure message with the store's name."
+    [msg] (string name ": " msg))
   (def short-ttl (get opts :ttl 1))
   (def wait (get opts :wait (+ short-ttl 0.75)))
   (def prefix (string "void-conf-" (os/getpid) "-"))
-  (defn id [suffix] (string prefix suffix))
+  (defn id
+    {:params [:string] :ret :string}
+    "One id under this run's own prefix."
+    [suffix] (string prefix suffix))
   (def ids @[])
-  (defn sid [suffix] (def s (id suffix)) (array/push ids s) s)
+  (defn sid
+    {:params [:string] :ret :string}
+    "Like `id`, but remembered so `defer` can delete it on the way
+    out."
+    [suffix] (def s (id suffix)) (array/push ids s) s)
 
   # -- the shape ---------------------------------------------------------
   #
