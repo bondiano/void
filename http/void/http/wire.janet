@@ -95,9 +95,7 @@
 
 (defn parse-request-head
   {:params [:buffer]
-   :ret (or :nil (enum :error)
-            @{:method :string :path :string :http-version [:number :number]
-              :headers @{:any :any} :head-size :number})}
+   :ret (or :nil (enum :error) HttpRequestHead)}
   ``Parse an HTTP request head from the start of buf. Returns nil while
   the head terminator has not arrived yet, :error on a malformed head,
   otherwise a table with:
@@ -123,9 +121,7 @@
 
 (defn parse-response-head
   {:params [:buffer]
-   :ret (or :nil (enum :error)
-            @{:status :number :message :string :http-version [:number :number]
-              :headers @{:any :any} :head-size :number})}
+   :ret (or :nil (enum :error) HttpResponseHead)}
   ``Parse an HTTP response head from the start of buf. Returns nil while
   the head is incomplete, :error on a malformed head, otherwise a table
   with `:status`, `:message`, `:http-version`, `:headers` and

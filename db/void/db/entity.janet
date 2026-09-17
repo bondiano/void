@@ -60,8 +60,7 @@
 
 (defn- rel-spec
   {:params [:keyword :keyword :any]
-   :ret {:name :keyword :kind :keyword :entity :keyword :key :keyword
-         :through (or {:entity :keyword :key :keyword} :nil) & r}
+   :ret DbRelation
    :throws [:string]}
   ``Normalize one relation declaration — a `[kind :Entity :key]` tuple
   or a `{:kind ... :entity ... :key ...}` map, optionally with
@@ -99,8 +98,8 @@
   (freeze (merge @{:name rname} spec (if through {:through through} {}))))
 
 (defn- field-map
-  {:params [{:type :keyword :props {:any :any} :children [:any]} :keyword]
-   :ret [{:keyword {:name :keyword :column :string :optional :boolean & r}} {:keyword :any}]
+  {:params [SchemaNode :keyword]
+   :ret [{:keyword DbField} {:keyword :any}]
    :throws [:string]}
   ``The entity's fields — name, column, whether they are optional, plus
   every `:db/*` prop — built from a normalized map schema's children,
@@ -121,18 +120,7 @@
 
 (defn descriptor
   {:params [:keyword :any :any]
-   :ret {:name :keyword
-         :table :string
-         :schema {:type :keyword :props {:any :any} :children [:any]}
-         :pk :keyword
-         :pk-column :string
-         :version (or :keyword :nil)
-         :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-         :columns [:string]
-         :field-order [:keyword]
-         :column->field {:keyword :keyword}
-         :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                          :through (or {:entity :keyword :key :keyword} :nil) & r}}}
+   :ret DbEntity
    :throws [:string]}
   ``Build an entity descriptor from a schema form plus db-mapping
   options (:db/table, :db/rels). `defentity` is the sugar; the
@@ -179,7 +167,7 @@
      :rels rels}))
 
 (defn register!
-  {:params [{:name :keyword & r}] :ret {:name :keyword & r}}
+  {:params [DbEntity] :ret DbEntity}
   "Register a descriptor under its name (re-registering replaces —
   REPL-friendly). Returns the descriptor."
   [desc]
@@ -194,55 +182,21 @@
 
 (defn lookup
   {:params [:keyword]
-   :ret (or {:name :keyword
-             :table :string
-             :schema {:type :keyword :props {:any :any} :children [:any]}
-             :pk :keyword
-             :pk-column :string
-             :version (or :keyword :nil)
-             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-             :columns [:string]
-             :field-order [:keyword]
-             :column->field {:keyword :keyword}
-             :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                              :through (or {:entity :keyword :key :keyword} :nil) & r}}}
-            :nil)}
+   :ret DbEntity?}
   "Descriptor by entity name, or nil."
   [name]
   (get registry name))
 
 (defn entity?
   {:params [:any] :ret :boolean
-   :narrows {:name :keyword
-             :table :string
-             :schema {:type :keyword :props {:any :any} :children [:any]}
-             :pk :keyword
-             :pk-column :string
-             :version (or :keyword :nil)
-             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-             :columns [:string]
-             :field-order [:keyword]
-             :column->field {:keyword :keyword}
-             :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                              :through (or {:entity :keyword :key :keyword} :nil) & r}}}}
+   :narrows DbEntity}
   "Is x a descriptor?"
   [x]
   (and (dictionary? x) (not (nil? (get x :column->field)))))
 
 (defn resolve
   {:params [:any]
-   :ret {:name :keyword
-         :table :string
-         :schema {:type :keyword :props {:any :any} :children [:any]}
-         :pk :keyword
-         :pk-column :string
-         :version (or :keyword :nil)
-         :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-         :columns [:string]
-         :field-order [:keyword]
-         :column->field {:keyword :keyword}
-         :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                          :through (or {:entity :keyword :key :keyword} :nil) & r}}}
+   :ret DbEntity
    :throws [:string]}
   ``The descriptor behind a name (:User), a schema node defined by
   `defentity`, or a descriptor itself.``
@@ -261,7 +215,7 @@
 
 (defn define!
   {:params [:keyword :any (or [:any] @[:any] :nil)]
-   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :ret SchemaNode
    :throws [:string]}
   ``Register an entity and return its normalized schema — the runtime
   half of `defentity` (void/db re-exports the macro through this same
@@ -305,15 +259,15 @@
 # -- instances (table prototypes) ----------------------------------------
 
 (defn- own-values
-  {:params [@{:any :any}] :ret {:any :any}}
+  {:params [DbInstance] :ret {:any :any}}
   "The instance's own column values as a frozen struct — the prototype
   chain is deliberately left out of the snapshot."
   [inst]
   (freeze (tabseq [[k v] :pairs inst] k v)))
 
 (defn- proto-for
-  {:params [:any {:any :any}]
-   :ret @{:void.db/descriptor :any :void.db/snapshot {:any :any} :void.db/preloaded @{:any :any}}}
+  {:params [DbEntity {:any :any}]
+   :ret @{:void.db/descriptor DbEntity :void.db/snapshot {:any :any} :void.db/preloaded @{:any :any}}}
   "The prototype every loaded instance shares: its descriptor, the
   load-time snapshot `save!` diffs against, and the (empty, to start)
   table of preloaded relations."
@@ -323,26 +277,15 @@
     :void.db/preloaded @{}})
 
 (defn instance?
-  {:params [:any] :ret :boolean :narrows @{:any :any}}
+  {:params [:any] :ret :boolean :narrows DbInstance}
   "Is x a loaded entity instance (a table with an entity prototype)?"
   [x]
   (and (table? x)
        (not (nil? (get (or (table/getproto x) @{}) :void.db/descriptor)))))
 
 (defn descriptor-of
-  {:params [@{:any :any}]
-   :ret {:name :keyword
-         :table :string
-         :schema {:type :keyword :props {:any :any} :children [:any]}
-         :pk :keyword
-         :pk-column :string
-         :version (or :keyword :nil)
-         :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-         :columns [:string]
-         :field-order [:keyword]
-         :column->field {:keyword :keyword}
-         :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                          :through (or {:entity :keyword :key :keyword} :nil) & r}}}
+  {:params [DbInstance]
+   :ret DbEntity
    :throws [:string]}
   "The descriptor of a loaded instance."
   [inst]
@@ -350,15 +293,15 @@
       (errorf "not a loaded entity instance: %q" inst)))
 
 (defn snapshot
-  {:params [@{:any :any}] :ret (or {:any :any} :nil)}
+  {:params [DbInstance] :ret (or {:any :any} :nil)}
   "The load-time column values of an instance — what `save!` diffs
   against."
   [inst]
   (get (table/getproto inst) :void.db/snapshot))
 
 (defn from-row
-  {:params [{:column->field {:keyword :keyword} & r} {:any :any} (or {:keyword :keyword} :nil)]
-   :ret @{:any :any}}
+  {:params [DbEntity DbRow (or {:keyword :keyword} :nil)]
+   :ret DbInstance}
   ``Map a driver row onto an entity instance: known columns become
   field keys, unknown ones (join extras) are kept as they came, and
   `aliases` — a column-keyword to field-keyword table — renames the
@@ -379,8 +322,7 @@
   (table/setproto inst (proto-for desc (own-values inst))))
 
 (defn to-row
-  {:params [{:fields {:keyword {:column :string & r}} :name :keyword :field-order [:keyword] & r}
-            {:keyword :any}]
+  {:params [DbEntity {:keyword :any}]
    :ret @{:string :any}
    :throws [:string]}
   ``Column map for a write: field keys to column names, unknown keys
@@ -402,7 +344,7 @@
   out)
 
 (defn changes
-  {:params [@{:any :any}] :ret @{:any :any}}
+  {:params [DbInstance] :ret @{:any :any}}
   ``The fields of an instance that differ from its snapshot — what
   `save!` would write.``
   [inst]
@@ -414,7 +356,7 @@
   out)
 
 (defn dirty?
-  {:params [@{:any :any}] :ret :boolean :narrows :any}
+  {:params [DbInstance] :ret :boolean :narrows :any}
   "Does this instance differ from its snapshot?"
   [inst]
   (not (empty? (changes inst))))
@@ -440,7 +382,7 @@
   ~(,with-identity-map* (fn identity-map-body [] ,;body)))
 
 (defn- id-cache
-  {:params [{:name :keyword & r} :any] :ret (or @{:any :any} :nil)}
+  {:params [DbEntity :any] :ret DbInstance?}
   "The identity-mapped instance already loaded for `id` in the current
   scope, or nil when there is none (no scope bound, or a first load)."
   [desc id]
@@ -448,7 +390,7 @@
     (get m [(desc :name) id])))
 
 (defn- id-cache!
-  {:params [{:name :keyword & r} :any @{:any :any}] :ret @{:any :any}}
+  {:params [DbEntity :any DbInstance] :ret DbInstance}
   "Remember `inst` under `id` in the current identity map, when one is
   bound; returns `inst` either way."
   [desc id inst]
@@ -490,7 +432,7 @@
   (or out "?"))
 
 (defn- guard!
-  {:params [{:name :keyword & r} :keyword] :ret :nil :throws [:string]}
+  {:params [DbEntity :keyword] :ret :nil :throws [:string]}
   "Warn (or, under :strict, throw) that `rname` was navigated without
   a :preload — the N+1 an unplanned `rel` is."
   [desc rname]
@@ -510,9 +452,8 @@
 # -- reading -------------------------------------------------------------
 
 (defn- rel-of
-  {:params [{:name :keyword :rels {:keyword :any} & r} :keyword]
-   :ret {:name :keyword :kind :keyword :entity :keyword :key :keyword
-         :through (or {:entity :keyword :key :keyword} :nil) & r}
+  {:params [DbEntity :keyword]
+   :ret DbRelation
    :throws [:string]}
   "The relation record `rname` names on `desc`, or an error listing
   what the entity actually declares."
@@ -554,10 +495,7 @@
     (tabseq [k :keys extra] (keyword (builder/snake k)) k)))
 
 (defn- select-stmt
-  {:params [{:columns [:string] :table :string & r}
-            {:extra (or {:keyword :any} :nil) :where :any :order-by :any :limit :any
-             :offset :any :join :any :left-join :any :group-by :any :having :any
-             :lock :any & r}]
+  {:params [DbEntity DbQueryOptions]
    :ret @{:select [:any] :from :string & r}}
   "The builder statement map for a `query`/`one`/`find` call: every
   column of `desc`, plus `:extra`'s joined columns under their own
@@ -641,11 +579,8 @@
 (var- load-preloads nil)
 
 (defn- load-rows
-  {:params [{:table :string :pk :keyword :name :keyword :column->field {:keyword :keyword} & r}
-            {:sql-opts :any :preload :any :extra (or {:keyword :any} :nil) :where :any
-             :order-by :any :limit :any :offset :any :join :any :left-join :any
-             :group-by :any :having :any :lock :any & r}]
-   :ret @[@{:any :any}]
+  {:params [DbEntity DbQueryOptions]
+   :ret @[DbInstance]
    :throws [:string]}
   "Run the select and map every row onto a loaded instance, caching
   each by primary key and running any requested preload."
@@ -665,7 +600,7 @@
 (def- preloaded-nil :void.db/nil)
 
 (defn- attach!
-  {:params [@{:any :any} :keyword :any] :ret :any}
+  {:params [DbInstance :keyword :any] :ret :any}
   "Record `value` (or the nil sentinel) as `rname`'s preloaded value on
   `inst`; returns `value` unchanged."
   [inst rname value]
@@ -674,7 +609,7 @@
   value)
 
 (defn- preloaded-value
-  {:params [@{:any :any} :keyword] :ret :any}
+  {:params [DbInstance :keyword] :ret :any}
   "The preloaded value of `rname` on `inst`, with the nil sentinel read
   back as plain nil."
   [inst rname]
@@ -682,13 +617,13 @@
   (if (= preloaded-nil v) nil v))
 
 (defn preloaded?
-  {:params [@{:any :any} :keyword] :ret :boolean :narrows :any}
+  {:params [DbInstance :keyword] :ret :boolean :narrows :any}
   "Has this relation been preloaded on this instance?"
   [inst rname]
   (not (nil? (get-in (table/getproto inst) [:void.db/preloaded rname]))))
 
 (defn- group-by-key
-  {:params [(or @[@{:any :any}] [@{:any :any}]) :keyword] :ret @{:any @[@{:any :any}]}}
+  {:params [(or @[DbInstance] [DbInstance]) :keyword] :ret @{:any @[DbInstance]}}
   "Bucket instances by the value of `key` — the shape a batched load's
   results are joined back onto their parents through."
   [insts key]
@@ -700,7 +635,7 @@
   out)
 
 (defn- column-of
-  {:params [{:fields {:keyword {:column :string & r}} :name :keyword & r} :keyword]
+  {:params [DbEntity :keyword]
    :ret :string
    :throws [:string]}
   "The column name of `field` on `desc`."
@@ -709,18 +644,16 @@
       (errorf "entity %q has no field %q" (desc :name) field)))
 
 (defn- values-of
-  {:params [(or @[@{:any :any}] [@{:any :any}]) :keyword] :ret @[:any]}
+  {:params [(or @[DbInstance] [DbInstance]) :keyword] :ret @[:any]}
   "The distinct non-nil values of `field` across instances — the right
   side of the one IN a batched load is."
   [insts field]
   (distinct (filter |(not (nil? $)) (map |(get $ field) insts))))
 
 (defn- load-batch
-  {:params [{:table :string :pk :keyword :name :keyword :column->field {:keyword :keyword}
-             :fields {:keyword {:column :string & r}} & r}
-            :keyword (or @[:any] [:any])
+  {:params [DbEntity :keyword (or @[:any] [:any])
             {:where :any :order-by :any :preload :any :sql-opts :any & r}]
-   :ret @[@{:any :any}]
+   :ret @[DbInstance]
    :throws [:string]}
   ``The rows of `target` whose `field` is one of `values`, under this
   relation's preload options: the options' :where is ANDed onto the
@@ -737,7 +670,7 @@
                        :preload (get opts :preload)}))))
 
 (defn- attach-hits!
-  {:params [{:kind :keyword & r} @{:any :any} :keyword (or @[:any] [:any])] :ret :any}
+  {:params [DbRelation DbInstance :keyword (or @[:any] [:any])] :ret :any}
   "Attach a relation's batch of matches to one instance: the whole
   tuple for has-many, the first (and only) row otherwise."
   [relation inst rname hits]
@@ -745,11 +678,7 @@
            (if (= :has-many (relation :kind)) (tuple ;hits) (first hits))))
 
 (defn- load-direct
-  {:params [{:pk :keyword & r}
-            (or @[@{:any :any}] [@{:any :any}])
-            {:kind :keyword :key :keyword :name :keyword & r}
-            {:pk :keyword :table :string :name :keyword :column->field {:keyword :keyword}
-             :fields {:keyword {:column :string & r}} & r}
+  {:params [DbEntity (or @[DbInstance] [DbInstance]) DbRelation DbEntity
             {:where :any :order-by :any :preload :any :sql-opts :any & r}]
    :ret :nil
    :throws [:string]}
@@ -767,11 +696,7 @@
                   (get by-key (get inst local) @[]))))
 
 (defn- load-through
-  {:params [{:pk :keyword & r}
-            (or @[@{:any :any}] [@{:any :any}])
-            {:key :keyword :through {:entity :keyword :key :keyword} :name :keyword & r}
-            {:pk :keyword :table :string :name :keyword :column->field {:keyword :keyword}
-             :fields {:keyword {:column :string & r}} & r}
+  {:params [DbEntity (or @[DbInstance] [DbInstance]) DbRelation DbEntity
             {:where :any :order-by :any :preload :any :sql-opts :any & r}]
    :ret :nil
    :throws [:string]}
@@ -807,12 +732,8 @@
         (load-direct desc insts relation target opts)))))
 
 (defn query
-  {:params [:any
-            (or {:where :any :order-by :any :limit :any :offset :any :join :any
-                :left-join :any :group-by :any :having :any :preload :any
-                :sql-opts :any :extra (or {:keyword :any} :nil) :lock :any & r}
-                :nil)]
-   :ret @[@{:any :any}]
+  {:params [:any DbQueryOptions?]
+   :ret @[DbInstance]
    :throws [:string]}
   ``Load entities (Data Mapper — plain data in, plain data out):
 
@@ -848,12 +769,8 @@
   (load-rows (resolve ent) opts))
 
 (defn one
-  {:params [:any
-            (or {:where :any :order-by :any :limit :any :offset :any :join :any
-                :left-join :any :group-by :any :having :any :preload :any
-                :sql-opts :any :extra (or {:keyword :any} :nil) :lock :any & r}
-                :nil)]
-   :ret (or @{:any :any} :nil)
+  {:params [:any DbQueryOptions?]
+   :ret DbInstance?
    :throws [:string]}
   "Like `query` with :limit 1 — the first matching entity or nil."
   [ent &opt opts]
@@ -861,12 +778,8 @@
   (first (query ent (merge opts {:limit 1}))))
 
 (defn find
-  {:params [:any :any
-            (or {:where :any :order-by :any :limit :any :offset :any :join :any
-                :left-join :any :group-by :any :having :any :preload :any
-                :sql-opts :any :extra (or {:keyword :any} :nil) :lock :any & r}
-                :nil)]
-   :ret (or @{:any :any} :nil)
+  {:params [:any :any DbQueryOptions?]
+   :ret DbInstance?
    :throws [:string]}
   ``Load one entity by primary key, or nil:
 
@@ -879,13 +792,9 @@
       (one desc (merge opts {:where [:= [:col (desc :pk-column)] id]}))))
 
 (defn find!
-  {:params [:any :any
-            (or {:where :any :order-by :any :limit :any :offset :any :join :any
-                :left-join :any :group-by :any :having :any :preload :any
-                :sql-opts :any :extra (or {:keyword :any} :nil) :lock :any & r}
-                :nil)]
-   :ret @{:any :any}
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  {:params [:any :any DbQueryOptions?]
+   :ret DbInstance
+   :throws [:string VoidError]}
   "Like `find`, but throws when the row does not exist."
   [ent id &opt opts]
   (or (find ent id opts)
@@ -911,7 +820,7 @@
   (pos? (count ent opts)))
 
 (defn rel
-  {:params [@{:any :any} :keyword] :ret :any :throws [:string]}
+  {:params [DbInstance :keyword] :ret :any :throws [:string]}
   ``Navigate a relation of a loaded instance:
 
       (db/rel u :brand)
@@ -928,8 +837,8 @@
   (preloaded-value inst rname))
 
 (defn preload!
-  {:params [:any (or @{:any :any} @[@{:any :any}] [@{:any :any}]) :any]
-   :ret (or @{:any :any} @[@{:any :any}] [@{:any :any}])
+  {:params [:any (or DbInstance @[DbInstance] [DbInstance]) :any]
+   :ret (or DbInstance @[DbInstance] [DbInstance])
    :throws [:string]}
   ``Preload relations onto already-loaded instances — the batched
   escape hatch when the rows came from somewhere else:
@@ -945,7 +854,7 @@
 
 (defn check-schema
   {:params [:any :boolean?]
-   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :ret SchemaNode
    :throws [:string]}
   ``The schema a write is checked against: the entity's own
   declaration, closed — an unknown key is an error at write time
@@ -1003,7 +912,7 @@
 (defn check!
   {:params [:any :any (or {:partial :boolean? :coerce :boolean?} :nil)]
    :ret :any
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``A `check` that raises: the (possibly coerced) attributes when they
   validate, and otherwise the same `:void.schema/invalid` envelope
   `schema/check!` raises — status 422, every error under `:data`. What
@@ -1022,7 +931,7 @@
 # -- writing -------------------------------------------------------------
 
 (defn- reload-by-pk
-  {:params [{:table :string :pk-column :string & r} :any] :ret (or @{:any :any} :nil) :throws [:string]}
+  {:params [DbEntity :any] :ret DbInstance? :throws [:string]}
   "Re-read a row by primary key after a write — what `insert!` falls
   back to when the driver gave neither RETURNING nor an insert id."
   [desc id]
@@ -1030,8 +939,8 @@
 
 (defn insert!
   {:params [:any {:keyword :any}]
-   :ret @{:any :any}
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :ret DbInstance
+   :throws [:string VoidError]}
   ``Insert one row and return the loaded entity:
 
       (db/insert! User {:email "a@b.c" :brand-id b})
@@ -1065,7 +974,7 @@
 (defn insert-all!
   {:params [:any (or @[{:keyword :any}] [{:keyword :any}])]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   "Insert several rows in one statement; returns the affected count."
   [ent rows]
   (def desc (resolve ent))
@@ -1076,7 +985,7 @@
 (defn update!
   {:params [:any :any {:keyword :any}]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Patch a row by primary key; returns the number of rows written:
 
       (db/update! User id {:email "new@b.c"})``
@@ -1090,7 +999,7 @@
 (defn delete!
   {:params [:any :any]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   "Delete a row by primary key; returns the number of rows deleted."
   [ent id]
   (def desc (resolve ent))
@@ -1100,14 +1009,14 @@
 (defn delete-where!
   {:params [:any :any]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   "Delete every row matching a where clause; returns the count."
   [ent where]
   (def desc (resolve ent))
   (state/execute! {:delete (desc :table) :where where}))
 
 (defn- refresh-snapshot!
-  {:params [@{:any :any}] :ret @{:any :any}}
+  {:params [DbInstance] :ret DbInstance}
   "Replace the instance's snapshot with its current values, after a
   write has landed — what makes the next `changes` empty again."
   [inst]
@@ -1116,9 +1025,9 @@
   inst)
 
 (defn save!
-  {:params [@{:any :any} (or {:version :any & r} :nil)]
-   :ret @{:any :any}
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  {:params [DbInstance (or {:version :any & r} :nil)]
+   :ret DbInstance
+   :throws [:string VoidError]}
   ``Write back the fields that changed since the instance was loaded —
   the Active Record half, and nothing more:
 
@@ -1171,12 +1080,8 @@
   (refresh-snapshot! inst))
 
 (defn reload
-  {:params [@{:any :any}
-            (or {:where :any :order-by :any :limit :any :offset :any :join :any
-                :left-join :any :group-by :any :having :any :preload :any
-                :sql-opts :any :extra (or {:keyword :any} :nil) :lock :any & r}
-                :nil)]
-   :ret (or @{:any :any} :nil)
+  {:params [DbInstance DbQueryOptions?]
+   :ret DbInstance?
    :throws [:string]}
   "Re-read the instance from the database; returns a fresh instance."
   [inst &opt opts]

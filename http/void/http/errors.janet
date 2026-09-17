@@ -130,7 +130,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 ::selection{background:rgba(76,194,255,.25)}`)
 
 (defn- html-error-page
-  {:params [:number :string] :ret @{:headers @{:string :any} & r}}
+  {:params [:number :string] :ret HttpResponse}
   ``One self-contained error page. It carries its own <style>, so it
   also carries its own Content-Security-Policy — the tightest one an
   inline-styled page can have. The security middleware keeps a CSP a
@@ -151,9 +151,8 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                "default-src 'none'; style-src 'unsafe-inline'"))
 
 (defn dev-page
-  {:params [:any @{:method :keyword :path :string & r}
-            {:status :number :dev :any :stacktrace :string? :error :any}]
-   :ret @{:headers @{:string :any} & r}}
+  {:params [:any HttpRequest HttpErrorContext]
+   :ret HttpResponse}
   "The dev error page: status, message, stacktrace, request summary."
   [err req ctx]
   (def trace (string/trim (or (ctx :stacktrace) "")))
@@ -169,7 +168,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
       "<dt>route</dt><dd>" (html-escape (string (get-in req [keys/route :name]))) "</dd></dl>")))
 
 (defn wants-html?
-  {:params [@{:headers {:string (or :string @[:string])} & r}]
+  {:params [HttpRequest]
    :ret :boolean :narrows :any}
   "Is this a browser? The Accept header says text/html; an API client,
   a curl and a health probe do not. Public because the 404/405 path
@@ -188,7 +187,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   (when (get en key) (t key)))
 
 (defn prod-page
-  {:params [:number] :ret @{:headers @{:string :any} & r}}
+  {:params [:number] :ret HttpResponse}
   ``The error page a browser gets outside dev: the status, the
   standard phrase, one sentence of recovery — and none of the detail,
   which is the same rule problem+json follows for a 5xx.``
@@ -202,9 +201,8 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
         ""))))
 
 (defn default-renderer
-  {:params [:any @{:method :keyword :path :string :headers {:string (or :string @[:string])} & r}
-            {:status :number :dev :any :stacktrace :string? :error :any}]
-   :ret @{:headers @{:string :any} & r}}
+  {:params [:any HttpRequest HttpErrorContext]
+   :ret HttpResponse}
   "The floor renderer: the dev page in dev, a presentable HTML page
   for a browser, terse text for everything else."
   [err req ctx]
@@ -216,11 +214,8 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                        (get wire/status-messages (ctx :status) "Error")))))
 
 (defn render
-  {:params [(or @[{:fn (or :function :cfunction) :name :keyword & r}] :nil)
-            :any
-            @{:method :keyword :path :string :headers {:string (or :string @[:string])} & r}
-            {:status :number :dev :any :stacktrace :string? :error :any}]
-   :ret @{:headers @{:string :any} & r}}
+  {:params [(or @[HttpErrorRenderer] :nil) :any HttpRequest HttpErrorContext]
+   :ret HttpResponse}
   ``Run the renderers (sorted contributions of
   :void.http/error-renderer) over an error; the first response wins,
   default-renderer is the guaranteed fallback.
@@ -248,14 +243,14 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
           (default-renderer err req ctx)))))
 
 (defn wrap-panic
-  {:params [(or :function :cfunction)
-            (or {:renderers (or @[{:fn (or :function :cfunction) :name :keyword & r}] :nil)
+  {:params [HttpHandler
+            (or {:renderers (or @[HttpErrorRenderer] :nil)
                  :dev :any
                  :on-error (or @[(or :function :cfunction)] :function :cfunction :nil)
                  :log (or (fn [:any :any :string?] :any) :nil)
                  & r}
                 :nil)]
-   :ret :function}
+   :ret HttpHandler}
   ``The phase-0 panic guard. Options:
     :renderers  :void.http/error-renderer contributions, priority order
     :dev        truthy exposes stacktraces (dev error page)

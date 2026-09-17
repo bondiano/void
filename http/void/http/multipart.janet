@@ -79,8 +79,7 @@
 
 (defn parse
   {:params [:string :string]
-   :ret @[{:name :string? :filename :string? :content-type :string?
-           :headers @{:string :string} :value :string}]
+   :ret @[HttpMultipartPart]
    :throws [:string]}
   ``Parse a multipart body against its boundary into parts:
 
@@ -118,8 +117,7 @@
   parts)
 
 (defn fields
-  {:params [(or @[{:name :string? :filename :string? :value :any & r}]
-                [{:name :string? :filename :string? :value :any & r}])]
+  {:params [(or @[HttpMultipartPart] [HttpMultipartPart])]
    :ret @{:string :any}}
   "Fold the non-file parts into a name -> value table (duplicate names
   accumulate into arrays), like a urlencoded form."
@@ -136,8 +134,7 @@
   out)
 
 (defn files
-  {:params [(or @[{:name :string? :filename :string? :value :any & r}]
-                [{:name :string? :filename :string? :value :any & r}])]
+  {:params [(or @[HttpMultipartPart] [HttpMultipartPart])]
    :ret @{:string :any}}
   ``Fold the file parts into a name -> part table (duplicate names
   accumulate into arrays) — the file half of what `fields` does for
@@ -179,8 +176,7 @@
   (string "\"" (string/replace-all "\"" "\\\"" (string/replace-all "\\" "\\\\" (string s))) "\""))
 
 (defn part-head
-  {:params [{:name :string? :filename :string? :content-type :string?
-             :headers (or @{:any :any} :nil) & r}]
+  {:params [HttpMultipartPart]
    :ret :string :throws [:string]}
   ``The header block of one part, without the boundary line. `part` is
   the same table `parse` returns: `:name` (required), `:filename` and
@@ -201,11 +197,7 @@
   (string out))
 
 (defn encode
-  {:params [(or @[{:name :string? :filename :string? :content-type :string?
-                   :value :any :headers (or @{:any :any} :nil) & r}]
-                [{:name :string? :filename :string? :content-type :string?
-                  :value :any :headers (or @{:any :any} :nil) & r}])
-            :string?]
+  {:params [(or @[HttpMultipartPart] [HttpMultipartPart]) :string?]
    :ret {:body :string :boundary :string :content-type :string}
    :throws [:string]}
   ``Build a `multipart/form-data` body out of parts:

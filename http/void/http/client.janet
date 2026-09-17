@@ -268,7 +268,7 @@
 # -- writing a request ---------------------------------------------------
 
 (defn- lower-keys
-  {:params [(or @{:any :any} :nil)] :ret @{:string :any}}
+  {:params [(or @{:any :any} {:any :any} :nil)] :ret @{:string :any}}
   "Header names as the wire wants to compare them: lowercase strings."
   [headers]
   (def out @{})
@@ -339,7 +339,7 @@
         (error res)))))
 
 (defn- header-str
-  {:params [@{:any :any} :string] :ret :any}
+  {:params [HttpHeaders :string] :ret :any}
   "One response header's value, first of an array when the header
   repeated."
   [headers name]
@@ -358,8 +358,7 @@
 
 (defn- read-head!
   {:params [:any :buffer :number?]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :head-size :number}
+   :ret HttpResponseHead
    :throws [(or {:void.http/closed :boolean :message :string}
                 {:void.http/protocol :boolean :message :string})]}
   "Read and parse the response head, growing buf until it has one."
@@ -375,7 +374,7 @@
   head)
 
 (defn- read-sized!
-  {:params [:any :buffer {:head-size :number & r} :number :number :number?]
+  {:params [:any :buffer HttpResponseHead :number :number :number?]
    :ret [:string :number]
    :throws [(or {:void.http/too-large :boolean :message :string}
                 {:void.http/closed :boolean :message :string})]}
@@ -391,7 +390,7 @@
   [(string/slice buf (head :head-size) need) need])
 
 (defn- chunked-response!
-  {:params [:any :buffer {:head-size :number & r} :number :number?]
+  {:params [:any :buffer HttpResponseHead :number :number?]
    :ret [:string :number]
    :throws [(or {:void.http/closed :boolean :message :string}
                 {:void.http/too-large :boolean :message :string}
@@ -416,7 +415,7 @@
   [(st :body) (st :pos)])
 
 (defn- read-to-eof!
-  {:params [:any :buffer {:head-size :number & r} :number :number?]
+  {:params [:any :buffer HttpResponseHead :number :number?]
    :ret [:string :number]
    :throws [{:void.http/too-large :boolean :message :string}]}
   "Read an unframed body until the peer closes the connection."
@@ -429,8 +428,7 @@
 
 (defn- read-response!
   {:params [:any :buffer {:read-timeout :number? :max-body :number? & r} :string]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+   :ret HttpClientResponse
    :throws [(or {:void.http/closed :boolean :message :string}
                 {:void.http/protocol :boolean :message :string}
                 {:void.http/too-large :boolean :message :string})]}
@@ -484,7 +482,7 @@
 # through one implementation of each format.
 
 (defn target-of
-  {:params [{:target :string? :path :string? :query (or @{:any :any} :string :nil) & r}]
+  {:params [HttpRequestOptions]
    :ret :string}
   ``The request target of a request table: `:target` (or `:path`) with
   `:query` appended. `:query` is a dictionary or a ready query string,
@@ -504,7 +502,7 @@
     (string base "?" qs)))
 
 (defn- body-of
-  {:params [{:body :any :form (or @{:any :any} :nil) :multipart :any & r}]
+  {:params [HttpRequestOptions]
    :ret [:any :string?]
    :throws [:string]}
   ``The body bytes and the content type they imply. Exactly one of
@@ -529,10 +527,7 @@
                  :timeout :number? :connect-timeout :number? :max-body :number?
                  :keep-alive :boolean? & r}
                 :nil)]
-   :ret @{:host :string :port :string :scheme :string :authority :string
-          :headers @{:any :any} :cookies @{:any :any} :timeout :number?
-          :connect-timeout :number? :max-body :number :keep-alive :boolean
-          :conn (or :abstract :nil) :buf :buffer}
+   :ret HttpClient
    :throws [:string]}
   ``A client for one host. Options: `:url` (any URL on the host — its
   scheme, host and port are what is kept), or `:host` and `:port`
@@ -565,7 +560,7 @@
     :buf @""})
 
 (defn close!
-  {:params [{:conn (or :abstract :nil) :buf :buffer & r}] :ret :nil}
+  {:params [HttpClient] :ret :nil}
   "Close the client's socket, if it has one open. A client stays
   usable — the next `send!` opens a new one."
   [client]
@@ -576,9 +571,8 @@
   nil)
 
 (defn- connect!
-  {:params [{:host :string :port :string :scheme :string :authority :string
-             :connect-timeout :number? :conn (or :abstract :nil) :buf :buffer & r}]
-   :ret :abstract
+  {:params [HttpClient]
+   :ret (or :abstract @{:read :function :write :function :close :function & r})
    :throws [:string]}
   "Open the client's socket (or hand off to `tls-connect` for https),
   counting it and clearing the read buffer for the new connection."
@@ -629,13 +623,8 @@
   nil)
 
 (defn- exchange!
-  {:params [{:host :string :port :string :scheme :string :authority :string
-             :headers @{:any :any} :cookies @{:any :any} :timeout :number?
-             :connect-timeout :number? :max-body :number :keep-alive :boolean
-             :conn (or :abstract :nil) :buf :buffer & r}
-            :buffer :string]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+  {:params [HttpClient :buffer :string]
+   :ret HttpClientResponse
    :throws [:any]}
   "One connect-if-needed, write, read cycle on the client's socket."
   [client bytes method]
@@ -666,13 +655,8 @@
   nil)
 
 (defn- send-prepared!
-  {:params [{:host :string :port :string :scheme :string :authority :string
-             :headers @{:any :any} :cookies @{:any :any} :timeout :number?
-             :connect-timeout :number? :max-body :number :keep-alive :boolean
-             :conn (or :abstract :nil) :buf :buffer & r}
-            :string :string @{:any :any} (or :string :nil) :boolean?]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+  {:params [HttpClient :string :string @{:any :any} (or :string :nil) :boolean?]
+   :ret HttpClientResponse
    :throws [:any]}
   ``The exchange: format the head with the headers as they now are,
   write it, read the answer, and reopen-and-repeat once when the
@@ -727,16 +711,8 @@
   out)
 
 (defn send!
-  {:params [{:host :string :port :string :scheme :string :authority :string
-             :headers @{:any :any} :cookies @{:any :any} :timeout :number?
-             :connect-timeout :number? :max-body :number :keep-alive :boolean
-             :conn (or :abstract :nil) :buf :buffer & r}
-            {:method :any :close :boolean? :headers (or @{:any :any} :nil)
-             :target :string? :path :string? :query (or @{:any :any} :string :nil)
-             :body :any :form (or @{:any :any} :nil) :multipart :any
-             :cookies (or @{:any :any} :nil) & r}]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+  {:params [HttpClient HttpRequestOptions]
+   :ret HttpClientResponse
    :throws [:any]}
   ``Send one request on this client and return the response:
 
@@ -782,7 +758,7 @@
 # header, the cookies the server set, and where a 30x points.
 
 (defn header
-  {:params [{:headers @{:any :any} & r} :string] :ret :any}
+  {:params [HttpClientResponse :string] :ret :any}
   ``One response header by lowercase name. Repeated headers arrive as
   arrays (`wire/parse-response-head`); this returns the first, and
   `(resp :headers)` still holds all of them — the same contract
@@ -792,7 +768,7 @@
   (if (indexed? v) (first v) v))
 
 (defn header-values
-  {:params [{:headers @{:any :any} & r} :string] :ret @[:any]}
+  {:params [HttpClientResponse :string] :ret @[:any]}
   "Every value of one response header, as an array — `set-cookie` is
   the header this exists for."
   [resp name]
@@ -803,7 +779,7 @@
     @[v]))
 
 (defn cookies
-  {:params [{:headers @{:any :any} & r}]
+  {:params [HttpClientResponse]
    :ret @[@{:name :string :value :string :path (or :string :nil)
             :domain (or :string :nil) :expires (or :string :nil)
             :max-age (or :number :nil) :secure :boolean? :http-only :boolean?
@@ -821,7 +797,7 @@
   (filter truthy? (map wire/parse-set-cookie (header-values resp "set-cookie"))))
 
 (defn cookie-values
-  {:params [{:headers @{:any :any} & r}] :ret @{:string :string}}
+  {:params [HttpClientResponse] :ret @{:string :string}}
   "The response's cookies as a name -> value table — what to hand back
   to `:cookies` on the next request."
   [resp]
@@ -841,24 +817,15 @@
   {301 :maybe-get 302 :maybe-get 303 :get 307 :keep 308 :keep})
 
 (defn redirect?
-  {:params [{:status :number :headers @{:any :any} & r}] :ret :boolean :narrows :any}
+  {:params [HttpClientResponse] :ret :boolean :narrows :any}
   "Does this response point somewhere else (a 30x with a Location)?"
   [resp]
   (truthy? (and (get redirect-statuses (resp :status))
                 (header resp "location"))))
 
 (defn follow-target
-  {:params [{:status :number :headers @{:any :any} & r}
-            :string
-            {:method :any :headers (or @{:any :any} :nil) :cookies (or @{:any :any} :nil)
-             :body :any :form (or @{:any :any} :nil) :multipart :any :timeout :number?
-             :connect-timeout :number? :max-body :number? :user-agent :string?
-             :follow :number? & r}]
-   :ret (or :nil
-            @{:url :string :method :keyword :headers @{:any :any}
-              :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
-              :multipart :any :timeout :number? :connect-timeout :number?
-              :max-body :number? :user-agent :string? :follow :number?})}
+  {:params [HttpClientResponse :string HttpRequestOptions]
+   :ret HttpRequestOptions?}
   ``Where a redirect leads, as the request that would go there:
   `{:url :method :body :headers}` — or nil when the response is not a
   redirect. `base` is the URL this response answered.
@@ -913,14 +880,8 @@
 # -- one-shot requests ---------------------------------------------------
 
 (defn request
-  {:params [{:url :string? :method :any :follow :number?
-             :headers (or @{:any :any} :nil) :cookies (or @{:any :any} :nil) :body :any
-             :form (or @{:any :any} :nil) :multipart :any :timeout :number?
-             :connect-timeout :number? :max-body :number? :keep-alive :boolean?
-             :close :boolean? & r}]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [HttpRequestOptions]
+   :ret HttpClientResponse
    :throws [:string]}
   ``One request to an absolute URL, on a connection of its own:
 
@@ -977,75 +938,40 @@
 # — `(client/get url)`.
 
 (defn get
-  {:params [:string
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   "GET an absolute URL — `request` with the method filled in."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :get})))
 
 (defn head
-  {:params [:string
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   "HEAD an absolute URL — the headers of a GET without its body."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :head})))
 
 (defn options
-  {:params [:string
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   "OPTIONS an absolute URL — what the server says it will accept."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :options})))
 
 (defn delete
-  {:params [:string
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :body :any :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   "DELETE an absolute URL."
   [url &opt opts]
   (request (merge (or opts {}) {:url url :method :delete})))
 
 (defn post
-  {:params [:string (or :string :buffer :nil)
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string (or :string :buffer :nil) HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   ``POST a body to an absolute URL. `body` is bytes; a form or an
   upload goes through `:form` / `:multipart` in `opts`, and passing
@@ -1054,30 +980,16 @@
   (request (merge (or opts {}) {:url url :method :post :body body})))
 
 (defn put
-  {:params [:string (or :string :buffer :nil)
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string (or :string :buffer :nil) HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   "PUT a body to an absolute URL."
   [url body &opt opts]
   (request (merge (or opts {}) {:url url :method :put :body body})))
 
 (defn patch
-  {:params [:string (or :string :buffer :nil)
-            (or {:follow :number? :headers (or @{:any :any} :nil)
-                 :cookies (or @{:any :any} :nil) :form (or @{:any :any} :nil)
-                 :multipart :any :timeout :number? :connect-timeout :number?
-                 :max-body :number? :keep-alive :boolean? :close :boolean? & r}
-                :nil)]
-   :ret @{:status :number :message :string :http-version [:number :number]
-          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean
-          :url :string :redirects :tuple}
+  {:params [:string (or :string :buffer :nil) HttpRequestOptions?]
+   :ret HttpClientResponse
    :throws [:string]}
   "PATCH a body to an absolute URL."
   [url body &opt opts]

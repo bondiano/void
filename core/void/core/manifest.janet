@@ -76,7 +76,7 @@
 
 (defn- normalize-components
   {:params [:any (or @[:any] [:any])]
-   :ret [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+   :ret [Component]
    :throws [:string]}
   "Check :components is a tuple of component definitions (a :key and
   a callable :start, see system/component) and stamp each with
@@ -118,7 +118,7 @@
 
 (defn- normalize-points
   {:params [:any {:keyword :any}]
-   :ret {:keyword :any}
+   :ret {:keyword ExtensionPoint}
    :throws [:string]}
   "Check :extension-points is {name point}: a built point must be
   stored under its own name; an options dictionary is built into one
@@ -145,21 +145,7 @@
 
 (defn manifest
   {:params [:any :any]
-   :ret {:name :keyword
-         :doc :string?
-         :void-api :number
-         :version :string
-         :requires {:keyword (or :boolean :string)}
-         :config-key :keyword?
-         :config-schema :any
-         :config-defaults (or {:keyword :any} :nil)
-         :when (or (fn [:any] :boolean) :nil)
-         :components [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
-         :contributes {:keyword [:any]}
-         :extension-points {:keyword :any}
-         :hooks [:keyword]
-         :on-load (or (fn [:any] :any) :nil)
-         :source :string?}
+   :ret Manifest
    :throws [:string]}
   ``Build and validate a plugin manifest — a frozen struct that can be
   pp'd, diffed and serialized. `defplugin` is the module sugar over this.
@@ -257,7 +243,7 @@
   @{})
 
 (defn register-manifest!
-  {:params [{:name :keyword & r}] :ret {:name :keyword & r}}
+  {:params [Manifest] :ret Manifest}
   "Register a manifest for keyword lookup in :plugins (re-registering
   replaces — REPL-friendly). Returns the manifest."
   [m]
@@ -265,8 +251,8 @@
   m)
 
 (defn- merge-collected
-  {:params [{:name :keyword :contributes {:keyword [:any]} :extension-points {:keyword :any} & r}]
-   :ret {:name :keyword :contributes {:keyword [:any]} :extension-points {:keyword :any} & r}
+  {:params [Manifest]
+   :ret Manifest
    :throws [:string]}
   "Fold the module-level contribute!/defextension-point queue into
   a manifest and clear the queue."

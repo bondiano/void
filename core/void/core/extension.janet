@@ -77,8 +77,7 @@
 
 (defn extension-point
   {:params [:keyword :any]
-   :ret {:name :keyword :cardinality (enum :many :single :single-required)
-         :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}
+   :ret ExtensionPoint
    :throws [:string]}
   ``Build a named extension-point contract:
 
@@ -175,8 +174,7 @@
 
 (defn point?
   {:params [:any] :ret :boolean
-   :narrows {:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}}
+   :narrows ExtensionPoint}
   "Is `x` a point contract — what `extension-point` builds: a
   dictionary with a keyword :name and a known :cardinality. The
   manifest uses it to tell a built point from an options dictionary
@@ -216,8 +214,7 @@
 
 (defn declare-point!
   {:params [:any]
-   :ret {:name :keyword :cardinality (enum :many :single :single-required)
-         :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}
+   :ret ExtensionPoint
    :throws [:string]}
   "Queue an extension point for the `defplugin` manifest of the module
   being loaded (the macro `defextension-point` is sugar for building +
@@ -232,8 +229,7 @@
 
 (defmacro defextension-point
   {:params [:any :any]
-   :ret {:name :keyword :cardinality (enum :many :single :single-required)
-         :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}}
+   :ret ExtensionPoint}
   "Declare an extension point owned by the plugin defined later in this
   module with `defplugin`. See `extension-point` for options."
   [name & kvs]
@@ -241,8 +237,7 @@
 
 (defn drain-collected!
   {:params []
-   :ret {:points {:keyword {:name :keyword :cardinality (enum :many :single :single-required)
-                            :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}}
+   :ret {:points {:keyword ExtensionPoint}
          :contributes {:keyword [:any]}}}
   "Take everything queued by `contribute!` / `defextension-point` since
   the last drain — `{:points {name point} :contributes {name [value
@@ -356,11 +351,10 @@
 # -- resolution (bootstrap phase 4) ---------------------------------------
 
 (defn- declared-points
-  {:params [@[{:name :keyword :extension-points {:keyword :any} :contributes {:keyword [:any]} & r}]
+  {:params [@[Manifest]
             @[:string]]
    :ret @{:keyword {:owner :keyword
-                     :point {:name :keyword :cardinality (enum :many :single :single-required)
-                             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}}}}
+                     :point ExtensionPoint}}}
   "The points a boot resolves against, name -> {:owner :point}: the
   core's own first, then every active plugin's in name order. A name
   declared twice is an error naming both owners; the first declaration
@@ -379,7 +373,7 @@
   points)
 
 (defn- inactive-owners
-  {:params [@[{:name :keyword :extension-points {:keyword :any} :contributes {:keyword [:any]} & r}]
+  {:params [@[Manifest]
             @{:keyword :any}]
    :ret @{:keyword :keyword}}
   "Point name -> the loaded-but-inactive plugin declaring it: so a
@@ -416,9 +410,9 @@
   aliases)
 
 (defn- gather-contributions
-  {:params [@[{:name :keyword :extension-points {:keyword :any} :contributes {:keyword [:any]} & r}]
+  {:params [@[Manifest]
             @{:keyword :any} @{:keyword :keyword} @{:keyword :keyword} @[:string]]
-   :ret @{:keyword @[{:plugin :keyword :value :any}]}}
+   :ret @{:keyword @[Contribution]}}
   "Canonical point name -> [{:plugin :value} ...] over the active
   plugins in name order. A contribution addressed to an alias folds
   into the canonical point with a deprecation warning on stderr; one
@@ -456,9 +450,8 @@
 
 (defn- schema-errors
   {:params [:keyword
-            {:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}
-            @[{:plugin :keyword :value :any}]]
+            ExtensionPoint
+            @[Contribution]]
    :ret @[:string]}
   "Every contribution to `name` checked against the point's :schema
   (none: no errors), each failure attributed to its plugin."
@@ -479,9 +472,8 @@
 
 (defn- cardinality-error
   {:params [:keyword
-            {:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}
-            @[{:plugin :keyword :value :any}]]
+            ExtensionPoint
+            @[Contribution]]
    :ret :string?}
   "The one message a :single / :single-required point produces when
   the count of contributions is wrong, naming the contributors; nil
@@ -505,8 +497,7 @@
                      (if (empty? cs) "" (string " (from: " (from-str) ")"))))))
 
 (defn- key-check
-  {:params [{:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}]
+  {:params [ExtensionPoint]
    :ret (fn [@[:any]] :nil)}
   "The check a :key point runs before anything else: every
   contribution carries the key, and no two carry the same one — the
@@ -522,8 +513,7 @@
     (unique values)))
 
 (defn- point-validator
-  {:params [{:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}]
+  {:params [ExtensionPoint]
    :ret :any}
   "The cross-check a point runs over its contribution values before
   folding: the :key uniqueness check when the point has a :key, then
@@ -538,8 +528,7 @@
       (fn [values] (unique values) (own values)))))
 
 (defn- point-reducer
-  {:params [{:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}]
+  {:params [ExtensionPoint]
    :ret :any}
   "The fold a point applies to its contribution values, first answer
   wins: its :reduce; a table keyed by :key for :index (each value
@@ -559,9 +548,8 @@
 
 (defn resolve-point
   {:params [:keyword
-            {:name :keyword :cardinality (enum :many :single :single-required)
-             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}
-            @[{:plugin :keyword :value :any}]]
+            ExtensionPoint
+            @[Contribution]]
    :ret [:any @[:string]]}
   ``Resolve one point from its contributions `cs` (`[{:plugin :value}
   ...]`): schema-check every value, enforce :cardinality, then — only
@@ -590,13 +578,12 @@
   [resolved errors])
 
 (defn resolve
-  {:params [@[{:name :keyword :extension-points {:keyword :any} :contributes {:keyword [:any]} & r}]
-            @[{:name :keyword :extension-points {:keyword :any} :contributes {:keyword [:any]} & r}]
+  {:params [@[Manifest]
+            @[Manifest]
             @[:string]]
    :ret @{:keyword @{:owner :keyword
-                     :point {:name :keyword :cardinality (enum :many :single :single-required)
-                             :schema :any :aliases [:keyword] :what :string? :schema-source :any & r}
-                     :contributions [{:plugin :keyword :value :any}]
+                     :point ExtensionPoint
+                     :contributions [Contribution]
                      :resolved :any}}}
   ``Phase 4 (extension resolution): collect points of active plugins +
   core points, validate every contribution against the point schema,

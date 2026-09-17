@@ -48,7 +48,7 @@
   (tuple ;(string/split "/" (string name))))
 
 (defn command-line
-  {:params [{:name :keyword & r}] :ret :string}
+  {:params [Command] :ret :string}
   "How a command is typed, without its arguments: `void jobs list`."
   [command]
   (string "void " (string/join (command-words (command :name)) " ")))
@@ -107,7 +107,7 @@
     (string f " " (placeholder spec))))
 
 (defn flag-usage
-  {:params [{:flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil) & r}]
+  {:params [Command]
    :ret @[:string]}
   "Each declared flag as it is typed, sorted: `[--limit LIMIT]`."
   [command]
@@ -116,10 +116,7 @@
     (string "[" (flag-word f (flags f)) "]")))
 
 (defn usage
-  {:params [{:name :keyword
-             :args (or @[:string] :nil)
-             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
-             & r}]
+  {:params [Command]
    :ret :string}
   ``The one line that says how a command is typed, built from what it
   declares: `void jobs list [--limit LIMIT] [--queue QUEUE]`. A command
@@ -132,11 +129,7 @@
                " "))
 
 (defn help
-  {:params [{:name :keyword
-             :doc :string?
-             :args (or @[:string] :nil)
-             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
-             & r}]
+  {:params [Command]
    :ret [:string]}
   ``The lines `--help` prints for one command: the usage, the
   docstring, and a table of the flags with theirs. Data in, text out —
@@ -157,7 +150,7 @@
   (tuple ;out))
 
 (defn help-wanted?
-  {:params [{:flags (or {:string :any} :nil) & r} (or @[:string] [:string])]
+  {:params [Command (or @[:string] [:string])]
    :ret :boolean
    :narrows :any}
   "Is this invocation asking for the command's help rather than for the
@@ -168,7 +161,7 @@
        (truthy? (some |(or (= "--help" $) (= "-h" $)) args))))
 
 (defn summary
-  {:params [{:name :keyword :args (or @[:string] :nil) :doc :string? & r} (or :number :nil)]
+  {:params [Command (or :number :nil)]
    :ret :string}
   ``One command as a help listing prints it: how it is typed — the
   words and their positionals, the flags left to `--help` — padded to
@@ -185,7 +178,7 @@
 # -- parsing -------------------------------------------------------------
 
 (defn- flag-reader
-  {:params [{:name :keyword & r} :string {:type :keyword? & r}]
+  {:params [Command :string {:type :keyword? & r}]
    :ret (or (fn [:string] :any) :keyword)
    :throws [:string]}
   "The reader for one flag's declared :type — a function from its argv
@@ -198,11 +191,7 @@
               (command-line command) flag t (util/names-str (keys value-types)))))
 
 (defn parse
-  {:params [{:name :keyword
-             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
-             :args (or @[:string] :nil)
-             & r}
-            (or @[:string] [:string])]
+  {:params [Command (or @[:string] [:string])]
    :ret [@{:keyword :any} [:string]]
    :throws [:string]}
   ``Split `args` into [opts positional] against a command's
@@ -252,13 +241,7 @@
   [opts (tuple ;pos)])
 
 (defn call
-  {:params [{:name :keyword
-             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
-             :args (or @[:string] :nil)
-             & r}
-            (fn [& :any] :any)
-            (or @[:any] [:any])
-            (or @[:string] [:string])]
+  {:params [Command (fn [& :any] :any) (or @[:any] [:any]) (or @[:string] [:string])]
    :ret :any
    :throws [:string]}
   ``Run a command's `:fn` over `args`, with the instances its `:needs`

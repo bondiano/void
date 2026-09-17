@@ -17,8 +17,8 @@
    :signals true :shutdown-timeout true})
 
 (defn stop!
-  {:params [{:stop-chan (or :abstract :nil) & r} :any]
-   :ret {:stop-chan (or :abstract :nil) & r}
+  {:params [Boot :any]
+   :ret Boot
    :throws [:string]}
   "Request a graceful stop of a system parked in run!, from any fiber
   (a netrepl session, a component, a hook). Returns the boot value."
@@ -36,7 +36,7 @@
              :signals (or @[:keyword] [:keyword] :nil)
              :shutdown-timeout :number?
              & r}]
-   :ret @{:keyword :any}
+   :ret Boot
    :throws [:string]}
   ``Run an application until it is told to stop:
 

@@ -22,7 +22,7 @@
 (require "void/http/init")
 
 (defn worker-id
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "Reports which prefork worker (or the master, unforked) answered —
   the e2e assertion that a fixed port really is shared across
   workers reads this back."

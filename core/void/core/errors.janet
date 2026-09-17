@@ -89,7 +89,7 @@
 
 (defn make
   {:params [:keyword (or :string :nil) (or {:any :any} :nil) (or :number :nil)]
-   :ret {:void/error :keyword :message :string? :data {:any :any} & r}
+   :ret VoidError
    :throws [:string]}
   ``The envelope for a kind. `message` is a string (or nil — the
   kind's name stands in), `data` a dictionary or nil, `status` an
@@ -115,7 +115,7 @@
 (defn raise
   {:params [:keyword (or :string :nil) (or {:any :any} :nil) (or :number :nil)]
    :ret :never
-   :throws [(or :string {:void/error :keyword :message :string? :data {:any :any} & r})]}
+   :throws [(or :string VoidError)]}
   "Raise an envelope: `(errors/raise :void.db/timeout \"statement cancelled\")`.
   The arguments are `make`'s."
   [kind &opt message data status]
@@ -128,7 +128,7 @@
   (= deadline-message x))
 
 (defn of
-  {:params [:any] :ret {:void/error :keyword :message :string? :data {:any :any} & r}}
+  {:params [:any] :ret VoidError}
   ``The envelope of whatever a `try` caught:
 
     * an envelope — itself;

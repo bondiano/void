@@ -8,7 +8,7 @@
 (var sse-released false)
 
 (defn- app
-  {:params [@{:path :string :body :any :query @{:string :any} & r}] :ret @{:status :number & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "The counterpart server the whole suite drives over real sockets:
   keep-alive, pipelining, chunked and SSE bodies, timeouts and
   malformed input, all dispatched by path."

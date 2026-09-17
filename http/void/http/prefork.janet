@@ -70,8 +70,7 @@
              :backoff :number?
              :on-exit (or (fn [:number :number] :any) :nil)
              & r}]
-   :ret @{:procs @{:number :abstract} :workers :number :stopping :boolean
-          :cmd (or [:string] @[:string])}
+   :ret HttpPreforkMaster
    :throws [:string]}
   ``Start the prefork master: spawn and supervise :workers processes.
 
@@ -120,14 +119,14 @@
   inst)
 
 (defn alive
-  {:params [@{:procs @{:number :abstract} & r}] :ret @[:number]}
+  {:params [HttpPreforkMaster] :ret @[:number]}
   "Indexes of currently running workers."
   [inst]
   (sorted (keys (inst :procs))))
 
 (defn stop
-  {:params [@{:procs @{:number :abstract} :stopping :boolean & r} :number?]
-   :ret @{:procs @{:number :abstract} :stopping :boolean & r}}
+  {:params [HttpPreforkMaster :number?]
+   :ret HttpPreforkMaster}
   ``Stop the master: SIGTERM every worker (its own void/run! handles
   the graceful drain), wait up to `timeout` seconds (default 15), then
   SIGKILL the stragglers. Returns the instance.``

@@ -13,7 +13,7 @@
   (string err))
 
 (defn errors-of
-  {:params [:any :any (or {:any :any} :nil)] :ret @[{:code :keyword & r}]}
+  {:params [:any :any (or {:any :any} :nil)] :ret [SchemaError]}
   "The `:errors` of checking `value` against `sch` — the list a
   passing check answers empty."
   [sch value &opt opts]
@@ -307,7 +307,7 @@
 (assert (schema/valid? deep {:db {:pool {:size 1}} :tags [{:name "a"}] :opt {:x 1}
                              :any {:k 1 :extra 2}}))
 (defn- unknown-of
-  {:params [(or @[{:code :keyword & r}] [{:code :keyword & r}])] :ret (or {:code :keyword & r} :nil)}
+  {:params [(or @[SchemaError] [SchemaError])] :ret SchemaError?}
   "The first :unknown error in a check's error list."
   [errs]
   (first (filter |(= :unknown ($ :code)) errs)))

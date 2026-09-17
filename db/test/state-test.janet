@@ -14,7 +14,7 @@
   {:params [(or {:dialect :keyword?
                  :returning :boolean?
                  :insert-id :any
-                 :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+                 :responder (or (fn [:string [:any]] DbResult?) :nil)
                  :stream :boolean?
                  :gate :any
                  :connect-hook (or (fn [:any] :any) :nil)
@@ -23,7 +23,7 @@
          @{:log @[{:sql :string :params [:any] :conn :number}]
            :conns :number :closed :number
            :open @[@{:id :number :in-exchange :boolean & r}]
-           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           :responder (or (fn [:string [:any]] DbResult?) :nil)
            & r}]}
   "A pool over a fresh fake driver, and the state it records into."
   [&opt opts]

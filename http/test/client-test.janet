@@ -60,8 +60,7 @@
 # -- a server to talk to -------------------------------------------------
 
 (defn- app
-  {:params [@{:path :string :method :keyword :headers @{:string :any} :body :any :query @{:string :any} & r}]
-   :ret @{:status :number & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "The counterpart server every client assertion in this suite talks
   to: one handler, dispatched by path, that exercises every response
   shape and header the client has to understand — chunked bodies,

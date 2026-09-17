@@ -100,9 +100,7 @@
   (propagate e f))
 
 (defn run!
-  {:params [:string
-            {:dialect :keyword :connect (fn [] :any) :close (fn [:any] :any)
-             :execute (fn [:any :string [:any] {:any :any}] :any) & r}
+  {:params [:string DbDriver
             (or {:sleep-sql :string? & r} :nil)]
    :ret :boolean
    :throws [:any]}

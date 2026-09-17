@@ -6,11 +6,11 @@
 
 (defn- new-pool
   {:params [(or {:size :number? :checkout-timeout :number? & r} :nil)]
-   :ret [@{:driver {:connect (fn [] :any) :close (fn [:any] :any) & r} & r}
+   :ret [DbPool
          @{:log @[{:sql :string :params [:any] :conn :number}]
            :conns :number :closed :number
            :open @[@{:id :number :in-exchange :boolean & r}]
-           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           :responder (or (fn [:string [:any]] DbResult?) :nil)
            & r}]}
   "A pool over a fresh fake driver, and the state it records into."
   [&opt opts]

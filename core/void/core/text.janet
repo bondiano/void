@@ -93,7 +93,7 @@
   (string out))
 
 (defn render
-  {:params [(or :string {:other :string :one :string? & r}) (or {:keyword :any} :nil)]
+  {:params [TextEntry (or {:keyword :any} :nil)]
    :ret :string}
   ``One entry of a package's own table to a string. A plural entry is
   `{:one "1 row" :other "{count} rows"}` and selects on `(params
@@ -120,7 +120,7 @@
     (f key params)))
 
 (defn t
-  {:params [{:keyword (or :string {:other :string :one :string? & r})}
+  {:params [{:keyword TextEntry}
             :keyword (or {:keyword :any} :nil)]
    :ret :string}
   ``One of a package's own strings: the bound catalog first, then
@@ -136,7 +136,7 @@
       (string key)))
 
 (defn translator
-  {:params [{:keyword (or :string {:other :string :one :string? & r})}]
+  {:params [{:keyword TextEntry}]
    :ret (fn [:keyword (or {:keyword :any} :nil)] :string)}
   ``The `t` of one package, with its table closed over:
 

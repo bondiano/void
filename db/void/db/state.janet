@@ -49,15 +49,14 @@
   :void.db/tx)
 
 (defn active-pool
-  {:params [] :ret :any :throws [:string]}
+  {:params [] :ret DbPool :throws [:string]}
   "The pool this fiber runs against: the `pool-dyn` override, else the
   started component's pool."
   []
   (system/active db-pool))
 
 (defn driver
-  {:params [] :ret {:connect (fn [] :any) :close (fn [:any] :any) & r}
-   :throws [:string]}
+  {:params [] :ret DbNormalizedDriver :throws [:string]}
   "The driver behind the active pool."
   []
   (pool/driver-of (active-pool)))
@@ -74,7 +73,7 @@
 # -- connection scope ----------------------------------------------------
 
 (defn with-conn*
-  {:params [(fn [@{:conn :any :stmts @{:string :any} :id :number & r}] :any)]
+  {:params [(fn [DbPoolEntry] :any)]
    :ret :any
    :throws [:any]}
   ``Run (f entry) with a connection checked out into `conn-dyn`.
@@ -171,9 +170,7 @@
   nil)
 
 (defn- prepared-for
-  {:params [{:prepare (fn [:any :string] :any) & r}
-            @{:conn :any :stmts @{:string :any} :id :number & r}
-            :string]
+  {:params [DbNormalizedDriver DbPoolEntry :string]
    :ret :any
    :throws [:any]}
   "The prepared handle for `sql` on this connection, preparing it once
@@ -186,9 +183,9 @@
 
 (defn- statement*
   {:params [:string [:any] (fn [:any] :number)
-            (fn [@{:conn :any :stmts @{:string :any} :id :number & r} {:any :any}] :any)]
+            (fn [DbPoolEntry DbNormalizedDriver] :any)]
    :ret :any
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``One statement on this fiber's connection, through the funnel every
   statement passes: the owner check, the pool's timing, the error
   envelope and the :debug line. `run` gets [entry drv] and answers
@@ -232,8 +229,8 @@
 
 (defn execute-sql
   {:params [:string [:any] (or {:prepared :boolean? & r} :nil)]
-   :ret {:rows @[{:keyword :any}] :count :number}
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :ret DbResult
+   :throws [:string VoidError]}
   ``Run raw SQL with positional parameters on the current connection
   (checking one out when none is bound). Returns the driver result
   {:rows [...] :count n}.
@@ -257,9 +254,9 @@
         ((drv :execute) (entry :conn) sql params opts)))))
 
 (defn each-row-sql
-  {:params [:string [:any] (fn [{:keyword :any}] :any)]
+  {:params [:string [:any] (fn [DbRow] :any)]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Run a select and call (f row) for each row as it arrives; returns
   how many there were. The raw-SQL half of `each-row`.``
   [sql params f]
@@ -268,9 +265,9 @@
               (fn stream [entry drv] ((drv :stream) (entry :conn) sql params f))))
 
 (defn run
-  {:params [{:keyword :any} (or {:any :any} :nil)]
-   :ret {:rows @[{:keyword :any}] :count :number}
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  {:params [DbStatement (or {:any :any} :nil)]
+   :ret DbResult
+   :throws [:string VoidError]}
   ``Compile a statement map (see void/db/builder) for the driver's
   dialect and execute it. Returns the driver result.``
   [stmt &opt opts]
@@ -282,9 +279,9 @@
     (errorf "db: expected a statement map, got %q" stmt)))
 
 (defn query
-  {:params [(or [:string [:any]] {:keyword :any}) (or {:any :any} :nil)]
-   :ret @[{:keyword :any}]
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  {:params [(or DbSql DbStatement) (or {:any :any} :nil)]
+   :ret (or @[DbRow] [DbRow])
+   :throws [:string VoidError]}
   "Run a statement (or [sql params]) and return its rows."
   [stmt &opt opts]
   (def res
@@ -294,9 +291,9 @@
   (get res :rows []))
 
 (defn one
-  {:params [(or [:string [:any]] {:keyword :any}) (or {:any :any} :nil)]
-   :ret (or {:keyword :any} :nil)
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+  {:params [(or DbSql DbStatement) (or {:any :any} :nil)]
+   :ret DbRow?
+   :throws [:string VoidError]}
   "Run a statement and return its first row, or nil. A :select gets
   :limit 1 unless it already caps itself."
   [stmt &opt opts]
@@ -307,9 +304,9 @@
   (first (query capped opts)))
 
 (defn value
-  {:params [(or [:string [:any]] {:keyword :any}) (or {:any :any} :nil)]
+  {:params [(or DbSql DbStatement) (or {:any :any} :nil)]
    :ret :any
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Run a single-column statement and return that column of the first
   row — for scalar selects like
   {:select [[:raw "count(*) AS n"]] :from "users"}.``
@@ -323,10 +320,10 @@
       (first row))))
 
 (defn each-row
-  {:params [(or [:string [:any]] {:keyword :any}) (fn [{:keyword :any}] :any)
+  {:params [(or DbSql DbStatement) (fn [DbRow] :any)
             (or {:any :any} :nil)]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Run a select and call (f row) for each row **as it arrives**,
   returning how many there were:
 
@@ -356,9 +353,9 @@
   (each-row-sql sql params f))
 
 (defn execute!
-  {:params [{:keyword :any} (or {:any :any} :nil)]
+  {:params [DbStatement (or {:any :any} :nil)]
    :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   "Run a write statement and return the affected-row count."
   [stmt &opt opts]
   (get (run stmt opts) :count 0))
@@ -366,7 +363,7 @@
 (defn ddl!
   {:params [(or @[:string] [:string])]
    :ret :nil
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Run schema statements (SQL strings) as an idempotent pass — what a
   plugin that creates its own tables at boot runs, and what it runs
   again at every boot after.
@@ -433,9 +430,9 @@
   (unless (= rollback-signal e) [:rolled-back (in e 1)]))
 
 (defn- tx-error
-  {:params [@{:conn :any :stmts @{:string :any} :id :number & r} :string :any]
+  {:params [DbPoolEntry :string :any]
    :ret :never
-   :throws [{:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [VoidError]}
   "Raise :void.db/transaction for a failed BEGIN/COMMIT/ROLLBACK, after
   discarding the connection — a transaction control statement that
   itself failed leaves the connection in a state no protocol says how
@@ -450,7 +447,7 @@
                 {:what what :cause cause}))
 
 (defn- run-tx
-  {:params [@{:conn :any :stmts @{:string :any} :id :number & r}
+  {:params [DbPoolEntry
             :number
             (or {:isolation :string? & r} :nil)
             (fn [] :any)]

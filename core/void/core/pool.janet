@@ -73,11 +73,7 @@
              :size :number? :checkout-timeout :number?
              :name :string? :timeout-kind :keyword?
              :counters (or {:keyword :number} :nil)}]
-   :ret @{:connect :function :close :function :reusable? (fn [:any] :boolean)
-          :validate (or (fn [:any] :any) :nil) :name :string :timeout-kind :keyword
-          :size :number :checkout-timeout :number
-          :idle @[:any] :waiters @[@{:chan :abstract :live :boolean :value :any :retry :boolean}]
-          :created :number :in-use :number :closed :boolean :stats @{:keyword :number}}
+   :ret Pool
    :throws [:string]}
   ``Build a pool. `opts`:
 
@@ -131,7 +127,7 @@
                   (get opts :counters {}))})
 
 (defn note!
-  {:params [@{:stats @{:keyword :number} & r} (or :keyword :number)] :ret :nil}
+  {:params [Pool (or :keyword :number)] :ret :nil}
   ``Add to the owner's counters: `(pool/note! p :queries 1 :query-us
   us)`. A counter not declared in `:counters` starts at zero.``
   [pool & kvs]
@@ -141,19 +137,19 @@
   nil)
 
 (defn closed?
-  {:params [{:closed :any & r}] :ret :boolean :narrows :any}
+  {:params [Pool] :ret :boolean :narrows :any}
   "Has `close!` been called on this pool?"
   [pool]
   (truthy? (pool :closed)))
 
 (defn- live-waiters
-  {:params [{:waiters @[{:live :boolean & r}] & r}] :ret :number}
+  {:params [Pool] :ret :number}
   "How many fibers are parked on the pool right now."
   [pool]
   (count |($ :live) (pool :waiters)))
 
 (defn- close-resource
-  {:params [@{:close (or :function :cfunction) :created :number & r} :any] :ret :nil}
+  {:params [Pool :any] :ret :nil}
   "Close a resource and free its slot. The `:close` hook runs under
   `protect`: a resource that fails to close is still gone."
   [pool res]
@@ -162,7 +158,7 @@
   nil)
 
 (defn- connect-resource
-  {:params [@{:created :number :connect (or :function :cfunction) & r}]
+  {:params [Pool]
    :ret :any :throws [:any]}
   "Open a resource in a free slot. The slot is reserved first — a
   failing `:connect` must release it, or the pool shrinks by one for
@@ -176,8 +172,7 @@
   res)
 
 (defn- take-idle
-  {:params [@{:idle @[:any] :validate (or (fn [:any] :any) :nil)
-              :close (or :function :cfunction) :created :number & r}]
+  {:params [Pool]
    :ret :any :throws [:any]}
   "Pop the newest idle resource and put it through `:validate`. Returns
   the resource, or nil when it had died on the stack (it is closed and
@@ -200,7 +195,7 @@
   :void.core.pool/wake)
 
 (defn- ring!
-  {:params [{:chan :abstract & r}] :ret :nil}
+  {:params [PoolWaiter] :ret :nil}
   "Ring a waiter's doorbell. Each waiter is rung at most once (it is
   popped from the list before) and the channel holds one value, so
   the give never blocks."
@@ -209,7 +204,7 @@
   nil)
 
 (defn- wait-for-wake-up
-  {:params [{:chan :abstract & r} :number] :ret :nil}
+  {:params [PoolWaiter :number] :ret :nil}
   ``Park on the waiter's channel under the checkout timeout without
   touching the caller's root task: the take runs in a supervised child
   task. Returns nil, whether the doorbell rang or the deadline fired:
@@ -225,8 +220,8 @@
                  (fn [] nil)))
 
 (defn- next-waiter
-  {:params [{:waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}] & r}]
-   :ret (or @{:live :boolean :chan :abstract :value :any :retry :boolean} :nil)}
+  {:params [Pool]
+   :ret PoolWaiter?}
   "Pop the oldest waiter still parked (dropping any left non-live)."
   [pool]
   (def ws (pool :waiters))
@@ -238,7 +233,7 @@
   found)
 
 (defn- retry!
-  {:params [@{:retry :boolean :chan :abstract & r}] :ret :nil}
+  {:params [PoolWaiter] :ret :nil}
   "Tell a waiter to re-enter `acquire` and decide again: the mark goes
   into the record, the channel only rings."
   [waiter]
@@ -246,7 +241,7 @@
   (ring! waiter))
 
 (defn- wake-one
-  {:params [{:waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}] & r}]
+  {:params [Pool]
    :ret :nil}
   "Tell the oldest waiter that a slot was freed, so it opens a fresh
   resource instead of parking until the timeout."
@@ -256,7 +251,7 @@
   nil)
 
 (defn- wake-all
-  {:params [{:waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}] & r}]
+  {:params [Pool]
    :ret :nil}
   "Tell every parked waiter that the pool state changed (it closed)."
   [pool]
@@ -267,7 +262,7 @@
   nil)
 
 (defn- reusable?
-  {:params [{:reusable? (fn [:any] :boolean) & r} :any] :ret :boolean :narrows :any}
+  {:params [Pool :any] :ret :boolean :narrows :any}
   "Does the owner's `:reusable?` accept the resource back? A hook that
   throws has answered."
   [pool res]
@@ -275,10 +270,7 @@
   (and ok v true))
 
 (defn release
-  {:params [@{:in-use :number :closed :any :reusable? (fn [:any] :boolean)
-              :idle @[:any] :waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}]
-              :close (or :function :cfunction) :created :number & r}
-            :any]
+  {:params [Pool :any]
    :ret :nil}
   ``Return a resource: to the oldest waiter if any, else the idle
   stack — or closed, when `:reusable?` says no or the pool is shutting
@@ -303,10 +295,8 @@
   nil)
 
 (defn- timeout!
-  {:params [{:stats @{:timeouts :number & r} :timeout-kind :keyword :name :string
-             :checkout-timeout :number :size :number :in-use :number
-             :waiters @[{:live :boolean & r}] & r}]
-   :ret :never :throws [:struct]}
+  {:params [Pool]
+   :ret :never :throws [VoidError]}
   "Count the timeout and raise the pool's `:timeout-kind`."
   [pool]
   (def s (pool :stats))
@@ -319,13 +309,8 @@
                  :in-use (pool :in-use) :waiting (live-waiters pool)}))
 
 (defn- await
-  {:params [@{:stats @{:waits :number :wait-us :number :timeouts :number & r}
-              :waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}]
-              :checkout-timeout :number :in-use :number :closed :any
-              :reusable? (fn [:any] :boolean) :idle @[:any]
-              :timeout-kind :keyword :name :string :size :number
-              :close (or :function :cfunction) :created :number & r}]
-   :ret :any :throws [:struct]}
+  {:params [Pool]
+   :ret :any :throws [VoidError]}
   "Park until a release hands this waiter a resource. Returns it, or
   nil when the waiter should re-enter `acquire`; a real timeout
   raises."
@@ -379,13 +364,7 @@
       (timeout! pool))))
 
 (defn acquire
-  {:params [@{:stats @{:checkouts :number :waits :number :wait-us :number :timeouts :number & r}
-              :waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}]
-              :checkout-timeout :number :in-use :number :closed :any
-              :reusable? (fn [:any] :boolean) :idle @[:any]
-              :timeout-kind :keyword :name :string :size :number :created :number
-              :connect (or :function :cfunction) :close (or :function :cfunction)
-              :validate (or (fn [:any] :any) :nil) & r}]
+  {:params [Pool]
    :ret :any :throws [:any]}
   ``Take a resource: an idle one (validated), a fresh one while under
   `:size`, else park until a release hands one over (or
@@ -398,7 +377,7 @@
   (def s (pool :stats))
   (put s :checkouts (inc (s :checkouts)))
   (defn closed!
-    {:params [] :ret :never :throws [:struct]}
+    {:params [] :ret :never :throws [VoidError]}
     "Raise `:void.core/pool-closed` naming this pool — the shared
     refusal every path out of `acquire` that finds the pool closed
     raises the same way."
@@ -422,14 +401,7 @@
   res)
 
 (defn with
-  {:params [@{:stats @{:checkouts :number :waits :number :wait-us :number :timeouts :number & r}
-              :waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}]
-              :checkout-timeout :number :in-use :number :closed :any
-              :reusable? (fn [:any] :boolean) :idle @[:any]
-              :timeout-kind :keyword :name :string :size :number :created :number
-              :connect (or :function :cfunction) :close (or :function :cfunction)
-              :validate (or (fn [:any] :any) :nil) & r}
-            (fn [:any] :any)]
+  {:params [Pool (fn [:any] :any)]
    :ret :any :throws [:any]}
   "Run `(f resource)` with a resource acquired for the call and released
   on every exit — a normal return, an error, a cancelled fiber."
@@ -439,8 +411,7 @@
     (f res)))
 
 (defn close!
-  {:params [@{:closed :any :idle @[:any] :close (or :function :cfunction) :created :number
-              :waiters @[@{:live :boolean :chan :abstract :value :any :retry :boolean}] & r}]
+  {:params [Pool]
    :ret :nil}
   "Close the pool: no more checkouts, idle resources closed now, in-use
   ones closed as they come back, parked waiters woken to fail."
@@ -452,8 +423,7 @@
   nil)
 
 (defn stats
-  {:params [@{:stats @{:keyword :number} :size :number :created :number :in-use :number
-              :idle @[:any] :waiters @[{:live :boolean & r}] & r}]
+  {:params [Pool]
    :ret {:size :number :created :number :in-use :number :idle :number :waiting :number & r}}
   "Point-in-time counters: {:size :created :in-use :idle :waiting
   :checkouts :waits :wait-us :timeouts} plus the owner's `:counters`."
@@ -467,8 +437,7 @@
             :waiting (live-waiters pool)})))
 
 (defn health
-  {:params [@{:closed :any :stats @{:keyword :number} :size :number :created :number
-              :in-use :number :idle @[:any] :waiters @[{:live :boolean & r}] & r}]
+  {:params [Pool]
    :ret @{:status (enum :up :down) & r}}
   "A component health value: `:status :up` (or `:down` once closed)
   with the stats."

@@ -137,7 +137,7 @@
   (put node (last path) value))
 
 (defn- record!
-  {:params [@{:any @[{:layer :keyword & r}]} (or @[:any] [:any]) {:layer :keyword & r}]
+  {:params [@{:any @[ConfigSource]} (or @[:any] [:any]) ConfigSource]
    :ret :nil}
   "Append `source` to the provenance history of `path` — the layers
   that set it, oldest first; `explain` reads the last one as the
@@ -148,7 +148,7 @@
     (put provenance path @[source])))
 
 (defn- apply-layer!
-  {:params [@{:any :any} @{:any @[{:layer :keyword & r}]} :any {:layer :keyword & r}]
+  {:params [@{:any :any} @{:any @[ConfigSource]} :any ConfigSource]
    :ret :nil}
   "Merge one layer's leaves into the values, recording each leaf's
   source. A leaf at the root (an empty path) cannot be set and is
@@ -188,7 +188,7 @@
                (string/split "__" (string/slice name (length prefix))))))
 
 (defn- apply-env!
-  {:params [@{:any :any} @{:any @[{:layer :keyword & r}]} {:string :string} :string]
+  {:params [@{:any :any} @{:any @[ConfigSource]} {:string :string} :string]
    :ret :nil}
   "Apply the `prefix`-ed variables of `env`, in sorted order for a
   stable provenance, as the env layer: each becomes the leaf its name
@@ -220,7 +220,7 @@
 
 (defn- apply-cli!
   {:params [@{:any :any}
-            @{:any @[{:layer :keyword & r}]}
+            @{:any @[ConfigSource]}
             (or :nil {:any :any} @[:any] [:any])
             @[:string]]
    :ret :nil}
@@ -294,12 +294,12 @@
 
 (defn- apply-defaults!
   {:params [@{:any :any}
-            @{:any @[{:layer :keyword & r}]}
+            @{:any @[ConfigSource]}
             (or :nil
                 {:any :any}
                 @[{:plugin :any :key :keyword :defaults {:any :any} & r}]
                 [{:plugin :any :key :keyword :defaults {:any :any} & r}])
-            @[{:layer :keyword & r}]
+            @[ConfigSource]
             @[:string]]
    :ret :nil}
   "Apply the lowest layer: one dictionary as the defaults layer, or a
@@ -339,10 +339,7 @@
                  :secret-sources (or @[(fn [:any] :any)] [(fn [:any] :any)] :nil)
                  & r}
                 :nil)]
-   :ret @{:profile :keyword
-          :values @{:any :any}
-          :provenance @{:any @[{:layer :keyword & r}]}
-          :layers @[{:layer :keyword & r}]}
+   :ret LoadedConfig
    :throws [:string]}
   ``Build the application config from layered sources.
 
@@ -426,7 +423,7 @@
   (get-in (cfg :values) path))
 
 (defn describe-source
-  {:params [{:layer :keyword & r}] :ret :string}
+  {:params [ConfigSource] :ret :string}
   "Human-readable origin of a provenance entry: \"env var VOID_DB__HOST\"."
   [source]
   (case (get source :layer)
@@ -441,8 +438,8 @@
     (string/format "%q" source)))
 
 (defn- child-entries
-  {:params [@{:any @[{:layer :keyword & r}]} (or @[:any] [:any])]
-   :ret @{:any {:layer :keyword & r}}}
+  {:params [@{:any @[ConfigSource]} (or @[:any] [:any])]
+   :ret @{:any ConfigSource}}
   "For a subtree at `path`: every provenance entry strictly below it,
   leaf path -> its winning (last) source — the :children of `explain`
   for a non-leaf path."
@@ -456,9 +453,9 @@
   out)
 
 (defn explain
-  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r} :keyword]
-   :ret (or {:path [:any] :value :any :source {:layer :keyword & r} :history [{:layer :keyword & r}]}
-            {:path [:any] :value :any :children @{:any {:layer :keyword & r}}})}
+  {:params [LoadedConfig :keyword]
+   :ret (or {:path [:any] :value :any :source ConfigSource :history [ConfigSource]}
+            {:path [:any] :value :any :children @{:any ConfigSource}})}
   ``Where did a config value come from?
 
       (config/explain cfg :database :host)
@@ -483,7 +480,7 @@
      :children (child-entries (cfg :provenance) p)}))
 
 (defn explain-str
-  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r} :keyword]
+  {:params [LoadedConfig :keyword]
    :ret :string}
   "One-line human answer: \"[:database :host] = \\\"10.0.0.5\\\" — from
   env var VOID_DATABASE__HOST (overrides file config/dev.janet)\"."
@@ -516,8 +513,8 @@
 # -- batch validation ----------------------------------------------------
 
 (defn- source-of
-  {:params [{:provenance @{:any @[{:layer :keyword & r}]} & r} (or @[:any] [:any])]
-   :ret (or {:layer :keyword & r} :nil)}
+  {:params [{:provenance @{:any @[ConfigSource]} & r} (or @[:any] [:any])]
+   :ret ConfigSource?}
   "The layer that set `path`, for an error message: the winning source
   of the leaf itself or, when the path is a subtree (an unknown key
   whose value is a map, a map where a scalar was expected), that of its
@@ -541,7 +538,7 @@
   (if (empty? parts) "" (string " (" (string/join parts ", ") ")")))
 
 (defn- data-schema-errors
-  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+  {:params [{:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
             :keyword :any :string]
    :ret [:string]}
   "A data schema's failures on slice `k`, one string each: the path
@@ -577,7 +574,7 @@
     []))
 
 (defn validate
-  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+  {:params [{:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
             (or @[{:key :keyword :schema :any :plugin :any :component :any & r}]
                 [{:key :keyword :schema :any :plugin :any :component :any & r}])]
    :ret @[:string]}
@@ -606,10 +603,10 @@
   errors)
 
 (defn validate!
-  {:params [{:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+  {:params [{:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
             (or @[{:key :keyword :schema :any :plugin :any :component :any & r}]
                 [{:key :keyword :schema :any :plugin :any :component :any & r}])]
-   :ret {:values @{:any :any} :provenance @{:any @[{:layer :keyword & r}]} & r}
+   :ret {:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
    :throws [:string]}
   "Like `validate`, but throws a single error listing every failure.
   Returns the config on success."

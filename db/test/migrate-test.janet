@@ -31,7 +31,7 @@
 (def versions @[])
 
 (defn- responder
-  {:params [:string [:any]] :ret {:rows @[{:keyword :any}] :count :number}}
+  {:params [:string [:any]] :ret DbResult}
   "The fake driver's :execute answer: a simulated version table kept
   in `versions`, so migrate/* sees the state a real database would
   give back."
@@ -178,12 +178,12 @@
           :reusable? (fn [@{:id :number :in-exchange :boolean & r}] :boolean)
           :ping (fn [@{:dead :boolean? & r}] :boolean)
           :execute (fn [@{:id :number :in-exchange :boolean & r} :string [:any] :any]
-                     {:rows @[{:keyword :any}] :count :number})
+                     DbResult)
           & r}
          @{:log @[{:sql :string :params [:any] :conn :number}]
            :conns :number :closed :number
            :open @[@{:id :number :in-exchange :boolean & r}]
-           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           :responder (or (fn [:string [:any]] DbResult?) :nil)
            & r}
          @[:string]]}
   ``A driver whose GET_LOCK answers `got` — nil (unsupported), 0

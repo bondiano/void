@@ -12,7 +12,7 @@
   err)
 
 (defn contrib
-  {:params [:keyword :any] :ret {:plugin :keyword :value :any}}
+  {:params [:keyword :any] :ret Contribution}
   "Wrap a value as one plugin's contribution, the shape
   `resolve-point` expects before it strips the wrapper."
   [plugin value] {:plugin plugin :value value})

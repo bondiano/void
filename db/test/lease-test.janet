@@ -50,7 +50,7 @@
 (def plan @{:update 0 :select [] :insert :ok})
 
 (defn- respond
-  {:params [:string :any] :ret {:rows @[{:keyword :any}] :count :number}
+  {:params [:string :any] :ret DbResult
    :throws [:string {:any :any}]}
   "The fake driver's :execute answer, driven by `plan`: how many rows
   an UPDATE or SELECT sees, and whether the INSERT succeeds or raises

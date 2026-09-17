@@ -30,13 +30,13 @@
   nil)
 
 (defn slow
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "A handler that outlasts the route's :void.http/timeout, to prove
   :on-timeout fires and the client sees a 503 rather than this body."
   [req] (ev/sleep 10) (ring/text 200 "never"))
 
 (defn show
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "A plain 200 handler, reused across the ordering and hook
   assertions where the response body itself does not matter."
   [req] (ring/text 200 "shown"))

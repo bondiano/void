@@ -12,7 +12,7 @@
   {:params [(or {:dialect :keyword?
                  :returning :boolean?
                  :insert-id :any
-                 :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+                 :responder (or (fn [:string [:any]] DbResult?) :nil)
                  :stream :boolean?
                  :gate :any
                  :connect-hook (or (fn [:any] :any) :nil)
@@ -23,12 +23,12 @@
           :reusable? (fn [@{:id :number :in-exchange :boolean & r}] :boolean)
           :ping (fn [@{:dead :boolean? & r}] :boolean)
           :execute (fn [@{:id :number :in-exchange :boolean & r} :string [:any] :any]
-                     {:rows @[{:keyword :any}] :count :number})
+                     DbResult)
           & r}
          @{:log @[{:sql :string :params [:any] :conn :number}]
            :conns :number :closed :number
            :open @[@{:id :number :in-exchange :boolean & r}]
-           :responder (or (fn [:string [:any]] (or {:rows @[{:keyword :any}] :count :number} :nil)) :nil)
+           :responder (or (fn [:string [:any]] DbResult?) :nil)
            & r}]}
   ``[driver state]. opts:
     :dialect    builder dialect (default :ansi)
@@ -120,7 +120,7 @@
 
 (defn rows-responder
   {:params [{:string @[{:keyword :any}]}]
-   :ret (fn [:string :any] (or {:rows @[{:keyword :any}] :count :number} :nil))}
+   :ret (fn [:string :any] DbResult?)}
   ``A responder from a table of {sql-substring [rows...]} — the first
   matching entry answers, everything else comes back empty.``
   [spec]

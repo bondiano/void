@@ -11,7 +11,7 @@
 (import void/http/ring :as ring)
 
 (defn home
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "A route handler that always answers 200 — this suite only needs
   something for a route to point at, never what it says."
   [_req] (ring/text 200 "ok"))

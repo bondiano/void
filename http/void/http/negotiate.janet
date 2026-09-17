@@ -112,7 +112,7 @@
   best-offer)
 
 (defn negotiate
-  {:params [{:headers {:any :any} & r} [:string]] :ret :string?}
+  {:params [HttpRequest [:string]] :ret :string?}
   "best over a request table — reads the accept header."
   [req offers]
   (def accept (get-in req [:headers "accept"]))

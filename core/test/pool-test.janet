@@ -15,7 +15,7 @@
                  :close (fn [:any] :any)
                  & r}
                 :nil)]
-   :ret [:any @{:opened :number :closed :number :fail-connect :boolean}]}
+   :ret [Pool @{:opened :number :closed :number :fail-connect :boolean}]}
   "[pool state]. `opts` go to pool/make on top of the fixture's hooks;
   `:dead?` and `:stale?` are predicates the fixture's :reusable? and
   :validate consult, so a test can flip a resource's fate."

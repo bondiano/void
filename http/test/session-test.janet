@@ -28,8 +28,8 @@
 # -- middleware ----------------------------------------------------------
 
 (defn- run
-  {:params [(fn [:any] :any) :string?]
-   :ret [:any @{:headers @{:string :any} & r}]}
+  {:params [HttpHandler :string?]
+   :ret [HttpResponse HttpRequest]}
   "Wraps `handler` with the session middleware over the shared store,
   fires one request carrying `cookie` (a session id, or none for an
   anonymous visit), and returns `[response request]` so callers can

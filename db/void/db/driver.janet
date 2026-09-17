@@ -124,7 +124,7 @@
    1146 :void.db/syntax})
 
 (defn classify
-  {:params [{:sqlstate :any :code :any :db/error :any & r}] :ret :keyword}
+  {:params [DbDriverError] :ret :keyword}
   ``The error kind for a driver's `{:sqlstate ... :code ...}` — by the
   SQLSTATE, with MySQL's errno breaking the ties its 23000 leaves.``
   [e]
@@ -163,7 +163,7 @@
   (and (= :mysql dialect) (= 1061 (get (errors/data e) :code))))
 
 (defn wrap-error
-  {:params [:any :string?] :ret {:void/error :keyword :message :string? :data {:any :any} & r}}
+  {:params [:any :string?] :ret VoidError}
   ``The error envelope for whatever a driver raised: its dictionary
   classified by SQLSTATE (the dictionary itself, :sqlstate, :code,
   :constraint and the driver's name in :data), a bare string as
@@ -192,27 +192,8 @@
    :ping :insert-id :reusable? :stream])
 
 (defn normalize
-  {:params [{:dialect :keyword :connect :function :close :function :execute :function & r}]
-   :ret {:name :string
-         :dialect :keyword
-         :connect (fn [] :any)
-         :close (fn [:any] :any)
-         :execute (fn [:any :string [:any] {:kind :keyword & r}] {:rows [:any] :count :number})
-         :returning :boolean
-         :prepare (or :function :nil)
-         :execute-prepared (or :function :nil)
-         :ping (or :function :nil)
-         :insert-id (or :function :nil)
-         :stream (fn [:any :string [:any] (fn [:any] :any)] :number)
-         :reusable? (fn [:any] :boolean)
-         :begin :function
-         :commit :function
-         :rollback :function
-         :savepoint :function
-         :release-savepoint :function
-         :rollback-to-savepoint :function
-         :streams? :boolean
-         & r}
+  {:params [DbDriver]
+   :ret DbNormalizedDriver
    :throws [:string]}
   ``Validate a driver dictionary and fill in the documented fallbacks.
   Returns a frozen driver value; throws with the offending key on any
@@ -279,13 +260,13 @@
       @{:streams? (truthy? (get drv :stream))})))
 
 (defn supports-prepared?
-  {:params [{:prepare :any :execute-prepared :any & r}] :ret :boolean}
+  {:params [DbNormalizedDriver] :ret :boolean}
   "True when the driver implements the prepared-statement pair."
   [drv]
   (and (drv :prepare) (drv :execute-prepared) true))
 
 (defn streams?
-  {:params [{:streams? :any & r}] :ret :boolean}
+  {:params [DbNormalizedDriver] :ret :boolean}
   ``True when this driver hands rows over as they arrive rather than
   after the last one — what tells `db/each-row` apart from a query in
   a loop's clothing. False means the fallback, which is correct and
@@ -294,7 +275,7 @@
   (truthy? (get drv :streams?)))
 
 (defn reusable?
-  {:params [{:reusable? (fn [:any] :boolean) & r} :any] :ret :boolean}
+  {:params [DbNormalizedDriver :any] :ret :boolean}
   ``Is `conn` safe to return to the pool — no operation left
   mid-protocol? The kernel asks before every checkin and discards a
   connection that says no (see void/db/pool, void/db/state).``
@@ -302,8 +283,8 @@
   ((drv :reusable?) conn))
 
 (defn result
-  {:params [(or @[:any] [:any] :nil) (or {:count :number? & r} :nil)]
-   :ret @{:rows (or @[:any] [:any]) :count :number}}
+  {:params [(or @[DbRow] [DbRow] :nil) (or {:count :number? & r} :nil)]
+   :ret DbResult}
   "Build a driver result — sugar for driver authors:
   (driver/result rows) / (driver/result rows {:count 3})."
   [rows &opt extra]

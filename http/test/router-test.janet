@@ -40,7 +40,7 @@
 
 (def trace @[])
 (defn- tracing
-  {:params [:keyword] :ret (fn [(fn [:any] :any)] (fn [:any] :any))}
+  {:params [:keyword] :ret (fn [HttpHandler] HttpHandler)}
   "A middleware factory that records `name` to `trace` before calling
   through — the whole observation mechanism the ordering assertions
   below read."
@@ -347,7 +347,7 @@
 # bare symbol with env resolves
 (def benv (curenv))
 (defn my-local-handler
-  {:params [:any] :ret {:status :number :body :string}}
+  {:params [:any] :ret HttpResponse}
   "A handler bound as a bare symbol with an explicit :env, to prove
   that path resolves without going through a declaring module."
   [req] {:status 200 :body "local"})
@@ -361,17 +361,17 @@
 # -- defroutes sugar -----------------------------------------------------
 
 (defn dr-home
-  {:params [:any] :ret {:status :number :body :string}}
+  {:params [:any] :ret HttpResponse}
   "The defroutes-sugar app's root handler, named only by its own
   symbol — proves a bare handler names its route."
   [req] {:status 200 :body "home"})
 (defn dr-create
-  {:params [:any] :ret {:status :number :body :string}}
+  {:params [:any] :ret HttpResponse}
   "Answers creation with 201 — its route gives an explicit :name, to
   prove that wins over the symbol-derived default."
   [req] {:status 201 :body "created"})
 (defn dr-users
-  {:params [:any] :ret {:status :number :body :string}}
+  {:params [:any] :ret HttpResponse}
   "A handler nested under the sugar's admin group, to prove group
   children expand and inherit the group's metadata."
   [req] {:status 200 :body "users"})

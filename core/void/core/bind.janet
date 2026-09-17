@@ -52,7 +52,7 @@
   {:doc "a symbol standing in for a function does not name one — where it is declared or the table is built (fail fast), or after a reload, at the call; :data carries :what and :symbol"})
 
 (defn- refuse
-  {:params [:string :any :string :any] :ret :never :throws [:struct]}
+  {:params [:string :any :string :any] :ret :never :throws [VoidError]}
   "Raise `:void.bind/unresolvable` for `sym`: the formatted sentence as
   the message, `{:what :symbol}` as the data every caller can branch on."
   [what sym fmt & args]
@@ -81,7 +81,7 @@
      (symbol (string/slice s (inc i)))]))
 
 (defn- module-env
-  {:params [:symbol :string :string] :ret :table :throws [:struct]}
+  {:params [:symbol :string :string] :ret :table :throws [VoidError]}
   "The env of a qualified symbol's module, `require`d; a module that
   cannot be loaded is the symbol's fault as far as the reader is
   concerned, so the error names both."
@@ -93,7 +93,7 @@
   env)
 
 (defn- locate
-  {:params [:symbol :any :string] :ret [:table :symbol] :throws [:struct]}
+  {:params [:symbol :any :string] :ret [:table :symbol] :throws [VoidError]}
   "[env name] a symbol resolves through; raises when the binding is
   not a function *now* — which, for a declaration, is fail fast."
   [sym env what]
@@ -111,7 +111,7 @@
   [menv nm])
 
 (defn- read-now
-  {:params [:table :symbol :symbol :string] :ret (or :function :cfunction) :throws [:struct]}
+  {:params [:table :symbol :symbol :string] :ret (or :function :cfunction) :throws [VoidError]}
   "The function behind a located binding, read at the call: the env
   is live, so a binding a reload dropped or turned into something
   else says so here rather than as a call of nil."
@@ -126,9 +126,8 @@
 
 (defn resolve
   {:params [(or :function :cfunction :symbol) :any :string?]
-   :ret {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
-         :name :symbol? :env :table? :what :string}
-   :throws [:struct]}
+   :ret Binding
+   :throws [VoidError]}
   ``Resolve a handler declaration — a symbol or a function — to a
   *binding*:
 
@@ -163,9 +162,8 @@
     (refuse what x "%s must be a function or a symbol, got %q" what x)))
 
 (defn current
-  {:params [{:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
-             :name :symbol? :env :table? :what :string}]
-   :ret (or :function :cfunction) :throws [:struct]}
+  {:params [Binding]
+   :ret (or :function :cfunction) :throws [VoidError]}
   ``The function a binding stands for *right now* — the module binding
   for a symbol (what `explain-route` and a worker want to show or
   call), the literal itself otherwise. Raises `:void.bind/unresolvable`
@@ -177,9 +175,8 @@
 
 (defn declared
   {:params [{:binding :symbol? :env :any :fn (or :function :cfunction :nil) & r} :string]
-   :ret {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
-         :name :symbol? :env :table? :what :string}
-   :throws [:struct]}
+   :ret Binding
+   :throws [VoidError]}
   ``The binding of a `{:binding 'sym :env <env> :fn <function>}`
   declaration — the shape `defjob`, `defhandler` and `defcommand`
   record, both halves of the handler at once. The symbol in its env

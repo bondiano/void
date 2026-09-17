@@ -117,11 +117,11 @@
             [start (if (= :eof end) (dec size) (min end (dec size)))]))))))
 
 (defn file-response
-  {:params [{:headers {:any :any} & r} :string
+  {:params [HttpRequest :string
             (or {:mime :string? :max-file-size :number?
                  :headers (or {:any :any} :nil) & r}
                 :nil)]
-   :ret (or :nil @{:status :number :body (or :nil :string) :headers @{:any :any}})
+   :ret HttpResponse?
    :throws [:string]}
   ``Serve one file: 200 (or 206 on a satisfiable Range), 304 on a
   matching If-None-Match, 416 with content-range on an unsatisfiable
@@ -161,10 +161,10 @@
                                                         start end (st :size))}))))))))
 
 (defn wrap-static
-  {:params [(fn [{:path :string :method :keyword :headers {:any :any} & r}] :any)
+  {:params [HttpHandler
             {:root :string :prefix :string? :index :string? :mime :string?
              :max-file-size :number? :headers (or {:any :any} :nil) & r}]
-   :ret (fn [{:path :string :method :keyword :headers {:any :any} & r}] :any)
+   :ret HttpHandler
    :throws [:string]}
   ``Middleware serving files from :root under :prefix (default "/") in
   front of the handler; GET and HEAD only. A directory path serves its

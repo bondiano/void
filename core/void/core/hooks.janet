@@ -103,8 +103,7 @@
 
 (defn add!
   {:params [@{:keyword :any} :keyword (or :function :cfunction) :any]
-   :ret {:hook :keyword :name :keyword :fn (or :function :cfunction)
-         :phase :number :plugin :any :doc :string?}
+   :ret HookHandler
    :throws [:string]}
   ``Register a synchronous handler for a hook:
 
@@ -145,9 +144,7 @@
 
 (defn remove!
   {:params [@{:keyword :any} :keyword :keyword]
-   :ret (or {:hook :keyword :name :keyword :fn (or :function :cfunction)
-             :phase :number :plugin :any :doc :string?}
-            :nil)}
+   :ret HookHandler?}
   "Remove the handler registered under `name` for `hook`; returns the
   removed entry or nil."
   [reg hook name]
@@ -157,8 +154,7 @@
 
 (defn handlers
   {:params [@{:keyword :any} :keyword?]
-   :ret @[{:hook :keyword :name :keyword :fn (or :function :cfunction)
-           :phase :number :plugin :any :doc :string?}]}
+   :ret @[HookHandler]}
   "Handlers for one hook (or, without `hook`, for every hook), in
   execution order: sorted by :phase, ties broken by :name."
   [reg &opt hook]
@@ -170,8 +166,7 @@
              entries))
 
 (defn- fail
-  {:params [{:hook :keyword :name :keyword :fn (or :function :cfunction)
-             :phase :number :plugin :any :doc :string? & r}
+  {:params [HookHandler
             :any]
    :ret :never :throws [:string]}
   "The error for a handler that threw: the hook, the handler's name,

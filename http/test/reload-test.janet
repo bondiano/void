@@ -15,12 +15,12 @@
 (import void/http/ring :as ring)
 
 (defn alpha
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "The route present from boot — stays reachable across the reload
   this suite drives, unlike beta."
   [req] (ring/text 200 "alpha"))
 (defn beta
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "The route added only by the grown manifest — 404 until the
   :void.dev/reloaded hook rebuilds the table, live afterward."
   [req] (ring/text 200 "beta"))

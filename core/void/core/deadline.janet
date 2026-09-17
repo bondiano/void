@@ -56,7 +56,7 @@
   (and (number? seconds) (pos? seconds)))
 
 (defn- raise-timeout
-  {:params [:number] :ret :never :throws [:struct]}
+  {:params [:number] :ret :never :throws [VoidError]}
   "The default `on-timeout`: the kernel's own kind, status 504."
   [seconds]
   (errors/raise :void/deadline

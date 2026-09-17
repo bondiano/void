@@ -15,14 +15,14 @@
 (def seen-on-response @[])
 
 (defn hello
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "The plain-text baseline route: no session, no body, nothing but
   200 hello — the control every other assertion in this suite is
   measured against."
   [req] (ring/text 200 "hello"))
 
 (defn whoami
-  {:params [@{:session @{:n :number? & r} & r}] :ret @{:status :number :body :string & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Bumps and reports the visit counter on the request's session table
   — the handler the cookie-jar assertions drive twice to prove the
   session survives across injects."
@@ -31,7 +31,7 @@
   (ring/text 200 (string "visit " (get-in req [:session :n]))))
 
 (defn echo-json
-  {:params [@{:parsed-body (or @{:string :any} :nil) & r}] :ret @{:status :number :headers @{:string :string} :body :string}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Echoes the :title field the test body codec decoded, to prove the
   codec ran and its result reached the handler as :parsed-body."
   [req]
@@ -41,7 +41,7 @@
 
 # a route that speaks its own wire format: the body reaches it as bytes
 (defn raw-echo
-  {:params [@{:body :string :parsed-body :any & r}] :ret @{:status :number :body :string & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Reports the raw body length and whether the parsing middleware ran
   — the :void.http/body :raw route this suite uses to prove that
   wrapper is absent from the chain rather than merely skipped."

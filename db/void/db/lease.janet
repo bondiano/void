@@ -107,7 +107,7 @@
 
 (defn- insert-first!
   {:params [:string :string :string :number] :ret :boolean
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``The first taker's INSERT, in its own transaction scope so a lost
   race on the primary key stays a `false` and never poisons a
   transaction the caller is in.``
@@ -128,7 +128,7 @@
 
 (defn acquire!
   {:params [:string :string :string :number :number] :ret :boolean
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Take or renew the lease `name` under `token` until `now + ttl`.
   True when this caller holds it on return — it was free, it had
   expired, or it was already this token's; false when another token

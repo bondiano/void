@@ -17,7 +17,7 @@
 
 (defn response
   {:params [:number :any (or {:string :any} :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponse}
   "A response table: status, optional body and headers."
   [status &opt body headers]
   @{:status status
@@ -57,33 +57,33 @@
   (header resp "content-type" mime))
 
 (defn text
-  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:number :any] :ret HttpResponse}
   "A text/plain response."
   [status body]
   (response status body @{"content-type" "text/plain; charset=utf-8"}))
 
 (defn html
-  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:number :any] :ret HttpResponse}
   "A text/html response."
   [status body]
   (response status body @{"content-type" "text/html; charset=utf-8"}))
 
 (defn redirect
-  {:params [:string :number?] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:string :number?] :ret HttpResponse}
   "A redirect response (302 by default)."
   [location &opt status]
   (default status 302)
   (response status nil @{"location" location}))
 
 (defn not-found
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponse}
   "The default 404."
   [&opt body]
   (text 404 (or body "not found")))
 
 (defn upgrade
   {:params [{:string :any} :function :number?]
-   :ret @{:status :number :body :any :headers @{:string :any} :void.http/upgrade :function}
+   :ret HttpResponse
    :throws [:string]}
   ``A protocol-upgrade response: the head goes out as an ordinary
   response (101 by default, with `headers`), and then `take-over` —
@@ -117,8 +117,7 @@
 # -- request access ------------------------------------------------------
 
 (defn request-header
-  {:params [@{:headers {:string (or :string @[:string])} & r} :string]
-   :ret :string?}
+  {:params [HttpRequest :string] :ret :string?}
   ``One request header value by lowercase name. Repeated headers arrive
   as arrays (see wire/parse-request-head); this returns the first value
   — reach into (req :headers) for the full array.``
@@ -127,7 +126,7 @@
   (if (indexed? v) (first v) v))
 
 (defn cookies
-  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret @{:string :string}}
+  {:params [HttpRequest] :ret @{:string :string}}
   "The request cookies as a name -> value table, parsed once and
   memoized in (req :cookies)."
   [req]
@@ -151,11 +150,7 @@
   str)
 
 (defn cookie-str
-  {:params [:any :any
-            (or {:path :string? :domain :string? :max-age :number? :expires :string?
-                 :secure :boolean? :http-only :boolean?
-                 :same-site (or (enum :strict :lax :none) :nil) & r}
-                :nil)]
+  {:params [:any :any HttpCookieOptions?]
    :ret :string
    :throws [:string]}
   ``Format one set-cookie header value. Options:
@@ -179,11 +174,7 @@
   (string out))
 
 (defn set-cookie
-  {:params [@{:headers @{:string :any} & r} :any :any
-            (or {:path :string? :domain :string? :max-age :number? :expires :string?
-                 :secure :boolean? :http-only :boolean?
-                 :same-site (or (enum :strict :lax :none) :nil) & r}
-                :nil)]
+  {:params [@{:headers @{:string :any} & r} :any :any HttpCookieOptions?]
    :ret @{:headers @{:string :any} & r}
    :throws [:string]}
   "Add a set-cookie header to a response (see cookie-str for options)."
@@ -191,11 +182,7 @@
   (header-add resp "set-cookie" (cookie-str name value opts)))
 
 (defn delete-cookie
-  {:params [@{:headers @{:string :any} & r} :any
-            (or {:path :string? :domain :string? :max-age :number? :expires :string?
-                 :secure :boolean? :http-only :boolean?
-                 :same-site (or (enum :strict :lax :none) :nil) & r}
-                :nil)]
+  {:params [@{:headers @{:string :any} & r} :any HttpCookieOptions?]
    :ret @{:headers @{:string :any} & r}
    :throws [:string]}
   "Expire a cookie on the client."
@@ -227,8 +214,7 @@
   (string out))
 
 (defn sse
-  {:params [:any (or {:string :any} :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any (or {:string :any} :nil)] :ret HttpResponse}
   ``An SSE response streaming a fiber (or any iterable) of events; each
   yielded value goes through sse-event, so both plain strings and
   {:event :data :id :retry} tables work:

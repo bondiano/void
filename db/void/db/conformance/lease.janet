@@ -24,9 +24,7 @@
 (import ./driver :as suite)
 
 (defn run!
-  {:params [:string
-            {:dialect :keyword :connect (fn [] :any) :close (fn [:any] :any)
-             :execute (fn [:any :string [:any] {:any :any}] :any) & r}
+  {:params [:string DbDriver
             (or {:racers :number? & r} :nil)]
    :ret :nil
    :throws [:any]}

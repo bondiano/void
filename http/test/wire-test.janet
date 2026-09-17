@@ -227,9 +227,7 @@
 
 (defn- head-of
   {:params [:string]
-   :ret (or :nil (enum :error)
-            @{:method :string :path :string :http-version [:number :number]
-              :headers @{:any :any} :head-size :number})}
+   :ret (or :nil (enum :error) HttpRequestHead)}
   "Parses a bare GET request head for `target`, to check what the
   request-line grammar accepts and how much of it survives into
   :path."

@@ -53,7 +53,7 @@
   nil)
 
 (defn- context
-  {:params [] :ret :any :throws [:string]}
+  {:params [] :ret HttpContext :throws [:string]}
   "The booted http context, or an error before :before-start has run."
   []
   (or current-context
@@ -309,7 +309,7 @@
 # -- the error path, without the throw -----------------------------------
 
 (defn render-error
-  {:params [:any :any :number?] :ret :any}
+  {:params [:any HttpRequest :number?] :ret HttpResponse}
   ``The response the error path would produce for `err` on `req` —
   the :void.http/error-renderer contributions in priority order
   (problem+json once void/rest is in the composition, the dev page in
@@ -341,9 +341,9 @@
             @{:keyword {:make :function :shared? :boolean? :replacement :string? & r}}
             :keyword]
    :ret (or :nil
-            @{:store :any :store-name :keyword :shared? :boolean
-              :replacement (or :string :nil) :ttl :number :cookie :string
-              :cookie-opts @{:any :any}})
+            {:store HttpSessionStore :store-name :keyword :shared? :boolean
+             :replacement (or :string :nil) :ttl :number :cookie :string
+             :cookie-opts HttpCookieOptions})
    :throws [:string]}
   "The session config resolved into a store instance and its cookie
   settings, or nil when sessions are off — reads the :void.http/session-store
@@ -375,8 +375,7 @@
                          (get scfg :cookie-opts {}))}))
 
 (defn- access-log!
-  {:params [{:received :number? :method :keyword :path :string & r}
-            {:status :number & r}]
+  {:params [HttpRequest HttpResponse]
    :ret :nil}
   "Log one access-log line: method, path, status, elapsed microseconds
   and the request id."
@@ -409,10 +408,8 @@
   (freeze by-stage))
 
 (defn- make-handler
-  {:params [{:cell :any :renderers :any :dev :boolean :on-error-global :tuple
-             :edge :tuple & r}
-            (or {:root :string :prefix :string? :index :string? & r} :nil)]
-   :ret (fn [:any] :any)}
+  {:params [HttpContext (or {:root :string :prefix :string? :index :string? & r} :nil)]
+   :ret HttpHandler}
   "The composed request handler: routing (404/405 rendered like any
   other response), static files in front of it when configured, the
   panic guard around all of that, then the :void.http/edge layer
@@ -456,8 +453,8 @@
   h)
 
 (defn- projected-routes
-  {:params [:keyword (or @{:any :any} (fn [:any] :any)) :any]
-   :ret @{:any :any}
+  {:params [:keyword (or HttpRoutes (fn [:any] HttpRoutes)) Boot]
+   :ret HttpRoutes
    :throws [:string]}
   ``The :routes of a source, with the function form applied to the boot
   value: a source that projects something bootstrap resolved (void/admin
@@ -474,13 +471,8 @@
     routes))
 
 (defn build-context
-  {:params [:any]
-   :ret @{:boot :any :config :any :workers :number :dev :boolean
-          :renderers :any :codecs :any :access-log :boolean :edge :tuple
-          :edge-info :tuple :on-error-global :tuple :on-timeout-global :tuple
-          :on-response-global :tuple :session (or :any :nil) :cell :any
-          :build-args :any :handler (fn [:any] :any) :limits-fn (fn [:any :any] :any)
-          :notify-response (fn [:any :any] :any) :notify-timeout (fn [:any] :any)}
+  {:params [Boot]
+   :ret HttpContext
    :throws [:string]}
   "Assemble the http context from a boot value: resolve the extension
   points, build and validate the route table (fail fast, batched),
@@ -573,9 +565,7 @@
 
 (defn- request-from-raw
   {:params [:buffer]
-   :ret @{:method :keyword :path :string :raw-path :string :query-string :string?
-          :query @{:any :any} :headers @{:any :any} :http-version [:number :number]
-          :received :number :arrived :number :body :string?}
+   :ret HttpRequest
    :throws [:string]}
   "A whole raw HTTP request (bytes) -> request table, through the same
   wire parser the server uses (:raw mode: limits, smuggling vectors,
@@ -604,12 +594,7 @@
   {:params [{:raw :buffer? :uri :string? :path :string? :headers (or @{:any :any} :nil)
              :body :any :json :any? :form (or @{:any :any} :nil) :method :any
              :remote-addr :string? & r}]
-   :ret (or @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query @{:any :any} :headers @{:any :any} :http-version [:number :number]
-              :received :number :arrived :number :body :string?}
-            @{:method :any :path :string :raw-path :string :query-string :string?
-              :query @{:any :any} :headers @{:any :any} :http-version [:number :number]
-              :remote-addr :string? :received :number :arrived :number :body :any})
+   :ret HttpRequest
    :throws [:string]}
   ``An in-memory request table from an inject/with-request spec:
   :method (:get, or :post once a body sugar is present),
@@ -736,7 +721,7 @@
 # -- REPL / tooling surface ----------------------------------------------
 
 (defn routes-table
-  {:params [] :ret :any}
+  {:params [] :ret HttpRouteTable?}
   "The current route table."
   []
   (router/current ((context) :cell)))
@@ -745,7 +730,7 @@
   {:params [{:raw :buffer? :uri :string? :path :string? :headers (or @{:any :any} :nil)
              :body :any :json :any? :form (or @{:any :any} :nil) :method :any
              :remote-addr :string? & r}]
-   :ret :any}
+   :ret HttpResponse}
   ``Run a request through the full stack — routing, middleware,
   sessions, error rendering — without a socket:
 
@@ -797,12 +782,7 @@
                " "))
 
 (defn print-routes
-  {:params [{:routes (or @[{:method :keyword :pattern :string :name :any
-                            :handler :any :source :any :meta @{:any :any} & r}]
-                         [{:method :keyword :pattern :string :name :any
-                           :handler :any :source :any :meta @{:any :any} & r}])
-             & r}
-            (or @{:keys :boolean? & r} :nil)]
+  {:params [HttpRouteTable (or @{:keys :boolean? & r} :nil)]
    :ret :nil}
   ``Print the route table (the `void routes` CLI command). With :keys
   each route also lists its merged metadata, one key per line — :name
@@ -902,9 +882,8 @@
            (print-routes (routes-table) {:keys (opts :keys)})))})
 
 (defn- live-sources
-  {:params [:any (or @[{:name :keyword :routes :any :env :any & r}]
-                     [{:name :keyword :routes :any :env :any & r}])]
-   :ret @[{:name :keyword :routes :any :env :any}]
+  {:params [Boot (or @[HttpRouteSource] [HttpRouteSource])]
+   :ret @[HttpRouteSource]
    :throws [:string]}
   ``Route sources re-read from the live manifest registry: a dofile
   reload of an app module re-runs its `defplugin`, which re-registers
@@ -934,7 +913,7 @@
   out)
 
 (defn rebuild!
-  {:params [] :ret :any :throws [:string]}
+  {:params [] :ret HttpRouteTable :throws [:string]}
   "Rebuild the route table and swap it atomically — after code changes
   that add routes or edit patterns/metadata (handler redefinitions are
   live without this). Route sources are re-read from the live manifest

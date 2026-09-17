@@ -3,7 +3,7 @@
 # binding through the module environment.
 
 (defn hello
-  {:params [:any] :ret {:status :number :body :string}}
+  {:params [:any] :ret HttpResponse}
   "A route handler with nothing to say but its own name — bound by
   qualified symbol from the router test-suite to exercise late
   binding."
@@ -11,7 +11,7 @@
   {:status 200 :body "hello"})
 
 (defn echo-id
-  {:params [@{:params @{:id :any & r} & r}] :ret {:status :number :body :any}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Reflects the router's :id param back as the body, so a test can
   check a bound-by-symbol handler actually receives what the router
   extracted."

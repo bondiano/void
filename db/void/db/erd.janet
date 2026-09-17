@@ -12,7 +12,7 @@
 (import ./builder :as builder)
 
 (defn- column-type
-  {:params [{:db/type :any & r}] :ret :string}
+  {:params [DbField] :ret :string}
   ``The SQL a field's `:db/type` names. An entity written by `void make`
   declares the builder's portable keyword — the same one its migration
   wrote — so the diagram says `text` where the migration said `:text`,
@@ -26,8 +26,7 @@
     (string t)))
 
 (defn- field-line
-  {:params [{:fields {:keyword {:column :string :db/pk :boolean? :db/fk (or :keyword :nil) :db/unique :boolean? :db/type :any & r} & r} & r}
-            :keyword]
+  {:params [DbEntity :keyword]
    :ret :string}
   "One field's row inside the entity's Mermaid block: its SQL type,
   column name, and the PK/FK/UK marks its descriptor carries."
@@ -44,10 +43,7 @@
           (if (empty? marks) "" (string " " marks))))
 
 (defn- rel-lines
-  {:params [{:name :keyword
-             :rels {:keyword {:kind :keyword :entity :keyword
-                              :through (or {:entity :keyword & r} :nil) & r}}
-             & r}]
+  {:params [DbEntity]
    :ret @[:string]}
   "One Mermaid relationship line per declared relation of this entity,
   cardinality read off its :kind (or :through, which is always

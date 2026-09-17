@@ -100,7 +100,7 @@
 
 (defn stage-wrapper
   {:params [:keyword [(or :function :cfunction)]]
-   :ret (or {:name :keyword :phase :number :wrap :function} :nil)
+   :ret HttpMiddleware?
    :throws [:string]}
   ``The synthetic middleware entry for one in-chain stage of one route
   ({:name :phase :wrap}), or nil when `hooks` (tuple of callables) is
@@ -146,7 +146,7 @@
 (def- phase-max 10000)
 
 (defn- placement-of
-  {:params [{:after :keyword? :before :keyword? & r}]
+  {:params [HttpMiddleware]
    :ret (or [:keyword :keyword] :nil)}
   "[:after target] / [:before target] of a contribution value, or nil."
   [v]
@@ -155,7 +155,7 @@
     (v :before) [:before (v :before)]))
 
 (defn check-placement
-  {:params [[{:name :keyword :phase :number? :before :keyword? :after :keyword? & r}]]
+  {:params [[HttpMiddleware]]
    :ret :nil
    :throws [:string]}
   ``The point's cross-check: every contribution places itself exactly
@@ -174,8 +174,8 @@
                 (string/join (map |(string/format "%q" $) ways) " and "))))))
 
 (defn resolve-phases
-  {:params [[{:plugin :keyword :value {:name :keyword :phase :number? :before :keyword? :after :keyword? & r} & r}]]
-   :ret @[{:plugin :keyword :value {:name :keyword :phase :number :before :keyword? :after :keyword? & r} & r}]
+  {:params [[HttpMiddlewareContribution]]
+   :ret @[HttpMiddlewareContribution]
    :throws [:string]}
   ``Contributions ({:plugin :value}) with every :before/:after turned
   into a numeric :phase — the named middleware's phase ∓ 1, clamped to
@@ -217,8 +217,8 @@
       c)))
 
 (defn sort-contributions
-  {:params [[{:plugin :keyword :value {:name :keyword :phase :number? & r} & r}]]
-   :ret @[{:plugin :keyword :value {:name :keyword :phase :number? & r} & r}]}
+  {:params [[HttpMiddlewareContribution]]
+   :ret @[HttpMiddlewareContribution]}
   ``Deterministic chain order for middleware contributions of the shape
   {:plugin <keyword> :value {:name :phase :wrap ...}}: ascending phase,
   ties broken by plugin name, then middleware name. The one sort the
@@ -231,9 +231,8 @@
     contribs))
 
 (defn describe
-  {:params [{:value {:name :keyword :phase :number :before :keyword? :after :keyword? & r}
-             :plugin :keyword :stage :boolean? & r}]
-   :ret {:name :keyword :phase :number :plugin :keyword & r}}
+  {:params [HttpMiddlewareContribution]
+   :ret HttpChainStep}
   ``One chain step as data, for explain-route and `void routes --chain`:
   {:name :phase :plugin :stage? :after?/:before?} — :stage true marks a
   synthetic stage wrapper, :after/:before carry the name a relative
@@ -246,12 +245,8 @@
            (if-let [[side target] (placement-of v)] {side target} {}))))
 
 (defn select
-  {:params [[{:plugin :keyword
-              :value {:name :keyword :phase :number? :named :boolean? :when (or :function :cfunction :nil) & r}
-              & r}]
-            {:keyword :any}]
-   :ret {:selected [{:plugin :keyword :value {:name :keyword :phase :number? & r} & r}]
-         :declined [{:name :keyword :phase :number :plugin :keyword :reason :keyword & r}]}
+  {:params [[HttpMiddlewareContribution] {:keyword :any}]
+   :ret {:selected [HttpMiddlewareContribution] :declined [HttpChainStep]}
    :throws [:string]}
   ``The middleware that apply to one route: global (un-:named)
   contributions whose :when predicate (if any) accepts the route's
@@ -291,7 +286,7 @@
    :when ":when declined the route's metadata"})
 
 (defn shared-phase-warnings
-  {:params [[{:plugin :keyword :value {:phase :number? & r} :stage :boolean? & r}]]
+  {:params [[HttpMiddlewareContribution]]
    :ret @[:string]}
   ``One warning per phase that two or more *different* plugins occupy
   among `selected` contributions: their order is by plugin name, which
@@ -312,10 +307,8 @@
                                 ", "))))
 
 (defn chain
-  {:params [[{:wrap (or :function :cfunction) :route-aware :boolean? & r}]
-            (or :function :cfunction)
-            (or {:keyword :any} :nil)]
-   :ret (or :function :cfunction)}
+  {:params [[HttpMiddleware] HttpHandler (or {:keyword :any} :nil)]
+   :ret HttpHandler}
   ``Compose selected middleware values around a handler: the lowest
   phase ends up outermost. A value marked :route-aware gets the route's
   merged metadata as the second argument of its :wrap — at build time,

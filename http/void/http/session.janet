@@ -42,12 +42,7 @@
 
 (defn memory-store
   {:params [(or {:sweep-every :number? & r} :nil)]
-   :ret @{:name :keyword
-          :entries @{:string @{:data :any :expires :number}}
-          :load (fn [:string] :any)
-          :save (fn [:string :any :number] :string)
-          :delete (fn [:string] @{:string @{:data :any :expires :number}})
-          :sweep (fn [] :nil)}}
+   :ret HttpSessionStore}
   ``An in-process session store: sid -> {:data :expires}. Expired
   entries die lazily on load and in bulk on :sweep, which also runs
   every :sweep-every saves (default 256).``
@@ -90,7 +85,7 @@
   :void.http/session-rotate)
 
 (defn rotate!
-  {:params [@{:method :keyword :path :string & r}] :ret :nil}
+  {:params [HttpRequest] :ret :nil}
   ``Ask for a fresh session id on this request, keeping the data. Call
   it whenever the identity behind a session changes — a login, a
   privilege escalation, a password change — because an id that
@@ -104,18 +99,10 @@
 # -- middleware ----------------------------------------------------------
 
 (defn wrap-session
-  {:params [(or :function :cfunction)
-            {:store (or @{:load (or :function :cfunction) :save (or :function :cfunction)
-                          :delete (or :function :cfunction) :sweep (or :function :cfunction) & r}
-                        :nil)
-             :cookie :string?
-             :ttl :number?
-             :cookie-opts (or {:path :string? :domain :string? :max-age :number? :expires :string?
-                               :secure :boolean? :http-only :boolean?
-                               :same-site (or (enum :strict :lax :none) :nil) & r}
-                              :nil)
-             & r}]
-   :ret :function
+  {:params [HttpHandler
+            {:store HttpSessionStore? :cookie :string? :ttl :number?
+             :cookie-opts HttpCookieOptions? & r}]
+   :ret HttpHandler
    :throws [:string]}
   ``Session middleware over a store. Options:
     :store        the store table (required)

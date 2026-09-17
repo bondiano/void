@@ -12,15 +12,15 @@
 (def hits @[])
 
 (defn home
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "The application's root route — an HTML page, to prove the app
   renders more than plain text through the same middleware chain."
   [req]
   (ring/html 200 "<h1>home</h1>"))
 
 (defn show-order
-  {:params [@{:params @{:id :string & r} & r}]
-   :ret @{:status :number :body :string & r}
+  {:params [HttpRequest]
+   :ret HttpResponse
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Looks an order up by its routed :id, aborting 404 for the one id
   this suite treats as missing — the custom error-renderer and
@@ -31,7 +31,7 @@
     (ring/text 200 (string "order " (get-in req [:params :id])))))
 
 (defn create-order
-  {:params [@{:form @{:string :any} & r}] :ret @{:status :number :body :string & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Creates an order from a urlencoded or codec-decoded form body,
   echoing the title back — the suite's route for exercising body
   parsing middleware."
@@ -39,7 +39,7 @@
   (ring/text 201 (string "created " (get-in req [:form "title"]))))
 
 (defn whoami
-  {:params [@{:session @{:seen :number? & r} & r}] :ret @{:status :number :body :string & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Bumps and reports the visit counter kept in the session — drives
   the cookie and session-persistence assertions."
   [req]
@@ -47,7 +47,7 @@
   (ring/text 200 (string "seen " (get-in req [:session :seen]))))
 
 (defn peer
-  {:params [@{:remote-addr :string? & r}] :ret @{:status :number :body :string & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "Reports the request's :remote-addr, or \"none\" when the inject
   path left it unset — proves :remote-addr is a request key the
   server fills, not something read off a socket."
@@ -264,7 +264,7 @@
     (router/GET "/boom" 'boom {:name :edge/boom})))
 
 (defn edge-ok
-  {:params [:any] :ret @{:status :number :body :string & r}}
+  {:params [:any] :ret HttpResponse}
   "A plain 200, for the edge wrappers to stamp headers onto."
   [req] (ring/text 200 "fine"))
 

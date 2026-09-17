@@ -170,19 +170,7 @@
 
 (defn dialect
   {:params [:keyword]
-   :ret {:name :keyword
-         :placeholder :function
-         :quote :function
-         :types {:keyword :string}
-         :offset-needs-limit (or :string :boolean :nil)
-         :backslash-escapes (or :boolean :nil)
-         :index-if-not-exists :boolean
-         :partial-indexes :boolean
-         :row-locks :boolean
-         :skip-locked :boolean
-         :share-lock :string
-         :upsert :keyword
-         :advisory-lock (or {:acquire :function :release :function :acquired? :function? & r} :nil)}
+   :ret DbDialect
    :throws [:string]}
   "Fetch a registered dialect by name."
   [name]
@@ -315,7 +303,7 @@
 (var- ddl-literal nil)
 
 (defn- param!
-  {:params [@{:d {:placeholder :function & r} :params @[:any] :literals :any & r} :any]
+  {:params [DbCompileContext :any]
    :ret :string}
   "A value position, compiled: a DDL literal under :literals, else a
   bound parameter pushed onto ctx and this dialect's placeholder for
@@ -328,7 +316,7 @@
       (((ctx :d) :placeholder) (length (ctx :params))))))
 
 (defn- quote-part
-  {:params [{:quote :function & r} :string] :ret :string}
+  {:params [DbDialect :string] :ret :string}
   "One dot-separated part of an identifier, quoted — `*` passes
   through bare, since `\"*\"` would stop `select *` from meaning
   every column."
@@ -336,7 +324,7 @@
   (if (= s "*") "*" ((d :quote) s)))
 
 (defn- ident
-  {:params [{:quote :function & r} (or :string :keyword)] :ret :string :throws [:string]}
+  {:params [DbDialect (or :string :keyword)] :ret :string :throws [:string]}
   "A SQL identifier: a string quoted verbatim, a keyword snake_cased
   and quoted part by part (so `:users.id` becomes `\"users\".\"id\"`)."
   [d x]
@@ -371,7 +359,7 @@
   (and (indexed? x) (= :sql (first x)) (or (= 2 (length x)) (= 3 (length x)))))
 
 (defn- sql-fragment
-  {:params [@{:d {:placeholder :function & r} :params @[:any] :literals :any & r} [:keyword :any]]
+  {:params [DbCompileContext [:keyword :any]]
    :ret :string
    :throws [:string]}
   ``[:sql "n + ?" [1]] — hand-written SQL that still carries values.
@@ -410,7 +398,7 @@
   (or (raw? x) (sql? x)))
 
 (defn- fragment-str
-  {:params [@{:d {:placeholder :function & r} :params @[:any] :literals :any & r} [:keyword :any]]
+  {:params [DbCompileContext [:keyword :any]]
    :ret :string
    :throws [:string]}
   "Compile a passthrough fragment — raw SQL verbatim, or a `[:sql ...]`
@@ -423,7 +411,7 @@
    :create-table :drop-table :alter-table :create-index :drop-index])
 
 (defn- statement?
-  {:params [:any] :ret :boolean :narrows {:any :any}}
+  {:params [:any] :ret :boolean :narrows DbStatement}
   ``Is this dictionary a statement — something with a head key — as
   opposed to a value that happens to be a map? The distinction is why
   a subquery is recognized in operand positions only: `{:set {:meta
@@ -438,7 +426,7 @@
 (var- compile-stmt nil)
 
 (defn- subquery-str
-  {:params [@{:d {:quote :function :placeholder :function & r} :params @[:any] & r} {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "A statement map compiled and parenthesized, for an operand position."
@@ -464,7 +452,7 @@
   (and (indexed? x) (= :excluded (first x)) (= 2 (length x))))
 
 (defn- excluded-str
-  {:params [@{:d {:upsert :keyword :quote :function & r} & r} (or :string :keyword)]
+  {:params [DbCompileContext (or :string :keyword)]
    :ret :string
    :throws [:string]}
   ``The value the conflicting INSERT proposed, inside an upsert's SET —
@@ -478,9 +466,7 @@
     (string "excluded." (ident d c))))
 
 (defn- value-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any]
+  {:params [DbCompileContext :any]
    :ret :string
    :throws [:string]}
   "A value position: always a parameter (or a SQL fragment) — keywords
@@ -493,9 +479,7 @@
     (param! ctx v)))
 
 (defn- operand
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any]
+  {:params [DbCompileContext :any]
    :ret :string
    :throws [:string]}
   "An operand of a binary operator: keyword = column (snake-cased),
@@ -514,7 +498,7 @@
     (param! ctx x)))
 
 (defn- table-str
-  {:params [@{:d {:quote :function :placeholder :function & r} :params @[:any] & r} :any]
+  {:params [DbCompileContext :any]
    :ret :string
    :throws [:string]}
   ``A table position: a name, [name :alias], or [statement :alias] —
@@ -548,9 +532,7 @@
   (or (nil? v) (= null v)))
 
 (defn- eq-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any :any]
+  {:params [DbCompileContext :any :any]
    :ret :string
    :throws [:string]}
   "The dictionary where-sugar's `k v` pair — `IS NULL` for a nil/NULL
@@ -561,9 +543,7 @@
     (string (operand ctx k) " = " (value-str ctx v))))
 
 (defn- in-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any :boolean]
+  {:params [DbCompileContext :any :boolean]
    :ret :string
    :throws [:string]}
   "`[:in column values]` / `[:not-in column values]`: values is a
@@ -589,7 +569,7 @@
             ")")))
 
 (defn- exists-str
-  {:params [@{:d {:quote :function :placeholder :function & r} :params @[:any] & r} :any :boolean]
+  {:params [DbCompileContext :any :boolean]
    :ret :string
    :throws [:string]}
   "`[:exists stmt]` / `[:not-exists stmt]`: stmt must be a statement map."
@@ -602,9 +582,7 @@
   (string (if negated "NOT EXISTS " "EXISTS ") (subquery-str ctx sub)))
 
 (defn- logical-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :string (or @[:any] [:any])]
+  {:params [DbCompileContext :string (or @[:any] [:any])]
    :ret :string
    :throws [:string]}
   "AND/OR a tuple of clauses: unwrapped when there is exactly one,
@@ -617,9 +595,7 @@
     (string "(" (string/join (map |(clause ctx $) cs) (string " " word " ")) ")")))
 
 (defn- cmp-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any]
+  {:params [DbCompileContext :any]
    :ret :string
    :throws [:string]}
   "`[op a b]` for a comparison operator: IS NULL / IS NOT NULL when
@@ -672,7 +648,7 @@
 # -- shared statement pieces ---------------------------------------------
 
 (defn- check-keys
-  {:params [{:any :any} {:keyword :boolean} :string] :ret :nil :throws [:string]}
+  {:params [DbStatement {:keyword :boolean} :string] :ret :nil :throws [:string]}
   "Refuse a statement key `what` does not allow — the mistyped-clause
   guard every statement compiler runs first."
   [stmt allowed what]
@@ -683,9 +659,7 @@
               (util/names-str (keys allowed))))))
 
 (defn- where-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            {:where :any & r}]
+  {:params [DbCompileContext DbStatement]
    :ret :string?
    :throws [:string]}
   "The WHERE clause of a statement, or nil when it has none."
@@ -694,9 +668,7 @@
     (string "WHERE " (clause ctx w))))
 
 (defn- returning-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any]
+  {:params [DbCompileContext :any]
    :ret :string?
    :throws [:string]}
   "The RETURNING clause: `*` for `true`, a column list for a tuple, or
@@ -711,7 +683,7 @@
     (string "RETURNING " cols)))
 
 (defn- order-str
-  {:params [@{:d {:quote :function & r} & r} :any] :ret :string? :throws [:string]}
+  {:params [DbCompileContext :any] :ret :string? :throws [:string]}
   "The ORDER BY clause: a column, or [column :asc|:desc], comma-joined."
   [ctx items]
   (when items
@@ -732,9 +704,7 @@
               ", "))))
 
 (defn- limit-str
-  {:params [@{:d {:placeholder :function :offset-needs-limit :any & r}
-              :params @[:any] :literals :any & r}
-            {:limit :any :offset :any & r}]
+  {:params [DbCompileContext DbStatement]
    :ret @[:string]
    :throws [:string]}
   "The LIMIT/OFFSET clause pieces, as a (possibly empty) array of SQL
@@ -772,8 +742,7 @@
 (def- lock-opts {:mode true :skip-locked true})
 
 (defn- lock-str
-  {:params [@{:d {:row-locks :any :share-lock :any :skip-locked :any & r} & r}
-            {:lock :any & r}]
+  {:params [DbCompileContext DbStatement]
    :ret :string?
    :throws [:string]}
   ``The row lock a claim takes: `:lock :update` (FOR UPDATE), or
@@ -805,9 +774,7 @@
                 "")))))
 
 (defn- join-strs
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :string (or @[:any] [:any])]
+  {:params [DbCompileContext :string (or @[:any] [:any])]
    :ret @[:string]
    :throws [:string]}
   "One `word` (JOIN / LEFT JOIN) line per `[table on-clause]` pair."
@@ -820,9 +787,7 @@
     (string word " " (table-str ctx (first p)) " ON " (clause ctx (in p 1)))))
 
 (defn- selected-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any]
+  {:params [DbCompileContext :any]
    :ret :string
    :throws [:string]}
   ``One entry of a select list: an operand, or `[:as <operand>
@@ -838,11 +803,7 @@
     (operand ctx x)))
 
 (defn- compile-select
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
-                  :row-locks :any :share-lock :any :skip-locked :any
-                  :offset-needs-limit :any & r}
-              :params @[:any] :literals :any & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile a :select statement: SELECT, FROM, JOINs, WHERE, GROUP BY,
@@ -877,10 +838,7 @@
 (def- on-conflict-keys {:on true :set true :where true})
 
 (defn- on-conflict-str
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
-                  :name :keyword & r}
-              :params @[:any] :literals :any & r}
-            :any @[:keyword]]
+  {:params [DbCompileContext :any @[:keyword]]
    :ret :string
    :throws [:string]}
   ``The upsert: `:on-conflict :nothing`, or a map — {:on [:id] :set
@@ -953,10 +911,7 @@
                 "DO NOTHING")))))
 
 (defn- compile-insert
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
-                  :name :keyword & r}
-              :params @[:any] :literals :any & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile an :insert statement: one row or several (same columns
@@ -998,9 +953,7 @@
 (def- update-keys {:update true :set true :where true :returning true})
 
 (defn- compile-update
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile an :update statement: SET, an optional WHERE, an optional
@@ -1025,9 +978,7 @@
 (def- delete-keys {:delete true :where true :returning true})
 
 (defn- compile-delete
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword & r}
-              :params @[:any] :literals :any & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile a :delete statement: an optional WHERE, an optional RETURNING."
@@ -1056,7 +1007,7 @@
    :set-default "SET DEFAULT" :no-action "NO ACTION"})
 
 (defn- quote-string-literal
-  {:params [{:backslash-escapes :any & r} :string] :ret :string}
+  {:params [DbDialect :string] :ret :string}
   ``A string as a DDL literal. `'` doubles everywhere; `\` doubles too
   on a dialect that treats it as an escape (MySQL) — otherwise a value
   like `a\'` closes the string one character early and the tail becomes
@@ -1069,7 +1020,7 @@
   (string "'" escaped "'"))
 
 (defn- literal
-  {:params [{:backslash-escapes :any & r} :any] :ret :string :throws [:string]}
+  {:params [DbDialect :any] :ret :string :throws [:string]}
   "A DDL literal — a DEFAULT is part of the statement, not a parameter."
   [d v]
   (cond
@@ -1084,7 +1035,7 @@
 (set ddl-literal literal)
 
 (defn- type-str
-  {:params [{:types {:keyword :string} :name :keyword & r} :any] :ret :string :throws [:string]}
+  {:params [DbDialect :any] :ret :string :throws [:string]}
   "The SQL spelling of a column type: a raw passthrough, a string
   verbatim, or a keyword looked up in the dialect's type table."
   [d t]
@@ -1103,7 +1054,7 @@
    :refs true :on-delete true :on-update true})
 
 (defn- references-str
-  {:params [{:quote :function & r} {:refs :any :on-delete :any :on-update :any & r}]
+  {:params [DbDialect {:refs :any :on-delete :any :on-update :any & r}]
    :ret :string?
    :throws [:string]}
   "The REFERENCES clause of a column, with its optional ON DELETE / ON
@@ -1131,9 +1082,7 @@
     (string/join parts " ")))
 
 (defn- column-str
-  {:params [{:quote :function :types {:keyword :string} :name :keyword
-             :backslash-escapes :any & r}
-            :any]
+  {:params [DbDialect :any]
    :ret :string
    :throws [:string]}
   ``One column of a :create-table (or the argument of an :add-column):
@@ -1166,10 +1115,7 @@
   {:create-table true :columns true :if-not-exists true :primary-key true})
 
 (defn- compile-create-table
-  {:params [@{:d {:quote :function :types {:keyword :string} :name :keyword
-                  :backslash-escapes :any & r}
-              & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile a :create-table statement: every column, plus an optional
@@ -1194,7 +1140,7 @@
 (def- drop-table-keys {:drop-table true :if-exists true :cascade true})
 
 (defn- compile-drop-table
-  {:params [@{:d {:quote :function & r} & r} {:any :any}] :ret :string :throws [:string]}
+  {:params [DbCompileContext DbStatement] :ret :string :throws [:string]}
   "Compile a :drop-table statement."
   [ctx stmt]
   (check-keys stmt drop-table-keys ":drop-table")
@@ -1208,10 +1154,7 @@
    :rename-column true :rename-to true})
 
 (defn- compile-alter-table
-  {:params [@{:d {:quote :function :types {:keyword :string} :name :keyword
-                  :backslash-escapes :any & r}
-              & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile an :alter-table statement — exactly one of :add-column,
@@ -1244,10 +1187,7 @@
    :where true})
 
 (defn- compile-create-index
-  {:params [@{:d {:quote :function :placeholder :function :upsert :keyword
-                  :partial-indexes :any :index-if-not-exists :any :name :keyword & r}
-              :params @[:any] :literals :any & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "Compile a :create-index statement; a :where predicate compiles to a
@@ -1289,7 +1229,7 @@
 (def- drop-index-keys {:drop-index true :if-exists true :on true})
 
 (defn- compile-drop-index
-  {:params [@{:d {:quote :function & r} & r} {:any :any}] :ret :string :throws [:string]}
+  {:params [DbCompileContext DbStatement] :ret :string :throws [:string]}
   "Compile a :drop-index statement."
   [ctx stmt]
   (check-keys stmt drop-index-keys ":drop-index")
@@ -1340,13 +1280,7 @@
 # -- entry point ---------------------------------------------------------
 
 (defn- compile-statement
-  {:params [@{:d {:name :keyword :quote :function :placeholder :function
-                  :types {:keyword :string} :upsert :keyword
-                  :row-locks :any :share-lock :any :skip-locked :any
-                  :offset-needs-limit :any :partial-indexes :any
-                  :index-if-not-exists :any :backslash-escapes :any & r}
-              :params @[:any] :literals :any & r}
-            {:any :any}]
+  {:params [DbCompileContext DbStatement]
    :ret :string
    :throws [:string]}
   "The dispatch on a statement's head key — also what a subquery in an
@@ -1374,23 +1308,8 @@
 (set compile-stmt compile-statement)
 
 (defn format
-  {:params [{:any :any}
-            (or :keyword
-                {:name :keyword
-                 :placeholder :function
-                 :quote :function
-                 :types {:keyword :string}
-                 :offset-needs-limit (or :string :boolean :nil)
-                 :backslash-escapes (or :boolean :nil)
-                 :index-if-not-exists :boolean
-                 :partial-indexes :boolean
-                 :row-locks :boolean
-                 :skip-locked :boolean
-                 :share-lock :string
-                 :upsert :keyword
-                 :advisory-lock (or {:acquire :function :release :function :acquired? :function? & r} :nil)}
-                :nil)]
-   :ret [:string [:any]]
+  {:params [DbStatement (or :keyword DbDialect :nil)]
+   :ret DbSql
    :throws [:string]}
   ``Compile a statement map into [sql params] for a dialect (a name or
   a dialect value; default :ansi). The statement kind is the map's

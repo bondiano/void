@@ -12,7 +12,7 @@
 
 (defn- req
   {:params [:string (or @{:string :any} :nil) :keyword?]
-   :ret @{:method :keyword :path :string :headers @{:string :any}}}
+   :ret HttpRequest}
   "A bare request table for static/file-response and wrap-static to
   read — method defaults to :get, headers to none."
   [path &opt headers method]

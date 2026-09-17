@@ -182,8 +182,8 @@
 # -- redaction and serializers -------------------------------------------
 
 (defn- redact
-  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}]
-   :ret @{:ts :number :level :keyword :ns :string :msg :any & r}}
+  {:params [LogRecord]
+   :ret LogRecord}
   "Blank, in place, every configured redaction path the record has a
   value at."
   [rec]
@@ -193,8 +193,8 @@
   rec)
 
 (defn- serialize
-  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}]
-   :ret @{:ts :number :level :keyword :ns :string :msg :any & r}}
+  {:params [LogRecord]
+   :ret LogRecord}
   "Apply the registered serializers to the record in place, each to its
   key when present; a serializer that throws leaves a placeholder
   naming its error rather than losing the record."
@@ -239,7 +239,7 @@
   (string/format "%02d:%02d:%02d" (d :hours) (d :minutes) (d :seconds)))
 
 (defn- kv-str
-  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}] :ret :string}
+  {:params [LogRecord] :ret :string}
   "The record's extra keys as ` k=v ...` in key order for the pretty
   sink — the four standard keys are printed by the line itself; empty
   when there are none."
@@ -252,7 +252,7 @@
 
 (defn pretty-sink
   {:params [(or {:color :boolean? & r} :nil)]
-   :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
+   :ret (fn [LogRecord] :nil)}
   "Synchronous human sink: one colored line per record to stderr
   (colors only on a tty)."
   [&opt opts]
@@ -270,7 +270,7 @@
 
 (defn jdn-sink
   {:params [(or {:buffer :number? :stream :abstract? & r} :nil)]
-   :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
+   :ret (fn [LogRecord] :nil)}
   ``Production sink: JDN lines (janet %j — machine-parseable, JSON-ish
   for plain data) written by a dedicated fiber behind a buffered
   channel. A full buffer drops the record and counts it —
@@ -283,7 +283,7 @@
   (def out (get opts :stream stderr))
   (def chan (ev/chan cap))
   (defn write!
-    {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}] :ret :nil}
+    {:params [LogRecord] :ret :nil}
     "Write one record synchronously, bypassing the buffered channel —
     used for :fatal, which never waits behind a full buffer."
     [rec]
@@ -332,7 +332,7 @@
   nil)
 
 (defn set-sinks!
-  {:params [(or [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)] :nil)]
+  {:params [(or [(fn [LogRecord] :nil)] :nil)]
    :ret :table}
   "Replace the active sinks (tuple/array of (fn [record])). nil
   restores the default pretty stderr sink. Close previous async
@@ -342,7 +342,7 @@
   (put state :sinks sinks))
 
 (defn sinks
-  {:params [] :ret [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)]}
+  {:params [] :ret [(fn [LogRecord] :nil)]}
   "The active sink list (the default pretty sink when none set)."
   []
   (or (state :sinks) default-sinks))

@@ -81,7 +81,7 @@
 
 (defn- answer
   {:params [{:string @[{:keyword :any}]}]
-   :ret (fn [:string :any] (or {:rows @[{:keyword :any}] :count :number} :nil))}
+   :ret (fn [:string :any] DbResult?)}
   "Point the fake driver's responder at a fresh {sql-substring rows}
   table for the next assertion."
   [spec] (set responder (fake/rows-responder spec)))

@@ -12,7 +12,7 @@
 (def taken @[])
 
 (defn- app
-  {:params [@{:path :string & r}] :ret @{:status :number & r}}
+  {:params [HttpRequest] :ret HttpResponse}
   "The seam under test: /upgrade hands the socket to an echo loop,
   /upgrade-boom hands it to a protocol that immediately panics, /plain
   proves the server is still an ordinary HTTP server after either."
