@@ -41,6 +41,7 @@
 # -- RFC 2047 encoded words ----------------------------------------------
 
 (defn- utf8-chunks
+  {:params [:string :number] :ret @[:string]}
   ``Split bytes into pieces of at most `n` octets, never inside a
   UTF-8 sequence: a continuation byte (10xxxxxx) is not a boundary,
   and a chunk that ended on one would decode to a replacement
@@ -58,6 +59,7 @@
   out)
 
 (defn encoded-word
+  {:params [:any] :ret :string}
   ``One header value as RFC 2047 encoded words (UTF-8, base64), split
   so that no line exceeds `max-line`. 45 octets of input make 60
   characters of base64, and `=?UTF-8?B??=` costs 12 more.``
@@ -67,6 +69,7 @@
                (string crlf " ")))
 
 (defn header-text
+  {:params [:any] :ret :string}
   ``A header value, encoded if it has to be. ASCII stays as it is —
   the common case must stay readable in the file — and anything else
   becomes encoded words.``
@@ -75,6 +78,7 @@
   (if (address/ascii? s) s (encoded-word s)))
 
 (defn- fold
+  {:params [:string] :ret :string}
   ``Fold a long header value at ", " boundaries (RFC 5322 §2.2.3). Only
   address lists get long enough to need it, and they are the values
   that have a legal place to break.``
@@ -93,6 +97,7 @@
   (string/join lines (string crlf " ")))
 
 (defn header
+  {:params [:string :any] :ret :string :throws [:string]}
   ``One header line, `name: value` — the value checked for the newline
   that would inject another header, encoded if it is not ASCII, and
   folded if it is long.
@@ -107,6 +112,9 @@
   (string name ": " (fold (header-text clean)) crlf))
 
 (defn address-header
+  {:params [:string (or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+   :ret (or :nil :string)
+   :throws [:string]}
   "A header holding one or more addresses, with display names encoded."
   [name addrs]
   (def rendered
@@ -123,10 +131,14 @@
 
 # -- transfer encodings --------------------------------------------------
 
-(defn- hex-octet [b]
+(defn- hex-octet
+  {:params [:number] :ret :string}
+  "One byte as the `=XX` escape quoted-printable uses for it."
+  [b]
   (string/format "=%02X" b))
 
 (defn quoted-printable
+  {:params [:any] :ret :string}
   ``Encode bytes as quoted-printable (RFC 2045 §6.7): printable ASCII
   stays, everything else becomes =XX, trailing whitespace is escaped
   so that no relay can trim it away, and lines are broken with a soft
@@ -158,6 +170,7 @@
   (string/join lines crlf))
 
 (defn base64-body
+  {:params [:any] :ret :string}
   "Base64 with the line length a mail body is allowed (RFC 2045 §6.8)."
   [data]
   (def encoded (base64/encode (string data)))
@@ -172,6 +185,7 @@
   (peg/compile ~(* "<" (any (if-not ">" 1)) ">")))
 
 (defn text-of
+  {:params [:any] :ret :string}
   ``A plain-text rendering of an HTML body — what goes in the text part
   when the caller gave only HTML (see the module docstring on why
   something is generated at all).
@@ -215,6 +229,7 @@
 # -- the message ---------------------------------------------------------
 
 (defn date-header
+  {:params [:number] :ret :string}
   ``An RFC 5322 date, in UTC. A local offset would need a timezone
   database Janet does not have, and `+0000` is not a lie — it is where
   the process thinks it is.``
@@ -230,30 +245,48 @@
                  (d :year) (d :hours) (d :minutes) (d :seconds)))
 
 (defn message-id
+  {:params [:string :string] :ret :string}
   "A Message-ID from a random token and the sender's domain."
   [token domain]
   (string "<" token "@" domain ">"))
 
 (defn boundary
+  {:params [:string] :ret :string}
   "A multipart boundary from a random token — prefixed so it cannot
   collide with anything a body says about void."
   [token]
   (string "=_void_" token))
 
-(defn- part [content-type encoded-body encoding &opt extra]
+(defn- part
+  {:params [:string :string :string :string?] :ret :string}
+  "One MIME part: its Content-Type, its Content-Transfer-Encoding,
+  whatever `extra` headers it needs, and the already-encoded body."
+  [content-type encoded-body encoding &opt extra]
   (string "Content-Type: " content-type crlf
           "Content-Transfer-Encoding: " encoding crlf
           (or extra "")
           crlf
           encoded-body crlf))
 
-(defn- text-part [body]
+(defn- text-part
+  {:params [:string] :ret :string}
+  "The text/plain part, quoted-printable."
+  [body]
   (part "text/plain; charset=UTF-8" (quoted-printable body) "quoted-printable"))
 
-(defn- html-part [body]
+(defn- html-part
+  {:params [:string] :ret :string}
+  "The text/html part, quoted-printable."
+  [body]
   (part "text/html; charset=UTF-8" (quoted-printable body) "quoted-printable"))
 
-(defn- attachment-part [a]
+(defn- attachment-part
+  {:params [{:filename :any :content :any :type :any :inline :any & r}]
+   :ret :string
+   :throws [:string]}
+  "One attachment, base64-encoded, with the Content-Disposition
+  (inline or attachment) and filename it was normalized with."
+  [a]
   (def filename (address/header-value "an attachment filename"
                                       (get a :filename "attachment")))
   (part (string (get a :type "application/octet-stream")
@@ -264,7 +297,11 @@
                 (if (get a :inline) "inline" "attachment")
                 "; filename=\"" (header-text filename) "\"" crlf)))
 
-(defn- multipart [subtype bound parts]
+(defn- multipart
+  {:params [:string :string [:string]] :ret :string}
+  "Wrap already-rendered parts in a multipart/`subtype` envelope with
+  `bound` as its boundary."
+  [subtype bound parts]
   (string "Content-Type: multipart/" subtype "; boundary=\"" bound "\"" crlf
           crlf
           "This is a message in MIME format." crlf
@@ -272,6 +309,9 @@
           "--" bound "--" crlf))
 
 (defn body-of
+  {:params [{:text :any :html :any :attachments :any & r} @[:string]]
+   :ret :string
+   :throws [:string]}
   ``The MIME body of a message: the parts, their nesting and the
   Content-Type header that describes them, as one string.
 
@@ -294,6 +334,11 @@
                [alternative ;(map attachment-part attachments)])))
 
 (defn render
+  {:params [{:from :any :to :any :cc :any :reply-to :any :subject :any :message-id :any
+             :headers :any :text :any :html :any :attachments :any & r}
+            (or :nil {:boundaries :any :message-id :any :date :any & r})]
+   :ret :string
+   :throws [:string]}
   ``A normalized message (see ./message) as the octets of a mail.
 
   `opts` carries what the message cannot know about itself:

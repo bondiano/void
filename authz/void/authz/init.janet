@@ -101,6 +101,9 @@
    :roles {}})
 
 (defn- conf
+  {:params [(or {:default :keyword? :log :keyword? :roles (or {:any :any} :nil) & r} :nil)]
+   :ret @{:default :keyword :log :keyword :roles {:any :any} & r}}
+  ``The [:authz] slice with defaults filled in.``
   # `conf`, not `slice`: this module's `defpolicy` macro uses janet's
   # own `slice`, and a module-level binding of that name shadows it
   [cfg]
@@ -130,6 +133,7 @@
 (def policies "See policy/policies — every registered name." policy/policies)
 (def describe-policies "See policy/describe." policy/describe)
 (defmacro defpolicy
+  {:params [:keyword :any] :ret :keyword}
   ``See policy/defpolicy — define and register a policy:
 
       (defpolicy :orders/read "docstring" [ctx] body)``
@@ -166,6 +170,7 @@
 # -- the component -------------------------------------------------------
 
 (defn- resolved
+  {:params [{:extensions {:keyword :any} & r} :keyword] :ret (or @[:any] [:any])}
   ``One of this package's extension points, as the boot the component
   was started in resolved it.
 
@@ -224,6 +229,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn print-policies
+  {:params [] :ret :nil}
   "Print the policy registry — the body of `void authz policies`."
   []
   (def rows (policy/describe))

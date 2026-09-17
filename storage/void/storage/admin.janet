@@ -25,16 +25,25 @@
 (import ./state :as state)
 (import ./upload :as upload)
 
-(defn- image-key? [k]
+(defn- image-key?
+  {:params [:any] :ret :boolean :narrows :any}
+  "Does this key's declared mime type start with image/ — worth a
+  thumbnail rather than a plain link?"
+  [k]
   (string/has-prefix? "image/" (static/mime-type (string k))))
 
-(defn- basename [k]
+(defn- basename
+  {:params [:any] :ret :string}
+  "The last path segment of a key, for the link text a non-image
+  upload shows."
+  [k]
   (def s (string k))
   (if-let [i (last (string/find-all "/" s))]
     (string/slice s (inc i))
     s))
 
 (defn- shown
+  {:params [:any? :keyword] :ret (or :string [:any])}
   "The value as hiccup: a thumbnail for an image, a named link
   otherwise, the em dash for nothing — sized by mode."
   [value mode]
@@ -49,7 +58,11 @@
                 :class (if (= :detail mode) "storage-preview" "storage-thumb")}]]
         [:a {:href url :target "_blank"} (basename value)]))))
 
-(defn- accept-attr [field]
+(defn- accept-attr
+  {:params [{:node :any & r}] :ret :string?}
+  "The HTML accept attribute for a field's :storage/accept
+  annotation, comma-joined — nil when the field declared none."
+  [field]
   (when-let [accept (get (sschema/annotations (field :node)) :storage/accept)]
     (string/join (map string accept) ",")))
 

@@ -22,6 +22,7 @@
   "BENCH-WS ")
 
 (defn parse
+  {:params [:string] :ret :any :throws [:string]}
   "One generator stdout -> its report table. Throws when there is no
   report in it, quoting what there was instead."
   [out]
@@ -33,6 +34,9 @@
   (json/decode (string/slice line (length marker)) true))
 
 (defn summarize
+  {:params [:any]
+   :ret @{:connections :any :requested :any :messages :any :rps :any
+          :duration :any & r}}
   ``Fold the generator's report into a result row of the shape the rest
   of the suite uses: `:rps` is messages *delivered* per second (the budgeted
   10k msg/s is a fan-out number, not a broadcast rate) and the delivery
@@ -52,6 +56,9 @@
   row)
 
 (defn command
+  {:params [{:janet :string? :script :string :url :string
+             :connections :number :duration :number :warmup :number & r}]
+   :ret [:string]}
   ``The argv for one run. opts: :janet (interpreter), :script (the
   generator), :url :connections :duration :warmup.``
   [opts]
@@ -63,6 +70,11 @@
    "--warmup" (string (opts :warmup))])
 
 (defn run
+  {:params [{:janet :string? :script :string :url :string
+             :connections :number :duration :number :warmup :number
+             :env (or {:any :any} :nil) & r}]
+   :ret :any
+   :throws [:string]}
   "One generator run: spawn, capture, parse. Throws when it fails."
   [opts]
   (def env (merge-into (os/environ) (get opts :env {})))

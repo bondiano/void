@@ -22,6 +22,7 @@
   512)
 
 (defn valid?
+  {:params [:any] :ret :boolean :narrows :string}
   ``Is this a well-formed storage key? Non-empty, within `max-length`,
   no NUL, no backslash, relative (no leading /), slash-separated with
   no empty, "." or ".." segment.``
@@ -36,6 +37,7 @@
             (string/split "/" key))))
 
 (defn check!
+  {:params [:any] :ret :string :throws [:string]}
   "Refuse a malformed key with the reason in the text. Returns the key."
   [key]
   (unless (valid? key)
@@ -57,6 +59,7 @@
     (freeze t)))
 
 (defn- clean
+  {:params [:any] :ret :string}
   ``One path segment reduced to what a key may carry: every character
   outside [A-Za-z0-9._-] collapsed to "-", runs collapsed, leading and
   trailing dots and dashes stripped — which is also what turns ".."
@@ -71,6 +74,7 @@
   (string/trim (string out) ".-"))
 
 (defn sanitize-filename
+  {:params [:any] :ret :string}
   ``A browser-supplied filename reduced to something a key may carry:
   the last path segment, cleaned by `clean`. Empty in, "file" out — a
   part with no usable name still needs a key.``
@@ -85,6 +89,7 @@
   (if (empty? cleaned) "file" cleaned))
 
 (defn extension
+  {:params [:any] :ret :string}
   "The lowercase extension of a filename, dot included — or \"\"."
   [name]
   (def s (sanitize-filename name))
@@ -92,10 +97,16 @@
     (if (pos? i) (string/ascii-lower (string/slice s i)) "")
     ""))
 
-(defn- token []
+(defn- token
+  {:params [] :ret :string}
+  "A random hex token, unique enough that two uploads in the same
+  minute never collide."
+  []
   (string/join (seq [x :in (os/cryptorand 8)] (string/format "%02x" x))))
 
 (defn generate
+  {:params [(or {:prefix :any? :ext :any? :filename :any? :now :number? & r} :nil)]
+   :ret :string :throws [:string]}
   ``A fresh key for an upload: `<prefix>/<yyyy>/<mm>/<token><.ext>`.
   opts: :prefix (default "uploads" — sanitized segments, so a prefix is
   data too), :ext (the extension to use, dot included — what a caller

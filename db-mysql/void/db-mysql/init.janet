@@ -98,17 +98,23 @@
   contract, so the kernel cannot route them.``
   nil)
 
-(defn- driver-now []
+(defn- driver-now
+  {:params [] :ret :any :throws [:string]}
+  "The started :db.mysql/driver value, or a readable error naming the
+  component to add."
+  []
   (or current
       (error "void/db-mysql is not started — no :db.mysql/driver component")))
 
 (defn connection-info
+  {:params [:any] :ret :any :throws [:string]}
   "What a checked-out connection is: server version, thread id,
   charset, transaction state, how many times it has been replaced."
   [h]
   (((driver-now) :connection-info) h))
 
 (defn last-insert-id
+  {:params [] :ret :any :throws [:string]}
   ``The id the last INSERT on THIS fiber's connection generated.
 
   Only meaningful inside `db/with-conn` or `db/with-tx`, and that is
@@ -124,6 +130,7 @@
 # -- pool width ----------------------------------------------------------
 
 (defn pool-size
+  {:params [(or {:config {:values :any & r} & r} :nil)] :ret :number}
   ``The [:db :pool :size] void/db will run with (its own default is 10)
   — here it is also a thread count.
 

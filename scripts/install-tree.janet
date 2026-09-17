@@ -28,16 +28,23 @@
   "Where the installed bundle lives unless --tree says otherwise."
   (string packages/root "/.void-tree"))
 
-(defn- run [& args]
+(defn- run
+  {:params [:string] :ret :nil :throws [:string]}
+  "Print and run one shell command; throw on a non-zero exit."
+  [& args]
   (print "  $ " (string/join args " "))
   (def code (os/execute args :p))
   (unless (zero? code)
     (errorf "%s failed with exit code %d" (first args) code)))
 
-(defn- installed? [tree]
+(defn- installed?
+  {:params [:string] :ret :boolean :narrows :any}
+  "Does this tree already carry the void bundle?"
+  [tree]
   (= :directory (os/stat (string tree "/lib/void") :mode)))
 
 (defn exports
+  {:params [:string] :ret [:string]}
   ``The three lines a shell needs to speak to the installed tree, one
   per thing that has to be told: `janet` resolves modules through
   JANET_PATH, `jpm` (which is what runs a suite, and which ignores
@@ -49,7 +56,11 @@
    (string "export JANET_PATH=" tree "/lib")
    (string "export PATH=" tree "/bin:$PATH")])
 
-(defn main [_ & args]
+(defn main
+  {:params [:string :string] :ret :nil :throws [:string]}
+  "CLI entrypoint: install the bundle into the tree (or just print the
+  shell exports with --export)."
+  [_ & args]
   (var tree default-tree)
   (var deps? nil)     # nil = decide by whether the tree exists
   (var export-only? false)

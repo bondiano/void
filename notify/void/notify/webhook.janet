@@ -89,6 +89,8 @@
 # -- the wire format -----------------------------------------------------
 
 (defn body-of
+  {:params [{:id :any :key :any :at :any :title :any :body :any :url :any :data :any & r}]
+   :ret :string}
   ``The JSON document a notification becomes. A projection of the
   normalized notification and nothing else — which is why the receipt,
   the log and a test all read the same string.``
@@ -103,6 +105,7 @@
      :data (get note :data {})}))
 
 (defn signature
+  {:params [:any :any? :any?] :ret :string?}
   ``The `X-Void-Signature` value for a body at `at`: `t=<unix>,v1=<hex
   hmac-sha256 of "<t>.<body>">`. nil when no secret is configured —
   an unsigned webhook to an endpoint that does not check one is a
@@ -119,6 +122,7 @@
 # -- failures ------------------------------------------------------------
 
 (defn webhook-error
+  {:params [:any :any :any] :ret @{:notify/webhook :boolean :status :any :url :any :message :string}}
   "The value a failed delivery throws: the endpoint's own answer, so
   that `permanent?` can read the status off it."
   [status url &opt body]
@@ -136,6 +140,7 @@
   [408 429])
 
 (defn permanent?
+  {:params [{:status :any :blocked :any & r}] :ret :boolean}
   ``Has the receiver already answered for good? A 4xx is the endpoint
   saying no — a wrong URL, a signature it will not accept — and no
   number of retries changes it; 5xx and a connection that broke are
@@ -165,7 +170,10 @@
 # (scripts/packages.janet), and one CIDR containment over a parsed
 # address is cheaper to own than a package edge is.
 
-(defn- parse-ipv4 [s]
+(defn- parse-ipv4
+  {:params [:any] :ret (or [:number] :nil)}
+  "Parse a dotted-quad IPv4 address into its four byte values, or nil."
+  [s]
   (def groups (string/split "." (string s)))
   (when (= 4 (length groups))
     (def parts (seq [g :in groups
@@ -175,7 +183,10 @@
                  (if (and n (int? n) (<= 0 n 255)) n -1)))
     (unless (index-of -1 parts) (tuple ;parts))))
 
-(defn- parse-ipv6 [s0]
+(defn- parse-ipv6
+  {:params [:any] :ret (or [:number] :nil)}
+  "Parse an IPv6 address into its sixteen byte values, or nil."
+  [s0]
   (def s (string s0))
   (when (string/find ":" s)
     (def [ok bytes]
@@ -204,7 +215,10 @@
           (tuple ;out))))
     (when ok bytes)))
 
-(defn- in-prefix? [bytes prefix bits]
+(defn- in-prefix?
+  {:params [(or [:number] @[:number]) (or [:number] @[:number]) :number] :ret :boolean}
+  "Do the first `bits` bits of `bytes` match `prefix`?"
+  [bytes prefix bits]
   (and (>= (* 8 (length bytes)) bits)
        (do
          (var same true)
@@ -232,6 +246,7 @@
    [[0xfc 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] 7]])
 
 (defn private-address?
+  {:params [:any] :ret :boolean}
   ``Is this address (v4 or v6, as text) one a webhook must not reach
   by default — loopback, RFC 1918, link-local, ULA or unspecified?
   An address that does not parse is treated as private: what cannot
@@ -248,7 +263,11 @@
     v6 (truthy? (some (fn [[prefix bits]] (in-prefix? v6 prefix bits)) blocked-v6))
     true))
 
-(defn- allow-entry-admits? [entry address]
+(defn- allow-entry-admits?
+  {:params [:any :any] :ret :boolean}
+  "Does this `[:notify-webhook :allow-hosts]` entry (a bare address or
+  a CIDR) admit `address`?"
+  [entry address]
   # an :allow-hosts entry that is a CIDR (or a bare address) admits an
   # address inside it
   (def e (string entry))
@@ -265,7 +284,10 @@
                     (in-prefix? addr prefix bits))))
     (= (string/ascii-lower e) (string/ascii-lower (string address)))))
 
-(defn- resolved-addresses [host]
+(defn- resolved-addresses
+  {:params [:any] :ret (or [:string] @[:string] :nil)}
+  "The addresses `host` resolves to — itself, if it is already one."
+  [host]
   # the literal address as itself; a name through the resolver, every
   # answer judged — the delivery that follows resolves the same name,
   # so what is checked is what will be dialed
@@ -276,6 +298,8 @@
         (distinct (map |(first (net/address-unpack $)) addrs))))))
 
 (defn target-refusal
+  {:params [:any (or {:allow-hosts (or @[:string] [:string] :nil) :allow-private :any & r} :nil)]
+   :ret :string?}
   ``Why a per-notification URL must not be POSTed to, or nil when it
   may. The host is allowed outright when `[:notify-webhook
   :allow-hosts]` names it; otherwise its resolved addresses must all
@@ -308,6 +332,10 @@
 # -- the channel ---------------------------------------------------------
 
 (defn project
+  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
+             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
+             :overrides @{:keyword (or {:any :any} @{:any :any})}}]
+   :ret (or @{:id :string :at :number :key :keyword :url :string :body :string :headers :any} :nil)}
   "The endpoint and the body, or nil when this notification names no
   endpoint and none is configured."
   [note]
@@ -329,7 +357,12 @@
   carry a credential to whatever URL the notification chose.``
   ["content-type" "accept" "user-agent"])
 
-(defn- override-headers [given configured?]
+(defn- override-headers
+  {:params [(or {:any :any} :nil) :any] :ret (or {:any :any} @{:string :any})}
+  "The headers a per-notification `:webhook` override may add: as
+  given, when the URL is the configured one; the name-allowlisted
+  subset otherwise."
+  [given configured?]
   (if configured?
     given
     (tabseq [[k v] :pairs (or given {})
@@ -338,6 +371,9 @@
       name v)))
 
 (defn deliver
+  {:params [{:body :any :url :any :id :any :key :any :headers (or {:any :any} :nil) & r}]
+   :ret @{:channel :keyword :id :any :at :any & r}
+   :throws [:any]}
   ``POST the projected body, sign it here, and let the status decide
   whether there is anything to retry.
 
@@ -387,12 +423,19 @@
 
 # -- boot ----------------------------------------------------------------
 
-(defn- reveal-secret [cfg]
+(defn- reveal-secret
+  {:params [@{:signing-key :any & r}] :ret @{:signing-key :any & r}}
+  "Resolve `:signing-key` if it is a `{:secret ...}` config reference."
+  [cfg]
   (when (config/secret? (get cfg :signing-key))
     (put cfg :signing-key (config/reveal (get cfg :signing-key))))
   cfg)
 
-(defn- check-signing [cfg]
+(defn- check-signing
+  {:params [{:signing-key :any & r}] :ret :nil :throws [:string]}
+  "Refuse a configured `:signing-key` this process cannot sign with —
+  void/crypto is not in the composition."
+  [cfg]
   (when-let [secret (get cfg :signing-key)]
     (unless (empty? (string secret))
       (unless (first (protect (crypto/hmac-sha256 "probe" "probe")))

@@ -81,23 +81,40 @@
 
 # -- helpers -------------------------------------------------------------
 
-(defn- text [resp] (test/text resp))
+(defn- text
+  {:params [@{:body :any & r}] :ret :string}
+  "The response body as a string."
+  [resp] (test/text resp))
 
 (defn- token-of
+  {:params [@{:body :any & r}] :ret :string?}
   "The CSRF token out of a rendered form — no page below asked for one."
   [resp]
   (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
 (defn- message-of
+  {:params [@{:body :any & r}] :ret :string?}
   "The one line a page is allowed to say."
   [resp]
   (first (peg/match ~(* (thru `class="message">`) (<- (to "<"))) (text resp))))
 
-(defn- token-for [client uri]
+(defn- token-for
+  {:params [@{:kernel {:handler :any :make-request :any :serialize :any
+                       :notify-response :any & r}
+             :cookies @{:string :string} :headers @{:string :any} & r}
+            :string]
+   :ret :string
+   :throws [:string]}
+  "The CSRF token on the page at `uri`, or an error — every page this
+  suite asks for carries one."
+  [client uri]
   (or (token-of (test/inject client {:uri uri}))
       (errorf "no CSRF token on %s" uri)))
 
-(defn- link-of [challenge]
+(defn- link-of
+  {:params [{:handle :any :code :any & r}] :ret :string}
+  "The verification link a captured challenge points at."
+  [challenge]
   (string "/auth/link?h=" (challenge :handle) "&c=" (challenge :code)))
 
 (log/set-sinks! [(fn [_])])
@@ -181,7 +198,10 @@
                   :status)))
 
   (def anon-token (token-for c "/login"))
-  (defn- sign-in [email password]
+  (defn- sign-in
+    {:params [:string :string] :ret @{:raw :string & r}}
+    "Try /login with these credentials, against the shared client `c`."
+    [email password]
     (test/inject c {:uri "/login"
                     :headers {"x-csrf-token" anon-token}
                     :form {:email email :password password}}))
@@ -241,7 +261,10 @@
                   :status)))
 
   (def after (test/client (c :boot)))
-  (defn- try-login [password]
+  (defn- try-login
+    {:params [:string] :ret @{:raw :string & r} :throws [:string]}
+    "Try /login for ada, against the fresh client `after`."
+    [password]
     (test/inject after {:uri "/login"
                         :headers {"x-csrf-token" (token-for after "/login")}
                         :form {:email "ada@example.com" :password password}}))

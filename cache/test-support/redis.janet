@@ -28,11 +28,13 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn prefix
+  {:params [:string] :ret :string}
   "A key prefix nothing else is using: the suite name and this process."
   [suite]
   (string "void-test:cache:" suite ":" (os/getpid) ":"))
 
 (defn with-client*
+  {:params [:string (fn [a] b)] :ret :any}
   ``Run (f client) against the configured server under this suite's
   own key prefix, with the redis client bound — no plugin bootstrap
   behind it, which is what makes the store testable on its own.``

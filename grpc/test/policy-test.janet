@@ -29,11 +29,27 @@
   [ctx]
   (if (= "user:buyer" (authz/attr ctx :subject/subject)) true "not the buyer"))
 
-(defn get-order [msg _req] {:id (msg :id)})
-(defn count-orders [_msg _req] {:count 1})
-(defn place-order [msg _req] {:id "A-2" :total_cents (msg :total_cents)})
-(defn explode [_msg _req] {:count 0})
-(defn slow [_msg _req] {:count 0})
+(defn get-order
+  {:params [{:id :any & r} :any] :ret {:id :any}}
+  "The RPC handler under test: echoes the id back."
+  [msg _req] {:id (msg :id)})
+(defn count-orders
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: a fixed count."
+  [_msg _req] {:count 1})
+(defn place-order
+  {:params [{:total_cents :any & r} :any] :ret {:id :string :total_cents :any}}
+  "The RPC handler under test: places a new order."
+  [msg _req] {:id "A-2" :total_cents (msg :total_cents)})
+(defn explode
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: never actually explodes here — this
+  file's :Explode method exists only to be policy-guarded."
+  [_msg _req] {:count 0})
+(defn slow
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: a fixed count, standing in for a slow method."
+  [_msg _req] {:count 0})
 
 (grpc/defservice :shop.orders/OrderService
   {:meta {:void.authz/policy :orders/may-read}}
@@ -45,8 +61,11 @@
 
 # an ordinary route in the same application, so the two error
 # renderers have to coexist rather than take turns
-(defn page [_req] (ring/text 200 "a page"))
-(defn boom [_req] (error {:http/status 403 :message "not yours"}))
+(defn page {:params [:any] :ret :any} "An ordinary route, to check the two error renderers coexist." [_req] (ring/text 200 "a page"))
+(defn boom
+  {:params [:any] :ret :never :throws [{:http/status :number :message :string}]}
+  "An ordinary route that raises an HTTP abort directly, not through void/grpc."
+  [_req] (error {:http/status 403 :message "not yours"}))
 
 (def app-routes
   (router/routes {:void.authz/policy :public}
@@ -63,7 +82,10 @@
 
 (def path "/shop.orders.OrderService/")
 
-(defn- rpc [c method message &opt input identity]
+(defn- rpc
+  {:params [:any :string :any :keyword? :any] :ret :any}
+  "One RPC call through the injected test client, under the given identity."
+  [c method message &opt input identity]
   (with-dyns [authz/identity-dyn identity]
     (test/inject c {:method :post
                     :uri (string path method)

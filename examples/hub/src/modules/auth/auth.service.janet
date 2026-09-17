@@ -22,12 +22,17 @@
 (import ./auth.repository :as repo)
 
 (defn subject-string
+  {:params [@{:id :number & r}] :ret :string}
   "The subject a record signs in as — `[:auth-db :users :subject-kind]`
   is the `user` half of it."
   [record]
   (string "user:" (record :id)))
 
 (defn record-of
+  {:params [(or {:subject :string & r} :nil)]
+   :ret (or @{:id :number :email :string :password-hash :string?
+              :verified-at :string? :created-at :string? & r} :nil)
+   :throws [:string]}
   "The row an identity points at, or nil."
   [id]
   (when id
@@ -35,17 +40,28 @@
       (repo/by-id n))))
 
 (defn current-record
+  {:params []
+   :ret (or @{:id :number :email :string :password-hash :string?
+              :verified-at :string? :created-at :string? & r} :nil)
+   :throws [:string]}
   "The signed-in account as a row, or nil."
   []
   (record-of (auth/current-user)))
 
 (defn record-for-email
+  {:params [:string]
+   :ret (or @{:id :number :email :string :password-hash :string?
+              :verified-at :string? :created-at :string? & r} :nil)
+   :throws [:string]}
   "The account at an address, or nil — what the reset flow asks for
   before it decides to say nothing about the answer."
   [email]
   (repo/by-email email))
 
 (defn send-verification!
+  {:params [@{:id :number :email :string & r}]
+   :ret {:handle :string :kind :keyword :expires :number :delivered @[:keyword]}
+   :throws [:string :any]}
   ``Ask somebody to confirm the address they registered with. The claim
   is what tells this challenge from a password reset when the link comes
   back — `challenge!` refuses if nobody delivered it, which is the
@@ -57,6 +73,9 @@
                     :claims {:purpose "verify"}}))
 
 (defn send-reset!
+  {:params [@{:id :number :email :string & r}]
+   :ret {:handle :string :kind :keyword :expires :number :delivered @[:keyword]}
+   :throws [:string :any]}
   "Mail a link that signs somebody in long enough to choose a new
   password."
   [record]
@@ -65,6 +84,13 @@
                     :claims {:purpose "reset"}}))
 
 (defn register!
+  {:params [:string :string]
+   :ret (or {:status (enum :taken)}
+            {:status (enum :created)
+             :record @{:id :number :email :string :password-hash :string?
+                       :verified-at :string? :created-at :string? & r}
+             :identity (or {:subject :string & r} :nil)})
+   :throws [:string :any]}
   ``Create an account and answer with the identity it signs in as.
   `{:status :taken}` when the address already has one.
 
@@ -81,6 +107,9 @@
       {:status :created :record record :identity (check :identity)})))
 
 (defn authenticate
+  {:params [{:email :string :password :string}]
+   :ret (or {:subject :string & r} :nil)
+   :throws [:string]}
   ``The identity behind a password, or nil.
 
   `check-password` distinguishes an unknown address from a wrong
@@ -91,6 +120,11 @@
   (get (auth/check-password (auth/user-store) credentials) :identity))
 
 (defn redeem
+  {:params [:string? :string?]
+   :ret (or {:subject :string :via :keyword :cookie :boolean
+             :claims {:keyword :any} :at :number :expires (or :number :nil)}
+            :nil)
+   :throws [:string]}
   ``The identity a link carries, or nil when it has expired or been
   used.
 
@@ -102,17 +136,24 @@
   (auth/redeem! handle code))
 
 (defn purpose-of
+  {:params [(or {:claims (or {:purpose :any & r} :nil) & r} :nil)] :ret :any}
   "What a redeemed link was for — a claim that travelled on the
   challenge, so there is no second table and no second route."
   [identity]
   (get-in identity [:claims :purpose]))
 
 (defn confirm-address!
+  {:params [(or {:subject :string & r} :nil)]
+   :ret (or :number :nil)
+   :throws [:string]}
   "Stamp the address of a redeemed verification link."
   [identity]
   (repo/mark-verified! (record-of identity)))
 
 (defn change-password!
+  {:params [@{:id :number & r} :string]
+   :ret :number
+   :throws [:string]}
   "Set a new password on an account that is already signed in."
   [record password]
   (repo/set-password-hash! (record :id) (auth/hash-password password)))

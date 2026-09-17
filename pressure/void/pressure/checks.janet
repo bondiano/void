@@ -54,6 +54,9 @@
   2)
 
 (defn evaluate
+  {:params [{:waiting :number? :size :number? :in-use :number? :timeouts :number? & r}
+            :number :number (or :number :nil) :number (or :string :nil)]
+   :ret [(or {:ok :boolean} {:ok :boolean :reason :string}) (or :number :nil)]}
   ``The decision, as a pure function: `[result since']` from one stats
   reading. `since` is when the exhaustion was first seen (nil when it
   was not), `now` the current monotonic clock; the caller keeps
@@ -75,6 +78,9 @@
     [{:ok true} nil]))
 
 (defn make-pool-check
+  {:params [(fn [] (or {:waiting :number? :size :number? :in-use :number? :timeouts :number? & r} :nil))
+            (or {:max-waiting :number? :grace :number? :label :string? & r} :nil)]
+   :ret (fn [] (or {:ok :boolean} {:ok :boolean :reason :string}))}
   ``A pool-exhaustion check over `read-stats`, a thunk returning a
   `pool/stats`-shaped dictionary or nil (nil answers `{:ok true}`).
   `opts` may fix `:max-waiting`, `:grace` and the `:label` the reason
@@ -105,6 +111,7 @@
 # -- the built-in: this process's :db/pool -------------------------------
 
 (defn- module-fn
+  {:params [:string :symbol] :ret :any}
   "The public binding `name` of module `path`, or nil when that
   package is not on this process's module path (the seam that keeps
   void/pressure free of a dependency on void/db — see the module
@@ -114,6 +121,8 @@
   (when ok (get-in env [name :value])))
 
 (defn- pool-stats-reader
+  {:params [:string :keyword (or (fn [:any] :any) :nil)]
+   :ret (fn [] (or {:waiting :number? :size :number? :in-use :number? :timeouts :number? & r} :nil))}
   ``A thunk answering the stats of the `component` pool through
   `module`'s public `stats`, or nil when the package is not on this
   process's module path, no boot is running, or this composition has
@@ -136,6 +145,7 @@
           (when (and ok-s (dictionary? s)) s))))))
 
 (defn- limit
+  {:params [:keyword :number] :ret :number}
   "A numeric [:pressure] config value off the active state, else the
   default — the state a check runs against is the one that holds the
   slice its thresholds came from."
@@ -144,6 +154,10 @@
   (if (number? v) v dflt))
 
 (defn- pool-contribution
+  {:params [:keyword :string
+            (fn [] (or {:waiting :number? :size :number? :in-use :number? :timeouts :number? & r} :nil))
+            :keyword :keyword]
+   :ret {:name :keyword :doc :string :fn (fn [] (or {:ok :boolean} {:ok :boolean :reason :string}))}}
   ``One shipped check over one pool: the reader above, the thresholds
   off the active state's config (so a check runs against the slice its
   numbers came from), and the grace period's memory — one var per

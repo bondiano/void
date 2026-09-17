@@ -24,6 +24,7 @@
   :void.dash/logs)
 
 (defn active?
+  {:params [] :ret :boolean :throws [:string]}
   "Is the live half armed — void/datastar composed and its registry
   running?"
   []
@@ -31,6 +32,7 @@
        (truthy? datastar/current-registry)))
 
 (defn poke!
+  {:params [:keyword] :ret :nil :throws [:string]}
   "Wake a room, if the live half is armed; never throws — a dashboard
   must not take a log sink or a sampler down with it."
   [room]
@@ -39,6 +41,9 @@
   nil)
 
 (defn stream
+  {:params [:any (fn [] :any) (or @[:keyword] [:keyword])]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
   ``A morph-stream over `view` (a function of no arguments returning
   the full page as hiccup), or the refusal that names the plugin when
   the live half is not armed.``

@@ -64,6 +64,8 @@
    :note [:optional :string]})
 
 (defn echo
+  {:params [@{:parsed-body :any & r}]
+   :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
   "POST /echo — the validated body straight back out."
   [req]
   (rest/json (req :parsed-body)))
@@ -101,5 +103,8 @@
                                    8101)}
                   :pressure {:max-loop-lag 0}}}})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret @{:keyword :any}}
+  "Process entrypoint: start the B1 app and block until stopped."
+  [& args]
   (void/run! app))

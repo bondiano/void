@@ -20,6 +20,7 @@
 (require "void/bench/probe")
 
 (defn hello
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "GET / — the B0 handler."
   [req]
   (ring/response 200 "Hello, World!"
@@ -44,5 +45,8 @@
                          :port (or (scan-number (or (os/getenv "PORT") ""))
                                    8100)}}}})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret @{:keyword :any}}
+  "Process entrypoint: start the B0 app and block until stopped."
+  [& args]
   (void/run! app))

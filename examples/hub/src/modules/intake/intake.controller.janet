@@ -13,11 +13,17 @@
 
 (def log-ns "hub.intake")
 
-(defn- accepted [status body]
+(defn- accepted
+  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "A JSON response with the given status."
+  [status body]
   (ring/content-type (ring/response status (string (json/encode body)))
                      "application/json"))
 
 (defn receive
+  {:params [{:params (or @{:any :any} :nil) :body :any :headers (or @{:any :any} :nil) & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}
+   :throws [:string]}
   "POST /in/:source — the whole receiving end."
   [req]
   (def name (get-in req [:params :source]))

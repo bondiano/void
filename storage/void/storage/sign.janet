@@ -26,16 +26,26 @@
   # scheme to change without a flag day
   "void.storage.v1")
 
-(defn- payload [key expires-at]
+(defn- payload
+  {:params [:string :number] :ret :string}
+  "The versioned bytes `secret/sign` MACs: the scheme version, the
+  key and the expiry, newline-separated."
+  [key expires-at]
   (string version "\n" key "\n" expires-at))
 
-(defn- keys-ready! []
+(defn- keys-ready!
+  {:params [] :ret :nil :throws [:string]}
+  "Refuse to go on when :void/security's signing keys are not
+  configured — a temporary URL with no key to sign it is a bug, not
+  a nil."
+  []
   (when (empty? secret/keys)
     (error (string "storage: a temporary URL needs the signing keys of "
                    ":void/security — add it to :plugins (and [:security "
                    ":signing-key] in :prod), or serve the file without :expires"))))
 
 (defn params
+  {:params [:string :number :number?] :ret {:string :string} :throws [:string]}
   ``The query parameters of a temporary URL for `key`:
   {"exp" "<unix>" "sig" "<base64url mac>"}. `expires` is seconds from
   `now` (default: from the wall clock).``
@@ -49,6 +59,8 @@
    "sig" (crypto/base64url (secret/sign (payload key at)))})
 
 (defn valid?
+  {:params [:string (or :string :buffer :nil) (or :string :buffer :nil) :number?]
+   :ret :boolean :narrows :any}
   ``Does `sig` authorize `key` until `exp`, and is `exp` still in the
   future? Tampering, truncation and expiry all get the same false —
   which of them it was is nothing a client needs told.``

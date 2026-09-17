@@ -115,11 +115,24 @@
   through it."
   nil)
 
-(defn- boot []
+(defn- boot
+  {:params []
+   :ret {:phase :keyword :profile :keyword :extensions {:keyword :any}
+         :system (or {:components :any & r} :nil)
+         :config (or {:values @{:any :any} & r} :nil)
+         & r}
+   :throws [:string]}
+  "The boot value this process's projection reads, or an error naming
+  what to add if nothing set it."
+  []
   (or boot-ref
       (error "void/mcp is not booted — add :void/mcp to :plugins (the projection is built at :before-start)")))
 
 (defn build-settings
+  {:params [{:extensions {:keyword :any}
+             :config (or {:values @{:any :any} & r} :nil) & r}]
+   :ret {:keyword :any}
+   :throws [:string]}
   "The [:mcp] slice over the defaults, checked against the
   composition. Normally called by the :before-start hook."
   [b]
@@ -144,6 +157,14 @@
 # -- the projection ------------------------------------------------------
 
 (defn server-value
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:info @{:name :string :version :string}
+          :instructions :any
+          :tools @[@{:name :string :title :string :description :string :input-schema :any
+                     :annotations :any :read-only? :boolean :plugin :keyword?
+                     :call (fn [:any :any] :any)}]
+          :resources @[@{:uri :string :name :string :title :string :description :string
+                        :mime-type :string :read (fn [] :any)}]}}
   ``The server value for this process (see ./server for the shape) —
   built per call, so a command contributed by a hot-reloaded plugin is
   a tool without a restart. `opts` :start-needs says whether a tool
@@ -152,6 +173,7 @@
   (registry/build (boot) settings (or opts {})))
 
 (defn exposed
+  {:params [(or {:keyword :any} :nil)] :ret {:tools @[:string] :resources @[:string]}}
   "What this composition exposes, as data: {:tools [names] :resources
   [uris]} — what `void mcp tools` prints and what the suite asserts on."
   [&opt opts]
@@ -160,6 +182,12 @@
    :resources (map |($ :uri) (srv :resources))})
 
 (defn handle
+  {:params [{:id :any :params :any :response? :any :notification? :any :method :string? & r}
+            (or {:keyword :any} :nil)]
+   :ret (or @{:jsonrpc :string :id :any :result :any}
+            @{:jsonrpc :string :id :any
+              :error @{:code (or :keyword :number) :message :string & r}}
+            :nil)}
   "Answer one decoded JSON-RPC message against this process's
   projection — the entry point both transports share."
   [msg &opt opts]
@@ -168,6 +196,7 @@
 # -- commands ------------------------------------------------------------
 
 (defn print-tools
+  {:params [] :ret :nil}
   ``The body of `void mcp tools`: what an agent connecting right now
   would see, and — for every command that is not there — the reason.
   Every exposed tool is printed with the plugin that contributed it,

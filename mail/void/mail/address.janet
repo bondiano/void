@@ -39,11 +39,13 @@
       :main (* :label (any (* "." :label)) -1)}))
 
 (defn ascii?
+  {:params [:any] :ret :boolean :narrows :any}
   "True when every byte is printable US-ASCII (space through ~)."
   [s]
   (all |(and (>= $ 0x20) (< $ 0x7f)) (string s)))
 
 (defn valid-email?
+  {:params [:any] :ret :boolean :narrows :any}
   ``Is this an address this client can put in a MAIL FROM or an RCPT
   TO? Deliberately not the full RFC 5321 grammar: quoted local parts
   and address literals (`[192.0.2.1]`) are legal and are refused,
@@ -64,6 +66,9 @@
        true))
 
 (defn parse
+  {:params [(or :string :buffer {:email :any & r})]
+   :ret {:name :string? :email :string}
+   :throws [:string]}
   ``An address as data. Accepts what an application writes:
 
       "ada@example.com"
@@ -99,6 +104,9 @@
     (errorf "an address is a string or a {:name :email} table, got %q" addr)))
 
 (defn list-of
+  {:params [(or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+   :ret @[{:name :string? :email :string}]
+   :throws [:string]}
   ``Normalize whatever a message put in :to / :cc / :bcc into a list of
   parsed addresses. nil is an empty list; one address is a list of
   one.``
@@ -110,6 +118,7 @@
     (errorf "a recipient list is a string, an address or an array of them, got %q" addrs)))
 
 (defn header-value
+  {:params [:string :any] :ret :string :throws [:string]}
   ``A value on its way into a header, checked. CR and LF are refused —
   that is header injection, and this is the one place that can see
   it.``
@@ -120,6 +129,7 @@
   s)
 
 (defn format-address
+  {:params [(or :string :buffer {:email :any & r})] :ret :string :throws [:string]}
   ``Render one parsed address for a header. The display name is not
   encoded here — ./mime does that, because whether an encoded word is
   needed depends on the whole header line, not on this piece.``
@@ -130,16 +140,21 @@
     (a :email)))
 
 (defn format-list
+  {:params [(or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+   :ret :string :throws [:string]}
   "Render a list of addresses as one header value."
   [addrs]
   (string/join (map format-address (list-of addrs)) ", "))
 
 (defn emails
+  {:params [(or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+   :ret @[:string] :throws [:string]}
   "Just the addresses — what SMTP puts in RCPT TO."
   [addrs]
   (map |($ :email) (list-of addrs)))
 
 (defn domain-of
+  {:params [(or :string :buffer {:email :any & r})] :ret :string :throws [:string]}
   "The domain half of an address, for a Message-ID."
   [addr]
   (def email ((parse addr) :email))

@@ -59,6 +59,7 @@
   @[])
 
 (defmacro- defrk
+  {:params [:symbol :any :any] :ret :any}
   ``Declare one librdkafka function: a module-level `var`, nil until
   `load!` installs the call. `& args` are ffi types; a trailing
   :optional marks a symbol an older library may not have.``
@@ -227,6 +228,7 @@
 (def- cell-size 8)
 
 (defn cstr
+  {:params [:pointer?] :ret :string?}
   "A `char *` that may be NULL, as a janet string or nil."
   [ptr]
   (when ptr
@@ -235,6 +237,7 @@
     (ffi/read :string cell 0)))
 
 (defn bytes-at
+  {:params [:pointer? :number] :ret :string}
   ``Exactly `n` bytes from `ptr`, as a janet string. A message value
   is a pointer plus a length, and the length is the half that matters:
   a payload is bytes, and bytes are allowed to contain a NUL.``
@@ -244,11 +247,13 @@
     (string (ffi/pointer-buffer ptr n n 0))))
 
 (defn read-out
+  {:params [:buffer :keyword] :ret :any}
   "One out-parameter of C type `type`, read back from an 8-byte cell."
   [cell type]
   (ffi/read type cell 0))
 
 (defn out-cell
+  {:params [] :ret :buffer}
   "An 8-byte zeroed buffer for a C out-parameter."
   []
   (buffer/new-filled cell-size))
@@ -274,6 +279,9 @@
    :key 40 :key-len 48 :offset 56 :private 64})
 
 (defn message
+  {:params [:pointer?]
+   :ret (or :nil {:err :number :rkt :pointer? :topic :string? :partition :number
+                  :value :string :key :string? :offset :number :token :number})}
   ``One rd_kafka_message_t as a table. `:topic` is read through
   `rd_kafka_topic_name`, whose lifetime is the rkt's — the string is
   copied here, so the table survives the event that owned it. `:len`
@@ -302,6 +310,7 @@
      :token (scan-number (string (ffi/read :uint64 buf (message-offsets :private))))}))
 
 (defn event-log
+  {:params [:pointer] :ret (or :nil {:fac :string? :text :string? :level :number})}
   "A log event's {:fac :text :level} — syslog levels, 3 is an error,
   7 is debug."
   [ev]
@@ -314,6 +323,7 @@
      :level (read-out levelp :int)}))
 
 (defn message-headers
+  {:params [:pointer] :ret @{:string :string?}}
   ``The headers of a fetched message, as a table of string -> string.
   The headers object belongs to the message and the message to its
   event, so everything is copied on the way out. A message without
@@ -350,31 +360,48 @@
 (def- vu-union 8)
 
 (defn vu-buffer
+  {:params [:number] :ret :buffer}
   "A zeroed buffer for `n` rd_kafka_vu_t entries."
   [n]
   (buffer/new-filled (* n vu-size)))
 
-(defn- vu-base [i] (* i vu-size))
+(defn- vu-base
+  {:params [:number] :ret :number}
+  "The byte offset of entry `i` in a vu buffer."
+  [i] (* i vu-size))
 
-(defn vu-topic! [buf i name]
+(defn vu-topic!
+  {:params [:buffer :number :string] :ret :buffer}
+  "Write vtype :topic and the topic name into entry `i`."
+  [buf i name]
   (ffi/write :int (vtypes :topic) buf (vu-base i))
   (ffi/write :ptr name buf (+ (vu-base i) vu-union)))
 
-(defn vu-value! [buf i bytes]
+(defn vu-value!
+  {:params [:buffer :number :string] :ret :buffer}
+  "Write vtype :value and the payload bytes into entry `i`."
+  [buf i bytes]
   (ffi/write :int (vtypes :value) buf (vu-base i))
   (ffi/write :ptr bytes buf (+ (vu-base i) vu-union))
   (ffi/write :uint64 (length bytes) buf (+ (vu-base i) vu-union 8)))
 
-(defn vu-key! [buf i bytes]
+(defn vu-key!
+  {:params [:buffer :number :string] :ret :buffer}
+  "Write vtype :key and the key bytes into entry `i`."
+  [buf i bytes]
   (ffi/write :int (vtypes :key) buf (vu-base i))
   (ffi/write :ptr bytes buf (+ (vu-base i) vu-union))
   (ffi/write :uint64 (length bytes) buf (+ (vu-base i) vu-union 8)))
 
-(defn vu-msgflags! [buf i flags]
+(defn vu-msgflags!
+  {:params [:buffer :number :number] :ret :buffer}
+  "Write vtype :msgflags and the produceva flags into entry `i`."
+  [buf i flags]
   (ffi/write :int (vtypes :msgflags) buf (vu-base i))
   (ffi/write :int flags buf (+ (vu-base i) vu-union)))
 
 (defn vu-opaque!
+  {:params [:buffer :number :number] :ret :buffer}
   "The msg_opaque as a u64 written where the `void *` goes: the
   pointer is never dereferenced by anyone — it rides to the delivery
   report and comes back out of `_private` as the same number."
@@ -382,7 +409,10 @@
   (ffi/write :int (vtypes :opaque) buf (vu-base i))
   (ffi/write :uint64 token buf (+ (vu-base i) vu-union)))
 
-(defn vu-header! [buf i name bytes]
+(defn vu-header!
+  {:params [:buffer :number :string :string] :ret :buffer}
+  "Write vtype :header, its name and its value bytes into entry `i`."
+  [buf i name bytes]
   (ffi/write :int (vtypes :header) buf (vu-base i))
   (ffi/write :ptr name buf (+ (vu-base i) vu-union))
   (ffi/write :ptr bytes buf (+ (vu-base i) vu-union 8))
@@ -391,6 +421,7 @@
 # -- the pipe ------------------------------------------------------------
 
 (defn make-pipe
+  {:params [] :ret [:number :number]}
   ``A pipe(2) as [read-fd write-fd]. The write end goes to
   `rd_kafka_queue_io_event_enable`, the read end to void/fdwait.``
   []
@@ -400,6 +431,7 @@
   [(ffi/read :int fds 0) (ffi/read :int fds 4)])
 
 (defn drain-pipe!
+  {:params [:number] :ret :nil}
   ``Take whatever is in the pipe. Called only after fdwait said the
   descriptor is readable, so the read cannot block; anything left
   keeps the fd readable and the next pass drains again
@@ -410,6 +442,7 @@
   nil)
 
 (defn wake-byte!
+  {:params [:number] :ret :nil}
   ``One byte into the write end — our own hand on the library's
   doorbell. The pump drains without counting, so a spurious byte costs
   one empty poll; a missing one costs a fiber parked forever, which is
@@ -418,16 +451,21 @@
   (write- fd "!" 1)
   nil)
 
-(defn close-fd! [fd] (close- fd) nil)
+(defn close-fd!
+  {:params [:number] :ret :nil}
+  "Close a raw fd opened by `make-pipe`."
+  [fd] (close- fd) nil)
 
 # -- errors --------------------------------------------------------------
 
 (defn err-str
+  {:params [:number] :ret :string}
   "rd_kafka_resp_err_t as its text."
   [code]
   (rd_kafka_err2str code))
 
 (defn take-error!
+  {:params [:pointer?] :ret (or :nil {:code :number :text :string})}
   ``Consume an rd_kafka_error_t: nil in, nil out; otherwise its
   {:code :text}, with the object destroyed — the caller received
   ownership and this is where it ends.``
@@ -450,11 +488,13 @@
   @[])
 
 (defn available?
+  {:params [] :ret :boolean}
   "Have the bindings been opened?"
   []
   (not (nil? library-path)))
 
 (defn candidates
+  {:params [:string?] :ret [:string]}
   "The search order for a given configured path (nil = the defaults),
   environment override included."
   [&opt path]
@@ -463,11 +503,18 @@
     (os/getenv path-env) [(os/getenv path-env)]
     default-candidates))
 
-(defn- try-open [path]
+(defn- try-open
+  {:params [:string] :ret (or :nil :abstract)}
+  "Open `path` as a native library, or nil on failure."
+  [path]
   (def [ok lib] (protect (ffi/native path)))
   (when ok lib))
 
-(defn- load-libc! []
+(defn- load-libc!
+  {:params [] :ret :function}
+  "Bind pipe(2)/read(2)/write(2)/close(2) out of this process itself —
+  they are always in it, unlike librdkafka."
+  []
   # the current process: pipe/read/close are always in it
   (def self (ffi/native))
   (defn bind [name ret & args]
@@ -481,6 +528,7 @@
   (set close- (bind "close" :int :int)))
 
 (defn load!
+  {:params [:string?] :ret :string :throws [:string]}
   ``Open librdkafka and install the bindings. `path` (from
   [:kafka :library]) is tried alone; without it the platform defaults
   are, in order. Idempotent for the same path.``
@@ -521,6 +569,7 @@
   found)
 
 (defn version
+  {:params [] :ret :string?}
   "What the loaded library calls itself — \"2.15.0\" or similar."
   []
   (when (available?) (rd_kafka_version_str)))

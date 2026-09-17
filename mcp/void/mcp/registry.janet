@@ -74,6 +74,7 @@
 # -- names ---------------------------------------------------------------
 
 (defn tool-name
+  {:params [:keyword] :ret :string}
   ``The MCP name of a command: `:db/status` -> "db_status". Clients
   and models alike expect `[a-z0-9_-]`, and the slash a namespaced
   command keyword carries is not in it.``
@@ -81,6 +82,7 @@
   (string/replace-all "/" "_" (string name)))
 
 (defn schema-uri
+  {:params [:keyword] :ret :string}
   "The URI a registered schema is published under."
   [name]
   (string "void://schema/" name))
@@ -88,6 +90,7 @@
 # -- running a command ---------------------------------------------------
 
 (defn- callable
+  {:params [{:name :any & r} :keyword?] :ret (fn [& :any] :any) :throws [:struct]}
   ``The function of a contribution under `key`, resolved now through
   void/core/bind: a function is itself, a qualified symbol
   (`'my-app.ops/status`) is read through its module's env at every
@@ -104,6 +107,9 @@
    :call))
 
 (defn- instances
+  {:params [{:system (or {:components :any & r} :nil) & r} (or @[:keyword] [:keyword] :nil) :any]
+   :ret @[:any]
+   :throws [:string]}
   ``The `:needs` instances of a command, in declaration order.
 
   `:start` decides what happens when a needed component is not
@@ -128,6 +134,7 @@
   (map |(get-in sys [:instances $]) (or needs [])))
 
 (defn- argv
+  {:params [(or {:args :any & r} :nil)] :ret @[:string] :throws [:string]}
   ``The `args` of a tool call as strings. An array is the declared
   shape; a bare string is what a model that thinks in command lines
   sends, and splitting it on whitespace is a better answer than
@@ -146,6 +153,7 @@
     (errorf "args must be an array of strings, got %q" given)))
 
 (defn- rendered
+  {:params [:any :any] :ret :string}
   "What a call answers with: what it printed, or — when it printed
   nothing — what it returned."
   [out value]
@@ -156,6 +164,7 @@
     (string/format "%q" value)))
 
 (defn- failure-text
+  {:params [:any] :ret :string}
   "What a failed call says to the model: a string as it is, an error
   envelope (void/core/errors) by its sentence, anything else described."
   [value]
@@ -165,6 +174,18 @@
     (describe value)))
 
 (defn run-command
+  {:params [{:system (or {:components :any & r} :nil) & r}
+            {:name :keyword
+             :doc :string?
+             :needs (or @[:keyword] [:keyword] :nil)
+             :read-only? :any
+             :plugin :keyword?
+             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+             :args (or @[:string] :nil)
+             & r}
+            :any
+            (or {:out :any :start-needs :any & r} :nil)]
+   :ret @{:text :string :error? :boolean}}
   ``Run a CLI command as a tool call: resolve its `:needs`, bind
   `:out` to a buffer, call it with the instances followed by the
   argument strings, and answer with what it printed.
@@ -191,6 +212,18 @@
      :error? true}))
 
 (defn run-tool
+  {:params [{:system (or {:components :any & r} :nil) & r}
+            {:name :keyword
+             :doc :string?
+             :title :string?
+             :read-only? :any
+             :schema :any
+             :needs (or @[:keyword] [:keyword] :nil)
+             :plugin :keyword?
+             & r}
+            :any
+            (or {:out :any :start-needs :any & r} :nil)]
+   :ret @{:text :string :error? :boolean}}
   ``Run a `:void.mcp/tool` contribution. Its arguments are validated
   (and coerced) against its `:schema` first, so a tool written for MCP
   gets what every other void input gets: one declaration, validation
@@ -226,6 +259,7 @@
 # reason, as :void.http/route-source taking a function.
 
 (defn- provenance
+  {:params [{:extensions {:keyword :any} & r} :keyword] :ret @{:keyword :keyword?}}
   ``Which plugin contributed each entry of one point, by the entry's
   :name — read off the contribution wrappers, because the resolved
   values bootstrap hands on no longer say where they came from.``
@@ -234,6 +268,7 @@
     (get-in c [:value :name]) (c :plugin)))
 
 (defn- expanded
+  {:params [{:extensions {:keyword :any} & r} :keyword :string] :ret @[{:plugin :keyword? & r}]}
   "The contributions of one point, with every :expand applied, and each
   entry carrying the plugin it came from."
   [boot point what]
@@ -255,24 +290,37 @@
   out)
 
 (defn contributed-tools
+  {:params [{:extensions {:keyword :any} & r}] :ret @[{:plugin :keyword? & r}]}
   "Every :void.mcp/tool this composition has, projections included."
   [boot]
   (expanded boot :void.mcp/tool "MCP tool"))
 
 (defn contributed-resources
+  {:params [{:extensions {:keyword :any} & r}] :ret @[{:plugin :keyword? & r}]}
   "Every :void.mcp/resource this composition has, projections included."
   [boot]
   (expanded boot :void.mcp/resource "MCP resource"))
 
 # -- what is exposed -----------------------------------------------------
 
-(defn- hidden? [settings name]
+(defn- hidden?
+  {:params [{:hide (or @[:keyword] [:keyword] :nil) & r} :keyword] :ret :boolean}
+  "Is `name` named in `[:mcp :hide]`?"
+  [settings name]
   (truthy? (index-of name (get settings :hide []))))
 
-(defn- allowlisted? [settings name]
+(defn- allowlisted?
+  {:params [{:tools (or @[:keyword] [:keyword] :nil) & r} :keyword] :ret :boolean}
+  "Is `name` named in `[:mcp :tools]`?"
+  [settings name]
   (truthy? (index-of name (get settings :tools []))))
 
 (defn exposed?
+  {:params [{:hide (or @[:keyword] [:keyword] :nil)
+             :tools (or @[:keyword] [:keyword] :nil)
+             :read-only :boolean? & r}
+            {:name :keyword :read-only? :any & r}]
+   :ret :boolean}
   ``The gate, in one place: a declaration is exposed when it says it
   is read-only (and `[:mcp :read-only]` is on), or when the operator
   named it in `[:mcp :tools]`; `[:mcp :hide]` wins over both, so a
@@ -294,12 +342,14 @@
                 (true? (get entry :read-only?))))))
 
 (defn command-names
+  {:params [{:extensions {:keyword :any} & r}] :ret @[:keyword]}
   "Every CLI command in this composition, whether exposed or not — the
   vocabulary `[:mcp :tools]` is checked against."
   [boot]
   (map |($ :name) (get-in boot [:extensions :void.core/cli :resolved] [])))
 
 (defn contributed-tool-names
+  {:params [{:extensions {:keyword :any} & r}] :ret @[:keyword]}
   "Every :void.mcp/tool in this composition."
   [boot]
   (map |($ :name) (contributed-tools boot)))
@@ -315,7 +365,12 @@
                          "description" "Command-line arguments, exactly as the `void` binary takes them"}}
    "additionalProperties" false})
 
-(defn- annotations [entry title]
+(defn- annotations
+  {:params [{:read-only? :any & r} :string]
+   :ret @{:title :string :readOnlyHint :boolean :destructiveHint :boolean :openWorldHint :boolean}}
+  "The MCP tool annotations for `entry` (a command or a :void.mcp/tool
+  contribution), titled `title`."
+  [entry title]
   (def read-only (true? (get entry :read-only?)))
   @{:title title
     :readOnlyHint read-only
@@ -326,6 +381,18 @@
     :openWorldHint false})
 
 (defn command-tool
+  {:params [{:system (or {:components :any & r} :nil) & r}
+            {:name :keyword
+             :doc :string?
+             :needs (or @[:keyword] [:keyword] :nil)
+             :read-only? :any
+             :plugin :keyword?
+             :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
+             :args (or @[:string] :nil)
+             & r}
+            {:keyword :any}]
+   :ret @{:name :string :title :string :description :string :input-schema :any
+          :annotations :any :read-only? :boolean :plugin :keyword? :call (fn [:any :any] :any)}}
   "One CLI command as an MCP tool."
   [boot cmd opts]
   (def name (tool-name (cmd :name)))
@@ -346,6 +413,18 @@
             (run-command boot cmd arguments (merge opts {:out out})))})
 
 (defn contributed-tool
+  {:params [{:system (or {:components :any & r} :nil) & r}
+            {:name :keyword
+             :doc :string?
+             :title :string?
+             :read-only? :any
+             :schema :any
+             :needs (or @[:keyword] [:keyword] :nil)
+             :plugin :keyword?
+             & r}
+            {:keyword :any}]
+   :ret @{:name :string :title :string :description :string :input-schema :any
+          :annotations :any :read-only? :boolean :plugin :keyword? :call (fn [:any :any] :any)}}
   "One :void.mcp/tool contribution as an MCP tool."
   [boot tool opts]
   (def name (tool-name (tool :name)))
@@ -362,6 +441,13 @@
             (run-tool boot tool arguments (merge opts {:out out})))})
 
 (defn tools
+  {:params [{:extensions {:keyword :any} :system (or {:components :any & r} :nil) & r}
+            {:hide (or @[:keyword] [:keyword] :nil)
+             :tools (or @[:keyword] [:keyword] :nil)
+             :read-only :boolean? & r}
+            (or {:keyword :any} :nil)]
+   :ret @[@{:name :string :title :string :description :string :input-schema :any
+            :annotations :any :read-only? :boolean :plugin :keyword? :call (fn [:any :any] :any)}]}
   "Every tool this composition exposes, sorted by name: the CLI
   commands that pass the gate, then the :void.mcp/tool contributions
   that do."
@@ -382,6 +468,7 @@
 # -- resources -----------------------------------------------------------
 
 (defn schema-document
+  {:params [:keyword] :ret @{:string :any} :throws [:string]}
   ``One registered schema as a standalone JSON Schema document. The
   refs it reaches are resolved into `components/schemas` — the same
   pointer void/openapi writes, and it resolves inside this document
@@ -396,6 +483,8 @@
   doc)
 
 (defn schema-names
+  {:params [{:schemas (or :boolean @[:keyword] [:keyword] :nil) & r}]
+   :ret (or @[:keyword] [:keyword])}
   ``The schemas exposed as resources: every registered one
   (`[:mcp :schemas]` true, the default), a named subset, or none.``
   [settings]
@@ -406,6 +495,9 @@
     (schema/registered)))
 
 (defn schema-resources
+  {:params [{:schemas (or :boolean @[:keyword] [:keyword] :nil) & r}]
+   :ret @[@{:uri :string :name :string :title :string :description :string
+            :mime-type :string :read (fn [] :any)}]}
   "The registered schemas as resources."
   [settings]
   (seq [name :in (schema-names settings)]
@@ -417,6 +509,10 @@
       :read (fn read-schema [] (json/encode (schema-document name)))}))
 
 (defn health-resource
+  {:params [{:phase :keyword :profile :keyword :extensions {:keyword :any}
+             :system (or {:components :any & r} :nil) & r}]
+   :ret @{:uri :string :name :string :title :string :description :string
+          :mime-type :string :read (fn [] :any)}}
   ``The process's health as a resource — `plugin/health`, the same
   fold `GET /health` renders (void/obs-http), so an agent and a load
   balancer read one report rather than two.``
@@ -429,6 +525,17 @@
     :read (fn read-health [] (json/encode (plugin/health boot)))})
 
 (defn contributed-resource
+  {:params [{:system (or {:components :any & r} :nil) & r}
+            {:uri :string
+             :name :any
+             :title :string?
+             :doc :string?
+             :mime-type :string?
+             :needs (or @[:keyword] [:keyword] :nil)
+             & r}
+            {:keyword :any}]
+   :ret @{:uri :string :name :string :title :string :description :string
+          :mime-type :string :read (fn [] :any)}}
   "One :void.mcp/resource contribution as a resource."
   [boot res opts]
   @{:uri (res :uri)
@@ -443,6 +550,14 @@
             (f ;inst))})
 
 (defn resources
+  {:params [{:phase :keyword :profile :keyword :extensions {:keyword :any}
+             :system (or {:components :any & r} :nil) & r}
+            {:health :boolean?
+             :schemas (or :boolean @[:keyword] [:keyword] :nil)
+             :hide (or @[:keyword] [:keyword] :nil) & r}
+            (or {:keyword :any} :nil)]
+   :ret @[@{:uri :string :name :string :title :string :description :string
+            :mime-type :string :read (fn [] :any)}]}
   "Every resource this composition publishes, sorted by URI."
   [boot settings &opt opts]
   (default opts {})
@@ -458,6 +573,25 @@
 # -- the server value ----------------------------------------------------
 
 (defn build
+  {:params [{:phase :keyword :profile :keyword :extensions {:keyword :any}
+             :system (or {:components :any & r} :nil) & r}
+            {:hide (or @[:keyword] [:keyword] :nil)
+             :tools (or @[:keyword] [:keyword] :nil)
+             :read-only :boolean?
+             :health :boolean?
+             :schemas (or :boolean @[:keyword] [:keyword] :nil)
+             :name :string?
+             :version :string?
+             :instructions :any
+             & r}
+            (or {:keyword :any} :nil)]
+   :ret @{:info @{:name :string :version :string}
+          :instructions :any
+          :tools @[@{:name :string :title :string :description :string :input-schema :any
+                     :annotations :any :read-only? :boolean :plugin :keyword?
+                     :call (fn [:any :any] :any)}]
+          :resources @[@{:uri :string :name :string :title :string :description :string
+                        :mime-type :string :read (fn [] :any)}]}}
   ``The server value for a booted composition (see ./server for its
   shape). `opts` :start-needs says whether a tool may start the
   components it needs — true on stdio, false in a serving process.``
@@ -472,6 +606,10 @@
 # -- the allowlist is checked before anything runs -----------------------
 
 (defn check-settings!
+  {:params [{:extensions {:keyword :any} & r}
+            {:tools (or @[:keyword] [:keyword] :nil) :hide (or @[:keyword] [:keyword] :nil) & r}]
+   :ret {:tools (or @[:keyword] [:keyword] :nil) :hide (or @[:keyword] [:keyword] :nil) & r}
+   :throws [:string]}
   ``Refuse a `[:mcp :tools]` or `[:mcp :hide]` entry that names
   nothing: a typo in an allowlist is a tool silently missing from an
   agent's toolbox, and there is no later moment at which anybody finds

@@ -43,6 +43,8 @@
    :routes true :encoding true})
 
 (defn normalize
+  {:params [:any] :ret {:name :keyword :priority :number :render :function & r}
+   :throws [:string]}
   "Validate a widget declaration — the shape both the extension point
   and an anonymous `:widget` table have to have."
   [w]
@@ -74,6 +76,7 @@
 # -- the default text projection -----------------------------------------
 
 (defn text-of
+  {:params [:any] :ret :string}
   ``What a value looks like when nobody said otherwise. `nil` is drawn
   as an em dash rather than as an empty cell: a column that is blank
   for every row and a column that is missing look identical, and only
@@ -88,13 +91,21 @@
     (number? v) (string v)
     (string/format "%q" v)))
 
-(defn- truncate [s n]
+(defn- truncate
+  {:params [:any :number] :ret :string}
+  "`s`, cut to `n` characters with an ellipsis when it was longer."
+  [s n]
   (def str (string s))
   (if (<= (length str) n) str (string (string/slice str 0 n) "…")))
 
 # -- the fallback: html/form ---------------------------------------------
 
 (defn- form-spec
+  {:params [{:name :keyword :schema {:type :keyword :props {:any :any} :children [:any]} & r}]
+   :ret (or {:name :keyword :label :string :help :string? :required :boolean
+             :control :keyword & r}
+            :nil)
+   :throws [:string]}
   ``The html/form control description of one field — projected by the
   module that already projects schemas into controls, which reads the
   schema's own `:label` (and translates a keyword one) on the way.``
@@ -126,6 +137,8 @@
   :void.admin/select-limit)
 
 (defn target-resource
+  {:params [(or {:entity :keyword & r} :nil)]
+   :ret (or {:name :keyword :entity {:name :keyword & r} & r} :nil)}
   ``The admin declaration of the entity a foreign key points at, or nil
   — the widget needs the *resource*, because that is where :search, the
   ordering and the label live. This is why an inline target has to be
@@ -140,6 +153,8 @@
     out))
 
 (defn label-of
+  {:params [{:entity {:pk :keyword :fields {:keyword :any} & r} & r} @{:any :any}]
+   :ret :string}
   ``The human label of a row: the first of :name :title :label :email
   :slug the entity actually has, else the primary key. A picker
   showing primary keys is a picker nobody can use, and guessing is
@@ -154,6 +169,7 @@
   (string (or out (get row pk))))
 
 (defn- link-options
+  {:params [{:entity :any :order-by :any & r} :number] :ret @[@{:any :any}]}
   "The target rows, when there are few enough of them to be a select."
   [target limit]
   (db/query (target :entity) {:limit (inc limit) :order-by (target :order-by)}))
@@ -260,13 +276,22 @@
 
 # -- resolution ----------------------------------------------------------
 
-(defn- matches? [w field]
+(defn- matches?
+  {:params [{:types (or @[:any] [:any] :nil) :match (or :function :nil) & r} {:type :any & r}]
+   :ret (or :boolean :nil)}
+  "Does this contributed widget claim the field, by :types or :match?"
+  [w field]
   (or (when-let [types (get w :types)]
         (truthy? (index-of (field :type) types)))
       (when-let [m (get w :match)]
         (truthy? (m field)))))
 
 (defn resolve
+  {:params [{:name :keyword :widgets {:keyword :any} & r}
+            {:name :keyword :type :any :rel :any & r}
+            (or @[{:name :keyword :render :function & r}] [{:name :keyword :render :function & r}])]
+   :ret [{:name :keyword :render :function & r} (enum :declared :contributed :relation :schema)]
+   :throws [:string]}
   ``The widget for one field, plus *why* it was chosen — the pair
   `void admin widgets` prints. `contribs` are the :void.admin/widget
   contributions, highest priority first.
@@ -301,13 +326,27 @@
     [form-widget :schema]))
 
 (defn resolve-all
+  {:params [{:name :keyword :widgets {:keyword :any}
+             :form-fields [{:name :keyword :type :any :rel :any & r}]
+             :list [{:field (or {:name :keyword :type :any :rel :any & r} :nil) & r}]
+             :filters [{:field (or {:name :keyword :type :any :rel :any & r} :nil) & r}]
+             & r}
+            (or @[{:name :keyword :render :function & r}] [{:name :keyword :render :function & r}])]
+   :ret {:keyword {:widget {:name :keyword :render :function & r}
+                   :why :keyword :field {:name :keyword & r}}}
+   :throws [:string]}
   ``Every field of a resource that a widget draws — form fields, list
   columns backed by a field, filters — resolved once, at mount.
   Returns {field-name {:widget :why}}.``
   [desc contribs]
   (def sorted-contribs (sorted-by |(- (get $ :priority 100)) contribs))
   (def out @{})
-  (defn add [field]
+  (defn add
+    {:params [(or {:name :keyword :type :any :rel :any & r} :nil)]
+     :ret (or @{:any :any} :nil)
+     :throws [:string]}
+    "Resolve and record one field, unless it is nil or already done."
+    [field]
     (when (and field (nil? (get out (field :name))))
       (def [w why] (resolve desc field sorted-contribs))
       (put out (field :name) {:widget w :why why :field field})))
@@ -319,11 +358,15 @@
 # -- calling a widget ----------------------------------------------------
 
 (defn render
+  {:params [{:widget {:render :function & r} :field :any & r} {:keyword :any}] :ret :any}
   "The form control for a field, through its resolved widget."
   [entry ctx]
   (((entry :widget) :render) (merge {:field (entry :field) :readonly false} ctx)))
 
 (defn display
+  {:params [{:widget {:display (or :function :nil) & r} :field :any & r}
+            {:value :any :mode (or :keyword :nil) & r}]
+   :ret :any}
   ``The list cell / detail row for a field. Falls back to the text
   projection, truncated for a list — a body column must not turn one
   row into a page.``
@@ -336,6 +379,8 @@
       (if (= :list (full :mode)) (truncate t 80) t))))
 
 (defn filter-control
+  {:params [{:widget {:filter (or :function :nil) & r} :field :any & r} {:keyword :any}]
+   :ret :any}
   "The filter-panel control for a field, when its widget has one."
   [entry ctx]
   (when-let [f (get-in entry [:widget :filter])]
@@ -349,6 +394,7 @@
   :void.admin/field-error)
 
 (defn refuse!
+  {:params [:any] :ret :never :throws [{:void.admin/field-error :string}]}
   ``Refuse a submitted value from inside a widget's `:parse`. The
   message lands on the field, the form re-renders with a 422, and
   nothing else about the submission is lost — which is what separates
@@ -357,12 +403,15 @@
   (error {field-error-key (string message)}))
 
 (defn field-error
+  {:params [:any] :ret :any}
   "The message of a widget refusal, or nil when the error is anything
   else — anything else is a bug and stays one."
   [err]
   (when (dictionary? err) (get err field-error-key)))
 
 (defn parse
+  {:params [{:widget {:parse (or :function :nil) & r} :field :any & r} :any {:keyword :any}]
+   :ret :any :throws [:any]}
   "One submitted string -> the domain value, when the widget says how.
   Without a :parse the value goes through schema-layer coercion, which
   is where type conversion belongs."
@@ -372,6 +421,10 @@
     raw))
 
 (defn multipart?
+  {:params [(or (or @[{:widget (or {:encoding (or :keyword :nil) & r} :nil) & r}]
+                    [{:widget (or {:encoding (or :keyword :nil) & r} :nil) & r}])
+                :nil)]
+   :ret :boolean}
   ``Does any of these resolved entries draw a control that cannot ride
   a urlencoded body? The enctype of a form is a consequence of the
   widgets on it: a file input in a form that forgot the attribute
@@ -380,6 +433,8 @@
   (truthy? (some |(= :multipart (get-in $ [:widget :encoding])) (or entries []))))
 
 (defn assets
+  {:params [{:keyword {:widget {:name :keyword :assets (or {:keyword :any} :nil) & r} & r}}]
+   :ret @[[:keyword {:keyword :any}]]}
   "The {:style :script} of every distinct widget a page used — once per
   widget name, not once per control."
   [entries]
@@ -394,6 +449,9 @@
   out)
 
 (defn all-assets
+  {:params [{:keyword {:keyword {:widget {:name :keyword :assets (or {:keyword :any} :nil) & r}
+                                 & r}}}]
+   :ret @[[:keyword {:keyword :any}]]}
   ``The `:assets` of every distinct widget in the whole resolution —
   the argument is the mount's `rname -> entries` table, not one
   resource's.

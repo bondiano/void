@@ -7,7 +7,10 @@
 ### which is why ../../test/route-test.janet is a table of examples that
 ### boots nothing.
 
-(defn- commit-line [payload]
+(defn- commit-line
+  {:params [:any] :ret :string?}
+  "The first line of a push payload's head commit message, or nil."
+  [payload]
   (def head (get payload :head_commit))
   (when (dictionary? head)
     (def message (string (get head :message "")))
@@ -15,6 +18,8 @@
     (unless (empty? first-line) first-line)))
 
 (defn title-of
+  {:params [{:repo :string? :source :string? :event :string? :sender :string? & r}]
+   :ret :string}
   "The one line every channel shows: what happened, and where."
   [delivery]
   (string (or (delivery :repo) (delivery :source))
@@ -22,6 +27,7 @@
           (if-let [who (delivery :sender)] (string " by " who) "")))
 
 (defn body-of
+  {:params [{:event :string? & r} :any] :ret :string?}
   ``A few more words for the channels that have room. Reads the payload
   the sender sent, and says nothing rather than guessing when it is not
   the shape this knows.``
@@ -50,6 +56,15 @@
   (if (empty? parts) nil (string/join parts " · ")))
 
 (defn note-for
+  {:params [{:chat-id :string? :to (or @[:keyword] [:keyword] :nil) & r}
+            {:repo :string? :source :string? :event :string? :sender :string?
+             :delivery-id :string? :body-key :string? & r}
+            :any]
+   :ret {:key :keyword :title :string :body :string?
+         :to {:keyword :string}
+         :channels (or @[:keyword] [:keyword])
+         :data {:delivery :string? :source :string? :event :string?
+                :repo :string? :sender :string? :key :string?}}}
   ``The notification one rule makes out of one delivery. Addresses are
   keyed by what an address *is*: `:telegram` is a chat, and a rule that
   does not name one leaves the channel to its configured default.``

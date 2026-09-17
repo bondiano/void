@@ -78,12 +78,14 @@
    "connect_cb" "closesocket_cb" "open_cb" "resolve_cb"])
 
 (defn brokers
+  {:params [{:brokers (or :string [:string] :nil) & r}] :ret :string}
   "The bootstrap.servers string for a slice."
   [cfg]
   (def b (get cfg :brokers (fallbacks :brokers)))
   (if (indexed? b) (string/join b ",") (string b)))
 
 (defn- property-value
+  {:params [(or :string :number :boolean)] :ret :string}
   # librdkafka reads strings; true/false spell themselves
   [v]
   (cond
@@ -91,6 +93,14 @@
     (string v)))
 
 (defn properties
+  {:params [{:brokers (or :string [:string] :nil)
+             :client-id (or :string :nil)
+             :properties (or @{:string (or :string :number :boolean)} :nil)
+             & r}
+            (or @{:string (or :string :number :boolean)} :nil)
+            (or @{:string (or :string :number :boolean)} :nil)]
+   :ret @[[:string :string]]
+   :throws [:string]}
   ``The property list for a slice, as pairs in a stable order:
   computed base first, then [:properties] (which wins over the base —
   an operator who spells a property the library's way means it), with
@@ -124,22 +134,29 @@
   (sorted-by first (pairs out)))
 
 (defn message-timeout-ms
+  {:params [{:message-timeout (or :number :nil) & r}] :ret :number}
   "The delivery-report bound, in the milliseconds librdkafka speaks."
   [cfg]
   (math/floor (* 1000 (get cfg :message-timeout (fallbacks :message-timeout)))))
 
 (defn probe-timeout
+  {:params [{:probe-timeout (or :number :nil) & r}] :ret :number}
   "The boot probe's bound, in seconds."
   [cfg]
   (get cfg :probe-timeout (fallbacks :probe-timeout)))
 
 (defn verify?
+  {:params [{:verify (or :boolean :nil) & r}] :ret :boolean}
   "Should :start prove the cluster answers before anything depends on
   it?"
   [cfg]
   (not= false (get cfg :verify)))
 
 (defn describe
+  {:params [{:brokers (or :string [:string] :nil) :client-id (or :string :nil)
+             :verify (or :boolean :nil) :message-timeout (or :number :nil) & r}]
+   :ret {:brokers :string :client-id (or :string :nil) :verify :boolean
+         :message-timeout :number}}
   ``The client as a handful of values for a log line or a health
   report — no secret among them (a sasl.password lives in
   [:properties] and stays there).``

@@ -18,6 +18,9 @@
 (import void/http/router :as router)
 
 (defn home
+  {:params [:any]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
   "GET / — the queue."
   [_req]
   (ring/redirect (http/url-for :admin.page/jobs)))

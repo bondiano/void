@@ -61,6 +61,12 @@
                                :watch {:enabled false}}}}}))
 
 (defn- delivery
+  {:params [:string
+            (or @{:body :string? :unsigned :any? :uri :string?
+                 :headers (or @{:any :any} :nil) :request (or @{:any :any} :nil) & r}
+                :nil)]
+   :ret @{:any :any}
+   :throws [:string]}
   ``One delivery as GitHub sends it: the event, the id it retries under,
   and a signature over the bytes. `:headers` overrides one of them,
   `:unsigned` sends none at all — and it has to be its own option rather
@@ -83,7 +89,10 @@
           :body payload}
          (get overrides :request {})))
 
-(defn- json-of [resp]
+(defn- json-of
+  {:params [@{:body :any & r}] :ret :any :throws [:any]}
+  "Decode a response body as JSON (keyword keys)."
+  [resp]
   (json/decode (test/text resp) true))
 
 (log/set-sinks! [(fn [_])])

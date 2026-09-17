@@ -25,6 +25,7 @@
 (import ./state :as state)
 
 (defn key-for
+  {:params [:any :any] :ret :string}
   ``The key a `wrap`ped call is stored under — the handle for
   invalidating one:
 
@@ -34,11 +35,17 @@
   (key/for-call name args))
 
 (defn forget-call
+  {:params [:any :any] :ret :any}
   "Drop the cached result of one call: `(forget-call :rates \"usd\")`."
   [name & args]
   (state/delete! (key/for-call name args)))
 
 (defn wrap
+  {:params [:function
+            (or {:name :any? :key (or (fn [a] b) :nil) :ttl :any? :cache-nil :any?
+                 :single-flight :any? :when (or (fn [a] b) :nil) & r}
+                :nil)]
+   :ret (fn [& a] b)}
   ``Memoize `f` through the cache. Returns a function of the same
   arguments that answers from the cache when it can and calls `f` when
   it cannot.

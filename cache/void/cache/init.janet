@@ -98,7 +98,14 @@
    :on-error :degrade
    :memory {:max-entries 1000 :sweep-interval 60}})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or {:memory (or {:max-entries :number? :sweep-interval :number? & r} :nil) & r}
+                :nil)]
+   :ret @{:enabled :any :prefix :string :ttl :any :single-flight :any :on-error :any
+          :memory @{:max-entries :any :sweep-interval :any}}}
+  "The [:cache] slice with defaults filled in, :memory merged one
+  level deeper than a flat `merge` would go."
+  [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (put cfg :memory (merge (defaults :memory) (get (or cfg0 {}) :memory {})))
   cfg)
@@ -212,7 +219,11 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- with-cache [c f]
+(defn- with-cache
+  {:params [:any (fn [] :any)] :ret :any}
+  "Run `f` with `c` bound as the active cache — how the CLI commands
+  reach a specific instance without going through the component."
+  [c f]
   (with-dyns [state/cache-dyn c] (f)))
 
 (plugin/contribute! :void.core/cli

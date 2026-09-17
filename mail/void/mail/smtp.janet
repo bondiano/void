@@ -76,6 +76,8 @@
 # -- errors --------------------------------------------------------------
 
 (defn smtp-error
+  {:params [:number? :string (or :nil {:keyword :any})]
+   :ret {:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}}
   ``An SMTP failure as a value. `:permanent` is the whole point: the
   job that retries deliveries asks this and nothing else.``
   [code msg &opt extra]
@@ -86,19 +88,30 @@
          (or extra {})))
 
 (defn permanent?
+  {:params [:any] :ret :boolean :narrows :any}
   "Did this failure already get its final answer from the server?"
   [err]
   (and (dictionary? err) (true? (get err :permanent))))
 
-(defn- fail [code msg &opt extra]
+(defn- fail
+  {:params [:number? :string (or :nil {:keyword :any})]
+   :ret :never
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
+  "Raise an SMTP failure — the one way every function below reports
+  one, so `permanent?` always has a value it recognizes to ask."
+  [code msg &opt extra]
   (error (smtp-error code msg extra)))
 
 # -- the connection ------------------------------------------------------
 
-(defn- target [cfg]
+(defn- target
+  {:params [{:host :string? :port :any & r}] :ret :string}
+  "`host:port`, for an error message naming which server refused."
+  [cfg]
   (string (get cfg :host "127.0.0.1") ":" (get cfg :port 25)))
 
 (defn tls-refusal
+  {:params [{:tls :any & r}] :ret :string?}
   ``Why these settings may not be used, or nil: a [:mail :smtp :tls]
   other than :none in a composition without `void/tls` would either
   crash on the first delivery or — worse — quietly speak plaintext. A
@@ -117,6 +130,10 @@
                    mode)))
 
 (defn open
+  {:params [{:host :string? :port :any :tls :any :connect-timeout :number? & r}]
+   :ret @{:stream :any :buf :buffer :pos :number :cfg :any :caps :any
+          :secure :boolean :closed :boolean}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   "Connect to the server. The connection is a table, so that the
   capabilities EHLO reports can be written on it. `:tls :smtps` runs
   the handshake here, before SMTP says a word."
@@ -151,6 +168,7 @@
     :closed false})
 
 (defn close
+  {:params [@{:stream :any :closed :any & r}] :ret :nil}
   "Close the connection. Never throws — a mail that was accepted is
   sent whatever the socket does afterwards."
   [c]
@@ -173,7 +191,14 @@
   reply, it is feeding an unbounded array.``
   50)
 
-(defn- read-line! [c]
+(defn- read-line!
+  {:params [@{:buf :buffer :pos :number :cfg {:timeout :number? & r} :stream :any & r}]
+   :ret :string
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
+  "Read one line, growing `c`'s buffer as needed and refusing to grow
+  it past `max-reply-line` — the bound that keeps a peer with no line
+  ending from running the process out of memory."
+  [c]
   (def buf (c :buf))
   (def timeout (get-in c [:cfg :timeout] (defaults :timeout)))
   (var at (string/find "\n" buf (c :pos)))
@@ -203,6 +228,9 @@
   (string/trimr line "\r"))
 
 (defn read-reply
+  {:params [@{:buf :buffer :pos :number :cfg {:timeout :number? & r} :stream :any & r}]
+   :ret {:code :number :lines @[:string] :text :string}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   ``Read one reply, however many lines it takes — up to
   `max-reply-lines`, past which the reply is a structural error rather
   than an array that grows as long as the server keeps hyphenating.
@@ -226,13 +254,23 @@
     (set done (or (= 3 (length line)) (not= "-" (string/slice line 3 4)))))
   {:code code :lines lines :text (string/join lines " ")})
 
-(defn- write! [c data]
+(defn- write!
+  {:params [@{:cfg {:timeout :number? & r} :stream :any & r} :string]
+   :ret :nil
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
+  "Write `data` to the connection's stream, under its configured
+  timeout."
+  [c data]
   (def timeout (get-in c [:cfg :timeout] (defaults :timeout)))
   (def [ok result] (protect (:write (c :stream) data timeout)))
   (unless ok (fail nil (string "write failed: " result)))
   nil)
 
 (defn command
+  {:params [@{:buf :buffer :pos :number :cfg {:timeout :number? & r} :stream :any & r}
+            :string :number :string?]
+   :ret {:code :number :lines @[:string] :text :string}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   ``Send one command and read its reply. `expect` is the leading digit
   the caller needs (2 for "went through", 3 for "go on"); a reply that
   does not start with it is an error carrying the server's own words,
@@ -248,14 +286,22 @@
 
 # -- the conversation ----------------------------------------------------
 
-(defn- helo-name [cfg]
+(defn- helo-name
+  {:params [{:helo :string? & r}] :ret :string}
+  "The name this client introduces itself with: [:mail :smtp :helo],
+  the machine's hostname if that is plain ASCII, or \"localhost\"."
+  [cfg]
   (or (get cfg :helo)
       # the name a relay on loopback never checks and a remote server
       # only logs; a deployment that needs its FQDN here configures it
       (let [h (os/getenv "HOSTNAME")]
         (if (and h (not (empty? h)) (address/ascii? h)) h "localhost"))))
 
-(defn- parse-caps [reply]
+(defn- parse-caps
+  {:params [{:lines (or @[:string] [:string]) & r}] :ret @{:keyword @[:string]}}
+  "The EHLO reply's continuation lines as a table of capability to its
+  arguments — `250-AUTH PLAIN LOGIN` becomes `{:auth [\"PLAIN\" \"LOGIN\"]}`."
+  [reply]
   (def caps @{})
   (each line (drop 1 (reply :lines))
     (def parts (string/split " " (string/trim line)))
@@ -264,6 +310,10 @@
   caps)
 
 (defn- ehlo!
+  {:params [@{:buf :buffer :pos :number :cfg {:helo :string? :timeout :number? & r}
+              :stream :any :caps :any & r}]
+   :ret @{:buf :buffer :pos :number :cfg :any :stream :any :caps :any & r}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   "Introduce ourselves. ESMTP first; a server that refuses EHLO gets a
   plain HELO, which is the one fallback this client keeps — it costs
   three lines and it is what a minimal relay in a container answers."
@@ -277,6 +327,10 @@
         (put c :caps @{}))))
 
 (defn- secure!
+  {:params [@{:buf :buffer :pos :number :cfg {:host :string? :connect-timeout :number? & r}
+              :stream :any :caps :any :secure :any & r}]
+   :ret @{:buf :buffer :pos :number :cfg :any :stream :any :caps :any :secure :boolean & r}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   ``STARTTLS (RFC 3207): ask, hand the socket to void/tls, and forget
   everything learned before the handshake — capabilities *and* any
   buffered bytes, because both predate the protection (bytes a server sent ahead of the handshake are exactly the injection the RFC warns about).``
@@ -301,6 +355,12 @@
   (put c :secure true))
 
 (defn greet!
+  {:params [@{:buf :buffer :pos :number
+              :cfg {:helo :string? :timeout :number? :host :string?
+                    :connect-timeout :number? :tls :any & r}
+              :stream :any :caps :any :secure :any & r}]
+   :ret @{:buf :buffer :pos :number :cfg :any :stream :any :caps :any :secure :any & r}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   ``Read the greeting, introduce ourselves, and secure the session
   when [:mail :smtp :tls] asks for it — :starttls upgrades here and
   introduces again, because the pre-handshake EHLO answer is not to
@@ -320,13 +380,22 @@
                  :ns log-ns :server (target (c :cfg)))))
   c)
 
-(defn- loopback? [host]
+(defn- loopback?
+  {:params [:any] :ret :boolean :narrows :any}
+  "Is this host the machine itself — the one place a password may
+  travel unencrypted by default?"
+  [host]
   (or (= host "localhost")
       (string/has-prefix? "127." (string host))
       (= host "::1")
       (= host "[::1]")))
 
-(defn- reveal-password [cfg]
+(defn- reveal-password
+  {:params [{:password :any & r}] :ret :string? :throws [:string]}
+  "[:mail :smtp :password] as a plain string — nil when there is none,
+  an error when it is neither nil nor bytes, because by the time it
+  reaches here a secret box should already have been unwrapped."
+  [cfg]
   (def p (get cfg :password))
   (cond
     (nil? p) nil
@@ -335,7 +404,15 @@
     # mailer does that before it gets here
     (errorf "[:mail :smtp :password] must be a string or an env reference, got %q" p)))
 
-(defn- mechanism [c]
+(defn- mechanism
+  {:params [@{:cfg {:auth :any & r} :caps :any & r}]
+   :ret :string?
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}
+            :string]}
+  "Which AUTH mechanism to use, honoring [:mail :smtp :auth] or
+  falling back to whatever the server offered — nil for :none, and an
+  error for a server that offers neither PLAIN nor LOGIN."
+  [c]
   (def cfg (c :cfg))
   (def offered (map string/ascii-upper (get-in c [:caps :auth] [])))
   (def wanted (get cfg :auth :auto))
@@ -356,6 +433,9 @@
     (errorf "[:mail :smtp :auth] must be :auto, :plain, :login or :none, got %q" wanted)))
 
 (defn auth-refusal
+  {:params [{:username :any :password :any :auth :any :host :string? :tls :any
+             :allow-plaintext-auth :any & r}]
+   :ret :string?}
   ``Why these settings may not send their password, or nil when they
   may. A **pure** function of the configuration, so the mailer asks it
   at boot: credentials that would go out in the clear are a
@@ -379,6 +459,13 @@
       (target cfg))))
 
 (defn authenticate!
+  {:params [@{:buf :buffer :pos :number
+              :cfg {:username :any :password :any :auth :any :host :string? :tls :any
+                    :allow-plaintext-auth :any :timeout :number? & r}
+              :stream :any :caps :any & r}]
+   :ret @{:buf :buffer :pos :number :cfg :any :stream :any :caps :any & r}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}
+            :string]}
   ``AUTH, when there are credentials to send. Refuses to send them
   over a plaintext connection to a host that is not loopback — see the
   module docstring; `:allow-plaintext-auth true` is how a private
@@ -403,6 +490,7 @@
   c)
 
 (defn dot-stuff
+  {:params [:any] :ret :string}
   ``Prepare a body for DATA: CRLF line endings, and a line that begins
   with a dot gets a second one (RFC 5321 §4.5.2). Without this, a
   message body containing a line \".\" ends the mail early and the
@@ -414,6 +502,10 @@
   (if (string/has-prefix? "." out) (string "." out) out))
 
 (defn send-message!
+  {:params [@{:buf :buffer :pos :number :cfg {:timeout :number? & r} :stream :any & r}
+            {:message {:envelope-from :any :recipients :any & r} :bytes :any & r}]
+   :ret {:accepted @[:string] :rejected @[{:email :any :code :any :message :any}] :reply :any}
+   :throws [{:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   ``One message over an open, greeted connection. Returns
   `{:accepted :rejected :reply}`; a recipient the server refused with
   5xx is *rejected*, not a failure — the mail still goes to the
@@ -449,6 +541,9 @@
   {:accepted accepted :rejected rejected :reply reply})
 
 (defn quit!
+  {:params [@{:buf :buffer :pos :number :cfg {:timeout :number? & r} :stream :any
+              :closed :any & r}]
+   :ret :nil}
   "Say goodbye. Best effort: the message is already accepted."
   [c]
   (protect (command c "QUIT" 2 "QUIT"))
@@ -456,6 +551,12 @@
   nil)
 
 (defn deliver!
+  {:params [{:host :string? :port :any :tls :any :connect-timeout :number?
+             :username :any :password :any :auth :any :allow-plaintext-auth :any
+             :helo :string? :timeout :number? & r}
+            {:message {:envelope-from :any :recipients :any & r} :bytes :any :id :any & r}]
+   :ret {:transport :keyword :id :any :accepted :any :rejected :any :at :any & r}
+   :throws [:string {:mail/smtp :boolean :code :number? :permanent :boolean? :message :string & r}]}
   ``Send one delivery: connect, greet, authenticate, send, quit. A
   connection per message — a pool would save a handshake against a
   relay on loopback, which is where the handshake costs nothing, and
@@ -481,6 +582,7 @@
                         :code (get-in result [:reply :code])})))
 
 (defn transport
+  {:params [(fn [] :any)] :ret {:name :keyword :doc :string :send :function}}
   "The `:void.mail/transport` contribution — `cfg` is read at send
   time, so a REPL that changes [:mail :smtp] changes the next mail."
   [cfg-fn]

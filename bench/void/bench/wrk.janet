@@ -30,6 +30,7 @@
         ", timeout " (<- (some :d)))))
 
 (defn to-ms
+  {:params [:number :string] :ret :number :throws [:string]}
   "A latency value in wrk's unit -> milliseconds."
   [v unit]
   (case unit
@@ -43,6 +44,10 @@
   {50 :p50 75 :p75 90 :p90 99 :p99 99.9 :p999})
 
 (defn parse
+  {:params [:string]
+   :ret @{:latency @{:p50 :number? :p75 :number? :p90 :number? :p99 :number? :p999 :number?}
+          :rps :number? :non-2xx :number? :socket-errors :number?}
+   :throws [:string]}
   ``One wrk/wrk2 stdout -> @{:rps <num> :latency @{:p50 <ms> ...}
   :non-2xx <n>? :socket-errors <n>?}. Percentiles other than
   50/75/90/99/99.9 are ignored.``
@@ -61,6 +66,7 @@
   res)
 
 (defn median
+  {:params [(or @[:number] [:number])] :ret :number?}
   "The median of a list of numbers (mean of the middle two for even
   lengths); nil for an empty list."
   [xs]
@@ -72,6 +78,9 @@
     (/ (+ (in s (dec (div n 2))) (in s (div n 2))) 2)))
 
 (defn summarize
+  {:params [(or @[:any] [:any])]
+   :ret @{:rps :number? :p50 :number? :p75 :number? :p90 :number? :p99 :number?
+          :p999 :number? :non-2xx :number? :socket-errors :number?}}
   ``Fold parsed runs into one row: per-metric medians, error counters
   summed. Metrics a run did not report are skipped.``
   [runs]
@@ -91,12 +100,14 @@
 # -- invocation ----------------------------------------------------------
 
 (defn tool-argv
+  {:params [:string] :ret @[:string]}
   "An overridable tool name (VOID_BENCH_WRK / VOID_BENCH_WRK2 may hold
   a multi-word command) -> argv prefix."
   [name]
   (filter |(not (empty? $)) (string/split " " name)))
 
 (defn available?
+  {:params [:string] :ret :boolean? :narrows :any}
   "Is the tool invocable? (checks argv[0] on PATH)"
   [name]
   (def head (first (tool-argv name)))
@@ -106,6 +117,9 @@
                 :p))))
 
 (defn command
+  {:params [{:tool :string :url :string :threads :number :connections :number
+             :duration :number :rate :number? :script :string? & r}]
+   :ret [:string]}
   ``The full argv for one run. opts: :tool :url :threads :connections
   :duration (s), :rate (wrk2's fixed RPS; nil for plain wrk),
   :script (lua file for POST bodies).``
@@ -120,6 +134,12 @@
    (opts :url)])
 
 (defn run
+  {:params [{:tool :string :url :string :threads :number :connections :number
+             :duration :number :rate :number? :script :string?
+             :env (or {:any :any} :nil) & r}]
+   :ret @{:latency @{:p50 :number? :p75 :number? :p90 :number? :p99 :number? :p999 :number?}
+          :rps :number? :non-2xx :number? :socket-errors :number?}
+   :throws [:string]}
   ``One load-generator run: spawn, capture, parse. Extra env (the lua
   script reads BENCH_BODY_FILE) comes from (opts :env). Throws when
   the tool fails or reports nothing.``

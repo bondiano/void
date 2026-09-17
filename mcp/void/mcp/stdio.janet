@@ -39,6 +39,7 @@
   (* 4 1024 1024))
 
 (defn open-stdin
+  {:params [] :ret :abstract :throws [:string]}
   ``An ev-capable stream over this process's standard input. Janet
   hands out `stdin` as a blocking file; the fd is reachable as a
   stream through /dev/stdin (and /dev/fd/0 where that is what the
@@ -55,6 +56,7 @@
                      "/dev/fd/0) — the stdio transport needs a readable stdin"))))
 
 (defn write-message
+  {:params [:any :any] :ret :any}
   "Write one message as one line to `out` (a file, default stdout)."
   [msg &opt out]
   (default out stdout)
@@ -63,6 +65,8 @@
   msg)
 
 (defn serve
+  {:params [(fn [:any] :any) (or {:in :any :write (fn [:any] :any) :max-message :number? & r} :nil)]
+   :ret :number}
   ``Read messages from stdin and answer them on stdout until the
   client closes the stream. `handler` is (fn [decoded-message] ->
   response-message | nil) — ./init passes one that dispatches against

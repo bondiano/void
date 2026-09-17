@@ -156,7 +156,14 @@
 (errors/define! :void.pressure/shed
   {:status 503 :doc "load shedding refused the request; :data {:signals [...]} names what is saturated"})
 
-(defn- log-shed [st reasons]
+(defn- log-shed
+  {:params [@{:sheds :number :episodes :number & r}
+            [(or {:signal :any :value :number :limit :number :bar :number}
+                {:signal :any :check :boolean :reason :string})]]
+   :ret :nil}
+  "Log a shed request, once per episode by default (`[:pressure-http
+  :log]` widens or silences it)."
+  [st reasons]
   (def mode (settings :log))
   (when (and (not= :none mode)
              (or (= :all mode) (not= logged-episode (st :episodes))))
@@ -167,6 +174,10 @@
               :reasons (map |(get $ :signal) reasons))))
 
 (defn shed-response
+  {:params [:any
+            [(or {:signal :any :value :number :limit :number :bar :number}
+                {:signal :any :check :boolean :reason :string})]]
+   :ret :any}
   ``The response for one refused request: the configured status
   through the error renderers, plus `Retry-After`.``
   [req reasons]

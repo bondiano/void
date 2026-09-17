@@ -46,6 +46,8 @@
   @{})
 
 (defn configure!
+  {:params [:number?] :ret @{:slots @[:any] :capacity :number :next :number :written :number}
+   :throws [:string]}
   "Size the ring from [:dash :log-buffer] — called at :before-start.
   A ring of the same capacity is kept as it is (a restart must not
   wipe the record of why it restarted); a changed capacity is a fresh
@@ -57,11 +59,13 @@
   records)
 
 (defn held
+  {:params [] :ret :number}
   "How many records the ring holds."
   []
   (ring/size records))
 
 (defn sink
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r}] :ret :nil :throws [:string]}
   ``The :void.core/log-sink contribution: keep the record, wake the
   tails, poke the live page. Never throws and never blocks — a full
   tail drops the record for that tail (the page re-syncs on its next
@@ -76,6 +80,7 @@
   nil)
 
 (defn close-subscribers!
+  {:params [] :ret :nil}
   "Close every tail's channel — its taker wakes with nil and the
   stream fiber unsubscribes itself. The :dash/state component calls
   this at :stop."
@@ -89,6 +94,7 @@
 (def- skip-keys {:ts true :level true :ns true :msg true})
 
 (defn record-line
+  {:params [{:ts :number :level :keyword :ns :string :msg :any & r}] :ret :string}
   "One record as one line — the pretty sink's shape, uncolored."
   [rec]
   (def d (os/date (math/floor (get rec :ts 0)) true))
@@ -108,14 +114,21 @@
 
 (def- level-rank {:trace 10 :debug 20 :info 30 :warn 40 :error 50 :fatal 60})
 
-(defn- listing-state [req]
+(defn- listing-state
+  {:params [{:query {:string :any} & r}] :ret {:level :keyword? :ns :string?}}
+  "The level floor and namespace substring a request's query asks to
+  filter by, or nothing (any level, every namespace)."
+  [req]
   (def lvl (let [v (get-in req [:query "level"])]
              (when (and (string? v) (in level-rank (keyword v))) (keyword v))))
   (def ns* (let [v (get-in req [:query "ns"])]
              (when (and (string? v) (not (empty? v))) v)))
   {:level lvl :ns ns*})
 
-(defn- matching [st]
+(defn- matching
+  {:params [{:level :keyword? :ns :string?}] :ret @[:any]}
+  "The held records passing `st`'s level floor and namespace substring."
+  [st]
   (def min-rank (get level-rank (st :level) 0))
   (filter (fn [rec]
             (and (>= (get level-rank (get rec :level) 30) min-rank)
@@ -123,7 +136,10 @@
                      (string/find (st :ns) (string (get rec :ns ""))))))
           (ring/to-array records)))
 
-(defn- filter-panel [st]
+(defn- filter-panel
+  {:params [{:level :keyword? :ns :string?}] :ret :any :throws [:string]}
+  "The level/namespace filter form, as hiccup."
+  [st]
   [:form (merge {:method "get" :action (ctx/at "/logs") :class "vd-toolbar"}
                 (hx/get* (ctx/at "/logs") :target "#dash-logs" :swap :outer-html :push-url true
                          :trigger "change, submit"))
@@ -139,10 +155,17 @@
     [:input {:type "search" :name "ns" :id "f-ns" :value (st :ns)}]]
    [:div {:class "field"} [:button {:type "submit"} (text/t :void.dash/filter)]]])
 
-(defn- csrf-slot []
+(defn- csrf-slot
+  {:params [] :ret :any}
+  "The hidden CSRF field the form middleware bound, or nothing when
+  it is not in this composition."
+  []
   (when-let [f (dyn keys/csrf-field)] (f)))
 
-(defn- level-form []
+(defn- level-form
+  {:params [] :ret :any :throws [:string]}
+  "The runtime log-level form, or the sentence saying actions are off."
+  []
   (def allowed (ctx/setting :allow-actions?))
   [:div
    [:h2 (text/t :void.dash/log-levels)]
@@ -160,10 +183,14 @@
       [:div {:class "field"} [:button {:type "submit"} (text/t :void.dash/set)]]]
      [:p {:class "vd-absent"} (text/t :void.dash/actions-off)])])
 
-(defn- params [st]
+(defn- params
+  {:params [{:level :keyword? :ns :string?}] :ret @{:string (or :keyword :string :nil)}}
+  "st, as the query table the filtered page's own links carry."
+  [st]
   @{"level" (st :level) "ns" (st :ns)})
 
 (defn logs-fragment
+  {:params [{:level :keyword? :ns :string?}] :ret :any :throws [:string]}
   "The moving half: the matching records, newest last, capped for the
   page (the ring holds more than a page should)."
   [st]
@@ -185,14 +212,23 @@
          [:span {:class (string "dash-log-" (string (get rec :level :info)))}
           (string (record-line rec) "\n")])])])
 
-(defn logs-body [st req]
+(defn logs-body
+  {:params [{:level :keyword? :ns :string?} {:query {:string :any} & r}] :ret :any :throws [:string]}
+  "The whole Logs page: filters, the moving fragment, the level form."
+  [st req]
   [:div (view/live-attrs req "/logs/live")
    [:h1 (text/t :void.dash/logs)]
    (filter-panel st)
    (logs-fragment st)
    (level-form)])
 
-(defn index [req]
+(defn index
+  {:params [{:query {:string :any} & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /logs: the level/namespace-filtered listing, htmx poll or full page."
+  [req]
   (def st (listing-state req))
   (html/page (logs-body st req) {:layout view/layout :context {:request req}
                              :partial (fn [] (logs-fragment st))}))
@@ -200,6 +236,7 @@
 # -- the live tail -------------------------------------------------------
 
 (defn tail
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   ``The SSE tail: every record from now on, one `data:` line each. The
   subscription is registered on connect and released by the `defer`
   when the consumer goes away — the server cancels the body fiber,
@@ -220,6 +257,9 @@
 # -- the action ----------------------------------------------------------
 
 (defn set-level
+  {:params [{:form (or {:string :string} :nil) & r}]
+   :ret @{:status :number :headers @{:string :string} :body :string?}
+   :throws [:string]}
   "POST /logs/level — runtime per-namespace levels, behind
   [:dash :allow-actions]."
   [req]

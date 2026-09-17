@@ -12,6 +12,7 @@
 # invisible to any test that stubs the conversation out.
 
 (defn- server
+  {:params [[[:string? :string]]] :ret [(fn [] :any) :number @[:string]]}
   ``Answer one connection from `script`: a list of [expected-prefix
   reply] pairs, matched in order against the lines the client sends.
   Returns [stop-fn port received] — `received` fills up as the
@@ -61,7 +62,12 @@
 
 (def cfg-from {:from "void <no-reply@example.com>"})
 
-(defn- delivery [&opt msg]
+(defn- delivery
+  {:params [(or :nil {:to :any & r})]
+   :ret {:message :any :bytes :string :id :string :at :number}
+   :throws [:string]}
+  "A ready-to-send delivery, `msg` merged over this suite's defaults."
+  [&opt msg]
   (def m (message/normalize (merge {:to "ada@example.com" :subject "hi" :text "body"}
                                    (or msg {}))
                             cfg-from))
@@ -187,6 +193,9 @@
 # that grows until the process dies.
 
 (defn- fake-conn
+  {:params [(fn [:any :number :buffer :any] :any)]
+   :ret @{:stream @{:read :function} :buf :buffer :pos :number
+          :cfg {:timeout :number} :caps :any :closed :boolean}}
   "A connection whose :read is scripted — enough of the table for
   read-reply, no socket."
   [reader]

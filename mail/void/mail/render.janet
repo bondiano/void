@@ -35,13 +35,18 @@
   installed at boot."
   nil)
 
-(defn- require-base []
+(defn- require-base
+  {:params [] :ret :any :throws [:string]}
+  "The configured base URL, or an error naming the setting a letter
+  needs it from — a mail has no origin of its own to resolve against."
+  []
   (or base-url
       (error (string "[:mail :base-url] is not set, and a mail has no origin to "
                      "resolve a relative URL against — set it to where this "
                      "application answers, e.g. \"https://example.com\""))))
 
 (defn url
+  {:params [:any] :ret :string :throws [:string]}
   ``An absolute URL for a path in this application: `[:mail :base-url]`
   plus the path. An argument that is already absolute is returned as
   it is, so a link to somewhere else is not mangled.``
@@ -54,6 +59,7 @@
             (if (string/has-prefix? "/" s) s (string "/" s)))))
 
 (defn asset
+  {:params [:any] :ret :string :throws [:string]}
   "An absolute URL for an asset, through void/html's fingerprint
   manifest — the same file the pages link to, addressed from outside."
   [logical]
@@ -67,12 +73,14 @@
              1))))
 
 (defn relative-urls
+  {:params [:any] :ret @[:string]}
   "Every href/src in a rendered body that a mail client cannot
   resolve. Empty is what a letter should have."
   [body]
   (or (peg/match relative-href-peg (string body)) []))
 
 (defn check-absolute
+  {:params [:any] :ret :any :throws [:string]}
   ``Refuse a body with a relative link. Called on the rendered HTML,
   because a URL built by a component is only visible after the
   component ran.``
@@ -85,6 +93,9 @@
   body)
 
 (defn render
+  {:params [:any (or :nil {:engine :any? :layout :any? :context :any? :check :boolean? & r})]
+   :ret :string
+   :throws [:string]}
   ``Render a view through the composition's view engine and return the
   HTML as a string.
 
@@ -111,6 +122,9 @@
   (if (get opts :check true) (check-absolute body) body))
 
 (defn render-message
+  {:params [{:view :any :layout :any :engine :any :context :any :check-urls :any & r}]
+   :ret :any
+   :throws [:string]}
   ``Turn a message's `:view` into its `:html`. A message that carries
   its HTML already is returned untouched — rendering is a step, not a
   requirement.``

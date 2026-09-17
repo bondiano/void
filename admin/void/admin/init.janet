@@ -197,6 +197,7 @@
 (plugin/contribute! :void.authz/policy gate)
 
 (defn- register-action-policies!
+  {:ret @[:keyword] :throws [:string]}
   ``One allowing policy per action of every resource, registered only
   where the application has not defined one. It exists so the *name*
   is already on the route: narrowing an action later is a `defpolicy`
@@ -222,11 +223,15 @@
 (def- secretish-parts
   ["password" "secret" "token" "digest" "hash"])
 
-(defn- secretish? [fname]
+(defn- secretish?
+  {:params [:any] :ret :boolean :narrows :any}
+  "Does this field's name look like it holds a secret?"
+  [fname]
   (def s (string fname))
   (truthy? (some |(string/find $ s) secretish-parts)))
 
 (defn secret-projection-warnings
+  {:ret @[{:resource :keyword :projection :keyword :fields [:keyword]}] :throws [:string]}
   ``The resources whose *derived* `:list` or `:detail` — the fallback
   to every column of the entity, not a projection anybody wrote — holds
   a column named like a secret. A hash column added to an entity for
@@ -248,7 +253,11 @@
         (array/push out {:resource rname :projection projection :fields (tuple ;hit)}))))
   out)
 
-(defn- warn-secret-projections! []
+(defn- warn-secret-projections!
+  {:ret :nil :throws [:string]}
+  "Log a warning for every derived projection that leaks a
+  secret-shaped column."
+  []
   (each w (secret-projection-warnings)
     (log/warn (string "admin resource leaves its " (w :projection) " to be derived "
                       "from the entity, and the entity has a column named like a secret — "
@@ -261,12 +270,26 @@
 # -- the context ---------------------------------------------------------
 
 (defn build-context
+  {:params [{:extensions {:keyword {:resolved :any & r}}
+             :config {:values {:admin :any & r} & r} :hooks :any & r}]
+   :ret @{:config :any :prefix (or :string :nil) :title (or :string :nil)
+          :access (or :keyword :nil) :per-page (or :number :nil) :select-limit (or :number :nil)
+          :route-meta {:keyword :any} :inline-limit :number :stylesheet (or :string :nil)
+          :layout :any :htmx-src (or :string :nil) :htmx-integrity (or :string :nil)
+          :widgets :any :pages :any :dashboard :any :menu :any :history :any :bulk-runner :any
+          :hooks :any :resolved {:keyword {:keyword {:widget :any :why :keyword :field :any}}}
+          :assets :any}
+   :throws [:string]}
   "Assemble the admin context from a boot value: the [:admin] slice,
   the four contribution points, the hook registry, and the widget
   resolution of every declared resource. Normally called by the
   :before-start hook."
   [boot]
-  (defn resolved [name] (or (get-in boot [:extensions name :resolved]) []))
+  (defn resolved
+    {:params [:keyword] :ret :any}
+    "One extension point's resolved contributions, or [] before boot
+    has one."
+    [name] (or (get-in boot [:extensions name :resolved]) []))
   (def cfg (merge defaults (or (get-in boot [:config :values :admin]) {})))
   (def widgets (resolved :void.admin/widget))
   # the widget resolution first, because the asset bundle is a
@@ -368,6 +391,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn print-resources
+  {:ret :nil :throws [:string]}
   "The body of `void admin resources`."
   []
   (if (empty? (resources))
@@ -382,6 +406,7 @@
                                         ;(sorted (keys (d :custom-actions)))]) " ")))))
 
 (defn print-widgets
+  {:ret :nil :throws [:string]}
   ``The body of `void admin widgets`: which widget draws which field,
   and why it was the one. "Why is this field drawn like that" has to
   be answerable by a command, not by reading sources.``

@@ -71,6 +71,7 @@
   ~{:main (+ ,ident (* "(" (any (+ :main :s+)) ")"))})
 
 (defn- defn-of
+  {:params [:string] :ret :any}
   "A `defn` or `defn-` of one of `names`, and nothing that merely
   starts with one (`suggest` is not `suggest-fix`)."
   [& names]
@@ -225,10 +226,13 @@
   {"jpm_tree" true ".void-tree" true ".git" true "build" true})
 
 (defn- janet-files
+  {:params [:string] :ret @[:string]}
   "Every *.janet under `dir` (absolute), depth first, sorted."
   [dir]
   (def out @[])
-  (defn walk [d]
+  (defn walk
+    {:params [:string] :ret :nil}
+    [d]
     (each f (sorted (os/dir d))
       (def path (string d "/" f))
       (case (os/stat path :mode)
@@ -238,11 +242,18 @@
   out)
 
 (defn- relative
+  {:params [:string] :ret :string}
   "A path under the repository root, repo-relative."
   [path]
   (string/slice path (inc (length packages/root))))
 
 (defn- package-files
+  {:params [{:name :string :pattern :any :allow [(or :string [:string :string])]
+             :why :string :no-implementation :boolean?
+             :samples (or [:string] :nil) :not (or [:string] :nil)
+             :only (or [:keyword] :nil) :tests :boolean?}]
+   :ret @[:string]
+   :throws [:string]}
   ``The files an entry walks: the `void/` tree of each package in its
   scope, and its test directories when the entry asks for them.``
   [entry]
@@ -253,11 +264,13 @@
           names))
 
 (defn- line-of
+  {:params [:string :number] :ret :number}
   "1-based line number of byte offset `pos` in `text`."
   [text pos]
   (inc (length (string/find-all "\n" (string/slice text 0 pos)))))
 
 (defn- line-text
+  {:params [:string :number] :ret :string}
   "The line containing byte offset `pos`, trimmed."
   [text pos]
   (def start (if-let [nl (last (string/find-all "\n" (string/slice text 0 pos)))] (inc nl) 0))
@@ -265,11 +278,13 @@
   (string/trim (string/slice text start stop)))
 
 (defn- allow-file
+  {:params [(or :string [:string :string])] :ret :string}
   "The file an allowlist item names."
   [item]
   (if (string? item) item (item 0)))
 
 (defn- allows?
+  {:params [(or :string [:string :string]) :string :string] :ret :boolean :narrows :any}
   "Does allowlist `item` cover a hit in `file` on the line `text`? A
   bare file covers every hit in it; `[file name]` only a hit whose
   line contains `name`."
@@ -278,6 +293,12 @@
        (or (string? item) (truthy? (string/find (item 1) text)))))
 
 (defn- matches-in
+  {:params [{:name :string :pattern :any :allow [(or :string [:string :string])]
+             :why :string :no-implementation :boolean?
+             :samples (or [:string] :nil) :not (or [:string] :nil)
+             :only (or [:keyword] :nil) :tests :boolean?}
+            :string]
+   :ret @[{:file :string :line :number :text :string}]}
   "Every match of `entry`'s pattern in `path`, as {:file :line :text}
   — the line both for the report and for the per-name allowlist."
   [entry path]
@@ -287,6 +308,13 @@
     {:file rel :line (line-of text pos) :text (line-text text pos)}))
 
 (defn- check-entry
+  {:params [{:name :string :pattern :any :allow [(or :string [:string :string])]
+             :why :string :no-implementation :boolean?
+             :samples (or [:string] :nil) :not (or [:string] :nil)
+             :only (or [:keyword] :nil) :tests :boolean?}]
+   :ret {:name :string :hits @[{:file :string :line :number :text :string}]
+        :dead @[(or :string [:string :string])]}
+   :throws [:string]}
   ``One entry over its files: `:hits` are the matches no allowlist item
   covers, `:dead` the allowlist items nothing matched — an
   implementation that moved or was renamed, or text the table should
@@ -294,18 +322,27 @@
   [entry]
   (def found (mapcat |(matches-in entry $) (package-files entry)))
   (def allow (entry :allow))
-  (defn covered-by [m] (find |(allows? $ (m :file) (m :text)) allow))
+  (defn covered-by
+    {:params [{:file :string :line :number :text :string}]
+     :ret (or :string [:string :string] :nil)}
+    [m] (find |(allows? $ (m :file) (m :text)) allow))
   {:name (entry :name)
    :hits (filter |(nil? (covered-by $)) found)
    :dead (filter (fn [item] (not (some |(allows? item ($ :file) ($ :text)) found)))
                  allow)})
 
 (defn check
+  {:params [] :ret @[{:name :string :hits @[{:file :string :line :number :text :string}]
+                     :dead @[(or :string [:string :string])]}]
+   :throws [:string]}
   "Every entry's uncovered hits and dead allowlist items, in table order."
   []
   (map check-entry copies))
 
 (defn- report
+  {:params [{:name :string :hits @[{:file :string :line :number :text :string}]
+             :dead @[(or :string [:string :string])]}]
+   :ret :number}
   "Print one entry's findings to stderr; how many things are wrong."
   [{:name name :hits hits :dead dead}]
   (unless (and (empty? hits) (empty? dead))
@@ -321,11 +358,14 @@
 # -- the self-test: every pattern still finds the copy it is for --------
 
 (defn- entry-declares-a-home?
+  {:params [{:allow [(or :string [:string :string])] :no-implementation :boolean? & r}]
+   :ret :boolean :narrows :any}
   "Every entry either allows the implementation or says there is none."
   [entry]
   (or (not (empty? (entry :allow))) (= true (entry :no-implementation))))
 
 (defn self-test
+  {:params [] :ret @[:string]}
   ``Plant each entry's `:samples` into a string and assert the pattern
   finds them, and that its `:not` texts stay unfound; refuse an entry
   with neither an allowlist nor `:no-implementation`. Returns the
@@ -345,7 +385,11 @@
         (array/push failures (string/format "%s: finds %q, which it should not" (e :name) s)))))
   failures)
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret :nil :throws [:string]}
+  "CLI entrypoint: --self-test checks the patterns; otherwise walks
+  the tree and fails on any uncovered copy."
+  [& args]
   (if (index-of "--self-test" args)
     (let [failures (self-test)]
       (each f failures (eprint f))

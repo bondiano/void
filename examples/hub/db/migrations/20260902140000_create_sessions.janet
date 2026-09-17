@@ -28,8 +28,15 @@
 
 (def sessions-table "void_sessions")
 
-(defn up []
+(defn up
+  {:params [] :ret [:string] :throws [:string]}
+  "void/db-http's own session-table DDL, spelled for the engine this
+  migration runs against."
+  []
   (db-http/session-ddl ((db/current-driver) :dialect) sessions-table))
 
-(defn down []
+(defn down
+  {:params [] :ret [{:drop-table :string}]}
+  "Drop the sessions table."
+  []
   [{:drop-table sessions-table}])

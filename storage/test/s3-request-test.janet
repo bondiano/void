@@ -24,7 +24,8 @@
 (def secret "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
 
 (defn- percent-decode
-  # what a server does to the target before canonicalizing it again
+  {:params [:string] :ret :string}
+  "What a server does to the target before canonicalizing it again."
   [s]
   (def out @"")
   (var i 0)
@@ -56,9 +57,10 @@
 (def raw-path (string "/shop/" key))
 
 (defn- verify!
-  # an S3 end's half of the handshake: take what arrived on the wire,
-  # decode the target, rebuild the canonical request over the signed
-  # headers, and demand the same Authorization — byte for byte
+  {:params [:string] :ret :any :throws [:string]}
+  "An S3 end's half of the handshake: take what arrived on the wire,
+  decode the target, rebuild the canonical request over the signed
+  headers, and demand the same Authorization — byte for byte."
   [what]
   (def h (captured :headers))
   (def date (h "x-amz-date"))

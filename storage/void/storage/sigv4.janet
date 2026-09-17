@@ -35,6 +35,7 @@
     (freeze t)))
 
 (defn uri-encode
+  {:params [:any :boolean?] :ret :string}
   "Percent-encode for SigV4: unreserved bytes bare, everything else
   %XX with uppercase hex. `keep-slash` leaves / alone (path segments)."
   [s &opt keep-slash]
@@ -47,6 +48,7 @@
   (string out))
 
 (defn canonical-path
+  {:params [:any] :ret :string}
   "The canonical URI: the path with each segment percent-encoded and
   the slashes kept; \"/\" for an empty path."
   [path]
@@ -54,6 +56,7 @@
   (if (empty? p) "/" (uri-encode p true)))
 
 (defn canonical-query
+  {:params [(or {:any :any} :nil)] :ret :string}
   ``The canonical query string out of a params dictionary
   (string/keyword keys; a value may be an indexed of values): every key
   and value percent-encoded, `k=` even for an empty value, pairs sorted
@@ -67,18 +70,21 @@
   (string/join (seq [[k v] :in (sorted pairs)] (string k "=" v)) "&"))
 
 (defn hashed-payload
+  {:params [(or :string :buffer :nil)] :ret :string :throws [:string]}
   "Lowercase hex sha256 of the request body (\"\" for none)."
   [body]
   (crypto/hex (crypto/sha256 (or body ""))))
 
 (defn- collapse-ws
-  # SigV4 canonicalizes a header value by trimming it and collapsing
-  # every internal run of whitespace to one space — a value the far
-  # end normalizes differently is a signature that does not match
+  {:params [:any] :ret :string}
+  "SigV4 canonicalizes a header value by trimming it and collapsing
+  every internal run of whitespace to one space — a value the far end
+  normalizes differently is a signature that does not match."
   [s]
   (string (peg/replace-all ~(some (set " \t")) " " s)))
 
 (defn- header-lines
+  {:params [(or {:any :any} :nil)] :ret @[[:string :string]]}
   "[[lower-name trimmed-and-collapsed-value] ...] sorted by name."
   [headers]
   (sorted-by first
@@ -86,11 +92,15 @@
                [(string/ascii-lower (string k)) (collapse-ws (string/trim (string v)))])))
 
 (defn signed-headers
+  {:params [(or {:any :any} :nil)] :ret :string}
   "The SignedHeaders list: sorted lowercase names joined with ;."
   [headers]
   (string/join (map first (header-lines headers)) ";"))
 
 (defn canonical-request
+  {:params [{:method :any? :path :any? :query :any?
+             :headers (or {:any :any} :nil) :payload-hash :string? & r}]
+   :ret :string :throws [:string]}
   "The canonical request string of {:method :path :query :headers
   :payload-hash}."
   [req]
@@ -106,6 +116,7 @@
     "\n"))
 
 (defn amz-date
+  {:params [:number] :ret :string}
   ``An os/time instant as SigV4 spells it: YYYYMMDDTHHMMSSZ. UTC, and
   that is not a preference: the scope carries the date, so a process
   in a westward zone would sign yesterday's credential for an hour
@@ -119,16 +130,19 @@
                  (d :hours) (d :minutes) (d :seconds)))
 
 (defn datestamp
+  {:params [:string] :ret :string}
   "The date half of `amz-date`: YYYYMMDD."
   [date]
   (string/slice date 0 8))
 
 (defn scope
+  {:params [:string :string :string] :ret :string}
   "The credential scope: date/region/service/aws4_request."
   [date region service]
   (string (datestamp date) "/" region "/" service "/aws4_request"))
 
 (defn string-to-sign
+  {:params [:string :string :string :string] :ret :string :throws [:string]}
   "What the derived key actually signs."
   [date region service creq]
   (string algorithm "\n"
@@ -137,6 +151,7 @@
           (crypto/hex (crypto/sha256 creq))))
 
 (defn signing-key
+  {:params [:string :string :string :string] :ret :string :throws [:string]}
   "The derived key: HMAC chain from the secret through date, region
   and service. Raw bytes."
   [secret date region service]
@@ -146,11 +161,16 @@
   (crypto/hmac-sha256 k-service "aws4_request"))
 
 (defn signature
+  {:params [:string :string :string :string :string] :ret :string :throws [:string]}
   "Lowercase hex signature of one string-to-sign."
   [secret date region service sts]
   (crypto/hex (crypto/hmac-sha256 (signing-key secret date region service) sts)))
 
 (defn authorization
+  {:params [{:date :string :region :string :service :string :access-key :string
+             :secret-key :string :path :any? :method :any? :query :any?
+             :headers (or {:any :any} :nil) :payload-hash :string? & r}]
+   :ret :string :throws [:string]}
   ``The Authorization header for a request. `req` is canonical-request's
   input plus :date (amz-date), :region, :service, :access-key,
   :secret-key. The caller has already put `host`, `x-amz-date` and
@@ -167,6 +187,9 @@
                                     (req :region) (req :service) sts)))
 
 (defn presign-query
+  {:params [{:access-key :string :date :string :region :string :service :string
+             :method :any? :path :any? :expires :any? :host :any? :secret-key :string & r}]
+   :ret {:string :string} :throws [:string]}
   ``The query parameters of a presigned URL (query auth):
   X-Amz-Algorithm/-Credential/-Date/-Expires/-SignedHeaders plus the
   computed X-Amz-Signature. `req`: :method :path :date :expires

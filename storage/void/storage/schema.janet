@@ -36,6 +36,7 @@
 (eachp [name spec] types (schema/register-type! name spec))
 
 (defn annotations
+  {:params [{:props (or {:any :any} :nil) & r}] :ret :struct}
   ``The `:storage/*` props of a schema node, as a struct — what the
   form projection and the admin widget read. `db-annotations` is the
   same idea for `:db/*`.``

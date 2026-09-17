@@ -47,6 +47,7 @@
   @{})
 
 (defn- mint-code!
+  {:params [:keyword {:any :any} (or {:any :any} :nil)] :ret :string}
   "Authorize a code the way the real issuer's /authorize would — the
   leg the browser walks, taken from the parsed Location query."
   [name q &opt opts]
@@ -59,7 +60,14 @@
                          opts))
   code)
 
-(defn- id-token-for [grant issuer]
+(defn- id-token-for
+  {:params [{:nonce (or :any :nil) :wrong-nonce (or :any :nil) :claims (or :any :nil)
+             :client :any & r}
+            :string]
+   :ret :string}
+  "Mint a signed id_token for `grant` the way the fake issuer's /token
+  would, echoing the nonce (or somebody else's, for the replay test)."
+  [grant issuer]
   (jwt/encode-token (merge {:sub "idp-user:7" :email "person@idp.test"}
                            (if-let [n (get grant :nonce)]
                              {:nonce (if (grant :wrong-nonce) "somebody-elses" n)}
@@ -68,7 +76,11 @@
                     {:alg :rs256 :key rsa-key :kid "rsa-1"
                      :issuer issuer :audience (grant :client) :ttl 300}))
 
-(defn- token-answer [req issuer]
+(defn- token-answer
+  {:params [{:body :any & r} :string] :ret :any}
+  "The fake issuer's /token: a refresh grant or a code exchange,
+  checked the way a real authorization server checks PKCE."
+  [req issuer]
   (def form (or (wire/parse-query (string (or (req :body) ""))) @{}))
   (case (get form "grant_type")
     "refresh_token"
@@ -108,7 +120,11 @@
     (ring/response 400 (json/encode {:error "unsupported_grant_type"})
                    @{"content-type" "application/json"})))
 
-(defn- as-handler [req]
+(defn- as-handler
+  {:params [{:path :any & r}] :ret :any}
+  "The fake authorization server: discovery, JWKS, token and userinfo,
+  routed by path the way a real issuer's endpoints would be."
+  [req]
   (def issuer (dyn :as-issuer))
   (case (req :path)
     # only the OIDC document: the OAuth one 404s, and discovery's
@@ -143,7 +159,12 @@
 
 (var last-sign-in nil)
 
-(defn- on-sign-in [ctx]
+(defn- on-sign-in
+  {:params [{:claims :any :provider :any & r}] :ret (or :any :nil)}
+  "The application's :void.oauth/sign-in hook under test: refuses the
+  blocked email, otherwise signs in an identity keyed by provider and
+  subject."
+  [ctx]
   (set last-sign-in ctx)
   (def claims (ctx :claims))
   (cond
@@ -151,7 +172,10 @@
     (identity/make (string (ctx :provider) ":" (get claims :sub))
                    {:via :oauth :cookie true :claims claims})))
 
-(defn whoami [req]
+(defn whoami
+  {:params [:any] :ret :any}
+  "The test app's one route: the signed-in subject, or \"nobody\"."
+  [req]
   (ring/text 200 (or (auth/subject) "nobody")))
 
 (def app-routes
@@ -171,7 +195,11 @@
 (def modules ["void/http/init" "void/crypto/init" "void/auth/init" "void/auth/http"
               "void/oauth/init"])
 
-(defn- config [oauth-extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli :any}}
+  "The composition's `:config`, with `oauth-extra` merged into the
+  `[:oauth]` slice for the test that needs a different provider set."
+  [oauth-extra]
   {:env @{}
    :cli {:log {:level :error}
          :http {:port 0 :session {:enabled true} :access-log false}
@@ -213,6 +241,7 @@
 (def only [:http/kernel :auth/registry :oauth/providers])
 
 (defn- start-flow
+  {:params [:any :string] :ret {:any :any}}
   "GET the start route and hand back the query the browser would carry
   to the issuer."
   [c path]

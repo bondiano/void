@@ -38,6 +38,8 @@
   :void.admin/access)
 
 (defn- meta-for
+  {:params [{:name :keyword & r} :keyword (or {:keyword :any} :nil)]
+   :ret @{:name :keyword :void.authz/policy [:keyword :keyword] & r}}
   "The metadata of one action's route: its name, the gate plus its own
   policy, and — on the routes that are about one row — the loader that
   hands that row to the policies."
@@ -49,12 +51,21 @@
 
 (def- txn {:void.db/txn true})
 
-(defn- row-meta [desc action &opt extra]
+(defn- row-meta
+  {:params [{:name :keyword & r} :keyword (or {:keyword :any} :nil)]
+   :ret @{:name :keyword :void.authz/policy [:keyword :keyword] & r}}
+  "The metadata of one action's route about a single row: `meta-for`
+  plus the loader (`act/row-loader`) that hands the policies the row
+  they are deciding about."
+  [desc action &opt extra]
   (meta-for desc action (merge {:void.authz/resource (act/row-loader desc)} (or extra {}))))
 
 # -- widget routes -------------------------------------------------------
 
 (defn- widget-routes
+  {:params [{:name :keyword :path :string & r}
+            {:keyword {:widget :any :why :keyword :field :any}}]
+   :ret @[@{:keyword :any}]}
   ``The routes a widget asked for, mounted under `<resource>/-/w/<field>`
   with the same gate as everything else. FK autocompletion is the first
   user of this seam rather than a special case of the core — which is
@@ -85,12 +96,19 @@
 # -- one resource --------------------------------------------------------
 
 (defn resource-routes
+  {:params [{:name :keyword :path :string :action-set {:keyword :boolean}
+             :custom-actions {:keyword :any} :editable :any :inlines :any & r}
+            {:keyword {:widget :any :why :keyword :field :any}}]
+   :ret @[@{:keyword :any}]}
   "Every route of one resource, in matcher order."
   [desc entries]
   (def base (desc :path))
   (def on (desc :action-set))
   (def out @[])
-  (defn add [r] (array/push out r))
+  (defn add
+    {:params [@{:keyword :any}] :ret @[@{:keyword :any}]}
+    "Push one more route of this resource onto the list being built."
+    [r] (array/push out r))
 
   # static first — they are a table lookup, and `new` must not be an :id
   (when (in on :index)
@@ -149,6 +167,8 @@
 # -- the served assets ---------------------------------------------------
 
 (defn- asset-routes
+  {:ret @[{:route :boolean :method :keyword :pattern :string
+           :handler (or :symbol :function) :meta {:keyword :any}}]}
   "The two halves of the bundle as routes (void/html/chrome): the
   URL carries a crc32 of the body, and the route sits behind the same
   gate as every other admin route."
@@ -159,7 +179,12 @@
                                 {:name (keyword "admin/asset-" (string half))
                                  :meta {:void.authz/policy [access-policy]}}))))
 
-(defn- page-routes []
+(defn- page-routes
+  {:ret @[{:route :boolean :method :keyword :pattern :string
+           :handler (or :symbol :function) :meta {:keyword :any}}]}
+  "The admin's own extra pages (:void.admin/page), mounted under the
+  admin prefix with the same gate plus whatever policies the page named."
+  []
   (seq [p :in (ctx/setting :pages [])]
     (router/route (get p :method :get)
                   (p :path)
@@ -171,6 +196,9 @@
 # -- the whole thing -----------------------------------------------------
 
 (defn resolve-widgets
+  {:params [(or @[{:name :keyword :render :function & r}]
+                [{:name :keyword :render :function & r}])]
+   :ret {:keyword {:keyword {:widget :any :why :keyword :field :any}}}}
   "Resolve every field of every declared resource once — the table
   `void admin widgets` prints and the handlers read."
   [contribs]
@@ -178,6 +206,7 @@
             rname (widget/resolve-all (res/lookup rname) contribs))))
 
 (defn routes
+  {:ret {:routes :boolean :global {:keyword :any} :children [:any]}}
   ``The route source: the whole registry plus the admin's own pages,
   under `[:admin :prefix]`. Called once per route-table build, so a
   resource added in a REPL and a `http/rebuild!` are enough to see it.

@@ -16,6 +16,7 @@
 (import void/html/form :as form)
 
 (defn who-bar
+  {:params [] :ret :tuple}
   "Who is signed in, and the way out."
   []
   (def link "text-sm text-slate-400 no-underline transition hover:text-slate-100")
@@ -35,6 +36,7 @@
      [:a {:class link :href "/register"} "Create an account"]]))
 
 (defn layout
+  {:params [:any :any] :ret @[:any]}
   "The frame every page of this application that is not the desk goes
   in."
   [content context]
@@ -57,6 +59,10 @@
      [:main {:class "mx-auto max-w-md px-6 py-16"} content]]))
 
 (defn page
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "Hiccup in the frame — what a controller hands back as a response
   body."
   [content]

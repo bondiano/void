@@ -23,11 +23,17 @@
 
 (var served 0)
 
-(defn work [req]
+(defn work
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Handler for the route that may be shed."
+  [req]
   (++ served)
   (ring/text 200 "worked"))
 
-(defn health [req]
+(defn health
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Handler for the exempt route."
+  [req]
   (ring/text 200 "ok"))
 
 (def app-routes
@@ -63,7 +69,11 @@
                                :recovery-samples 2}
                     :pressure-http {:retry-after 2}}}}))
 
-(defn- request [path]
+(defn- request
+  {:params [:string] :ret (or :string :nil)}
+  "Fire one raw HTTP request at the running server and return the
+  response bytes, read until the server closes the connection."
+  [path]
   (def [ok resp]
     (protect
       (with [conn (net/connect "127.0.0.1" (string port))]
@@ -73,11 +83,25 @@
         buf)))
   (when ok (string resp)))
 
-(defn- head [path]
+(defn- head
+  {:params [:string]
+   :ret (or [(or :nil (enum :error)
+                @{:status :number :message :string :http-version [:number :number]
+                  :headers @{:any :any} :head-size :number})
+             :string]
+            :nil)}
+  "The parsed response head and the raw bytes it came from, or nil
+  when the connection produced nothing."
+  [path]
   (when-let [raw (request path)]
     [(wire/parse-response-head (buffer raw)) raw]))
 
-(defn- await [pred timeout what]
+(defn- await
+  {:params [(fn [] :any) :number :string] :ret :any}
+  "Poll `pred` until it is truthy or `timeout` seconds pass, asserting
+  `what` either way — the wait for an async transition (pressure
+  tripping, recovering) that a fixed sleep would make flaky."
+  [pred timeout what]
   (def deadline (+ (os/clock :monotonic) timeout))
   (var got nil)
   (while (and (not got) (< (os/clock :monotonic) deadline))

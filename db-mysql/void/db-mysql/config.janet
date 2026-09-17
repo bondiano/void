@@ -119,6 +119,7 @@
   ["mysql://" "mariadb://"])
 
 (defn url?
+  {:params [:any] :ret :boolean}
   "Does this string look like a MySQL connection URL?"
   [s]
   (def t (string s))
@@ -131,6 +132,7 @@
     (table/to-struct t)))
 
 (defn percent-decode
+  {:params [:string] :ret :string :throws [:string]}
   ``Undo the %XX escaping of a URL component. A stray % that does not
   introduce two hex digits is a typo in a connection string, and
   saying so beats connecting somewhere unintended.``
@@ -150,12 +152,18 @@
       (do (buffer/push-byte out c) (++ i))))
   (string out))
 
-(defn- split-once [s sep]
+(defn- split-once
+  {:params [:string :string] :ret [:string (or :string :nil)]}
+  "`s` split at the first `sep`, or `[s nil]` when `sep` does not occur."
+  [s sep]
   (if-let [i (string/find sep s)]
     [(string/slice s 0 i) (string/slice s (+ i (length sep)))]
     [s nil]))
 
-(defn- split-last [s sep]
+(defn- split-last
+  {:params [:string :string] :ret [(or :string :nil) :string]}
+  "`s` split at the last `sep`, or `[nil s]` when `sep` does not occur."
+  [s sep]
   (if-let [i (last (string/find-all sep s))]
     [(string/slice s 0 i) (string/slice s (+ i (length sep)))]
     [nil s]))
@@ -176,7 +184,11 @@
 (def- number-keys {:connect-timeout true :read-timeout true :write-timeout true})
 (def- keyword-keys {:ssl-mode true})
 
-(defn- url-value [key raw]
+(defn- url-value
+  {:params [:keyword :string] :ret (or :boolean :number :keyword :string) :throws [:string]}
+  "One URL query value, coerced by what `key` is known to hold —
+  boolean, number or keyword — or left as the raw string."
+  [key raw]
   (cond
     (boolean-keys key)
     (case raw
@@ -191,6 +203,7 @@
     raw))
 
 (defn parse-url
+  {:params [:string] :ret @{:keyword :any} :throws [:string]}
   ``A MySQL connection URL as the config keys it stands for:
 
       (parse-url "mysql://void:s3cret@db:3307/app?ssl-mode=required")
@@ -265,6 +278,7 @@
   (peg/compile ~(* (some (+ (range "az" "AZ" "09") (set "_-+:/., "))) -1)))
 
 (defn- setting-value
+  {:params [:string :any] :ret :string :throws [:string]}
   ``One named session setting's value, quoted for the statement it
   goes into.
 
@@ -289,6 +303,10 @@
   (string "'" s "'"))
 
 (defn init-command
+  {:params [{:time-zone (or :any :nil) :sql-mode (or :any :nil)
+             :init-command (or :string :nil) & r}]
+   :ret (or :string :nil)
+   :throws [:string]}
   ``The MYSQL_INIT_COMMAND for a slice: the statement the server runs
   as the session opens, and again on every reconnect the library
   makes. :time-zone and :sql-mode become one SET, and
@@ -306,6 +324,13 @@
   (unless (empty? parts) (string/join parts "; ")))
 
 (defn spec
+  {:params [(or {:any :any} :nil)]
+   :ret {:host (or :string :nil) :port :any :socket :any :database :any
+         :user :any :password :any :charset :any :library :any
+         :connect-timeout :any :read-timeout :any :write-timeout :any
+         :found-rows :boolean :ssl-mode :any :ssl-ca :any :ssl-cert :any
+         :ssl-key :any :decode :any & r}
+   :throws [:string]}
   ``The plain-data connection spec for a [:db-mysql] slice — what
   crosses into a worker thread (./worker's `connect!` takes exactly
   this). Marshalable by construction: strings, numbers, booleans and
@@ -351,6 +376,9 @@
   (table/to-struct out))
 
 (defn describe
+  {:params [(or {:any :any} :nil)]
+   :ret {:host :any :port :any :socket :any :database :any :user :any :ssl-mode :any}
+   :throws [:string]}
   ``The connection as a handful of values for a log line or a health
   report: {:host :port :socket :database :user :charset :ssl-mode},
   with no secret among them. \"Which server did it connect to\" is the
@@ -366,6 +394,7 @@
   (table/to-struct out))
 
 (defn safe-url
+  {:params [:string] :ret :string}
   ``A connection URL with the password removed — what gets logged when
   a slice was configured with one. The rest stays: a URL with its
   secret masked is still the fastest way to see where a process

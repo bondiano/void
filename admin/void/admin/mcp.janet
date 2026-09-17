@@ -41,6 +41,9 @@
 # -- the request an agent does not have ----------------------------------
 
 (defn- agent-request
+  {:params [(or {:filters (or {:keyword :any} :nil) & r} :nil)]
+   :ret @{:method :keyword :path :string :params @{:any :any} :query @{:string :string}
+          :form @{:any :any} :void.admin/via :keyword}}
   ``A `:scope` is `(fn [request] where)` and an agent's call is not an
   HTTP request. It gets one shaped like the ones a scope actually
   reads: the query parameters it was given, no params, and a marker
@@ -60,6 +63,7 @@
     :void.admin/via :mcp})
 
 (defn tool-key
+  {:params [:any :any] :ret :keyword}
   ``The keyword an admin tool is named by. `void/mcp` turns a slash
   into an underscore, and a model's tool name may hold nothing but
   `[a-z0-9_-]` — so the name is flat: `:admin-articles-list` becomes
@@ -68,6 +72,7 @@
   (keyword "admin-" rname "-" verb))
 
 (defn- all-optional
+  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
   "The same map schema with every entry optional — a patch names the
   fields it changes and nothing else."
   [sch]
@@ -77,6 +82,7 @@
                   k (if (= :optional (sub :type)) sub (schema/optional sub)))))
 
 (defn- ensure!
+  {:params [{:name :keyword & r} :any :any?] :ret :any :throws [:string]}
   ``The gate and the action's own policy, exactly as the routes carry
   them. `decide` rather than `ensure!` for one reason: a refusal has to
   reach the model as a sentence, and `ensure!` raises the value the
@@ -92,6 +98,9 @@
   decision)
 
 (defn- row->data
+  {:params [(or @[{:name :keyword :field :any & r}] [{:name :keyword :field :any & r}])
+            {:any :any}]
+   :ret @{:keyword :any}}
   ``One row as `cols` projects it — the columns that name a real
   field, and nothing else.
 
@@ -108,6 +117,7 @@
     (c :name) (get row (c :name))))
 
 (defn- ok
+  {:params [:any] :ret :string}
   "A tool answers with a string. `json/encode` builds a buffer, and a
   buffer would reach the model as its printed representation."
   [value]
@@ -115,7 +125,21 @@
 
 # -- tools ---------------------------------------------------------------
 
-(defn- list-tool [desc]
+(defn- list-tool
+  {:params [{:name :keyword :title :string :search [:keyword] :per-page (or :number :nil)
+             :sortable [:keyword]
+             :filters [{:field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        :param :string :name :keyword & r}]
+             :scope (or :function :nil) :order-by :any :preload :any
+             :list [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
+             :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}]
+   :ret {:name :keyword :title :string :doc :string :read-only? :boolean
+         :needs [:keyword] :schema :any :fn :function}
+   :throws [:string]}
+  "The read-only tool projecting the list page: same state, same
+  scope, same filters, same paging."
+  [desc]
   {:name (tool-key (desc :name) "list")
    :title (string "List " (desc :title))
    :doc (string "List rows of " (desc :title)
@@ -143,7 +167,20 @@
               :page (st :page)
               :per-page (st :per-page)}))})
 
-(defn- get-tool [desc]
+(defn- get-tool
+  {:params [{:name :keyword :singular :string :title :string
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret {:name :keyword :title :string :doc :string :read-only? :boolean
+         :needs [:keyword] :schema {:id :any} :fn :function}
+   :throws [:string]}
+  "The read-only tool projecting one row by primary key, inside the
+  same scope a person sees."
+  [desc]
   {:name (tool-key (desc :name) "get")
    :title (string "Get one " (desc :singular))
    :doc (string "One row of " (desc :title) " by primary key, inside the same scope a person sees.")
@@ -157,7 +194,21 @@
          (ensure! desc :show row)
          (ok (row->data (desc :detail) row)))})
 
-(defn- create-tool [desc]
+(defn- create-tool
+  {:params [{:name :keyword :singular :string :title :string
+             :readonly [:keyword] :form-fields [{:name :keyword & r}]
+             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :defaults {:keyword :function}
+             :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
+             :entity {:pk :keyword & r}
+             & r}]
+   :ret {:name :keyword :title :string :doc :string :read-only? :boolean
+         :needs [:keyword] :schema {:type :keyword :props {:any :any} :children [:any]}
+         :fn :function}
+   :throws [:string]}
+  "The write tool projecting `create`: its input schema is the
+  resource's own form schema, one value, two readers."
+  [desc]
   {:name (tool-key (desc :name) "create")
    :title (string "Create a " (desc :singular))
    :doc (string "Create one row of " (desc :title)
@@ -177,6 +228,11 @@
          (ok (row->data (desc :detail) row)))})
 
 (defn- update-schema
+  {:params [{:entity {:version (or :keyword :nil)
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :form-schema {:type :keyword :props {:any :any} :children [:any]} & r}]
+   :ret {:type :keyword :props {:any :any} :children [:any]}
+   :throws [:string]}
   ``The patch an agent sends: the form schema with every field
   optional, the primary key, and — when the entity declares one — the
   version column, also optional. The version is in the schema because
@@ -192,7 +248,23 @@
                     (all-optional (schema/select (get-in desc [:entity :schema]) [vfield])))
       (all-optional (desc :form-schema)))))
 
-(defn- update-tool [desc]
+(defn- update-tool
+  {:params [{:name :keyword :singular :string :title :string
+             :readonly [:keyword] :form-fields [{:name :keyword & r}]
+             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
+             :entity {:name :keyword :pk :keyword :pk-column :string :version (or :keyword :nil)
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret {:name :keyword :title :string :doc :string :read-only? :boolean
+         :needs [:keyword] :schema {:type :keyword :props {:any :any} :children [:any]}
+         :fn :function}
+   :throws [:string]}
+  "The write tool projecting `update`: the same read-only filter, the
+  same version guard, the same write as the edit form."
+  [desc]
   (def vfield (get-in desc [:entity :version]))
   {:name (tool-key (desc :name) "update")
    :title (string "Update a " (desc :singular))
@@ -222,7 +294,18 @@
                    (desc :name) (get arguments :id)))
          (ok (row->data (desc :detail) row)))})
 
-(defn- delete-tool [desc]
+(defn- delete-tool
+  {:params [{:name :keyword :singular :string :title :string
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret {:name :keyword :title :string :doc :string :read-only? :boolean
+         :needs [:keyword] :schema {:id :any} :fn :function}
+   :throws [:string]}
+  "The write tool projecting `destroy`."
+  [desc]
   {:name (tool-key (desc :name) "delete")
    :title (string "Delete a " (desc :singular))
    :doc (string "Delete one row of " (desc :title) " by primary key.")
@@ -239,7 +322,21 @@
          (act/announce! req desc :destroy (get arguments :id) before nil)
          (ok {:deleted (get arguments :id)}))})
 
-(defn- action-tool [desc action]
+(defn- action-tool
+  {:params [{:name :keyword :title :string
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            {:name :keyword :label (or :string :nil) :doc (or :string :nil)
+             :apply (or :function :nil) & r}]
+   :ret {:name :keyword :title :string :doc :string :read-only? :boolean
+         :needs [:keyword] :schema {:ids [:any]} :fn :function}
+   :throws [:string]}
+  "One custom action, projected: every id passes the action's own
+  policy before it runs."
+  [desc action]
   {:name (tool-key (desc :name) (string (action :name)))
    :title (string (get action :label (string (action :name))) " — " (desc :title))
    :doc (or (get action :doc)
@@ -264,6 +361,27 @@
          (ok {:applied n :asked (length (get arguments :ids []))}))})
 
 (defn tools-for
+  {:params [{:name :keyword :title :string :singular :string
+             :readonly [:keyword] :form-fields [{:name :keyword & r}]
+             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :defaults {:keyword :function}
+             :scope (or :function :nil) :search [:keyword] :order-by :any :preload :any
+             :per-page (or :number :nil) :sortable [:keyword]
+             :filters [{:field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        :param :string :name :keyword & r}]
+             :list [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
+             :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
+             :action-set {:keyword :boolean}
+             :custom-actions {:keyword {:name :keyword :label (or :string :nil)
+                                        :doc (or :string :nil) :apply (or :function :nil) & r}}
+             :entity {:name :keyword :pk :keyword :pk-column :string :version (or :keyword :nil)
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret @[{:name :keyword :title :string :doc :string :read-only? :boolean
+           :needs [:keyword] :schema :any :fn :function}]
+   :throws [:string]}
   "Every tool one resource projects."
   [desc]
   (def out @[(list-tool desc) (get-tool desc)])
@@ -278,6 +396,18 @@
 # -- resources -----------------------------------------------------------
 
 (defn declaration
+  {:params [{:name :keyword :title :string :mount :boolean :path :string
+             :entity {:name :keyword & r}
+             :actions [:keyword] :custom-actions {:keyword :any}
+             :list [{:name :keyword & r}] :detail [{:name :keyword & r}]
+             :form [:keyword] :readonly [:keyword] :search [:keyword] :sortable [:keyword]
+             :filters [{:name :keyword & r}] :inlines {:keyword :any}
+             & r}]
+   :ret {:name :keyword :title :string :entity :keyword :mounted :boolean :url (or :string :nil)
+         :actions [:keyword] :list [:keyword] :detail [:keyword] :form [:keyword]
+         :readonly [:keyword] :search [:keyword] :sortable [:keyword] :filters [:keyword]
+         :inlines @[:keyword] :policies {:keyword :keyword}}
+   :throws [:string]}
   ``The declaration itself, as data. An agent that can read this does
   not have to guess what it may filter on, sort by or write — and what
   it reads is the same value the pages render from, so the two cannot
@@ -301,6 +431,10 @@
                a (res/policy-name (desc :name) a))})
 
 (defn resources-for
+  {:params [{:name :keyword :title :string & r}]
+   :ret [{:name :keyword :uri :string :title :string :doc :string
+          :mime-type :string :read :function}]
+   :throws [:string]}
   ``The one resource each declaration publishes: itself. Reading it
   passes the same two policies the index route carries — the gate and
   `:index` — because a declaration names fields, actions and policy

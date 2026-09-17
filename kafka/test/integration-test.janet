@@ -40,6 +40,7 @@
 (def bcfg {:prefix prefix :redeliver {:interval 0.15 :max-interval 0.5}})
 
 (defn- await
+  {:params [:string (fn [] :any) :number?] :ret :boolean :throws [:string]}
   "Poll `pred` until it answers or `label` runs out of patience —
   broker latencies (group joins above all) are real but not worth a
   fixed sleep each."
@@ -52,7 +53,12 @@
     (errorf "%s: not within %d s" label timeout))
   true)
 
-(defn- fresh-broker [b &opt cfg]
+(defn- fresh-broker
+  {:params [:any :any] :ret :any}
+  "A bus broker over `b`, its dedup/poison/retry middleware off — the
+  scenarios below want the backend's own behaviour, not the bus
+  kernel's."
+  [b &opt cfg]
   (state/make b (codec/normalize codec/json)
               (merge @{:group :default
                        :dedup {:enabled false}
@@ -61,6 +67,16 @@
                      (or cfg {}))))
 
 (defn- make-backend
+  {:params []
+   :ret {:name :keyword
+         :encoded? :boolean
+         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean :shared :boolean}
+         :publish! (fn [:any] :nil)
+         :consume! (fn [:any :any] :any)
+         :stop! (fn [:any] :nil)
+         :close (fn [] :nil)
+         :health (fn [] :any)
+         :stats (fn [] :any)}}
   "A fresh raw backend over a producer of its own — what the
   conformance suite's factory has to be, and what this file normalizes
   once for its own scenarios."

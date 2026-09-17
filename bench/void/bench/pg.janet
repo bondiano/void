@@ -27,6 +27,7 @@
   "VOID_TEST_PG")
 
 (defn conninfo
+  {:params [] :ret :string?}
   "The configured server, or nil."
   []
   (var out nil)
@@ -37,11 +38,16 @@
   out)
 
 (defn available?
+  {:params [] :ret :boolean :narrows :any}
   "Is there a server for B2/B3 to run against?"
   []
   (not (nil? (conninfo))))
 
-(defn- keyword-params [info]
+(defn- keyword-params
+  {:params [:string] :ret @{:string :string}}
+  "Parse a libpq-style \"key=value ...\" conninfo string into a
+  key -> value table, unquoting a 'quoted value'."
+  [info]
   (from-pairs
     (seq [pair :in (string/split " " info) :when (not (empty? pair))]
       (def i (string/find "=" pair))
@@ -54,6 +60,10 @@
            v))])))
 
 (defn config
+  {:params [(or {:any :any} :nil)]
+   :ret (or {:url :string :application-name :string & r}
+            {:params @{:string :string} :application-name :string & r})
+   :throws [:string]}
   "The [:db-postgres] config slice for the configured server."
   [&opt extra]
   (def info (or (conninfo)

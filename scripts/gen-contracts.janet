@@ -129,6 +129,7 @@
 # -- deterministic rendering of schema shorthand -------------------------
 
 (defn render-schema
+  {:params [:any] :ret :string}
   "One-line janet rendering of a schema shorthand with dictionary keys
   sorted, so regeneration is stable."
   [s]
@@ -178,7 +179,10 @@
 # -- assemble ------------------------------------------------------------
 
 (def out @"")
-(defn p [fmt & args] (buffer/push out (string/format fmt ;args) "\n"))
+(defn p
+  {:params [:string :any] :ret :buffer}
+  "Append one formatted line to the output buffer."
+  [fmt & args] (buffer/push out (string/format fmt ;args) "\n"))
 
 (p "# void contracts — v1 (frozen)")
 (p "")
@@ -222,6 +226,7 @@
 (def without-suite @[])
 
 (defn- conformance-line
+  {:params [:string :keyword :string? :number] :ret :string :throws [:string]}
   "The registry line for a contract's suite: what it is, or that there
   is none and how many implementations are waiting for one."
   [what name module n-impls]

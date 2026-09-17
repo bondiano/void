@@ -438,7 +438,7 @@
    :peg (fn [e] (string/format "%q does not match peg %q" (e :value) (e :source)))})
 
 (defn- err!
-  {:params [@[:any] (or @[:any] [:any]) :keyword :any] :ret :nil}
+  {:params [@[:any] (or @[:any] [:any]) :keyword :any] :ret :array}
   "Push one validation error `{:path :code ...kvs}` onto `errors`."
   [errors path code & kvs]
   (array/push errors (struct :path (tuple ;path) :code code ;kvs)))

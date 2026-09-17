@@ -104,7 +104,11 @@
 # -- [:grpc :mount] false leaves the routes off --------------------------
 
 (proto/load-file! "test/protos/orders.proto")
-(defn h [_msg _req] {:count 0})
+(defn h
+  {:params [:any :any] :ret {:count :number}}
+  "A handler that answers every method the same way — all this file
+  needs to check the mount/unmount of the route source."
+  [_msg _req] {:count 0})
 (grpc/defservice :shop.orders/OrderService
   (rpc :GetOrder h) (rpc :CountOrders h) (rpc :PlaceOrder h)
   (rpc :Explode h) (rpc :Slow h))
@@ -124,7 +128,10 @@
 
 # -- the CLI prints what it promises -------------------------------------
 
-(defn- captured [f]
+(defn- captured
+  {:params [(fn [] :any)] :ret :string}
+  "Run `f` with `:out` redirected, and answer what it printed."
+  [f]
   (def out @"")
   (with-dyns [:out out] (f))
   (string out))

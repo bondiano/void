@@ -42,7 +42,13 @@
 
 # -- errors --------------------------------------------------------------
 
-(defn- error-text [e]
+(defn- error-text
+  {:params [{:message (or :string :nil) :code (or :number :nil) :sqlstate (or :string :nil) & r}]
+   :ret :string}
+  "The worker's error dictionary as one readable line: the message,
+  the errno in parens, the SQLSTATE in brackets — whichever of those
+  the server actually gave."
+  [e]
   (def parts @[(get e :message "mysql: the server reported an error")])
   (when-let [c (get e :code)] (unless (zero? c) (array/push parts (string "(errno " c ")"))))
   (when-let [s (get e :sqlstate)]
@@ -50,6 +56,9 @@
   (string/join parts " "))
 
 (defn- raise
+  {:params [{:message (or :string :nil) :code (or :number :nil) :sqlstate (or :string :nil) & r}]
+   :ret :never
+   :throws [{:db/error :keyword :message :string & r}]}
   ``Re-raise the worker's error dictionary on this side as the
   :void/db-driver contract's error form: {:db/error :mysql :message
   :code :sqlstate :lost :context}. The message carries the errno and
@@ -60,6 +69,8 @@
   (error (freeze (merge e {:db/error :mysql :message (error-text e)}))))
 
 (defn error-info
+  {:params [:any]
+   :ret (or {:message :any :code :any :sqlstate :any :lost :any :context :any & r} :nil)}
   ``The structured form of the error `e` — {:message :code :sqlstate
   :lost :context} — or nil when `e` did not come from this driver:
   the driver's own dictionary, or the one riding under :data of the
@@ -78,18 +89,26 @@
     nil))
 
 (defn sqlstate
+  {:params [:any] :ret (or :string :nil)}
   "The SQLSTATE of a driver error, or nil."
   [e]
   (get (error-info e) :sqlstate))
 
 (defn errno
+  {:params [:any] :ret (or :number :nil)}
   "The MySQL error number of a driver error, or nil."
   [e]
   (get (error-info e) :code))
 
 # -- the handle ----------------------------------------------------------
 
-(defn- start-thread [spec]
+(defn- start-thread
+  {:params [:any]
+   :ret @{:spec :any :req :any :resp :any :busy :boolean :pending :boolean
+          :open :boolean :closed :boolean :in-tx :boolean :info :any}}
+  "Start the worker thread for `spec` and its handle, before the
+  connection outcome is known — `open` awaits that next."
+  [spec]
   (def h @{:spec spec
            :req (ev/thread-chan 1)
            # room for an answer and the supervisor's parting message
@@ -110,6 +129,7 @@
   h)
 
 (defn- supervisor-message
+  {:params [:any] :ret :boolean}
   ``Did this come from the thread rather than from the worker's own
   protocol? Janet's supervisor messages are triples tagged :ok or
   :error; the worker answers in `:answer`/`:failed` pairs, so
@@ -120,6 +140,9 @@
             (or (= :answer (first m)) (= :failed (first m))))))
 
 (defn- await
+  {:params [@{:resp :any :open :boolean :pending :boolean & r} :string]
+   :ret :any
+   :throws [:string]}
   "The worker's next answer, or an error saying the thread is gone."
   [h what]
   (def message (ev/take (h :resp)))
@@ -149,6 +172,10 @@
             (raise payload))))))
 
 (defn- ask
+  {:params [@{:open :boolean :busy :boolean :pending :boolean :req :any :resp :any & r}
+            :any :string]
+   :ret :any
+   :throws [:string]}
   "Send one command and wait for its answer."
   [h command what]
   (unless (h :open)
@@ -177,6 +204,10 @@
     (await h what)))
 
 (defn open
+  {:params [:any]
+   :ret @{:spec :any :req :any :resp :any :busy :boolean :pending :boolean
+          :open :boolean :closed :boolean :in-tx :boolean :info :any}
+   :throws [:string]}
   ``Start a worker thread, connect, and return the handle. Blocks the
   calling fiber (not the loop) until the server has answered the
   handshake, so a wrong host or a refused password is an error here
@@ -189,16 +220,22 @@
   h)
 
 (defn open-config
+  {:params [(or {:any :any} :nil)]
+   :ret @{:spec :any :req :any :resp :any :busy :boolean :pending :boolean
+          :open :boolean :closed :boolean :in-tx :boolean :info :any}
+   :throws [:string]}
   "The same, from a [:db-mysql] config slice."
   [cfg]
   (open (config/spec cfg)))
 
 (defn live?
+  {:params [@{:open :any & r}] :ret :boolean}
   "Is this handle's worker still holding a usable connection?"
   [h]
   (truthy? (h :open)))
 
 (defn reusable?
+  {:params [@{:open :any :pending :any & r}] :ret :boolean}
   ``Safe to return to the pool? Not while a reply is still outstanding —
   a query abandoned mid-flight (a cancel) leaves the worker's answer on
   the channel, and the next owner's `ev/take` would read it.``
@@ -206,6 +243,8 @@
   (and (truthy? (h :open)) (not (h :pending))))
 
 (defn close
+  {:params [@{:closed :boolean :open :boolean :busy :boolean :req :any :resp :any & r}]
+   :ret :nil}
   ``Close the connection and end its thread. Safe twice, and safe on a
   handle whose worker has already died — a close that raised would
   turn every failure into two.
@@ -231,6 +270,10 @@
 # -- statements ----------------------------------------------------------
 
 (defn execute
+  {:params [@{:open :boolean :busy :boolean :pending :boolean :req :any :resp :any & r}
+            :any (or @[:any] [:any] :nil) (or {:any :any} :nil)]
+   :ret :any
+   :throws [:string]}
   ``Run one statement and return {:rows [...] :count n}, plus
   :insert-id for a write. Parameters are the builder's — `?`
   placeholders, values out of band here and rendered into literals on
@@ -240,12 +283,18 @@
        (string/format "running %s" (string/slice (string sql) 0 (min 120 (length (string sql)))))))
 
 (defn ping
+  {:params [@{:open :boolean :busy :boolean :pending :boolean :req :any :resp :any & r}]
+   :ret :any
+   :throws [:string]}
   "Is the server still there? Cheap, and the only thing that finds a
   connection the server closed while it was idle in the pool."
   [h]
   (ask h [:ping] "pinging"))
 
 (defn info
+  {:params [@{:info :any :open :boolean :busy :boolean :pending :boolean :req :any :resp :any & r}]
+   :ret :any
+   :throws [:string]}
   ``What this connection is: {:server :server-version :client :library
   :host :charset :thread-id}. Read once at connect and cached — every
   value in it is fixed for the life of a session.``
@@ -253,6 +302,9 @@
   (or (h :info) (put h :info (ask h [:info] "reading the server info"))))
 
 (defn server-version
+  {:params [@{:info :any :open :boolean :busy :boolean :pending :boolean :req :any :resp :any & r}]
+   :ret :any
+   :throws [:string]}
   "The server's version as [major minor patch]."
   [h]
   (get (info h) :server-version))

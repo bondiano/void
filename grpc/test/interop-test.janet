@@ -18,7 +18,10 @@
 ### machine of whoever changes the protocol, which is where it matters
 ### most.
 
-(defn- which [program]
+(defn- which
+  {:params [:string] :ret (or :string :nil)}
+  "The absolute path of `program` on PATH, or nil when it is not there."
+  [program]
   # :p, not :px — an absent program is exit 127, which is the answer
   # this asks for and not an error to raise
   (def p (os/spawn ["/bin/sh" "-c" (string "command -v " program)] :p {:out :pipe :err :pipe}))
@@ -37,13 +40,32 @@
 
 (def orders @{"A-1" {:id "A-1" :total_cents 990 :status :STATUS_PLACED :labels ["web"]}})
 
-(defn get-order [msg _req]
+(defn get-order
+  {:params [{:id :any & r} :any]
+   :ret @{:id :string :total_cents :number :status :keyword :labels [:string]}
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+  "The RPC handler under test: the order by id, or not_found."
+  [msg _req]
   (or (orders (msg :id))
       (grpc/fail! :not_found (string "no order " (msg :id)))))
-(defn count-orders [_msg _req] {:count (length orders)})
-(defn place-order [msg _req] {:id "A-2" :total_cents (msg :total_cents)})
-(defn explode [_msg _req] (grpc/fail! :permission_denied "not yours"))
-(defn slow [_msg _req] {:count 0})
+(defn count-orders
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: how many orders exist."
+  [_msg _req] {:count (length orders)})
+(defn place-order
+  {:params [{:total_cents :any & r} :any] :ret {:id :string :total_cents :any}}
+  "The RPC handler under test: places a new order."
+  [msg _req] {:id "A-2" :total_cents (msg :total_cents)})
+(defn explode
+  {:params [:any :any]
+   :ret :never
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+  "The RPC handler under test: always refuses, permission_denied."
+  [_msg _req] (grpc/fail! :permission_denied "not yours"))
+(defn slow
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: answers with a fixed count."
+  [_msg _req] {:count 0})
 
 (grpc/defservice :shop.orders/OrderService
   (rpc :GetOrder get-order)
@@ -52,7 +74,11 @@
   (rpc :Explode explode)
   (rpc :Slow slow))
 
-(defn- run-interop []
+(defn- run-interop
+  {:params [] :ret :nil}
+  "Boot the service and run `buf curl` against it, asserting its
+  answers agree with this server's."
+  []
   (def boot
     (test/start! {:plugins [:void/http :void/proto :void/grpc]
                   :config {:env @{}

@@ -16,6 +16,12 @@
 ### into every signature in memory: the last key wins, so a hover
 ### that does not answer `-> :never` names an annotation nobody read.
 ###
+### A named type is a third way to read nothing: `HttpRequest` spelled
+### `HttpReqest` is a variable nobody binds, and a variable rules nothing
+### out either. Every capitalised name a signature uses must therefore be
+### declared with `:typedef` — in the file itself or in a `*.d.janet`
+### anywhere under the repository.
+###
 ### Prints one line per finding and exits non-zero when there is any.
 
 (import spork/json)
@@ -105,9 +111,10 @@
   end)
 
 (defn- signatures
-  {:params [:string] :ret @[[:string :number :number :number]]}
+  {:params [:string] :ret @[[:string :number :number :number :string]]}
   "Each top-level `defn` or `defmacro` whose metadata declares a signature: its name, the
-  name's 0-based row and column, and the offset of the metadata's closing brace."
+  name's 0-based row and column, the offset of the metadata's closing brace, and the
+  metadata's text."
   [text]
   (def out @[])
   (var row 0)
@@ -117,19 +124,57 @@
                close (struct-end text open)]
       (def meta (string/slice text open close))
       (when (some |(string/find $ meta) [":params" ":ret" ":throws"])
-        (array/push out [name row (- at start) close])))
+        (array/push out [name row (- at start) close meta])))
     (+= start (inc (length line)))
     (++ row))
   out)
 
 (defn- probe
-  {:params [:string [[:string :number :number :number]]] :ret :string}
+  {:params [:string [[:string :number :number :number :string]]] :ret :string}
   "The text with `:ret :never` written last into every signature, back to front so that each
   offset still points where it did."
   [text sigs]
   (reduce (fn [out [_ _ _ close]]
             (string (string/slice out 0 close) " :ret :never" (string/slice out close)))
           text (reverse sigs)))
+
+(def- typedef-head
+  (peg/compile
+    ~(any (+ (* "(def" (some :s) (<- (* (range "AZ") (any (if-not (set " \t\r\n()[]{}") 1))))
+                (some :s) ":typedef")
+             1))))
+
+(def- tokens
+  (peg/compile ~(any (+ (<- (some (if-not (set " \t\r\n()[]{}") 1))) 1))))
+
+(defn- typedefs
+  {:params [:string] :ret @{:string :boolean}}
+  "Every name declared with `:typedef` in a `*.d.janet` under `dir`, plus the named types the
+  core declarations carry."
+  [dir]
+  (def names @{"Pattern" true "CType" true})
+  (defn walk [path]
+    (case (os/stat path :mode)
+      :directory (each entry (os/dir path)
+                   (unless (or (string/has-prefix? "." entry) (index-of entry ["jpm_tree" "tmp"]))
+                     (walk (string path "/" entry))))
+      :file (when (string/has-suffix? ".d.janet" path)
+              (each name (peg/match typedef-head (slurp path)) (put names name true)))))
+  (walk dir)
+  names)
+
+(defn- unknown-types
+  {:params [:string @{:string :boolean} @{:string :boolean}] :ret @[:string]}
+  "The capitalised names in a signature's metadata that no `:typedef` declares, here or in
+  the repository's declarations."
+  [meta declared local]
+  (distinct
+    (seq [token :in (peg/match tokens meta)
+          :let [name (if (string/has-suffix? "?" token) (string/slice token 0 -2) token)]
+          :when (and (<= (chr "A") (first name) (chr "Z"))
+                     (not (declared name))
+                     (not (local name)))]
+      name)))
 
 (defn main
   {:params [:string] :ret :never}
@@ -151,6 +196,7 @@
             :initializationOptions {:types {:diagnostics "warning"}}})
   (send in {:method "initialized" :params {}})
   (var found 0)
+  (def declared (typedefs "."))
   (each target targets
     (def target-uri (uri target))
     (def text (slurp target))
@@ -169,6 +215,12 @@
           (printf "%s:%d:%d %s" target (inc (start :line)) (inc (start :character))
                   (diagnostic :message)))))
     (def sigs (signatures (string text)))
+    (def local (tabseq [name :in (peg/match typedef-head text)] name true))
+    (each [name row col _ meta] sigs
+      (each unknown (unknown-types meta declared local)
+        (++ found)
+        (printf "%s:%d:%d the annotation of %s names %s, which no :typedef declares"
+                target (inc row) (inc col) name unknown)))
     (unless (empty? sigs)
       (send in {:method "textDocument/didChange"
                 :params {:textDocument {:uri target-uri :version 2}

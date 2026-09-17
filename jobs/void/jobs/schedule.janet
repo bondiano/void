@@ -183,7 +183,7 @@
   (defschedule-form name spec job-name opts))
 
 (defn forget!
-  {:params [:keyword] :ret :nil}
+  {:params [:keyword] :ret :table}
   "Drop a schedule — for tests, and for a REPL that renamed one."
   [name]
   (put registry name nil))

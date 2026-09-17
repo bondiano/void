@@ -26,6 +26,10 @@
 (def log-ns "void.kafka.producer")
 
 (defn- on-dr
+  {:params [@{:client :any :timeout :number :next-token :number
+              :waiters @{:number :any}
+              :stats @{:produced :number :delivered :number :failed :number}}]
+   :ret (fn [:pointer :any] :nil)}
   ``The delivery-report handler: one event carries a batch. A report
   someone is parked on resolves their channel; a fire-and-forget
   report becomes a counter, and a failed one a log line — at :warn,
@@ -48,6 +52,14 @@
                         :topic (msg :topic) :err (rk/err-str (msg :err))))))))))
 
 (defn make
+  {:params [@[[:string :string]] (or {:library (or :string :nil) :timeout (or :number :nil) & r} :nil)]
+   :ret @{:client @{:kind :keyword :handle :pointer :queue :pointer :rfd :number
+                    :wfd :number :pair :any :stopped :boolean :pump-done :any
+                    :last-error :any :handlers @{:keyword :any}
+                    :stats @{:events :number :errors :number}}
+          :timeout :number :next-token :number
+          :waiters @{:number :any}
+          :stats @{:produced :number :delivered :number :failed :number}}}
   ``A producer over property pairs (./config's `properties`).
 
       (make props {:library path :timeout 30})
@@ -72,12 +84,26 @@
   (client/pump! c)
   p)
 
-(defn- take-token! [p]
+(defn- take-token!
+  {:params [@{:next-token :number & r}] :ret :number}
+  "Mint the next delivery token, an ever-increasing counter."
+  [p]
   (def t (p :next-token))
   (put p :next-token (inc t))
   t)
 
 (defn produce!
+  {:params [@{:client @{:kind :keyword :handle :pointer :queue :pointer :rfd :number
+                        :wfd :number :pair :any :stopped :boolean :pump-done :any
+                        :last-error :any :handlers @{:keyword :any}
+                        :stats @{:events :number :errors :number}}
+              :timeout :number :next-token :number
+              :waiters @{:number :any}
+              :stats @{:produced :number :delivered :number :failed :number}}
+            {:topic :any :value (or :string :nil) :key (or :string :nil)
+             :headers (or @{:string :string} :nil) :wait? (or :boolean :nil) & r}]
+   :ret (or :nil {:partition :number :offset :number})
+   :throws [:string]}
   ``One message out:
 
       (produce! p {:topic "user.created" :value bytes
@@ -142,6 +168,7 @@
                 topic (rk/err-str (report :err)))))))
 
 (defn flush!
+  {:params [@{:client @{:handle :pointer & cr} & r} :number?] :ret :number}
   ``Wait (parked, not blocked — rd_kafka_flush would block the loop)
   for the library to finish what it holds, up to `timeout` seconds.
   Returns what is left, which a clean shutdown wants to see as 0 and
@@ -155,6 +182,11 @@
   (client/outq-len (p :client)))
 
 (defn close!
+  {:params [@{:client @{:handle :pointer :queue :pointer :rfd :number :wfd :number
+                        :pair :any :pump-done :any & cr}
+              :waiters @{:number :any} & r}
+            :number?]
+   :ret :nil}
   ``Flush, stop the pump, release the handle. The flush is best
   effort with its remainder logged: at :stop the alternative to
   losing a queued message is holding the process, and the bounded
@@ -173,6 +205,10 @@
   nil)
 
 (defn stats
+  {:params [@{:client @{:handle :pointer & cr} :waiters @{:number :any}
+              :stats @{:produced :number :delivered :number :failed :number} & r}]
+   :ret @{:produced :number :delivered :number :failed :number
+         :outq :number :waiting :number}}
   "The counters, plus what the library still holds."
   [p]
   (merge (table/to-struct (p :stats))

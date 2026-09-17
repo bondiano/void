@@ -14,7 +14,10 @@
 ### What a step returns is executed: void/db/builder compiles it for
 ### whichever engine is running, which is what keeps one file portable.
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "The deliveries table, and the two indexes a list is filtered by."
+  []
   [{:create-table "deliveries"
     :columns [[:id :serial {:primary-key true}]
               # which configured source it came in on — `[:hub :sources]`
@@ -35,5 +38,8 @@
    {:create-index "deliveries_received_idx" :on "deliveries" :columns [:received-at]}
    {:create-index "deliveries_repo_idx" :on "deliveries" :columns [:repo]}])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:drop-table :string}]}
+  "Drop the deliveries table."
+  []
   [{:drop-table "deliveries"}])

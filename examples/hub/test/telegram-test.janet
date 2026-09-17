@@ -23,7 +23,13 @@
 
 (def calls @[])
 
-(defn- api [req]
+(defn- api
+  {:params [{:body :any? :path :string & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:any]}
+  "The fake bot API: the chat id decides the status, so one server
+  covers every branch of the retry decision."
+  [req]
   (def body (json/decode (string (or (req :body) "{}")) true))
   (array/push calls {:path (req :path) :body body})
   # the chat decides the answer, so one server covers every branch of
@@ -64,7 +70,11 @@
                          :dev {:netrepl {:enabled false}
                                :watch {:enabled false}}}}}))
 
-(defn- note [chat]
+(defn- note
+  {:params [:string] :ret {:key :keyword :title :string :body :string
+                           :to {:telegram :string} :channels [:keyword]}}
+  "A notification addressed to one chat."
+  [chat]
   {:key :hub/delivery
    :title "bondiano/void — push by bondiano"
    :body "refs/heads/main · 1 commit · feat: hub"

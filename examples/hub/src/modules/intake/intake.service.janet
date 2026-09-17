@@ -41,6 +41,7 @@
 (var- sources {})
 
 (defn configure!
+  {:params [(or {:sources (or {:keyword :any} :nil) & r} :nil)] :ret :nil}
   "Called from the application's :before-start hook (src/app.janet).
   Nothing is configured by default: an endpoint nobody set up answers
   404 rather than accepting anonymous bytes."
@@ -51,11 +52,13 @@
             :sources (sorted (keys sources))))
 
 (defn source
+  {:params [(or :string :keyword)] :ret (or {:signing-secret :any & r} :nil)}
   "The configuration of a named source, or nil when there is none."
   [name]
   (get sources (keyword name)))
 
 (defn signing-secret
+  {:params [(or {:signing-secret :any & r} :nil)] :ret :string :throws [:string]}
   ``What a source signs with. The configured value is a **secret
   reference** — `{:secret "GITHUB_WEBHOOK_SECRET"}` — which
   void/core/config resolved into an opaque box at load, so it is not in
@@ -78,6 +81,7 @@
 # -- the signature -------------------------------------------------------
 
 (defn signature-of
+  {:params [:any :any] :ret :string}
   ``What `X-Hub-Signature-256` should say for these bytes: GitHub's
   scheme is `sha256=<hex hmac-sha256 of the raw body>`. The same shape
   void/notify's webhook channel *sends*, read from the other end.``
@@ -85,6 +89,9 @@
   (string "sha256=" (crypto/hex (crypto/hmac-sha256 (string secret) (string body)))))
 
 (defn signature-ok?
+  {:params [(or {:signing-secret :any & r} :nil) :any :any]
+   :ret :boolean
+   :throws [:string]}
   ``Constant-time comparison, and `crypto/equal?` rather than `=`
 : a signature check that returns early on the first wrong
   byte tells the sender how much of the guess was right.
@@ -98,6 +105,7 @@
 # -- where the bytes go --------------------------------------------------
 
 (defn- safe-id
+  {:params [:string?] :ret :string?}
   ``The sender's delivery id as a storage key may hold it, or nil. It is
   **checked, not laundered**: GitHub sends a UUID, and a string that is
   not one is somebody else's idea of an identifier — a key is not the
@@ -112,6 +120,7 @@
     cleaned))
 
 (defn body-key
+  {:params [:string :string] :ret :string}
   ``Where a delivery's bytes live: `<source>/<yyyy>/<mm>/<id>.json`.
   Dated, because the first thing anybody asks of a store this size is
   "what can be deleted", and the id, because that is what a person has
@@ -124,6 +133,7 @@
 # -- what the payload says about itself ----------------------------------
 
 (defn payload-of
+  {:params [:any] :ret (or {:any :any} :nil)}
   ``Somebody else's JSON, decoded **once** — the row wants two fields
   out of it and the message wants a few more, and parsing it twice would
   be paying twice for a value the bytes already are. nil when it cannot
@@ -134,6 +144,7 @@
   (when (and ok (dictionary? payload)) payload))
 
 (defn describe
+  {:params [:any] :ret {:repo :string? :sender :string?}}
   "The two things worth a column. Both are the sender's business, so
   both may be missing."
   [payload]
@@ -145,6 +156,14 @@
 # -- receiving -----------------------------------------------------------
 
 (defn receive!
+  {:params [{:source :string :event :string? :delivery-id :string? :body :string? & r}]
+   :ret (or {:status (enum :no-id)}
+            {:status (enum :duplicate) :delivery-id :string?}
+            {:status (enum :received)
+             :row @{:id :number :source :string :event :string :delivery-id :string
+                    :repo :string? :sender :string? :body-key :string :size :number
+                    :received-at :string & r}})
+   :throws [:string]}
   ``Keep a delivery whose signature has already checked out, and route
   it. Takes values rather than a request — `{:source :event :delivery-id
   :body}` — and answers with one of
@@ -215,6 +234,12 @@
 # no waiting for somebody to push.
 
 (defn find-delivery
+  {:params [:any]
+   :ret (or @{:id :number :source :string :event :string :delivery-id :string
+              :repo :string? :sender :string? :body-key :string :size :number
+              :received-at :string & r}
+            :nil)
+   :throws [:string]}
   ``The delivery an operator named: the sender's own id (what GitHub
   shows on its deliveries page, and what a support request quotes), or
   this application's row id. Both, because an operator has whichever one
@@ -226,12 +251,18 @@
         (when (int? n) (deliveries/by-id n)))))
 
 (defn stored-body
+  {:params [{:body-key :string & r}] :ret :any}
   "The bytes of a kept delivery, or nil when the store no longer holds
   them (a sweep, a bucket the deployment moved off)."
   [row]
   (storage/fetch (row :body-key)))
 
 (defn replay!
+  {:params [{:delivery-id :string :body-key :string :event :string? & r}]
+   :ret @[{:id :string? :key :any? :at :number? :results @[{:channel :keyword
+                                                              :status :keyword & r}]
+           & r}]
+   :throws [:string]}
   ``Route a kept delivery again, from the bytes as they arrived. Returns
   what `routing/dispatch!` returned — one result per matching rule, so a
   caller can print what it queued and see that a delivery nobody routes

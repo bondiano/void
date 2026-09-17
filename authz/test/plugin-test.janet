@@ -11,7 +11,10 @@
 
 (def plugins ["void/authz/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli @{:any :any}}}
+  "This suite's boot config, with `extra` merged into :cli."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}} extra)})
 
 # -- phases 1-5 ----------------------------------------------------------
@@ -59,7 +62,11 @@
 # the CLI renders the registry
 (def printed @"")
 (def cli (plugin/extension boot :void.core/cli))
-(defn- run-cli [name & args]
+(defn- run-cli
+  {:params [:keyword :any] :ret :string}
+  "Run a registered CLI command by name against `value`, and return
+  what it printed."
+  [name & args]
   (buffer/clear printed)
   (def cmd (first (filter |(= name ($ :name)) cli)))
   (assert cmd (string/format "%q is a command" name))

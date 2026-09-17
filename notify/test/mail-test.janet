@@ -16,7 +16,12 @@
 (def plugins ["void/http/init" "void/html/init" "void/mail/init"
               "void/notify/init" "void/notify/mail"])
 
-(defn- start [&opt extra]
+(defn- start
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot the mail-routed notifier, with `extra` merged into the CLI config."
+  [&opt extra]
   (test/start! {:plugins plugins :only [:http/kernel]
                 :profile :test
                 :config {:env @{}

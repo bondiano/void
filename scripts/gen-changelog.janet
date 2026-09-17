@@ -29,6 +29,7 @@
 (import ../core/void/core/init :as core)
 
 (defn- git
+  {:params [:string] :ret :string :throws [:string]}
   "Run one git command, return its trimmed stdout."
   [& args]
   (with [p (os/spawn ["git" ;args] :px {:out :pipe})]
@@ -39,6 +40,7 @@
 # -- what the repository says about itself -------------------------------
 
 (defn- ancestor?
+  {:params [:string] :ret :boolean :narrows :any}
   "Is this ref an ancestor of HEAD — that is, does the history this
   repository has now actually contain it?"
   [ref]
@@ -53,6 +55,7 @@
   @[])
 
 (defn- tags
+  {:params [] :ret @[:string] :throws [:string]}
   ``Release tags, oldest first — vX.Y sorted numerically, and **only
   those the current history contains**.
 
@@ -75,7 +78,10 @@
                  (def [bmaj bmin] (map scan-number (string/split "." (string/slice b 1))))
                  (or (< amaj bmaj) (and (= amaj bmaj) (< amin bmin))))))
 
-(defn- tag-date [tag]
+(defn- tag-date
+  {:params [:string] :ret :string :throws [:string]}
+  "The ISO date a tag was made, as git log records it."
+  [tag]
   (git "log" "-1" "--format=%as" tag))
 
 (def- subjects-en
@@ -108,6 +114,7 @@
    "6736d4b" "docs: README v0.5 — waves 0-6 closed, the application deployed"})
 
 (defn- commits
+  {:params [:string] :ret @[{:hash :string :subject :string}] :throws [:string]}
   "Commits of one range as {:hash :subject}, newest first; merge
   commits are skipped (there are none, but a projection should not
   depend on that)."
@@ -120,6 +127,7 @@
       {:hash hash :subject (get subjects-en hash subject)})))
 
 (defn- strip-refs
+  {:params [:string] :ret :string}
   ``A commit subject as the changelog prints it. Older subjects carry
   a "(wave N, ADR-nnnn)" tail from when the design record lived in the
   repository; the record does not any more, so the pointer goes and
@@ -147,6 +155,7 @@
 (def- known-types (map first (filter first sections)))
 
 (defn- split-subject
+  {:params [:string] :ret [:string? :string]}
   "\"feat: void/tls — ...\" -> [\"feat\" \"void/tls — ...\"]; a subject
   without a known prefix goes to \"Other\" whole."
   [subject]
@@ -166,7 +175,12 @@
    "v0.4" "end of wave 4 — the killer features: admin + MCP"
    "v0.5" "end of wave 6 — parity and the first application: storage, the auth scaffold, the jobs dashboard, notifications, tailwind without node, htmx 4 — and examples/hub, deployed"})
 
-(defn- render-release [buf title date theme cs]
+(defn- render-release
+  {:params [:buffer :string :string? :string? (or @[{:hash :string :subject :string}]
+                                                  [{:hash :string :subject :string}])]
+   :ret :any}
+  "Append one release section (a tagged release or Unreleased) to buf."
+  [buf title date theme cs]
   (buffer/push buf "## " title)
   (when date (buffer/push buf " — " date))
   (buffer/push buf "\n\n")
@@ -188,6 +202,9 @@
           (buffer/push buf "\n"))))))
 
 (defn- render
+  {:params [] :ret {:text :string :tags @[:string]
+                    :pending @[{:hash :string :subject :string}]}
+   :throws [:string]}
   "The whole file as a string, projected from the history now."
   []
   (def ts (tags))
@@ -228,6 +245,7 @@
    :pending pending})
 
 (defn- released-part
+  {:params [:string] :ret :string}
   "Everything from the first release heading on — the part of the file
   that is a function of tagged history alone."
   [text]
@@ -236,9 +254,12 @@
     text))
 
 (defn- tag<?
+  {:params [:string :string] :ret :boolean :narrows :any}
   "vX.Y[.Z] numeric order."
   [a b]
-  (defn parts [t] (map scan-number (string/split "." (string/slice t 1))))
+  (defn parts
+    {:params [:string] :ret @[:number?]}
+    [t] (map scan-number (string/split "." (string/slice t 1))))
   (def [pa pb] [(parts a) (parts b)])
   (var result nil)
   (loop [i :range [0 (max (length pa) (length pb))] :until (not (nil? result))]
@@ -248,6 +269,7 @@
   (or result false))
 
 (defn- check
+  {:params [] :ret :nil :throws [:string]}
   "Exit 1 with a sentence when the file on disk or the version in
   void/core has fallen behind the tags."
   []
@@ -270,7 +292,11 @@
     (printf "CHANGELOG.md matches the history through %s; version %s is not behind it"
             newest core/version)))
 
-(defn main [&opt _ mode]
+(defn main
+  {:params [:string? :string?] :ret :nil :throws [:string]}
+  "CLI entrypoint: write CHANGELOG.md, or with mode \"check\", verify it
+  without writing."
+  [&opt _ mode]
   (when (= mode "check") (check) (os/exit 0))
   (def {:text text :tags ts :pending pending} (render))
   (spit "CHANGELOG.md" text)

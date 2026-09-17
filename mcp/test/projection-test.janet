@@ -24,7 +24,12 @@
     :doc "A component a command needs"
     :start (fn [_ _] (array/push started :thing) @{:value 42})))
 
-(defn- app []
+(defn- app
+  {:params [] :ret :any}
+  "The test composition: a handful of CLI commands and one
+  :void.mcp/tool and :void.mcp/resource, covering the gate and the
+  projection."
+  []
   (plugin/manifest 'test/app
     :version "0.1.0"
     :requires {:void/mcp ">=0.0.1"}
@@ -76,7 +81,15 @@
        :mime-type "text/plain"
        :read (fn [] "the note")}]}))
 
-(defn- boot-with [mcp-config]
+(defn- boot-with
+  {:params [:any]
+   :ret @{:phase :keyword :profile :keyword :extensions {:keyword :any}
+          :system (or {:components :any & r} :nil)
+          :config (or {:values @{:any :any} & r} :nil) & r}}
+  "Bootstrap (without starting) the test app with `mcp-config` as the
+  [:mcp] slice, and run its :config-loaded / :before-start hooks — the
+  state `void mcp serve` begins in."
+  [mcp-config]
   (def boot (plugin/bootstrap {:plugins [:void/mcp (app)]
                                :profile :test
                                :config {:env @{}
@@ -141,7 +154,14 @@
 
 (def boot2 (boot-with {:tools [:test/write]}))
 
-(defn- call [name args]
+(defn- call
+  {:params [:string :any]
+   :ret (or @{:jsonrpc :string :id :any :result :any}
+            @{:jsonrpc :string :id :any
+              :error @{:code (or :keyword :number) :message :string & r}}
+            :nil)}
+  "Call tool `name` with `args` against this process's projection."
+  [name args]
   (mcp/handle @{:id 1 :method "tools/call"
                 :params @{:name name :arguments args}}))
 
@@ -172,7 +192,10 @@
 (def module-dir (string (os/cwd) "/.tmp-mcp-test-" (os/time)))
 (os/mkdir module-dir)
 (array/insert module/paths 0 [(string module-dir "/:all:.janet") :source])
-(defn- write-symtool [version]
+(defn- write-symtool
+  {:params [:string] :ret :nil}
+  "(Re)write the module `:test/sym` resolves to, at `version`."
+  [version]
   (spit (string module-dir "/symtool.janet")
         (string "(defn hello [& args] (printf \"" version " %j\" args))")))
 (write-symtool "v1")
@@ -228,7 +251,10 @@
 (assert (index-of "void://schema/Order" uris) "so is every registered schema")
 (assert (index-of "void://note" uris) "and so is a contributed one")
 
-(defn- read-resource [uri]
+(defn- read-resource
+  {:params [:string] :ret (or @{:uri :string :mimeType :string :text :string} :nil)}
+  "Read resource `uri`'s first content block."
+  [uri]
   (get-in (mcp/handle @{:id 3 :method "resources/read" :params @{:uri uri}})
           [:result :contents 0]))
 

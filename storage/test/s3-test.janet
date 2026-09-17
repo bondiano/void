@@ -25,7 +25,11 @@
 
 (log/set-level! "void" :error)
 
-(defn- run []
+(defn- run
+  {:params [] :ret :any}
+  "The suite body, run only when a real S3-compatible server is
+  configured (see test-support/s3.janet)."
+  []
   (crypto/load!)
   (def st (store/normalize (s3/store (s3/make (s3env/config)))))
   (def prefix (s3env/prefix "s3"))

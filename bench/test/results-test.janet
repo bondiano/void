@@ -4,7 +4,12 @@
 
 # -- comparison: the 5% contract -----------------------------------------
 
-(defn rows [&keys {:rps rps :p50 p50 :p99 p99}]
+(defn rows
+  {:params [(or :keyword :number)]
+   :ret {:rows {:b0 {:bench :keyword :throughput {:rps :number}
+                     :latency {:rate :number :p50 :number :p99 :number}}}}}
+  "A results document with one plaintext row, its numbers given by keyword."
+  [&keys {:rps rps :p50 p50 :p99 p99}]
   {:rows {:b0 {:bench :plaintext
                :throughput {:rps rps}
                :latency {:rate 16000 :p50 p50 :p99 p99}}}})

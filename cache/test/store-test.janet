@@ -7,7 +7,13 @@
   @{:name :test
     :entries @{}})
 
-(defn- four-functions [state]
+(defn- four-functions
+  {:params [@{:any :any}]
+   :ret {:name (enum :test) :get (fn [a] b) :put (fn [a b c] d) :delete (fn [a] b)
+         :clear (fn [a] b)}}
+  "The bare four required keys, over a table the test can inspect
+  directly — the minimum a `:void/cache-store` has to be."
+  [state]
   {:name :test
    :get (fn [k] (get state k))
    :put (fn [k v ttl] (put state k v) v)

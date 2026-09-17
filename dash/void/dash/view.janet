@@ -105,6 +105,9 @@ document.addEventListener("input", function (e) {
 `)
 
 (defn asset-bundle
+  {:params []
+   :ret {:style (or {:file :string :body :string} :nil)
+         :script (or {:file :string :body :string} :nil)}}
   "The dash's served assets, as data:
   {:style {:file :body} :script {:file :body}} (void/html/chrome)."
   []
@@ -112,6 +115,7 @@ document.addEventListener("input", function (e) {
    :script (chrome/served-asset "dash.js" script)})
 
 (defn asset-url
+  {:params [:keyword?] :ret :string? :throws [:string]}
   "Where one half of the bundle is served (:style by default), or nil."
   [&opt half]
   (default half :style)
@@ -132,7 +136,11 @@ document.addEventListener("input", function (e) {
    [:void.dash/logs "/logs"]
    [:void.dash/tap "/tap"]])
 
-(defn- nav-links [request]
+(defn- nav-links
+  {:params [{:path :string? & r}] :ret @[:any] :throws [:string]}
+  "The section links, the one matching the request's path marked
+  active."
+  [request]
   (def here (get request :path ""))
   (seq [[label path] :in sections
         :let [href (ctx/at path)]]
@@ -144,6 +152,9 @@ document.addEventListener("input", function (e) {
      (text/t label)]))
 
 (defn layout
+  {:params [:any {:request {:path :string? & r} :void.html/title :any
+                 :void.html/head :any & r}]
+   :ret :any :throws [:string]}
   "The frame every dash page renders inside."
   [content context]
   (def request (get context :request))
@@ -176,6 +187,7 @@ document.addEventListener("input", function (e) {
 # -- shared pieces -------------------------------------------------------
 
 (defn value-str
+  {:params [:any :number?] :ret :string}
   ``A config or contribution value as a string a page may print. A
   secret box prints as its own representation — @{:secret "NAME"} —
   which is safe by construction (the value lives outside the box);
@@ -191,6 +203,7 @@ document.addEventListener("input", function (e) {
   (if (> (length s) limit) (string (string/slice s 0 limit) "…") s))
 
 (defn status-word
+  {:params [:keyword?] :ret :any}
   "A health status keyword as a badge: a dot in the status hue, then
   the word — the lamp reads before the label does."
   [status]
@@ -201,6 +214,7 @@ document.addEventListener("input", function (e) {
    (string s)])
 
 (defn absent
+  {:params [:keyword :string] :ret :any}
   ``The section that has no source, said the void way: the name of the
   plugin whose composition would fill it, not an empty box.``
   [what plugin-name]
@@ -208,6 +222,7 @@ document.addEventListener("input", function (e) {
    (text/t :void.dash/absent {:what (text/t what) :plugin plugin-name})])
 
 (defn poll-wrap
+  {:params [:string :string :any] :ret :any}
   ``The moving half of a page: it re-fetches itself every 5 seconds
   from its own URL — the jobs-dashboard idiom. The static frame stays
   outside it, so a poll never steals focus from a control.``
@@ -216,6 +231,7 @@ document.addEventListener("input", function (e) {
    ;body])
 
 (defn detail-link
+  {:params [:string :string :any] :ret :any}
   "A link that opens `href` in the detail panel `target` (an id) when
   htmx is there, and as a page when it is not."
   [href target & body]
@@ -223,6 +239,7 @@ document.addEventListener("input", function (e) {
    ;body])
 
 (defn sparkline
+  {:params [(or @[:any] [:any]) :number? :number?] :ret :any}
   ``An inline SVG polyline over up to the last `n` numbers — no
   JavaScript, fixed size, nils skipped. Returns nil when there is
   nothing to draw yet.``
@@ -253,6 +270,7 @@ document.addEventListener("input", function (e) {
                  :stroke-linecap "round"}]]))
 
 (defn live-attrs
+  {:params [{:query (or {:string :any} :nil) & r} :string] :ret {:string :string} :throws [:string]}
   ``The data-* attributes that put a page on its morph stream when
   void/datastar is in the composition — and nothing at all when it is
   not, which leaves the htmx poll in charge. `path` is the stream's
@@ -266,11 +284,13 @@ document.addEventListener("input", function (e) {
     {}))
 
 (defn ms
+  {:params [:any] :ret :string}
   "A number of milliseconds, printed to the tenth."
   [x]
   (if (number? x) (string/format "%.1f ms" x) "—"))
 
 (defn bytes-str
+  {:params [:any] :ret :string}
   "A byte count, printed for a human."
   [n]
   (cond
@@ -281,6 +301,7 @@ document.addEventListener("input", function (e) {
     (string/format "%d B" n)))
 
 (defn duration-str
+  {:params [:any] :ret :string}
   "Seconds as a human duration: 42s, 12m 3s, 5h 2m, 3d 4h."
   [secs]
   (if (not (number? secs))
@@ -293,6 +314,7 @@ document.addEventListener("input", function (e) {
         (string (div s 86400) "d " (div (mod s 86400) 3600) "h")))))
 
 (defn stamp
+  {:params [:any] :ret :string}
   "A realtime clock value as an ISO-ish UTC stamp."
   [t]
   (if (number? t)

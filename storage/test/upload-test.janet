@@ -11,7 +11,10 @@
 
 (def root (string "tmp/upload-test-" (os/getpid)))
 
-(defn- rm-rf [path]
+(defn- rm-rf
+  {:params [:string] :ret :any}
+  "Recursively delete a path, tolerating one that is already gone."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each e (os/dir path) (rm-rf (string path "/" e)))
                    (os/rmdir path))

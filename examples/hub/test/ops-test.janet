@@ -58,11 +58,15 @@
                          :dev {:netrepl {:enabled false}
                                :watch {:enabled false}}}}}))
 
-(defn- csrf-of [resp]
+(defn- csrf-of
+  {:params [@{:body :any & r}] :ret :string?}
+  "The CSRF token out of a rendered form."
+  [resp]
   (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`)))
                     (test/text resp))))
 
 (defn- raw-body-href
+  {:params [@{:body :any & r}] :ret :string?}
   ``The temporary URL the deliveries page minted, out of the rendered
   page: whichever attribute order hiccup wrote, the link to the store
   is the one whose href starts with the serve prefix.``
@@ -72,7 +76,16 @@
     # an href in HTML has its ampersands escaped; a URL does not
     (string "/storage/" (string/replace-all "&amp;" "&" tail))))
 
-(defn- sign-up [client email]
+(defn- sign-up
+  {:params [@{:kernel {:handler :any :make-request :any :serialize :any
+                       :notify-response :any & r}
+             :cookies @{:string :string} :headers @{:string :any} & r}
+            :string]
+   :ret @{:raw :string & r}
+   :throws [:string]}
+  "Register `email` against `client`, carrying the CSRF token the
+  form asked for."
+  [client email]
   (def form (test/inject client {:uri "/register"}))
   (test/inject client {:uri "/register"
                        :headers {"x-csrf-token" (csrf-of form)}

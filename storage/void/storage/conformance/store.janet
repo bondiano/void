@@ -51,6 +51,7 @@
     (freeze t)))
 
 (defn- percent-encoded
+  {:params [:string] :ret :string}
   ``The key as it appears inside a URL path: every byte outside the
   unreserved set percent-encoded, the slashes kept. Both shipped stores
   spell it this way — one through wire/url-encode, the other through
@@ -65,12 +66,14 @@
   (string out))
 
 (defn- names-key?
+  {:params [:string :string] :ret :boolean :narrows :any}
   "Does this URL name the key — literally, or percent-encoded?"
   [url k]
   (truthy? (or (string/find k url)
                (string/find (percent-encoded k) url))))
 
 (defn run!
+  {:params [:string :any (or {:size :number? & r} :nil)] :ret :boolean :throws [:string]}
   ``Assert that `store0` behaves like a `:void/storage-store`. `name`
   names the backend in the failure messages, because "the stream did
   not hand over the whole object" is a different bug in each of them.

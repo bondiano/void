@@ -7,6 +7,7 @@
 ### engine, which is what keeps a migration one portable file.
 
 (defn iso-now
+  {:params [] :ret :string}
   "An ISO-8601 UTC timestamp — what every `*-at` column in this
   application holds."
   []

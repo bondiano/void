@@ -15,7 +15,10 @@
 
 (def root (string "tmp/http-test-" (os/getpid)))
 
-(defn- rm-rf [path]
+(defn- rm-rf
+  {:params [:string] :ret :any}
+  "Recursively delete a path, tolerating one that is already gone."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each e (os/dir path) (rm-rf (string path "/" e)))
                    (os/rmdir path))
@@ -27,7 +30,13 @@
 
 (def plugins ["void/http/init" "void/storage/init" "void/storage/http"])
 
-(defn- start [storage-slice]
+(defn- start
+  {:params [(or {:serve :any? :local :any? & r} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Start this suite's plugin composition with `storage-slice` merged
+  over a private root."
+  [storage-slice]
   (test/start! {:plugins plugins
                 :profile :test
                 :config {:env @{}
@@ -150,7 +159,11 @@
   ["void/http/init" "void/authz/init" "void/authz/http"
    "void/storage/init" "void/storage/http"])
 
-(defn- deny-boot [serve]
+(defn- deny-boot
+  {:params [(or {:prefix :any? :policy :any? & r} :nil)] :ret [:boolean :any]}
+  "Start the deny-posture composition with `serve`, caught: the point
+  of this suite is the refusal, not an uncaught error."
+  [serve]
   (protect
     (test/start! {:plugins deny-plugins
                   :profile :test

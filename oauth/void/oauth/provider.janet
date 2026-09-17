@@ -83,11 +83,16 @@
   defaults)
 
 (defn secret-value
+  {:params [:any] :ret :any}
   "A config value that may be a secret box (`{:secret \"ENV\"}`)."
   [v]
   (when v (if (config/secret? v) (config/reveal v) v)))
 
-(defn- https? [url]
+(defn- https?
+  {:params [:any] :ret :boolean}
+  "Does `url` look like an `https://` URL — a string starting with the
+  scheme, checked before anything is dialed."
+  [url]
   (and (bytes? url) (string/has-prefix? "https://" (string url))))
 
 (def- back-channel-keys
@@ -102,11 +107,15 @@
           "process and name its plaintext side."))
 
 (defn openid?
+  {:params [(or {:scopes (or @[:string] [:string] :nil) & r} :nil)] :ret :boolean}
   "Does this provider ask for an id_token?"
   [p]
   (truthy? (index-of "openid" (get p :scopes []))))
 
 (defn- check-provider
+  {:params [:keyword :any {:algs :any & r}]
+   :ret {:name :keyword :algs :any :scopes :any :auth :any :params :any & r}
+   :throws [:string]}
   "One provider entry, validated into its resolved form — or a boot
   error whose text names the provider and the way out."
   [name p top]
@@ -144,6 +153,9 @@
   (freeze resolved))
 
 (defn redirect-uri
+  {:params [{:redirect-uri (or :string :nil) :name :any & r}
+            (or {:base-url (or :string :nil) :mount (or :string :nil) & r} :nil)]
+   :ret (or :string :nil)}
   ``The exact redirect URI this provider was registered with: the
   provider's own `:redirect-uri`, or `[:oauth :base-url]` + mount +
   the provider's callback path. Never derived from a Host header —
@@ -157,6 +169,9 @@
                 (cfg :mount) "/" (p :name) "/callback"))))
 
 (defn build-settings
+  {:params [{:config {:values {:oauth :any & r} & r} & r}]
+   :ret {:mount :any :providers @{:any :any} & r}
+   :throws [:string]}
   "The [:oauth] slice over the defaults, with every gate the design
   names run before a single browser is redirected."
   [boot]
@@ -174,6 +189,9 @@
   top)
 
 (defn provider
+  {:params [(or :string :keyword) (or {:providers (or @{:any :any} :nil) & r} :nil)]
+   :ret {:name :keyword & r}
+   :throws [:string]}
   "The resolved provider `name`, or a readable error listing the ones
   this composition has."
   [name &opt cfg]
@@ -191,12 +209,17 @@
   nil)
 
 (defn make-ring
+  {:params []
+   :ret @{:metadata :any :keys @{:any :any} :fetched :number :last-attempt :number :error :any}}
   "A fresh ring — what the component builds per provider, and what a
   test hands in directly."
   []
   @{:metadata nil :keys @{} :fetched 0 :last-attempt -1000 :error nil})
 
 (defn ring-for
+  {:params [(or :string :keyword)]
+   :ret @{:metadata :any :keys @{:any :any} :fetched :number :last-attempt :number :error :any}
+   :throws [:string]}
   "The running ring of a provider, or a readable error."
   [name]
   (unless current-rings
@@ -205,6 +228,7 @@
       (errorf "no ring for provider %q — is it in [:oauth :providers]?" name)))
 
 (defn free-keys!
+  {:params [@{:keys @{:any :any} & r}] :ret :table}
   "Free every opened key of a ring — replacement and :stop, the two
   ends of a key's lifetime."
   [ring]
@@ -213,6 +237,7 @@
   (put ring :keys @{}))
 
 (defn fetch-json
+  {:params [:string :number] :ret :any :throws [:string]}
   "GET a URL and decode JSON, or throw with the status in the text."
   [url timeout]
   (def resp (client/get url {:timeout timeout
@@ -222,6 +247,11 @@
   (json/decode (string (or (resp :body) "")) true))
 
 (defn discover
+  {:params [@{:metadata :any & r}
+            {:issuer (or :string :nil) :metadata-url (or :string :nil) :name :any & r}
+            (or {:timeout :number & r} :nil)]
+   :ret :any
+   :throws [:string]}
   ``The issuer's metadata for a provider (RFC 8414 first, the OpenID
   Connect document second — an issuer that publishes only the latter
   is common and means the same thing). Cached on the ring: endpoints
@@ -254,12 +284,19 @@
         (put ring :metadata found)
         found)))
 
-(defn- need [p value what config-key]
+(defn- need
+  {:params [{:name :any & r} :any :string :keyword] :ret :any :throws [:string]}
+  "`value` if it is truthy, else a readable error naming what was
+  missing on provider `p` and which config key would have supplied it."
+  [p value what config-key]
   (or value
       (errorf "provider %q has no %s: set %q, or an :issuer whose metadata publishes it"
               (p :name) what config-key)))
 
 (defn authorization-endpoint
+  {:params [@{:metadata :any & r} {:authorization-endpoint (or :string :nil) :name :any & r}
+            (or {:timeout :number & r} :nil)]
+   :ret :string :throws [:string]}
   "Where the browser is sent — the one endpoint that may be https."
   [ring p &opt cfg]
   (need p (or (p :authorization-endpoint)
@@ -267,6 +304,9 @@
         "authorization endpoint" :authorization-endpoint))
 
 (defn token-endpoint
+  {:params [@{:metadata :any & r} {:token-endpoint (or :string :nil) :name :any & r}
+            (or {:timeout :number & r} :nil)]
+   :ret :string :throws [:string]}
   "Where the code (and later a refresh token) is exchanged."
   [ring p &opt cfg]
   (need p (or (p :token-endpoint)
@@ -274,6 +314,9 @@
         "token endpoint" :token-endpoint))
 
 (defn jwks-uri
+  {:params [@{:metadata :any & r} {:jwks-uri (or :string :nil) :name :any & r}
+            (or {:timeout :number & r} :nil)]
+   :ret :string :throws [:string]}
   "Where the issuer's signing keys are published."
   [ring p &opt cfg]
   (need p (or (p :jwks-uri)
@@ -281,6 +324,9 @@
         "JWKS" :jwks-uri))
 
 (defn userinfo-endpoint
+  {:params [@{:metadata :any & r} {:userinfo-endpoint (or :string :nil) :issuer (or :string :nil) :name :any & r}
+            (or {:timeout :number & r} :nil)]
+   :ret (or :string :nil)}
   "The userinfo endpoint, or nil — a plain OAuth2 provider has none,
   and the sign-in hook then reads the profile itself."
   [ring p &opt cfg]
@@ -294,6 +340,11 @@
 # -- keys ----------------------------------------------------------------
 
 (defn refresh-keys!
+  {:params [@{:last-attempt :number :fetched :number :keys @{:any :any} :error :any & r}
+            {:algs (or :any :nil) :name :any & r}
+            (or {:timeout :number & r} :nil)]
+   :ret :number
+   :throws [:string]}
   "Fetch a provider's JWKS and open every usable key; replaced keys
   are freed here. Returns the number held."
   [ring p &opt cfg]
@@ -320,7 +371,14 @@
   (log/debug "JWKS fetched" :ns log-ns :provider (p :name) :keys (length opened))
   (length opened))
 
-(defn- ensure-keys! [ring p cfg]
+(defn- ensure-keys!
+  {:params [@{:keys @{:any :any} :fetched :number :last-attempt :number :error :any & r}
+            {:algs (or :any :nil) :name :any & r}
+            {:cache-ttl :number :refresh-cooldown :number & r}]
+   :ret @{:any :any}}
+  "The ring's opened keys, refreshed first if they are stale or empty
+  and the cooldown has passed since the last attempt."
+  [ring p cfg]
   (def now (os/clock :monotonic))
   (when (or (empty? (ring :keys))
             (> (- now (get ring :fetched 0)) (cfg :cache-ttl)))
@@ -333,6 +391,13 @@
   (ring :keys))
 
 (defn- key-for
+  {:params [@{:keys @{:any :any} :last-attempt :number & r}
+            {:algs (or :any :nil) :name :any & r}
+            {:cache-ttl :number :refresh-cooldown :number & r}
+            (or :string :nil)]
+   :ret (or {:alg :any :key :any :kid :any} :nil)}
+  "The opened key for `kid`, refetching once behind the cooldown when
+  it is not among the ones already held."
   # an unknown kid is the rotation signal and worth exactly one
   # refetch, behind the cooldown — an id_token is attacker-visible
   # input, and inventing kids must not dial this process's issuer
@@ -348,9 +413,18 @@
 
 # -- the id_token --------------------------------------------------------
 
-(defn- no [reason] {:ok false :reason reason})
+(defn- no
+  {:params [:any] :ret {:ok :boolean :reason :any}}
+  "A refusal value carrying `reason`, for the log."
+  [reason] {:ok false :reason reason})
 
 (defn verify-id-token
+  {:params [:any
+            {:name :any :algs (or :any :nil) :issuer (or :string :nil) :client-id :any & r}
+            (or :string :nil)
+            (or {:leeway :number & r} :nil)
+            (or @{:any :any} :nil)]
+   :ret (or {:ok :boolean :claims :any} {:ok :boolean :reason :any})}
   ``Verify an id_token against the provider's keys and this flow's
   facts. `nonce` is what the authorization request sent; a token that
   does not echo it is a replay. Returns `{:ok true :claims}` or

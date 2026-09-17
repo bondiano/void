@@ -23,12 +23,19 @@
 
 (def- link "text-slate-300 no-underline transition hover:text-emerald-400")
 
-(defn- message-line [state]
+(defn- message-line
+  {:params [(or {:message :string? & r} :nil)] :ret (or :tuple :nil)}
+  "The one line of `state` a page is allowed to say, or nothing."
+  [state]
   (when-let [m (get state :message)]
     [:p {:class "mb-5 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200"}
      m]))
 
 (defn register-view
+  {:params [(or {:values (or {:any :any} :nil) :errors (or [{:path :any & r}] :nil)
+                :message :string? & r}
+               :nil)]
+   :ret :tuple}
   "The sign-up page."
   [&opt state]
   (default state {})
@@ -44,6 +51,10 @@
    [:p {:class foot} [:a {:class link :href "/login"} "Already have an account?"]]])
 
 (defn login-view
+  {:params [(or {:values (or {:any :any} :nil) :errors (or [{:path :any & r}] :nil)
+                :message :string? :next :string? & r}
+               :nil)]
+   :ret :tuple}
   "The sign-in page. :next is where the visitor was going before
   void/auth-http sent them here."
   [&opt state]
@@ -63,6 +74,10 @@
     [:a {:class link :href "/register"} "Create an account"]]])
 
 (defn reset-view
+  {:params [(or {:values (or {:any :any} :nil) :errors (or [{:path :any & r}] :nil)
+                :message :string? & r}
+               :nil)]
+   :ret :tuple}
   "Ask for the address a reset link goes to."
   [&opt state]
   (default state {})
@@ -76,6 +91,10 @@
       :submit "Mail me a link"})])
 
 (defn password-view
+  {:params [(or {:values (or {:any :any} :nil) :errors (or [{:path :any & r}] :nil)
+                :message :string? & r}
+               :nil)]
+   :ret :tuple}
   "Set a new password — reached by following a reset link, or from an
   account page."
   [&opt state]
@@ -91,6 +110,7 @@
       :submit "Save"})])
 
 (defn verify-view
+  {:params [(or {:verified-at :any :email :string? & r} :nil)] :ret :tuple}
   "Where the confirmation link is asked for again — a link expires, and
   a flow with no way to send a second one is a dead end with a support
   ticket attached."
@@ -109,6 +129,7 @@
                      :attrs {:class "quiet-form mt-5"}})])])
 
 (defn notice-view
+  {:params [:string] :ret :tuple}
   "One line, and nothing to fill in."
   [message]
   [:div {:id "notice" :class card}

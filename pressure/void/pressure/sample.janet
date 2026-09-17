@@ -42,6 +42,7 @@
   0.0005)
 
 (defn lag
+  {:params [:number] :ret :number}
   ``One event-loop lag sample, in seconds: sleep `interval`, and
   return how much longer than `interval` the sleep actually took.
   Blocks the calling fiber for `interval`.
@@ -86,6 +87,7 @@
 # is asleep almost always; kdf already spends the same for one login.
 
 (defn heartbeat-work
+  {:params [[:abstract :abstract :number]] :ret [:boolean :any]}
   ``The heartbeat thread's body: stamp, give, wait for the stop signal
   with the interval as the deadline, forever. Takes plain data only
   ([stamp-chan stop-chan interval]) — it crosses a VM boundary, the
@@ -111,6 +113,7 @@
       (when (= :ok outcome) (break)))))
 
 (defn start-heartbeat!
+  {:params [:number] :ret {:chan :abstract :stop :abstract :interval :number}}
   "Start a heartbeat: one worker thread, beating every `interval`
   seconds. Returns the handle `beat` and `stop-heartbeat!` take."
   [interval]
@@ -120,6 +123,7 @@
   {:chan ch :stop stop :interval interval})
 
 (defn beat
+  {:params [{:chan :abstract & r}] :ret (or :number :nil)}
   ``Wait for the next beat and return its lag in seconds — how long
   the stamp waited between the thread writing it and this fiber
   running. Blocks the calling fiber for about the heartbeat's
@@ -141,6 +145,7 @@
     (if (< waited lag-floor) 0 waited)))
 
 (defn stop-heartbeat!
+  {:params [{:chan :abstract :stop :abstract & r}] :ret :nil}
   ``Stop a heartbeat: close both channels. The stop channel wakes the
   thread out of its pause (or fails its next give) and it exits;
   closing the stamp channel wakes a fiber parked in `beat` with nil.``
@@ -162,6 +167,7 @@
   (peg/compile ~(* "VmRSS:" :s+ (number :d+) :s* "kB")))
 
 (defn vmrss-bytes
+  {:params [:string] :ret (or :number :nil)}
   ``The resident set size on one line of `/proc/self/status`, in bytes,
   or nil when the line is not the VmRSS one. Public because it is the
   half of the Linux meter that can be tested anywhere.``
@@ -169,7 +175,10 @@
   (when-let [[kb] (peg/match vmrss-line line)]
     (* 1024 kb)))
 
-(defn- linux-rss []
+(defn- linux-rss
+  {:params [] :ret (or :number :nil)}
+  "Resident set size in bytes, read off /proc/self/status."
+  []
   (when-let [f (file/open "/proc/self/status" :r)]
     (defer (file/close f)
       (var out nil)
@@ -188,6 +197,7 @@
 (def- mach-resident-offset 8)
 
 (defn- macos-rss-reader
+  {:params [] :ret (or (fn [] (or :number :nil)) :nil)}
   "A (fn [] bytes) over mach's task_info, or nil when the symbols are
   not where they are expected — an unusable meter reports itself
   missing rather than throwing once per sample."
@@ -216,6 +226,7 @@
 (var- rss-reader :unresolved)
 
 (defn reader
+  {:params [] :ret (or (fn [] (or :number :nil)) :nil)}
   "The RSS reader for this platform, or nil where there is none.
   Resolved once and remembered."
   []
@@ -229,6 +240,7 @@
   rss-reader)
 
 (defn rss
+  {:params [] :ret (or :number :nil)}
   "Resident set size in bytes, or nil where the platform has no cheap
   meter for it (see the module docstring)."
   []
@@ -237,6 +249,7 @@
     (when (and ok (number? v)) v)))
 
 (defn available
+  {:params [] :ret {:loop-lag :boolean :rss :boolean :heap :boolean}}
   "Which signals this process can actually measure — the health line
   that keeps a threshold over a missing meter from reading as a
   passing check."

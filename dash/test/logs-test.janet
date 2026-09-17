@@ -25,7 +25,11 @@
 
 (log/set-level! nil :info)
 
-(defn- start [&opt dash-cfg]
+(defn- start
+  {:params [(or {:keyword :any} :nil)] :ret :any :throws [:string]}
+  "Boot the dash behind the open gate, with `dash-cfg` merged over a
+  50-record log ring."
+  [&opt dash-cfg]
   (plugin/start!
     {:plugins ["void/http/init" "void/html/init" "void/htmx/init" "void/dash/init" open-gate]
      :profile :test

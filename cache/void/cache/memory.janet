@@ -42,15 +42,29 @@
   {:max-entries 1000
    :sweep-interval 60})
 
-(defn- now [] (os/clock :monotonic))
+(defn- now
+  {:params [] :ret :number}
+  "Monotonic clock, for deadlines and expiry checks that must not
+  jump with the wall clock."
+  [] (os/clock :monotonic))
 
-(defn- bump [m k]
+(defn- bump
+  {:params [@{:stats @{:keyword :number} & r} :keyword] :ret :table}
+  "Increment the `k` counter of `m`'s stats table by one."
+  [m k]
   (def s (m :stats))
   (put s k (inc (s k))))
 
 # -- the recency list (over keys, never over entries) --------------------
 
-(defn- unlink! [m k e]
+(defn- unlink!
+  {:params [@{:entries @{:any @{:prev :any? :next :any? & r} & r}
+              :head :any? :tail :any? & r}
+            :any @{:prev :any? :next :any? & r}]
+   :ret :table}
+  "Remove `k`/`e` from the recency list, relinking its neighbours (or
+  the head/tail) around it."
+  [m k e]
   (def entries (m :entries))
   (def p (e :prev))
   (def n (e :next))
@@ -59,7 +73,12 @@
   (put e :prev nil)
   (put e :next nil))
 
-(defn- push-front! [m k e]
+(defn- push-front!
+  {:params [@{:head :any? :tail :any? & r} :any @{:prev :any? :next :any? & r}]
+   :ret (or :table :nil)}
+  "Make `k`/`e` the most recently used entry: the new head of the
+  recency list."
+  [m k e]
   (def h (m :head))
   (put e :prev nil)
   (put e :next h)
@@ -67,16 +86,33 @@
   (put m :head k)
   (unless (m :tail) (put m :tail k)))
 
-(defn- touch! [m k e]
+(defn- touch!
+  {:params [@{:entries @{:any @{:prev :any? :next :any? & r} & r}
+              :head :any? :tail :any? & r}
+            :any @{:prev :any? :next :any? & r}]
+   :ret (or :table :nil)}
+  "Mark `k`/`e` as just used: a no-op when it is already the head,
+  otherwise unlink and push it to the front."
+  [m k e]
   (unless (= k (m :head))
     (unlink! m k e)
     (push-front! m k e)))
 
-(defn- drop! [m k e]
+(defn- drop!
+  {:params [@{:entries @{:any :any} :head :any? :tail :any? & r}
+            :any @{:prev :any? :next :any? & r}]
+   :ret :table}
+  "Remove `k`/`e` from both the entries table and the recency list."
+  [m k e]
   (unlink! m k e)
   (put (m :entries) k nil))
 
-(defn- evict-lru! [m]
+(defn- evict-lru!
+  {:params [@{:entries @{:any :any} :tail :any? :stats @{:keyword :number} & r}]
+   :ret :any}
+  "Drop the least recently used entry, if there is one, and answer the
+  key that was evicted."
+  [m]
   (when-let [k (m :tail)]
     (drop! m k (get-in m [:entries k]))
     (bump m :evictions)
@@ -84,13 +120,24 @@
 
 # -- entries -------------------------------------------------------------
 
-(defn- deadline [ttl]
+(defn- deadline
+  {:params [(or :number :nil)] :ret :number?}
+  "The absolute time `ttl` seconds from now, or nil for no expiry."
+  [ttl]
   (when (and ttl (pos? ttl)) (+ (now) ttl)))
 
-(defn- expired? [e t]
+(defn- expired?
+  {:params [@{:expires :number? & r} :number] :ret (or :boolean :nil) :narrows :any}
+  "Has entry `e` passed its deadline as of `t`?"
+  [e t]
   (when-let [exp (e :expires)] (>= t exp)))
 
 (defn make
+  {:params [(or {:max-entries :number? :sweep-interval :number? :name :keyword? & r}
+                :nil)]
+   :ret @{:name :keyword :max :any :sweep-interval :any :entries @{:any :any}
+          :head :any? :tail :any? :sweeping :boolean :fiber :any? :started :boolean
+          :stats @{:keyword :number}}}
   ``An empty store. Options (the [:cache :memory] slice):
 
     :max-entries    how many entries before the least recently used
@@ -111,6 +158,10 @@
     :stats @{:hits 0 :misses 0 :puts 0 :evictions 0 :expirations 0 :sweeps 0}})
 
 (defn lookup
+  {:params [@{:entries @{:any @{:value :any :expires :number? :prev :any? :next :any? & r}}
+              :head :any? :tail :any? :stats @{:keyword :number} & r}
+            :any]
+   :ret :any}
   "The value under `k`, or nil. Counts as a use: the entry moves to the
   front of the recency list."
   [m k]
@@ -129,6 +180,8 @@
         (e :value))))
 
 (defn present?
+  {:params [@{:entries @{:any @{:expires :number? & r} & r} & r} :any]
+   :ret :boolean :narrows :any}
   ``Is `k` there and unexpired? Asking is not using: neither the
   recency order nor the hit counters move, which is what makes this
   usable from a health check or a test.``
@@ -137,6 +190,10 @@
   (truthy? (and e (not (expired? e (now))))))
 
 (defn put!
+  {:params [@{:entries @{:any @{:value :any :expires :number? :prev :any? :next :any? & r}}
+              :max :number :head :any? :tail :any? :stats @{:keyword :number} & r}
+            :any :any (or :number :nil)]
+   :ret :any}
   "Store `v` under `k` for `ttl` seconds (nil = no expiry). Evicts the
   least recently used entry when the store is full."
   [m k v ttl]
@@ -154,6 +211,7 @@
   v)
 
 (defn delete!
+  {:params [@{:entries @{:any :any} :head :any? :tail :any? & r} :any] :ret :boolean}
   "Drop one key. True when it was there."
   [m k]
   (if-let [e (get (m :entries) k)]
@@ -161,6 +219,7 @@
     false))
 
 (defn clear!
+  {:params [@{:entries @{:any :any} :head :any? :tail :any? & r} :string?] :ret :number}
   ``Drop every key under `prefix` — everything, when the prefix is
   empty or absent. Returns how many entries went.``
   [m &opt prefix]
@@ -179,6 +238,8 @@
       n)))
 
 (defn sweep!
+  {:params [@{:entries @{:any @{:expires :number? & r}} :stats @{:keyword :number} & r}]
+   :ret :number}
   "Drop every expired entry. Returns how many went."
   [m]
   (def t (now))
@@ -193,12 +254,16 @@
   n)
 
 (defn entry-count
+  {:params [@{:entries @{:any :any} & r}] :ret :number}
   "How many entries the store holds, expired ones included (they go on
   the next read or the next sweep)."
   [m]
   (length (m :entries)))
 
 (defn stats
+  {:params [@{:stats @{:keyword :number} :entries @{:any :any} :name :keyword :max :any
+              :sweeping :any? & r}]
+   :ret @{:store :keyword :entries :number :max-entries :any :sweeping :boolean & r}}
   "Counters plus the current size — what the component's :health
   reports."
   [m]
@@ -211,6 +276,9 @@
 # -- the sweeper ---------------------------------------------------------
 
 (defn start-sweeper!
+  {:params [@{:sweep-interval :any :sweeping :boolean :fiber :any? :started :boolean
+              :name :keyword? & r}]
+   :ret @{:sweep-interval :any :sweeping :boolean :fiber :any? :started :boolean & r}}
   ``Start the expiry sweeper. Idempotent, and a no-op when
   :sweep-interval is 0 — a process that only ever caches without a TTL
   has nothing to sweep.``
@@ -242,6 +310,8 @@
   m)
 
 (defn stop-sweeper!
+  {:params [@{:sweeping :boolean :fiber :any? :started :boolean & r}]
+   :ret @{:sweeping :boolean :fiber :any? :started :boolean & r}}
   "Stop the sweeper. The fiber is woken rather than waited for, so a
   shutdown never sits out a sweep interval."
   [m]
@@ -256,6 +326,10 @@
 # -- the :void/cache-store view ------------------------------------------
 
 (defn store
+  {:params [@{:name :keyword? & r}]
+   :ret {:name :any :values (enum :janet) :memory :any :get (fn [a] b)
+         :put (fn [a b c] d) :delete (fn [a] b) :clear (fn [a] b)
+         :has? (fn [a] b) :stats (fn [] b) :close (fn [] b)}}
   ``This store as a `:void/cache-store` dictionary. The underlying
   table stays reachable under :memory — the component's :health and
   :stop want it, and so does anyone at a REPL.``

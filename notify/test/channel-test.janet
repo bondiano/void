@@ -8,7 +8,14 @@
 
 (log/set-level! "void" :error)
 
-(defn- note [&opt to]
+(defn- note
+  {:params [:any]
+   :ret @{:id :string :at :number :key :keyword :title :string
+          :body :string? :url :string? :data (or {:any :any} @{:any :any}) :to :any
+          :channels [:keyword] :overrides @{:keyword (or {:any :any} @{:any :any})}}
+   :throws [:string]}
+  "A normalized notification addressed to `to` (default an email)."
+  [&opt to]
   (notification/normalize {:key :x :title "hi" :to (or to {:email "ada@example.com"})}
                           [:memory]
                           {:id "ntf_1" :at 1756400000}))

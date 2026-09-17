@@ -5,7 +5,27 @@
 
 (log/set-level! "void.pressure" :error)
 
-(defn- st [&opt extra]
+(defn- st
+  {:params [(or {:any :any} :nil)]
+   :ret @{:config {:keyword :any}
+          :checks @[{:name :keyword :fn (fn [] :any)}]
+          :under-pressure :boolean
+          :reasons [(or {:signal :any :value :number :limit :number :bar :number}
+                        {:signal :any :check :boolean :reason :string})]
+          :samples @{:keyword :number}
+          :peaks @{:keyword :number}
+          :clean :number
+          :sampled :number
+          :sheds :number
+          :episodes :number
+          :since :number
+          :changed-at :number
+          :sampling :boolean
+          :fiber (or :fiber :nil)
+          :pid :number}}
+  "This suite's fixture: a pressure state with sane defaults,
+  `extra` merged over them."
+  [&opt extra]
   (state/make (merge {:enabled true
                       :sample-interval 60
                       :max-loop-lag 100

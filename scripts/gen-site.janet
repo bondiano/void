@@ -199,6 +199,7 @@
 # -- links between documents ---------------------------------------------
 
 (defn- normalize
+  {:params [:string] :ret :string}
   "Collapse ./ and ../ in a repo-relative path."
   [path]
   (def parts @[])
@@ -210,9 +211,13 @@
       (array/push parts part)))
   (string/join parts "/"))
 
-(defn- depth-of [out] (length (string/find-all "/" out)))
+(defn- depth-of
+  {:params [:string] :ret :number}
+  "How many directories below the site root this output path lives."
+  [out] (length (string/find-all "/" out)))
 
 (defn- rewriter
+  {:params [:string :string] :ret (fn [:string] :string)}
   ``The link rewriter for a page: a relative .md link becomes the
   matching page, kept relative so the site works from any prefix; a
   relative link to anything that is not a page (source files, a
@@ -238,6 +243,7 @@
 # -- deterministic rendering of janet values -----------------------------
 
 (defn render-value
+  {:params [:any] :ret :string}
   "One-line janet rendering with dictionary keys sorted — the same
   discipline gen-contracts.janet applies, for the same reason: the
   page must not depend on table iteration order."
@@ -255,6 +261,7 @@
     (string/format "%q" s)))
 
 (defn- clean-doc
+  {:params [:string?] :ret :string?}
   "A docstring as one line of prose: source indentation and line
   breaks are not content."
   [s]
@@ -280,6 +287,7 @@
   5)
 
 (defn- node-text
+  {:params [:any] :ret :string}
   "The visible text of a hiccup node — without decorated links (the
   anchor §, a heading's muted source link): those are chrome, not the
   heading."
@@ -289,11 +297,15 @@
     (and (= :a (first n)) (dictionary? (get n 1)) (get-in n [1 :class])) ""
     (string/join (map node-text (filter |(not (dictionary? $)) (tuple/slice n 1))) "")))
 
-(defn- heading? [n]
+(defn- heading?
+  {:params [:any] :ret :any :narrows :any}
+  "Is this hiccup node an h2/h3 carrying an :id (a TOC/self-link candidate)?"
+  [n]
   (and (indexed? n) (toc-levels (first n))
        (dictionary? (get n 1)) (get-in n [1 :id])))
 
 (defn- add-anchors
+  {:params [:any] :ret @[:any]}
   "Append a self-link to every h2/h3 that has an id — what makes a
   section shareable by pointing at it."
   [body]
@@ -306,6 +318,7 @@
        body))
 
 (defn- dedup-ids
+  {:params [:any] :ret @[:any]}
   ``GitHub's answer to two headings spelled the same (CHANGELOG's
   repeated `Added`): the second occurrence gets -1, the third -2 — so
   every anchor on the page points at exactly one place.``
@@ -325,6 +338,9 @@
        body))
 
 (defn- prepare
+  {:params [:any]
+   :ret {:body @[:any] :entries @[{:level :number :id :string :text :string}]
+        :toc :any}}
   ``Everything a body needs before it becomes a page: heading ids made
   unique, a self-link on every h2/h3, the contents rail when the page has
   enough headings to earn one, and the heading list itself — the rail and
@@ -364,6 +380,7 @@
 (def- snippet-limit 240)
 
 (defn- clip
+  {:params [:string :number] :ret :string}
   ``A string cut to at most n bytes without splitting a UTF-8
   character — half the corpus is Russian, and half a codepoint is not
   text.``
@@ -376,13 +393,19 @@
       (string (string/slice s 0 i) "…"))))
 
 (defn- opening-prose
+  {:params [:any] :ret :string?}
   "The page's first paragraph as plain text, cut to a snippet."
   [body]
   (def para (find |(and (indexed? $) (= :p (first $))) body))
   (when para
     (clip (string/trim (node-text para)) snippet-limit)))
 
-(defn- index-page! [out title here entries body]
+(defn- index-page!
+  {:params [:string :string? :string? (or @[{:level :number :id :string :text :string}] :nil) :any]
+   :ret :array}
+  "Push this page's search-index record: title, section, headings, and
+  an opening-prose snippet."
+  [out title here entries body]
   (array/push search-index
               # the landing carries no title of its own
               {"t" (or title "void")
@@ -392,9 +415,16 @@
                "x" (or (opening-prose body) "")
                "h" (seq [e :in entries] {"t" (e :text) "i" (e :id)})}))
 
-(defn- write-page! [{:out out :title title :here here :body body :toc toc
-                     :lang lang :subnav subnav :layout layout
-                     :entries entries}]
+(defn- write-page!
+  {:params [{:out :string :title :string? :here :string? :body :any :toc :any
+             :lang :string? :subnav (or [[:string :string]] :nil)
+             :layout :keyword?
+             :entries (or @[{:level :number :id :string :text :string}] :nil)}]
+   :ret :nil}
+  "Render one page to site/, and add it to the search index."
+  [{:out out :title title :here here :body body :toc toc
+    :lang lang :subnav subnav :layout layout
+    :entries entries}]
   (def path (string out-dir "/" out))
   (def dir (string/join (array/slice (string/split "/" path) 0 -2) "/"))
   (os/mkdir dir)
@@ -406,6 +436,7 @@
   (print "  " path))
 
 (defn- doc-lang
+  {:params [:string] :ret :string}
   ``"ru" when the document is mostly Cyrillic prose, "en" otherwise —
   measured, not listed, so a translated document changes its own lang
   attribute.``
@@ -414,6 +445,7 @@
   (if (> (* 10 cyr) (length src)) "ru" "en"))
 
 (defn- assert-no-raw-tables!
+  {:params [:string :any] :ret :nil :throws [:string]}
   ``Refuse a page with an unparsed table: a paragraph that begins with
   a pipe is a table row the parser did not take — the exact regression
   scripts/site/markdown.janet's separator PEG once shipped.``
@@ -426,7 +458,10 @@
                   src head)))
       (each child node (assert-no-raw-tables! src child)))))
 
-(defn- doc-page! [{:src src :out out :here here}]
+(defn- doc-page!
+  {:params [{:src :string :out :string :here :string?}] :ret :nil :throws [:string]}
+  "Render one Markdown source into its page."
+  [{:src src :out out :here here}]
   (def source (slurp src))
   (def body (md/parse source {:rewrite-link (rewriter src out)}))
   (each node body (assert-no-raw-tables! src node))
@@ -437,7 +472,10 @@
                 :body (page-body :body) :toc (page-body :toc)
                 :entries (page-body :entries)}))
 
-(defn- config-page! []
+(defn- config-page!
+  {:params [] :ret :nil}
+  "Render the config reference page from every plugin's manifest."
+  []
   (def body @[[:h1 "Config reference"]
               [:p "Every plugin's slice of the configuration, projected "
                "from the manifests of the in-repo composition — the "
@@ -476,7 +514,10 @@
                 :title "Config reference" :body (page-body :body)
                 :toc (page-body :toc) :entries (page-body :entries)}))
 
-(defn- cli-page! []
+(defn- cli-page!
+  {:params [] :ret :nil}
+  "Render the CLI reference page from every :void.core/cli contribution."
+  []
   (def commands
     (sorted-by
       |($ :spelling)
@@ -524,6 +565,7 @@
 # these pages is written here.
 
 (defn- repo-rel
+  {:params [:string] :ret :string}
   "A path under the repository root, made repo-relative."
   [path]
   (def prefix (string packages/root "/"))
@@ -532,6 +574,7 @@
     path))
 
 (defn- package-description
+  {:params [:string] :ret :string?}
   "The :description string of a package's project.janet."
   [dir]
   (def path (string packages/root "/" dir "/project.janet"))
@@ -550,10 +593,13 @@
     (when (string? found) found)))
 
 (defn- module-files
+  {:params [:string] :ret @[:string]}
   "Every .janet file of a package's void/ tree, sorted."
   [dir]
   (def out @[])
-  (defn walk [p]
+  (defn walk
+    {:params [:string] :ret :nil}
+    [p]
     (each f (sorted (os/dir p))
       (def full (string p "/" f))
       (case (os/stat full :mode)
@@ -565,6 +611,7 @@
   out)
 
 (defn- module-of
+  {:params [:string :string] :ret :string}
   "The import name of a module file: <dir>/void/http/router.janet ->
   void/http/router, with a trailing /init folded away."
   [dir file]
@@ -576,6 +623,8 @@
     name))
 
 (defn- module-bindings
+  {:params [:string]
+   :ret (or @[{:sym :symbol :doc :string :kind :string :line :number :file :any}] :nil)}
   "The documented public bindings of a module, in source order:
   {:sym :doc :kind :line :file}. Nil when the module does not load in
   this composition (nothing in the bundle currently refuses)."
@@ -598,6 +647,7 @@
          :file (get sm 0)}))))
 
 (defn- dedent-doc
+  {:params [:string] :ret [:string]}
   "A docstring's lines with the source indentation of the continuation
   lines removed — the first line never carries any."
   [doc]
@@ -611,13 +661,14 @@
    ;(map |(if (<= (length $) cut) "" (string/slice $ cut)) rest-lines)])
 
 (defn- doc-hiccup
+  {:params [:string] :ret @[:any]}
   "A docstring as hiccup blocks: blank-line paragraphs, and a block
   whose every line is indented four spaces is a usage example — the
   convention the corpus's docstrings already follow."
   [doc]
   (def blocks @[])
   (def cur @[])
-  (defn flush! []
+  (defn flush! {:params [] :ret (or @[:any] :nil)} []
     (unless (empty? cur)
       (array/push blocks (tuple ;cur))
       (array/clear cur)))
@@ -630,6 +681,7 @@
       [:p ;(md/inline-markup (string/join (map string/trim b) " "))])))
 
 (defn- contribution-entry
+  {:params [{:value :any}] :ret [:any :string]}
   "One contributed value as [dt-content dd-content]: named
   contributions show their name and doc, anonymous ones their value."
   [c]
@@ -643,6 +695,14 @@
      ""]))
 
 (defn- plugin-section!
+  {:params [@[:any]
+            {:name :any :doc :string? :requires (or {:keyword :any} :nil)
+             :config-key :any :config-defaults :any
+             :components (or @[:any] [:any] :nil)
+             :extension-points (or {:keyword :any} :nil)
+             :contributes (or {:keyword :any} :nil) & r}
+            (or @[:any] [:any] :nil)]
+   :ret (or @[:any] :nil)}
   "The manifest of one plugin as page blocks, pushed onto body."
   [body m cli-contribs]
   (def name (m :name))
@@ -717,6 +777,7 @@
                     cli-contribs)])))
 
 (defn- package-page!
+  {:params [:keyword] :ret :nil}
   "One package's reference page: site/modules/<dir>.html."
   [pkg]
   (def dir (get-in packages/graph [pkg :dir]))
@@ -789,6 +850,7 @@
                 :entries (page-body :entries)}))
 
 (defn- modules-pages!
+  {:params [] :ret :number}
   "The per-package pages plus their index. Returns how many pages."
   []
   (def pkgs (packages/packages))
@@ -826,11 +888,13 @@
 (def- heading-level {:h1 1 :h2 2 :h3 3 :h4 4})
 
 (defn- first-of
+  {:params [:any :keyword] :ret :any}
   "The first block of a kind, or nil."
   [blocks tag]
   (find |(and (indexed? $) (= tag (first $))) blocks))
 
 (defn- section-blocks
+  {:params [:any :string] :ret @[:any]}
   ``The blocks under the heading with this id, up to the next heading
   of the same or a higher level — how the landing quotes a section of the
   README without repeating a word of it.``
@@ -851,6 +915,7 @@
   out)
 
 (defn- first-sentence
+  {:params [:string] :ret :string?}
   "A document's opening sentence, for the card that leads to it."
   [src]
   (def para (first-of (md/parse (slurp src)) :p))
@@ -881,7 +946,11 @@
    {:label "Compared" :href "comparison.html" :src "docs/COMPARISON.md"}
    {:label "Benchmarks" :href "bench.html" :src "docs/BENCH-v0.1.md"}])
 
-(defn- landing! []
+(defn- landing!
+  {:params [] :ret :nil}
+  "Render the landing page from README.md's own words and the
+  bootstrapped composition's counts."
+  []
   (def readme (md/parse (slurp "README.md")
                         {:rewrite-link (rewriter "README.md" "index.html")}))
   (def lede (first-of readme :p))
@@ -921,7 +990,10 @@
 
 # -- main ----------------------------------------------------------------
 
-(defn- git-sha []
+(defn- git-sha
+  {:params [] :ret :string?}
+  "The short HEAD sha, or nil when git is unavailable."
+  []
   (def [ok sha]
     (protect
       (with [p (os/spawn ["git" "rev-parse" "--short" "HEAD"] :px {:out :pipe})]
@@ -930,7 +1002,10 @@
         out)))
   (when (and ok (not (empty? sha))) sha))
 
-(defn main [&]
+(defn main
+  {:params [] :ret :nil}
+  "CLI entrypoint: generate the whole site into site/."
+  [&]
   (os/mkdir out-dir)
   (set generated-line
        (string "generated from "

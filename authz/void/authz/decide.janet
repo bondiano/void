@@ -50,6 +50,15 @@
   @{})
 
 (defn listen!
+  {:params [:keyword
+            (fn [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+                  :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+                  :action :any :us :number}]
+               :any)]
+   :ret (fn [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+              :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+              :action :any :us :number}]
+            :any)}
   "Hear about every decision without contributing a hook — the REPL's
   way, and a test's."
   [name f]
@@ -57,11 +66,21 @@
   f)
 
 (defn unlisten!
+  {:params [:keyword] :ret :table}
   "Remove a listener."
   [name]
   (put listeners name nil))
 
-(defn- emit! [decision]
+(defn- emit!
+  {:params [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+             :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+             :action :any :us :number}]
+   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+         :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+         :action :any :us :number}}
+  "Publish a decision to every hook handler and listener, log it under
+  the configured mode, and return it unchanged."
+  [decision]
   # the hook registry of the boot in force — see void/notify's emit!
   # for why this is no longer a var captured at :before-start
   (when-let [reg (get (plugin/running-boot) :hooks)]
@@ -86,7 +105,13 @@
               :us (decision :us)))
   decision)
 
-(defn- names-of [names]
+(defn- names-of
+  {:params [(or :keyword @[:keyword] [:keyword] :nil)]
+   :ret (or @[:keyword] [:keyword])
+   :throws [:string]}
+  "Normalize a policy reference — nil, one keyword, or a list — into a
+  list of policy names to evaluate."
+  [names]
   (cond
     (nil? names) []
     (keyword? names) [names]
@@ -94,6 +119,13 @@
     (errorf "a policy reference must be a keyword or a list of them, got %q" names)))
 
 (defn decide
+  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+            (or {:subject :any :action :any :resource :any :env :any
+                 :attrs :any :context :any & r} :nil)]
+   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+         :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+         :action :any :us :number}
+   :throws [:string]}
   ``Evaluate one policy, or every policy in a list (all must allow).
   Returns the decision value described in the module docstring.
 
@@ -129,6 +161,11 @@
   (emit! decision))
 
 (defn can?
+  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+            (or {:subject :any :action :any :resource :any :env :any
+                 :attrs :any :context :any & r} :nil)]
+   :ret :boolean
+   :throws [:string]}
   "Is it allowed? The boolean projection of `decide` — what a template
   asks before it renders a button, and what a handler asks before it
   writes."
@@ -139,6 +176,16 @@
   {:status 403 :doc "a policy denied the actor; :data {:decision <the decision value>}"})
 
 (defn forbidden
+  {:params [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+             :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+             :action :any :us :number}
+            (or :string :nil) (or :number :nil)]
+   :ret {:void/error :keyword :message :string? :data {:any :any}
+         :void.authz/decision {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+                                :reason (or :string :nil) :attrs [:keyword]
+                                :subject (or :string :nil) :action :any :us :number}
+         & r}
+   :throws [:string]}
   ``The error value for a denied decision: an envelope of kind
   :void.authz/forbidden carrying the decision in :data — and under
   :void.authz/decision on the value itself, where a renderer from
@@ -150,6 +197,18 @@
                  {:void.authz/decision decision})))
 
 (defn ensure!
+  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+            (or {:subject :any :action :any :resource :any :env :any
+                 :attrs :any :context :any & r} :nil)]
+   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+         :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+         :action :any :us :number}
+   :throws [:string
+            {:void/error :keyword :message :string? :data {:any :any}
+             :void.authz/decision {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+                                    :reason (or :string :nil) :attrs [:keyword]
+                                    :subject (or :string :nil) :action :any :us :number}
+             & r}]}
   ``Allow, or raise a 403 carrying the decision. The raised value has
   `:http/status 403` so the error renderers answer it the way they
   answer any other status (problem+json under void/rest, the dev page
@@ -162,6 +221,16 @@
   decision)
 
 (defn explain
+  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+            (or {:subject :any :action :any :resource :any :env :any
+                 :attrs :any :context :any & r} :nil)]
+   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+         :reason (or :string :nil)
+         :results [{:policy :keyword :allow :boolean :reason (or :string :nil)
+                    :doc (or :string :nil) :us :number}]
+         :attrs [:keyword] :values {:keyword :any}
+         :subject (or :string :nil) :action :any :us :number}
+   :throws [:string]}
   ``The decision, with every policy evaluated rather than stopping at
   the first deny — `void authz explain` and a REPL want the whole
   picture, enforcement wants the first answer. The `:allow` and
@@ -192,6 +261,12 @@
    :us (sum (map |($ :us) each-result))})
 
 (defn print-explanation
+  {:params [{:allow :boolean :reason (or :string :nil)
+             :results [{:policy :keyword :allow :boolean :reason (or :string :nil)
+                        :doc (or :string :nil) :us :number}]
+             :attrs [:keyword] :values {:keyword :any}
+             :subject (or :string :nil) :action :any & r}]
+   :ret :nil}
   "Print an `explain` result — the body of `void authz explain`."
   [out]
   (printf "subject   %s" (or (out :subject) "(anonymous)"))

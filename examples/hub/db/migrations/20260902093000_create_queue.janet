@@ -18,13 +18,20 @@
 
 (def jobs-table "void_jobs")
 
-(defn up []
+(defn up
+  {:params [] :ret [:string] :throws [:string]}
+  "void/jobs-db's own DDL, spelled for the engine this migration runs
+  against."
+  []
   # SQL strings for the dialect this migration runs against: the
   # plugin's declaration is one, the spelling is the engine's, and a
   # migration is where the two meet
   (jobs-db/ddl ((db/current-driver) :dialect) jobs-table))
 
-(defn down []
+(defn down
+  {:params [] :ret [{:drop-table :string}]}
+  "Drop the queue's three tables."
+  []
   [{:drop-table (string jobs-table "_rates")}
    {:drop-table (string jobs-table "_locks")}
    {:drop-table jobs-table}])

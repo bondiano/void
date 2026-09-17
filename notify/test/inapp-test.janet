@@ -33,8 +33,10 @@
                                :db-sqlite {:path db-path}
                                :db {:n1-guard :off}}}}))
 
-(defn- as [subject f]
+(defn- as
+  {:params [:any (fn [] :any)] :ret :any}
   "Run f as somebody — the dyn void/auth publishes, bound by name."
+  [subject f]
   (with-dyns [inapp/identity-dyn {:subject subject}] (f)))
 
 (defer (do (test/stop! boot) (os/rm db-path))

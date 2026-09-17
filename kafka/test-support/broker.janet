@@ -27,6 +27,8 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
+  {:params [(or {:brokers (or :string [:string] :nil) & r} :nil)]
+   :ret {:brokers (or :string :nil) :probe-timeout :number :message-timeout :number & r}}
   "The [:kafka] config slice for the configured cluster."
   [&opt extra]
   (merge {:brokers (brokers)
@@ -38,6 +40,7 @@
          (or extra {})))
 
 (defn unique
+  {:params [] :ret :string}
   "A per-run name part, so suites do not meet yesterday's topics: the
   broker keeps the log, which is the point of the backend and the
   hazard of the suite."

@@ -61,6 +61,7 @@
 (def- optional [:stat :close])
 
 (defn normalize
+  {:params [:any] :ret :struct :throws [:string]}
   ``Validate a store dictionary and fill in the documented fallbacks.
   Returns a frozen store value; throws with the offending key on any
   contract violation.``
@@ -92,6 +93,7 @@
       st)))
 
 (defn shared?
+  {:params [:any] :ret :boolean :narrows :any}
   "True when several processes see the same objects — the question
   `[:deploy :shape] :fleet` asks of every store it can reach
 ."

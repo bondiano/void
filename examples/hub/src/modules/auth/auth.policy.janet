@@ -18,6 +18,7 @@
   [])
 
 (defn configure!
+  {:params [(or {:operators (or @[:string] [:string]) & r} :nil)] :ret :nil}
   "Called from the application's :before-start hook (src/app.janet)."
   [slice]
   (set operators (or (get slice :operators) []))
@@ -26,6 +27,7 @@
   (log/info "operators ready" :ns log-ns :operators (length operators)))
 
 (defn warn-when-nobody!
+  {:params [] :ret :nil}
   "Say at start that the desk lets nobody in, rather than at the first
   403."
   []

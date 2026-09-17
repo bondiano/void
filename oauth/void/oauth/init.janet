@@ -118,6 +118,7 @@
   {:doc "the OAuth flow refused a callback or a start: a bad state, an unknown provider, a next that is not local"})
 
 (defn- refuse
+  {:params [{:any :any} :number :string] :ret :any}
   "A refusal through the error renderers — HTML for a browser,
   problem+json for an API — with the detail in the log, never in the
   body."
@@ -125,6 +126,7 @@
   (http/render-error (errors/make :void.oauth/refused message {} status) req status))
 
 (defn start-handler
+  {:params [{:params :any :session :any :query :any & r}] :ret :any :throws [:string]}
   "GET <mount>/:provider — write the pending record and send the
   browser to the authorization server."
   [req]
@@ -144,6 +146,7 @@
       (ring/redirect (flow/authorize-url p pend cfg)))))
 
 (defn- finish
+  {:params [{:any :any} {:next (or :string :nil) & r} :any] :ret :any :throws [:string]}
   "What the sign-in hook decided, turned into a response."
   [req pend out]
   (def cfg provider/settings)
@@ -161,6 +164,7 @@
     (errorf ":void.oauth/sign-in returned %q — an identity, a response table or nil" out)))
 
 (defn callback-handler
+  {:params [{:params :any :session :any :query :any & r}] :ret :any}
   "GET <mount>/:provider/callback — the flow's second half: the
   pending record is consumed first, every check failure is a refusal
   with its reason in the log, and the visitor's claims end up in front
@@ -232,6 +236,9 @@
                                                :req req})))))))))))
 
 (defn- own-routes
+  {:params [:any] :ret :any}
+  "The plugin's routes, built from the mount point resolved into
+  `provider/settings` — or none, when the composition mounts nothing."
   # a function of boot, not a value: the mount point is configuration,
   # which is not known when this manifest freezes (the form)
   [_boot]

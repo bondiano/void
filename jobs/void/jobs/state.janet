@@ -118,7 +118,7 @@
   f)
 
 (defn unlisten!
-  {:params [:any] :ret :nil}
+  {:params [:any] :ret :table}
   "Remove a listener by name."
   [name]
   (put listeners name nil))

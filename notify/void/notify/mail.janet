@@ -52,6 +52,7 @@
   defaults)
 
 (defn link
+  {:params [{:url :any & r}] :ret :string? :throws [:string]}
   ``The absolute URL a notification's `:url` becomes in a letter. A
   mail has no origin, so this is `mail/url` and nothing else — a relative
   link is an error at render, where it is visible.``
@@ -86,6 +87,11 @@
       "\n\n")))
 
 (defn letter
+  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
+             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
+             :overrides @{:keyword (or {:any :any} @{:any :any})}}
+            :string]
+   :ret @{:to :string :subject :string :view :any :text :string :headers @{:string :string} & r}}
   ``The message a notification becomes — public, because a preview in
   a REPL (`(mail/preview (notify-mail/letter note "ada@example.com"))`)
   is how anybody checks what a person will actually see.``
@@ -100,6 +106,10 @@
          (notification/override-for note :mail)))
 
 (defn project
+  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
+             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
+             :overrides @{:keyword (or {:any :any} @{:any :any})}}]
+   :ret (or {:id :string :at :number :key :keyword :delivery :any} :nil)}
   ``Render the letter and hand back the delivery — data, and the same
   octets on every retry. nil when the notification carries no address
   this channel can read, which is how a channel says "not mine".``
@@ -111,6 +121,7 @@
      :delivery (mail/build (letter note to))}))
 
 (defn deliver
+  {:params [{:delivery :any & r}] :ret @{:channel :keyword :id :any :at :any & r}}
   "Send the rendered letter through void/mail's own routing."
   [payload]
   (def receipt (mail/send-delivery (payload :delivery)))

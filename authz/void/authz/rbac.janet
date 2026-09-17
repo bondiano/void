@@ -29,6 +29,9 @@
   {})
 
 (defn roles-of
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}]
+   :ret @[:keyword]}
   ``The roles of the context's subject: `:subject/roles` if there is
   one, else `:subject/role` as a list of one, else nothing.``
   [ctx]
@@ -39,6 +42,11 @@
     (if-let [one (context/attr ctx :subject/role)] [(keyword one)] [])))
 
 (defn has-role?
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            (or :keyword @[:keyword] [:keyword])]
+   :ret :boolean
+   :narrows :any}
   "Does the subject hold this role (or any of these roles)?"
   [ctx role]
   (def held (roles-of ctx))
@@ -47,6 +55,9 @@
     (truthy? (index-of role held))))
 
 (defn permissions-of
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}]
+   :ret @{:keyword :boolean}}
   "Every permission the subject's roles grant, as a set-shaped table."
   [ctx]
   (def out @{})
@@ -56,6 +67,11 @@
   out)
 
 (defn permitted?
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            :keyword]
+   :ret :boolean
+   :narrows :any}
   ``Does any of the subject's roles grant this permission? `:*` in a
   role's list grants everything, which is what an :admin role is for
   and what every other role should not have.``
@@ -64,6 +80,10 @@
   (truthy? (or (granted :*) (granted permission))))
 
 (defn role-policy
+  {:params [(or :keyword @[:keyword] [:keyword])]
+   :ret (fn [@{:subject :any :action :any :resource :any :env {:keyword :any}
+               :attrs @{:keyword :any} :used @[:keyword] & r}]
+          (or :boolean :string))}
   ``A policy function that allows exactly the holders of `role` — the
   shortcut for a route that needs nothing cleverer:
 
@@ -74,6 +94,10 @@
         (string/format "subject does not hold role %q" role))))
 
 (defn permission-policy
+  {:params [:keyword]
+   :ret (fn [@{:subject :any :action :any :resource :any :env {:keyword :any}
+               :attrs @{:keyword :any} :used @[:keyword] & r}]
+          (or :boolean :string))}
   "A policy function that allows whoever the role table grants
   `permission` to."
   [permission]

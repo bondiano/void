@@ -13,7 +13,11 @@
 ### migration file portable. Apply it with `void db migrate`.
 (import void/auth/db :as auth-db)
 
-(defn up []
+(defn up
+  {:params [] :ret [{:keyword :any}]}
+  "The users table this application owns, plus the two void/auth-db
+  ships as data."
+  []
   [{:create-table "users"
     :columns [[:id :serial {:primary-key true}]
               [:email :text {:null false :unique true}]
@@ -27,6 +31,9 @@
               [:created-at :text]]}
    ;(auth-db/tables)])
 
-(defn down []
+(defn down
+  {:params [] :ret [{:keyword :any}]}
+  "Drop void/auth-db's two tables and this application's own."
+  []
   [;(auth-db/drop-tables)
    {:drop-table "users"}])

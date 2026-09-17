@@ -70,6 +70,10 @@
   nil)
 
 (defn make
+  {:params [(or {:interval :number? :max-samples :number? & r} :nil)]
+   :ret @{:interval :number :max-samples :number :samples @[:number]
+          :dropped :number :started-at :number :running :boolean
+          :started :boolean? :fiber (or :fiber :nil)}}
   "A probe state: the reservoir and the fiber handle."
   [cfg]
   @{:interval (get cfg :interval 0.01)
@@ -81,6 +85,12 @@
     :fiber nil})
 
 (defn reset!
+  {:params [@{:interval :number :max-samples :number :samples @[:number]
+              :dropped :number :started-at :number :running :boolean
+              :started :boolean? :fiber (or :fiber :nil)}]
+   :ret @{:interval :number :max-samples :number :samples @[:number]
+          :dropped :number :started-at :number :running :boolean
+          :started :boolean? :fiber (or :fiber :nil)}}
   "Drop every sample and restart the clock — what the runner calls
   before the timed runs, so the numbers describe the load and not the
   warmup."
@@ -90,12 +100,22 @@
   (put p :started-at (os/clock :monotonic))
   p)
 
-(defn- percentile [sorted q]
+(defn- percentile
+  {:params [@[:number] :number] :ret :number?}
+  "The q-th quantile (0..1) of a *sorted* array of numbers."
+  [sorted q]
   (when (pos? (length sorted))
     (def i (math/floor (* q (dec (length sorted)))))
     (in sorted i)))
 
 (defn stats
+  {:params [@{:interval :number :max-samples :number :samples @[:number]
+              :dropped :number :started-at :number :running :boolean
+              :started :boolean? :fiber (or :fiber :nil)}]
+   :ret {:samples :number :dropped :number :window :number :interval :number
+         :loop-lag (or {} {:p50 :number :p90 :number :p99 :number
+                            :max :number :mean :number})
+         :rss :number?}}
   ``The loop-lag distribution in milliseconds, plus RSS. `:max` is the
   one the GC budget rides on (see the module docstring).``
   [p]
@@ -114,7 +134,15 @@
                 :mean (/ (sum ms) n)})
    :rss (sample/rss)})
 
-(defn start! [p]
+(defn start!
+  {:params [@{:interval :number :max-samples :number :samples @[:number]
+              :dropped :number :started-at :number :running :boolean
+              :started :boolean? :fiber (or :fiber :nil)}]
+   :ret @{:interval :number :max-samples :number :samples @[:number]
+          :dropped :number :started-at :number :running :boolean
+          :started :boolean? :fiber (or :fiber :nil)}}
+  "Start the sampling fiber, unless one is already running."
+  [p]
   (unless (p :running)
     (put p :running true)
     (put p :fiber
@@ -131,7 +159,15 @@
                      (put p :dropped (inc (p :dropped)))))))))))
   p)
 
-(defn stop! [p]
+(defn stop!
+  {:params [@{:interval :number :max-samples :number :samples @[:number]
+              :dropped :number :started-at :number :running :boolean
+              :started :boolean? :fiber (or :fiber :nil)}]
+   :ret @{:interval :number :max-samples :number :samples @[:number]
+          :dropped :number :started-at :number :running :boolean
+          :started :boolean? :fiber (or :fiber :nil)}}
+  "Stop the sampling fiber, cancelling it if it had started."
+  [p]
   (put p :running false)
   (when-let [f (p :fiber)]
     (when (p :started) (protect (ev/cancel f "bench probe stopped"))))
@@ -148,6 +184,9 @@
   targets/probe-path)
 
 (defn handler
+  {:params [{:query {:string :any} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}
+   :throws [:string]}
   ``GET /void/bench/probe — the stats as JSON. `?reset=1` clears the
   reservoir after reading, which is how the runner brackets a set of
   timed runs.``

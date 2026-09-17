@@ -39,6 +39,8 @@
    :resource-not-found -32002})
 
 (defn request
+  {:params [(or :number :string) :string :any]
+   :ret @{:jsonrpc :string :id (or :number :string) :method :string & r}}
   "A request message — the client half, which the suite and
   ./http's tests speak."
   [id method &opt params]
@@ -47,6 +49,7 @@
   m)
 
 (defn notification
+  {:params [:string :any] :ret @{:jsonrpc :string :method :string & r}}
   "A notification: a method with no id, and therefore no answer."
   [method &opt params]
   (def m @{:jsonrpc version :method method})
@@ -54,11 +57,14 @@
   m)
 
 (defn result
+  {:params [:any :any] :ret @{:jsonrpc :string :id :any :result :any}}
   "A successful response to the request `id`."
   [id value]
   @{:jsonrpc version :id id :result value})
 
 (defn fail
+  {:params [:any (or :keyword :number) :string :any]
+   :ret @{:jsonrpc :string :id :any :error @{:code (or :keyword :number) :message :string & r}}}
   ``An error response. `code` is a keyword from `codes` or a number;
   `data` is optional and rides in the error object, which is where a
   client looks for the machine-readable half of a refusal.``
@@ -71,16 +77,19 @@
   @{:jsonrpc version :id (if (nil? id) :null id) :error err})
 
 (defn error?
+  {:params [:any] :ret :boolean :narrows {:error :any & r}}
   "Is this message an error response?"
   [msg]
   (and (dictionary? msg) (not (nil? (get msg :error)))))
 
 (defn encode
+  {:params [:any] :ret :string}
   "One message as one line of JSON — the frame both transports write."
   [msg]
   (json/encode msg))
 
 (defn- json-id
+  {:params [{:id :any & r}] :ret (or :number :string :keyword :nil)}
   ``The id of a decoded message, or nil. JSON null decodes to the
   keyword :null (spork/json), and a null id is JSON-RPC's way of
   saying "no id" — the two collapse here so nothing downstream has to
@@ -94,6 +103,11 @@
     :bad-id))
 
 (defn decode
+  {:params [:string]
+   :ret (or @{:ok @{:id :any :response? :boolean :params :any}}
+            @{:ok @{:id :any :method :string :params :any :notification? :boolean}}
+            @{:error @{:jsonrpc :string :id :any
+                       :error @{:code (or :keyword :number) :message :string & r}}})}
   ``Decode one frame. Returns
 
       {:ok {:id :method :params :notification? true|false}}

@@ -5,11 +5,18 @@
 
 (log/set-level! "void.cache" :error)
 
-(defn- fresh [&opt opts]
+(defn- fresh
+  {:params [(or {:prefix :string? :ttl :any? & r} :nil)] :ret [:any :any]}
+  "A fresh memory store and the cache built over it, for a test that
+  wants both — the store to inspect, the cache to call through."
+  [&opt opts]
   (def m (memory/make {:sweep-interval 0}))
   [m (state/make (memory/store m) (or opts {}))])
 
-(defn- with-cache [c f] (with-dyns [state/cache-dyn c] (f)))
+(defn- with-cache
+  {:params [:any (fn [] :any)] :ret :any}
+  "Run `f` with `c` bound as the active cache."
+  [c f] (with-dyns [state/cache-dyn c] (f)))
 
 # -- without a cache -----------------------------------------------------
 
@@ -189,7 +196,11 @@
 
 # -- a store that is broken ----------------------------------------------
 
-(defn- broken [&opt opts]
+(defn- broken
+  {:params [(or {:prefix :string? :ttl :any? & r} :nil)] :ret :any}
+  "A cache whose store fails on every call, for testing the
+  :degrade/:raise error policy."
+  [&opt opts]
   (state/make {:name :broken
                :get (fn [k] (error "the cache is down"))
                :put (fn [k v t] (error "the cache is down"))

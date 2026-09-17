@@ -10,7 +10,11 @@
 
 (def plugins ["void/cache/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [:any] :ret {:env @{:any :any} :cli :any}}
+  "Boot config for this suite's plugin composition, with `extra`
+  merged into the :cli slice."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}} extra)})
 

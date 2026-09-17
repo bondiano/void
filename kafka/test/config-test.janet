@@ -11,7 +11,10 @@
 
 (def props (config/properties {:brokers ["a:9092" "b:9092"] :client-id "app"
                                :properties {"linger.ms" 5 "acks" "all"}}))
-(defn- prop [name]
+(defn- prop
+  {:params [:string] :ret :any}
+  "The value of one property in `props`, or nil."
+  [name]
   (var out nil)
   (each [k v] props (when (= k name) (set out v)))
   out)

@@ -6,7 +6,11 @@
 (import void/mcp/jsonrpc :as rpc)
 (import void/mcp/server :as server)
 
-(defn- msg [id method &opt params]
+(defn- msg
+  {:params [:any :string :any]
+   :ret @{:id :any :method :string :params :any :notification? :boolean}}
+  "A decoded message like jsonrpc/decode would hand `server/handle`."
+  [id method &opt params]
   @{:id id :method method :params (or params @{}) :notification? (nil? id)})
 
 (def calls @[])

@@ -39,11 +39,13 @@
 (import void/core/util :as util)
 
 (defn path-of
+  {:params [:string :string] :ret :string}
   "The path a Connect call to this method arrives on."
   [service-proto-name method-proto-name]
   (string "/" service-proto-name "/" method-proto-name))
 
 (defn route-name
+  {:params [:string :string] :ret :keyword}
   "The route name a method's route carries — `:shop.orders.OrderService/GetOrder`,
   so `void routes` and `explain-route` name an RPC method the way its
   clients do."
@@ -51,6 +53,7 @@
   (keyword service-proto-name "/" method-proto-name))
 
 (defn get-route-name
+  {:params [:string :string] :ret :keyword}
   ``The name of the *second* route an idempotent method gets — Connect's
   GET form, which is a route of its own and so needs a name of its own.
   A protobuf identifier cannot contain a dash, so this suffix can
@@ -61,6 +64,9 @@
   (keyword service-proto-name "/" method-proto-name "-get"))
 
 (defn method
+  {:params [:any]
+   :ret {:name :keyword :handler :any :meta :any}
+   :throws [:string]}
   ``Normalize one method binding: {:name :GetOrder :handler <fn or
   symbol> :meta {...}}. The shape comes from the service descriptor,
   so this only carries what the `.proto` could not.``
@@ -78,6 +84,10 @@
   {:name (spec :name) :handler handler :meta meta})
 
 (defn service
+  {:params [:keyword [:any] (or {:meta :any :env :any :doc (or :string :nil) & r} :nil)]
+   :ret {:name :keyword :descriptor :any :proto-name :string :path :string
+        :meta :any :env :any :doc (or :string :nil) :methods [:any] :by-name @{:keyword :any}}
+   :throws [:string]}
   ``Build a service value out of a registered service descriptor and a
   list of method bindings. opts: :meta (route metadata for every
   method — the group layer), :env (`router/env-ref (curenv)` for bare
@@ -136,6 +146,7 @@
 (def- registry @{})
 
 (defn register!
+  {:params [{:name :keyword & r}] :ret {:name :keyword & r}}
   "Register a service value. Re-registering replaces — REPL-friendly,
   and the route table is rebuilt from the registry rather than cached."
   [svc]
@@ -143,22 +154,30 @@
   svc)
 
 (defn deregister!
+  {:params [:keyword] :ret :nil}
   "Forget a service by name."
   [name]
   (put registry name nil)
   nil)
 
 (defn services
+  {:params []
+   :ret @[{:name :keyword :descriptor :any :proto-name :string :path :string
+          :meta :any :env :any :doc (or :string :nil) :methods [:any] :by-name @{:keyword :any}}]}
   "Every registered service, by name."
   []
   (seq [n :in (sorted (keys registry))] (registry n)))
 
 (defn lookup
+  {:params [:keyword]
+   :ret (or :nil {:name :keyword :descriptor :any :proto-name :string :path :string
+                 :meta :any :env :any :doc (or :string :nil) :methods [:any] :by-name @{:keyword :any}})}
   "A registered service by name, or nil."
   [name]
   (registry name))
 
 (defn defservice-form
+  {:params [:any [:any]] :ret :tuple :throws [:string]}
   ``The expansion `defservice` writes — a function rather than only a
   macro, because ./init exports the same macro under its own name, and
   a macro cannot be re-exported by calling it (the head of a form has
@@ -182,6 +201,7 @@
                          (,merge ,opts {:env (,router/env-ref (curenv))}))))
 
 (defmacro defservice
+  {:params [:any :any] :ret :any}
   ``Declare and register an RPC service:
 
       (defservice :shop.orders/OrderService

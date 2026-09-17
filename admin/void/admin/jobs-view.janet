@@ -39,11 +39,13 @@
   "/jobs")
 
 (defn title
+  {:ret :string}
   "What the navigation and the page heading call it."
   []
   (text/t :void.admin/jobs))
 
 (defn url
+  {:params [:string? (or {:string :any} :nil)] :ret :string}
   "A URL in this section: (url), (url \"/-/bulk/retry\" params)."
   [&opt suffix query]
   (ctx/at (string path (or suffix "")) query))
@@ -51,6 +53,9 @@
 # -- the state of a listing ----------------------------------------------
 
 (defn params
+  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}]
+   :ret @{:string :any}}
   ``The query parameters that describe the current listing, so a
   filter link, the poll and a bulk confirmation all carry one view of
   it.``
@@ -64,6 +69,10 @@
     "limit" (when (not= (get st :limit) (get st :default-limit)) (get st :limit))})
 
 (defn- with-params
+  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}
+            :any]
+   :ret @{:string :any}}
   "The same parameters with some replaced — a nil drops the key, which
   is how \"this filter, without the queue\" is one expression."
   [st & kvs]
@@ -81,17 +90,22 @@
   "admin-jobs")
 
 (defn- wrapper-swap
+  {:params [:string] :ret @{:string :string} :throws [:string]}
   "The htmx half of anything that refetches the wrapper: into it,
   whole, and into the address bar."
   [href]
   (hx/get* href :target (string "#" wrapper-id) :swap :outer-html :push-url true))
 
-(defn- swap-link [href & body]
+(defn- swap-link
+  {:params [:string :any] :ret :tuple :throws [:string]}
+  "A link that swaps the wrapper rather than navigating."
+  [href & body]
   [:a (merge {:href href} (wrapper-swap href)) ;body])
 
 # -- the head of the page ------------------------------------------------
 
 (defn total-of
+  {:params [{:keyword {:keyword :number}} :keyword] :ret :number}
   "How many records are in one state, across every queue."
   [counts state]
   (var n 0)
@@ -99,7 +113,15 @@
     (+= n (get per-state state 0)))
   n)
 
-(defn- cards [snap st]
+(defn- cards
+  {:params [{:counts {:keyword {:keyword :number}} :backend {:keyword :any}
+             :enqueued :number :duplicates :number & r}
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}]
+   :ret :tuple}
+  "The four at-a-glance cards: the backend, the backlog, the dead
+  letter queue and this process's own enqueue counter."
+  [snap st]
   (def caps (snap :backend))
   (def dead (total-of (snap :counts) :dead))
   [:div {:class "vd-cards"}
@@ -138,13 +160,26 @@
     [:p {:class "vd-note"}
      (text/t :void.admin/jobs-enqueued-note {:duplicates (get snap :duplicates 0)})]]])
 
-(defn- depth-cell [st qname state n]
+(defn- depth-cell
+  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}
+            :any :keyword :number]
+   :ret :tuple :throws [:string]}
+  "One [queue x state] depth cell — a plain 0, or a link that swaps
+  the whole wrapper to that filter."
+  [st qname state n]
   [:td {:class "vd-count"}
    (if (zero? n)
      "0"
      (swap-link (url "" (with-params st "queue" qname "state" state)) (string n)))])
 
-(defn- depth-table [snap st]
+(defn- depth-table
+  {:params [{:counts {:keyword {:keyword :number}} & r}
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}]
+   :ret :tuple :throws [:string]}
+  "Every queue's depth, one row per queue and one column per state."
+  [snap st]
   (def counts (snap :counts))
   (def queues (sorted (keys counts)))
   [:table {:class "vd-table"}
@@ -167,12 +202,18 @@
 
 # -- the filter panel ----------------------------------------------------
 
-(defn- option [value selected label]
+(defn- option
+  {:params [:any :any :any] :ret :tuple}
+  "One <option>, selected when it reads the same as the current value."
+  [value selected label]
   [:option {:value (string value)
             :selected (when (= (string value) (string (or selected ""))) true)}
    label])
 
-(defn- select-field [name label options value]
+(defn- select-field
+  {:params [:string :any (or @[:any] [:any]) :any] :ret :tuple}
+  "A <select> filter field: 'any', plus one option per value."
+  [name label options value]
   (def id (string "f-jobs-" name))
   [:div {:class "field"}
    [:label {:for id} label]
@@ -180,7 +221,14 @@
     (option "" value (text/t :void.admin/any))
     ;(seq [o :in options] (option o value (string o)))]])
 
-(defn- filter-panel [snap st]
+(defn- filter-panel
+  {:params [{:queues @[:keyword] :jobs @[:keyword] & r}
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}]
+   :ret :tuple :throws [:string]}
+  "Queue, state, job and row-limit — the four filters, submitting on
+  every change and swapping the wrapper rather than reloading."
+  [snap st]
   [:form (merge {:id "admin-jobs-filters"
                  :method "get"
                  :action (url)
@@ -198,11 +246,18 @@
 
 # -- the listing ---------------------------------------------------------
 
-(defn- action-button [id action label danger?]
+(defn- action-button
+  {:params [:any :string :any :any] :ret :tuple :throws [:string]}
+  "One record action as its own tiny form — retry or discard, POSTing
+  to the section's own route."
+  [id action label danger?]
   (view/post-form :post (url (string "/" id "/-/" action)) {:class "vd-inline"}
     [:button {:type "submit" :class (when danger? "danger")} label]))
 
-(defn- row-actions [r]
+(defn- row-actions
+  {:params [{:id :any :state (or :keyword :nil) & r}] :ret :tuple :throws [:string]}
+  "Retry (dead only) and discard, for one row of the listing."
+  [r]
   [:td
    (when (= :dead (get r :state))
      (action-button (r :id) "retry" (text/t :void.admin/jobs-retry) false))
@@ -210,6 +265,10 @@
    (action-button (r :id) "discard" (text/t :void.admin/jobs-discard) true)])
 
 (defn- age-cell
+  {:params [{:run-at :any :state (or :keyword :nil) :finished-at :any :started-at :any
+             :enqueued-at :any & r}
+            :number]
+   :ret :tuple}
   ``How long ago something happened to this record — except for a
   pending one whose `:run-at` is still ahead, where the useful number
   is how long until it may be claimed. "waiting 3h" and "runs in 3h"
@@ -224,13 +283,18 @@
                               (get r :enqueued-at))
                           now)]))
 
-(defn- error-cell [r]
+(defn- error-cell
+  {:params [{:error (or :string :nil) & r}] :ret :tuple}
+  "The failure text, truncated — or the em dash of no failure."
+  [r]
   (def e (get r :error))
   [:td (if e
          [:code (if (> (length e) 80) (string (string/slice e 0 80) "…") e)]
          (widget/text-of nil))])
 
 (defn- rows-table
+  {:params [(or @[{:keyword :any}] [{:keyword :any}]) :number :boolean?]
+   :ret :tuple :throws [:string]}
   ``The listing. `actions?` is false on the sample a confirmation
   shows: a page asking "shall I do this to these records" must not
   also offer to do something else to one of them.``
@@ -257,6 +321,10 @@
          (when actions? (row-actions r))]))]])
 
 (defn- bulk-bar
+  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}
+            :number]
+   :ret (or :tuple :nil)}
   ``The two bulk actions, and the one line of arithmetic behind when
   they are offered: `counts` and `clear!` select by queue and state, so
   that is what a bulk here selects by — the job filter is dropped from
@@ -275,7 +343,14 @@
      [:a {:class "vd-button danger" :href (url "/-/bulk/discard" sel)}
       (text/t :void.admin/jobs-discard-all)]]))
 
-(defn- dead-banner [snap st]
+(defn- dead-banner
+  {:params [{:counts {:keyword {:keyword :number}} & r}
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}]
+   :ret (or :tuple :nil) :throws [:string]}
+  "A warning banner when there are dead records and the listing is
+  not already showing them."
+  [snap st]
   (def n (total-of (snap :counts) :dead))
   (when (and (pos? n) (not= :dead (st :state)))
     [:div {:class "vd-warn"}
@@ -284,6 +359,13 @@
                 (text/t :void.admin/jobs-open-dead))]))
 
 (defn body-fragment
+  {:params [{:counts {:keyword {:keyword :number}} :backend {:keyword :any}
+             :enqueued :number :duplicates :number & r}
+            (or @[{:keyword :any}] [{:keyword :any}])
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}
+            :number]
+   :ret :tuple :throws [:string]}
   ``Everything a change moves: the cards, the depth table and the
   listing. It re-fetches itself every few seconds — an operator
   watching a queue drain asked for exactly that — and the filter panel
@@ -309,6 +391,14 @@
               ""))]])
 
 (defn index-page
+  {:params [{:queues @[:keyword] :jobs @[:keyword]
+             :counts {:keyword {:keyword :number}} :backend {:keyword :any}
+             :enqueued :number :duplicates :number & r}
+            (or @[{:keyword :any}] [{:keyword :any}])
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}
+            :number]
+   :ret :tuple :throws [:string]}
   "The section: the filter panel, and everything it filters."
   [snap rows st now]
   [:div
@@ -317,6 +407,7 @@
    (body-fragment snap rows st now)])
 
 (defn notice-page
+  {:params [:any] :ret :tuple}
   ``A refusal a person can read. The built-in error page is terse
   outside dev, and these two refusals are not accidents — they are the
   answer to a URL that asks for something the queue will not do, and
@@ -333,14 +424,21 @@
   {:run-at true :enqueued-at true :started-at true :finished-at true
    :unique-until true :claimed-at true})
 
-(defn- stamp [t now]
+(defn- stamp
+  {:params [:number :number] :ret :string}
+  "One timestamp field: the date, and its age next to it."
+  [t now]
   (def d (os/date (math/floor t) true))
   (string/format "%04d-%02d-%02d %02d:%02d:%02dZ (%s)"
                  (d :year) (inc (d :month)) (inc (d :month-day))
                  (d :hours) (d :minutes) (d :seconds)
                  (jobs/record-age t now)))
 
-(defn- field-value [k v now]
+(defn- field-value
+  {:params [:keyword :any :number] :ret :string}
+  "One field of a record, drawn by what kind of field it is: a
+  timestamp, the failure count, or the default text projection."
+  [k v now]
   (cond
     (nil? v) (widget/text-of nil)
     (in time-fields k) (stamp v now)
@@ -348,6 +446,8 @@
     (widget/text-of v)))
 
 (defn record-page
+  {:params [{:id :any :state (or :keyword :nil) & r} :number]
+   :ret :tuple :throws [:string]}
   "One record: every field the queue stores for it, its failures, and
   the two things an operator can do about it."
   [r now]
@@ -380,6 +480,11 @@
 # -- the confirmation ----------------------------------------------------
 
 (defn confirm-page
+  {:params [:keyword
+            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
+             :limit :number :default-limit :number}
+            :number (or @[{:keyword :any}] [{:keyword :any}]) :number]
+   :ret :tuple :throws [:string]}
   ``What a bulk goes through, for the reason the resource bulk goes
   through one: the number is counted on the server, and it is the same
   road whether it is one record or forty thousand.``

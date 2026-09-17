@@ -79,6 +79,7 @@
   @[])
 
 (defmacro- defmy
+  {:params [:symbol :any :any] :ret :tuple}
   ``Declare one libmysqlclient function: a module-level `var`, nil
   until `load!` installs the call. `& args` are ffi types; a trailing
   :optional marks a symbol an older library may not have.``
@@ -195,11 +196,13 @@
   [2000 2999])
 
 (defn client-error?
+  {:params [:number] :ret :boolean}
   "Did the client library raise this, rather than the server?"
   [code]
   (and (>= code (client-error-range 0)) (<= code (client-error-range 1))))
 
 (defn connection-lost?
+  {:params [:number] :ret :boolean}
   ``Is this error the connection dying, rather than the statement
   failing? The two the pool has to tell apart, and the reason the test
   is the whole client-error range rather than the two obvious codes:
@@ -241,6 +244,7 @@
 (def- cell-size 8)
 
 (defn cstr
+  {:params [(or :pointer :nil)] :ret :string?}
   ``A `char *` that may be NULL, as a janet string or nil. Bindings
   that can return NULL are declared :ptr for exactly this: janet's
   ffi reads a :string return straight off the pointer, and off NULL
@@ -252,6 +256,7 @@
     (ffi/read :string cell 0)))
 
 (defn cell-ptr
+  {:params [(or :pointer :nil) :number] :ret (or :pointer :nil)}
   ``The i-th `void *` of a C array of pointers, or nil where the cell
   holds NULL. This is how a MYSQL_ROW (a `char **`) is read: one cell
   per column, NULL for a SQL NULL — which is the only way the text
@@ -262,6 +267,7 @@
     (ffi/read :ptr buf (* cell-size i))))
 
 (defn cell-ulong
+  {:params [(or :pointer :nil) :number] :ret (or :number :nil)}
   ``The i-th `unsigned long` of a C array — how mysql_fetch_lengths's
   answer is read — as a plain number.
 
@@ -275,6 +281,7 @@
     (scan-number (string (ffi/read :ulong buf (* cell-size i))))))
 
 (defn bytes-at
+  {:params [(or :pointer :nil) :number] :ret :string}
   ``Exactly `n` bytes from `ptr`, as a janet string. The text protocol
   hands
   values back as pointer plus length rather than as C strings, and
@@ -324,6 +331,8 @@
   {:name 0 :length 56 :flags 100 :type 112})
 
 (defn field
+  {:params [(or :pointer :nil)]
+   :ret (or {:name :string? :length (or :number :nil) :type (or :keyword :number) :flags :number} :nil)}
   ``One column's metadata as {:name :length :type :flags}: the name,
   the declared width (which is the whole of how a BOOLEAN is told
   from a TINYINT — see ./types), the type as a `field-types` keyword
@@ -353,12 +362,14 @@
   @[])
 
 (defn available?
+  {:params [] :ret :boolean}
   "Have the bindings been opened in THIS VM? A worker thread has its
   own answer, which is the point."
   []
   (not (nil? library-path)))
 
 (defn candidates
+  {:params [:string?] :ret [:string]}
   "The search order for a given configured path (nil = the defaults),
   environment override included."
   [&opt path]
@@ -367,11 +378,15 @@
     (os/getenv path-env) [(os/getenv path-env)]
     default-candidates))
 
-(defn- try-open [path]
+(defn- try-open
+  {:params [:string] :ret (or :abstract :nil)}
+  "Open one candidate path, nil (not an error) when it does not."
+  [path]
   (def [ok lib] (protect (ffi/native path)))
   (when ok lib))
 
 (defn load!
+  {:params [:string?] :ret :string :throws [:string]}
   ``Open libmysqlclient and install the bindings. `path` (from
   [:db-mysql :library]) is tried alone; without it the platform
   defaults are, in order. Idempotent for the same path.
@@ -416,6 +431,7 @@
   found)
 
 (defn client-version
+  {:params [] :ret :string?}
   "What the loaded library calls itself — \"8.0.36\" for Oracle's,
   \"3.3.8\" for MariaDB Connector/C. A string, because the two number
   it differently and neither is the server's version."
@@ -423,6 +439,7 @@
   (when (available?) (mysql_get_client_info)))
 
 (defn server-version
+  {:params [:pointer] :ret [:number :number :number]}
   ``A connection's server version as [major minor patch].
   mysql_get_server_version reports 80036 for 8.0.36 and 110402 for
   MariaDB 11.4.2.``

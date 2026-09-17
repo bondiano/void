@@ -24,10 +24,17 @@
 
 # -- boot gates ----------------------------------------------------------
 
-(defn- build [spec]
+(defn- build
+  {:params [:any] :ret {:mount :any :providers @{:any :any} & r} :throws [:string]}
+  "Run `spec` through `build-settings` as the `[:oauth]` config slice."
+  [spec]
   (provider/build-settings {:config {:values {:oauth spec}}}))
 
-(defn- refused [spec & needles]
+(defn- refused
+  {:params [:any :string] :ret :nil}
+  "Assert that `spec` fails to build, and that the error mentions every
+  one of `needles`."
+  [spec & needles]
   (def [ok err] (protect (build spec)))
   (assert (not ok) (string/format "%j should not have built" spec))
   (each needle needles

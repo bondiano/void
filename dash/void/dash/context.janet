@@ -19,27 +19,32 @@
   nil)
 
 (defn context
+  {:params [] :ret @{:keyword :any} :throws [:string]}
   "The dash context, or a refusal naming why it is not there."
   []
   (or current
       (error "void/dash is not booted — plugin/start! builds the dash context at :before-start")))
 
 (defn setting
+  {:params [:keyword :any?] :ret :any :throws [:string]}
   "One key of the context."
   [k &opt dflt]
   (get (context) k dflt))
 
 (defn boot
+  {:params [] :ret :any :throws [:string]}
   "The boot value the dashboard projects."
   []
   (setting :boot))
 
 (defn prefix
+  {:params [] :ret :string :throws [:string]}
   "Where the dashboard is mounted ([:dash :prefix], default \"/dash\")."
   []
   (setting :prefix "/dash"))
 
 (defn at
+  {:params [:string (or {:string :any} :nil)] :ret :string :throws [:string]}
   ``A URL under the dash prefix: (at "/routes"), (at "/why" {"key"
   "http/server"}) — chrome/url-under over [:dash :prefix].``
   [path &opt query]

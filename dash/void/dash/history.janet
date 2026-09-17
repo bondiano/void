@@ -25,6 +25,9 @@
   (ring/make default-samples))
 
 (defn configure!
+  {:params [{:samples :number? & r}]
+   :ret @{:slots @[:any] :capacity :number :next :number :written :number}
+   :throws [:string]}
   "Size the ring from the [:dash :history] slice — called at
   :before-start. Same capacity keeps the ring; a change is a fresh
   one."
@@ -35,22 +38,27 @@
   samples)
 
 (defn held
+  {:params [] :ret :number}
   "How many samples the ring holds."
   []
   (ring/size samples))
 
 (defn record!
+  {:params [{:ts :number :lag-ms :number :rss :number? :connections :number?}]
+   :ret @{:slots @[:any] :capacity :number :next :number :written :number}}
   "Append one sample."
   [s]
   (ring/push! samples s))
 
 (defn series
+  {:params [:keyword] :ret @[:any]}
   "One field of every held sample, oldest first (nils kept — a gap in
   a sparkline is information)."
   [k]
   (map |(get $ k) (ring/to-array samples)))
 
 (defn last-sample
+  {:params [] :ret (or {:ts :number :lag-ms :number :rss :number? :connections :number? & r} :nil)}
   "The newest sample, or nil."
   []
   (last (ring/to-array samples)))
@@ -62,6 +70,9 @@
   0.1)
 
 (defn sampler
+  {:params [:number (or (fn [] (or {:rss :any :connections :any & r} :nil)) :nil)
+            @{:stop :boolean? & r} (or (fn [] :any) :nil)]
+   :ret (fn [] :nil)}
   ``The sampler as a fiber body: every `interval` seconds measure the
   loop lag accumulated around its own sleeps, ask `sources` (a
   function of no arguments answering {:rss :connections} or nil-valued

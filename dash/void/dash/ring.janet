@@ -7,6 +7,8 @@
 ### snapshot while a sink keeps writing.
 
 (defn make
+  {:params [:number] :ret @{:slots @[:any] :capacity :number :next :number :written :number}
+   :throws [:string]}
   "A ring holding at most `capacity` entries."
   [capacity]
   (unless (and (int? capacity) (pos? capacity))
@@ -17,6 +19,8 @@
     :written 0})   # total writes ever, so readers can tell how much is real
 
 (defn push!
+  {:params [@{:slots @[:any] :capacity :number :next :number :written :number & r} :any]
+   :ret @{:slots @[:any] :capacity :number :next :number :written :number & r}}
   "Append one entry, evicting the oldest when full. Returns the ring."
   [ring entry]
   (put (ring :slots) (ring :next) entry)
@@ -25,6 +29,7 @@
   ring)
 
 (defn to-array
+  {:params [@{:slots @[:any] :capacity :number :written :number & r}] :ret @[:any]}
   "The held entries, oldest first — a copy, safe to render while
   writes continue."
   [ring]
@@ -38,6 +43,7 @@
   out)
 
 (defn size
+  {:params [@{:capacity :number :written :number & r}] :ret :number}
   "How many entries the ring currently holds."
   [ring]
   (min (ring :written) (ring :capacity)))

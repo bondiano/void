@@ -43,6 +43,7 @@
                 :status 503 :detail "bench_rows is still being filled"}))
 
 (defn row
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "GET /db — one random row by primary key."
   [req]
   (if (seed/seeded?)
@@ -85,5 +86,8 @@
                   :db {:pool {:size 8}}
                   :db-postgres (pg/config)}}})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret @{:keyword :any}}
+  "Process entrypoint: start the B2 app and block until stopped."
+  [& args]
   (void/run! app))

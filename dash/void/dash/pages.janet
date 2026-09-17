@@ -32,6 +32,14 @@
 # -- responses -----------------------------------------------------------
 
 (defn page
+  {:params [:any :any
+            (or {:layout :any :status :number? :headers (or {:any :any} :nil)
+                 :context (or {:any :any} :nil) :engine :keyword?
+                 :title :any :head :any :partial :any & r}
+                :nil)]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``A full dash page: the frame, the content — and, when the page has
   a half that moves, `:partial` names it, so an htmx swap into an
   element gets the fragment alone (html/page's :partial).``
@@ -39,6 +47,7 @@
   (html/page content (merge {:layout view/layout :context {:request req}} (or opts {}))))
 
 (defn- kw
+  {:params [:any] :ret :keyword}
   "A query-string keyword: with or without the leading colon a REPL
   habit types."
   [s]
@@ -47,6 +56,13 @@
 # -- reading the boot ----------------------------------------------------
 
 (defn- component-health
+  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
+                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                          :instances @{:keyword :any} & r}
+                         :nil)
+             & r}
+            :keyword]
+   :ret (or {:keyword :any} :nil)}
   ``One running component's :health value, or nil — the seam optional
   sections read through. A throwing health function answers nil here:
   a dashboard tile must not take the page down with it.``
@@ -58,6 +74,12 @@
       (when (and ok (dictionary? v)) v))))
 
 (defn sample-sources
+  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
+                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                          :instances @{:keyword :any} & r}
+                         :nil)
+             & r}]
+   :ret {:rss :any :connections :any}}
   ``What the history sampler reads each tick, resolved from the boot:
   {:rss :connections} — either nil when its component is not in the
   composition (./init hands this to the sampler).``
@@ -67,15 +89,22 @@
 
 # -- overview ------------------------------------------------------------
 
-(defn- card [title & body]
+(defn- card
+  {:params [:any :any] :ret :any}
+  "One card of the overview: a title and its body, as hiccup."
+  [title & body]
   [:div {:class "vd-card"} [:h2 title] ;body])
 
 (defn- vital
+  {:params [:any :any] :ret :any}
   "One cell of the vitals strip: label, the number, its context."
   [title & body]
   [:div {:class "dash-vital"} [:h2 title] ;body])
 
-(defn- process-vital [boot]
+(defn- process-vital
+  {:params [{:profile :keyword :deploy (or {:shape :keyword? & r} :nil) & r}] :ret :any :throws [:string]}
+  "The process vital: how long it has run, its profile and deploy shape."
+  [boot]
   (vital (text/t :void.dash/vital-process)
          [:p {:class "dash-big"}
           (view/duration-str (- (os/clock :monotonic) (ctx/setting :started-at 0)))]
@@ -84,7 +113,16 @@
                   {:profile (string (boot :profile))
                    :shape (string (get-in boot [:deploy :shape] :single))})]))
 
-(defn- runtime-vital [boot]
+(defn- runtime-vital
+  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
+                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                          :instances @{:keyword :any} & r}
+                         :nil)
+             & r}]
+   :ret :any}
+  "The RSS/loop-lag vital, or the sentence naming :void/obs when it
+  is not in this composition."
+  [boot]
   (if-let [h (component-health boot :obs/registry)]
     (vital (text/t :void.dash/vital-runtime)
            [:p {:class "dash-big"} (view/bytes-str (h :rss))]
@@ -100,7 +138,16 @@
            (view/sparkline (history/series :lag-ms))
            [:p {:class "vd-note"} (text/t :void.dash/lag-caption)])))
 
-(defn- http-vital [boot]
+(defn- http-vital
+  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
+                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                          :instances @{:keyword :any} & r}
+                         :nil)
+             & r}]
+   :ret :any}
+  "The HTTP vital: open connections and port, or the sentence saying
+  there is no listener in this composition."
+  [boot]
   (if-let [h (component-health boot :http/server)]
     (vital (text/t :void.dash/vital-http)
            [:p {:class "dash-big"} (string (get h :connections 0))]
@@ -111,7 +158,16 @@
     (vital (text/t :void.dash/vital-http)
            [:p {:class "vd-absent"} (text/t :void.dash/http-absent)])))
 
-(defn- pressure-vital [boot]
+(defn- pressure-vital
+  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
+                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                          :instances @{:keyword :any} & r}
+                         :nil)
+             & r}]
+   :ret :any}
+  "The load-shedding vital, or the sentence naming :void/pressure when
+  it is not in this composition."
+  [boot]
   (if-let [h (component-health boot :pressure/sampler)]
     (vital (text/t :void.dash/vital-pressure)
            [:p {:class "dash-big"}
@@ -131,10 +187,15 @@
   the one a page nobody reads is made of.``
   6)
 
-(defn- scalar-str [v]
+(defn- scalar-str
+  {:params [:any] :ret :string}
+  "One health scalar, printed plainly for a string or keyword and
+  cut otherwise."
+  [v]
   (if (or (string? v) (keyword? v)) (string v) (view/value-str v 24)))
 
 (defn- health-facts
+  {:params [{:keyword :any}] :ret :any}
   ``The scalars a component's own `:health` carries beside its status:
   the pool's occupancy, the queue's backend, the subscriber's channel
   count. dash computes none of them — they are what `GET /health` and
@@ -159,7 +220,10 @@
      (string/join (seq [k :in shown] (string k " " (scalar-str (get c k))))
                   " · ")]))
 
-(defn- health-tiles [boot]
+(defn- health-tiles
+  {:params [:any] :ret :any}
+  "The health patch panel: plugin/health's fold, one lamp per component."
+  [boot]
   (def h (plugin/health boot))
   [:div
    [:h2 (text/t :void.dash/health)]
@@ -182,7 +246,11 @@
         (when-let [r (get c :reason)]
           [:span {:class "dash-health-reason"} (view/value-str r 120)])])]])
 
-(defn- contributed-tiles []
+(defn- contributed-tiles
+  {:params [] :ret :any :throws [:string]}
+  "The :void.dash/tile contributions, each rendered and its own
+  throw caught so one broken tile does not take the page down."
+  []
   (def tiles (ctx/setting :tiles []))
   (unless (empty? tiles)
     [:div
@@ -195,6 +263,13 @@
             (if ok v [:p {:class "vd-warn"} (view/value-str v 120)]))])]]))
 
 (defn overview-fragment
+  {:params [{:profile :keyword :deploy (or {:shape :keyword? & r} :nil)
+             :system (or {:states @{:keyword (enum :running :stopped)}
+                         :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                         :instances @{:keyword :any} & r}
+                        :nil)
+             & r}]
+   :ret :any :throws [:string]}
   "Everything the overview poll moves."
   [boot]
   (view/poll-wrap "dash-overview" (ctx/at "")
@@ -207,19 +282,34 @@
     (contributed-tiles)))
 
 (defn overview-body
+  {:params [{:profile :keyword :deploy (or {:shape :keyword? & r} :nil)
+             :system (or {:states @{:keyword (enum :running :stopped)}
+                         :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
+                         :instances @{:keyword :any} & r}
+                        :nil)
+             & r}
+            {:query (or {:string :any} :nil) & r}]
+   :ret :any :throws [:string]}
   "The overview, inside the frame."
   [boot req]
   [:div (view/live-attrs req "/live")
    [:h1 (text/t :void.dash/overview)]
    (overview-fragment boot)])
 
-(defn overview [req]
+(defn overview
+  {:params [{:query (or {:string :any} :nil) & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /dash: the overview, or its htmx poll fragment."
+  [req]
   (def boot (ctx/boot))
   (page req (overview-body boot req) {:partial (fn [] (overview-fragment boot))}))
 
 # -- the table filter ----------------------------------------------------
 
 (defn- filter-bar
+  {:params [:string :keyword :number] :ret :any}
   ``The toolbar over a table: a client-side row filter (./view's one
   script) and the live row count. Progressive — without JavaScript the
   input is inert and the table is whole.``
@@ -239,11 +329,23 @@
 
 (def why-target "dash-why")
 
-(defn- why-link [key]
+(defn- why-link
+  {:params [:keyword] :ret :any :throws [:string]}
+  "The link that opens `key`'s plugin/why answer in the detail panel."
+  [key]
   (view/detail-link (ctx/at "/why" {"key" (string key)}) why-target
                     (text/t :void.dash/why)))
 
-(defn components-body [boot]
+(defn components-body
+  {:params [{:system {:order [:keyword]
+                      :components {:keyword {:plugin :keyword? :provides [:keyword] & r}}
+                      :resolution {:keyword {:keyword :keyword}}
+                      :states @{:keyword (enum :running :stopped)}
+                      & r}
+             & r}]
+   :ret :any :throws [:string]}
+  "The component graph, boot :system in topological order."
+  [boot]
   (def sys (boot :system))
   [:div
    [:h1 (text/t :void.dash/components)]
@@ -276,10 +378,20 @@
    [:div {:id why-target :class "vd-detail"}
     [:p {:class "vd-note"} (text/t :void.dash/pick-component)]]])
 
-(defn components [req]
+(defn components
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /dash/components."
+  [req]
   (page req (components-body (ctx/boot))))
 
 (defn why
+  {:params [{:query (or {:string :any} :nil) & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "The plugin/why answer for one component or interface, as a fragment."
   [req]
   (def boot (ctx/boot))
@@ -321,7 +433,11 @@
 
 (def point-target "dash-point")
 
-(defn plugins-body [boot]
+(defn plugins-body
+  {:params [{:extensions {:keyword :any} & r}] :ret :any :throws [:string]}
+  "Every plugin — plugin/inspect — and every extension point it can
+  be opened from."
+  [boot]
   (def rows (plugin/inspect boot))
   [:div
    [:h1 (text/t :void.dash/plugins)]
@@ -358,10 +474,20 @@
    [:div {:id point-target :class "vd-detail"}
     [:p {:class "vd-note"} (text/t :void.dash/pick-point)]]])
 
-(defn plugins [req]
+(defn plugins
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /dash/plugins."
+  [req]
   (page req (plugins-body (ctx/boot))))
 
 (defn point
+  {:params [{:query (or {:string :any} :nil) & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "One extension point: doc, contributions with attribution, the
   resolved value — plugin/inspect on the point, as a fragment."
   [req]
@@ -390,7 +516,15 @@
 
 # -- config --------------------------------------------------------------
 
-(defn config-body [boot]
+(defn config-body
+  {:params [{:config @{:profile :keyword :values @{:any :any}
+                       :provenance @{:any @[{:layer :keyword & r}]}
+                       :layers @[{:layer :keyword & r}]}
+             & r}]
+   :ret :any}
+  "The live config, every value with the layer that set it —
+  config/explain, one row per path."
+  [boot]
   (def cfg (boot :config))
   (def paths (sorted (keys (cfg :provenance))))
   [:div
@@ -415,14 +549,23 @@
               (text/t :void.dash/overrides
                       {:shadowed (string/join (map config/describe-source shadowed) ", ")})]))]])]]])
 
-(defn config-page [req]
+(defn config-page
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /dash/config."
+  [req]
   (page req (config-body (ctx/boot))))
 
 # -- routes --------------------------------------------------------------
 
 (def route-target "dash-route")
 
-(defn routes-body []
+(defn routes-body
+  {:params [] :ret :any :throws [:string]}
+  "The live route table — what `void routes` prints."
+  []
   (def table (http/routes-table))
   (def entries (sorted-by |[($ :pattern) (string ($ :method))] (table :routes)))
   [:div
@@ -444,10 +587,19 @@
    [:div {:id route-target :class "vd-detail"}
     [:p {:class "vd-note"} (text/t :void.dash/pick-route)]]])
 
-(defn routes [req]
+(defn routes
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /dash/routes."
+  [req]
   (page req (routes-body)))
 
 (defn route
+  {:params [{:query (or {:string :any} :nil) & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}}
   "One route's metadata provenance — the explain-route half that does
   not need a concrete path, read off the entry by :name."
   [req]
@@ -472,21 +624,47 @@
 
 # -- deploy --------------------------------------------------------------
 
-(defn- store-verdict [e]
+(defn- store-verdict
+  {:params [{:name :keyword :what :string
+             :shared? (or :boolean (enum :by-design :unknown))
+             :store :keyword? :why :string? :replacement :string? :error :string?}]
+   :ret :any}
+  "The store's sharing verdict as a badge."
+  [e]
   (case (get e :shared?)
     true [:span {:class "vd-up"} (text/t :void.dash/store-shared)]
     :by-design [:span {:class "vd-note"} (text/t :void.dash/store-by-design)]
     :unknown [:span {:class "vd-warn"} (text/t :void.dash/store-unknown)]
     [:span {:class "vd-down"} (text/t :void.dash/store-per-process)]))
 
-(defn- store-note [e]
+(defn- store-note
+  {:params [{:name :keyword :what :string
+             :shared? (or :boolean (enum :by-design :unknown))
+             :store :keyword? :why :string? :replacement :string? :error :string?}]
+   :ret :string}
+  "The verdict's explanation: a replacement, a reason, or an error."
+  [e]
   (case (get e :shared?)
     false (get e :replacement "")
     :by-design (get e :why "")
     :unknown (get e :error "")
     ""))
 
-(defn deploy-body [boot]
+(defn deploy-body
+  {:params [{:deploy (or {:shape :keyword? :reason :string?} :nil)
+             :stores (or @[{:name :keyword :what :string
+                           :shared? (or :boolean (enum :by-design :unknown))
+                           :store :keyword? :why :string? :replacement :string? :error :string?}]
+                          [{:name :keyword :what :string
+                           :shared? (or :boolean (enum :by-design :unknown))
+                           :store :keyword? :why :string? :replacement :string? :error :string?}]
+                          :nil)
+             :extensions :any & r}]
+   :ret :any}
+  "The deploy shape and every store this composition keeps —
+  deploy/survey, a throw from a store's own :ask reported as :unknown
+  rather than taking the page down."
+  [boot]
   (def dep (get boot :deploy {}))
   (def entries (or (get boot :stores)
                    (let [[ok v] (protect (deploy/survey boot))] (if ok v []))))
@@ -508,5 +686,11 @@
           [:td (store-verdict e)]
           [:td {:class "vd-note"} (store-note e)]])]])])
 
-(defn deploy-page [req]
+(defn deploy-page
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /dash/deploy."
+  [req]
   (page req (deploy-body (ctx/boot))))

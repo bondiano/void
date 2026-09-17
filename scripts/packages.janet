@@ -584,7 +584,10 @@
 # to a package directory, the bench apps are spawned from anywhere, and
 # the shims must work in all of it.
 
-(defn- dirname [p]
+(defn- dirname
+  {:params [:string] :ret :string}
+  "The directory part of a path, or \".\" when it has none."
+  [p]
   (def idxs (string/find-all "/" p))
   (if (empty? idxs) "." (string/slice p 0 (last idxs))))
 
@@ -593,6 +596,7 @@
   (os/realpath (string (dirname (dyn *current-file*)) "/..")))
 
 (defn dir
+  {:params [:keyword] :ret :string :throws [:string]}
   "Absolute path of a package's directory."
   [name]
   (def entry (or (graph name) (errorf "unknown package %q" name)))
@@ -600,11 +604,15 @@
 
 # -- projections ---------------------------------------------------------
 
-(defn- edges [name with-tests?]
+(defn- edges
+  {:params [:keyword :boolean?] :ret [:keyword] :throws [:string]}
+  "One package's own edges: its :deps, plus its :test-deps when with-tests?."
+  [name with-tests?]
   (def entry (or (graph name) (errorf "unknown package %q" name)))
   [;(entry :deps) ;(if with-tests? (or (entry :test-deps) []) [])])
 
 (defn closure
+  {:params [(or @[:keyword] [:keyword]) :boolean?] :ret @[:keyword] :throws [:string]}
   ``The transitive closure of `names` in topological order: every
   package comes after the packages it depends on, and `names`
   themselves come last. `test-deps` edges are followed only for the
@@ -626,26 +634,33 @@
   order)
 
 (defn packages
+  {:params [] :ret @[:keyword]}
   "The bundle's packages (everything but the examples), in declaration order."
   []
   (filter |(not (get-in graph [$ :example])) (sorted (keys graph))))
 
 (defn install-order
+  {:params [] :ret @[:keyword] :throws [:string]}
   "The bundle's packages in topological order."
   []
   (closure (packages)))
 
 (defn source-trees
+  {:params [] :ret @[:string] :throws [:string]}
   ``The `void/` trees of the bundle's packages, repo-relative — the
   :source list of the root project.janet. They install into one merged
   <modpath>/void/.``
   []
   (map |(string (get-in graph [$ :dir]) "/void") (install-order)))
 
-(defn- installed-example? [name]
+(defn- installed-example?
+  {:params [:keyword] :ret :boolean? :narrows :any}
+  "Is this an example that runs off an installed tree rather than the checkout?"
+  [name]
   (and (get-in graph [name :example]) (get-in graph [name :installed])))
 
 (defn suites
+  {:params [] :ret [:keyword] :throws [:string]}
   ``Everything with a `jpm test` suite that runs against the checkout:
   the bundle's packages in topological order, then the examples that
   reach them through `test-support/paths.janet`. The list of steps CI's
@@ -659,6 +674,7 @@
                     (keys graph)))])
 
 (defn installed-suites
+  {:params [] :ret @[:keyword]}
   ``The examples that run against an *installed* tree rather than the
   checkout. They are a separate list because they need a different
   thing done first: not a module path, an install.``
@@ -666,6 +682,7 @@
   (sorted (filter installed-example? (keys graph))))
 
 (defn jpm-dependencies
+  {:params [:boolean?] :ret @[:string] :throws [:string]}
   ``External jpm dependencies, in install order and without duplicates.
   Without `optional?` this is the bundle's :dependencies list, which
   leaves janet-lang/sqlite3 out on purpose: void/db-sqlite is a plugin
@@ -682,6 +699,7 @@
   urls)
 
 (defn installed-jpm-dependencies
+  {:params [] :ret @[:string] :throws [:string]}
   ``What has to be in the installed tree besides the bundle itself for
   the installed examples to run: the external dependencies they declare
   and the bundle does not carry. janet-lang/sqlite3 is the whole of the
@@ -699,17 +717,23 @@
   urls)
 
 (defn native?
+  {:params [(or @[:keyword] [:keyword])] :ret :boolean? :narrows :any :throws [:string]}
   "Does the closure of `names` include a package with a native module?"
   [names]
   (some |(get-in graph [$ :native]) (closure names true)))
 
 # -- module paths --------------------------------------------------------
 
-(defn- add-tree [path]
+(defn- add-tree
+  {:params [:string] :ret @[:any]}
+  "Push this root's :all: source templates onto module/paths, ahead of
+  the built-in ones, so it is checked before an installed copy."
+  [path]
   (array/insert module/paths 0 [(string path "/:all:/init.janet") :source])
   (array/insert module/paths 0 [(string path "/:all:.janet") :source]))
 
 (defn add-paths
+  {:params [(or @[:keyword] [:keyword]) :boolean?] :ret @[:keyword] :throws [:string]}
   ``Put the closure of `names` on the module path, so every package in
   it is importable as void/... from the checkout, with nothing
   installed. Later insertions win, so the roots shadow their
@@ -725,6 +749,7 @@
   order)
 
 (defn test-paths
+  {:params [:keyword] :ret @[:keyword] :throws [:string]}
   ``What `*/test-support/paths.janet` calls: the package's own tree plus
   everything its sources and its suite reach.``
   [name]
@@ -733,6 +758,7 @@
 # -- the graph agrees with the tree on disk ------------------------------
 
 (defn check
+  {:params [] :ret @[:string]}
   "Validate the graph against the repository. Returns a list of problems."
   []
   (def problems @[])
@@ -772,7 +798,9 @@
       (array/push problems (string/format "%q: dependency cycle" name))))
   # every package directory in the repository is in the graph
   (def declared (from-pairs (seq [n :in (keys graph)] [(get-in graph [n :dir]) true])))
-  (defn- scan [prefix]
+  (defn- scan
+    {:params [:string] :ret :nil}
+    [prefix]
     (each f (sorted (os/dir (string root "/" prefix)))
       (def rel (if (empty? prefix) f (string prefix "/" f)))
       (when (and (= :directory (os/stat (string root "/" rel) :mode))
@@ -786,7 +814,11 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn main [_ &opt what]
+(defn main
+  {:params [:string :string?] :ret :nil :throws [:string]}
+  "CLI entrypoint: print the requested projection, or check the graph
+  against the tree on disk by default."
+  [_ &opt what]
   (case (or what "check")
     "order" (each name (install-order) (print name))
     "trees" (each tree (source-trees) (print tree))

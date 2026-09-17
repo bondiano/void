@@ -32,6 +32,8 @@
 (var- id-counter 0)
 
 (defn configure!
+  {:params [:number?] :ret @{:slots @[:any] :capacity :number :next :number :written :number}
+   :throws [:string]}
   "Size the ring from [:dash :tap-buffer] — called at :before-start.
   A ring of the same capacity is kept as it is: a value tapped before
   the boot is part of the point."
@@ -42,6 +44,7 @@
   entries*)
 
 (defn tap*
+  {:params [:any :string?] :ret :any}
   ``Put one value in the tap ring; returns the value, so a tap can
   wrap an expression without changing it. `where` is free text — the
   `tap` macro fills in file:line.``
@@ -54,6 +57,7 @@
   value)
 
 (defmacro tap
+  {:params [:any] :ret :any}
   ``tap*, with the call site written down:
 
       (dash/tap (order-totals basket))
@@ -66,11 +70,13 @@
   ~(,tap* ,x ,where))
 
 (defn entries
+  {:params [] :ret @[:any]}
   "The held entries, newest first."
   []
   (reverse (ring/to-array entries*)))
 
 (defn find-entry
+  {:params [:number] :ret (or :any :nil)}
   "One entry by :id, or nil (evicted entries are gone — the ring is
   the contract)."
   [id]
@@ -78,19 +84,24 @@
 
 # -- shapes --------------------------------------------------------------
 
-(defn- kind-of [v]
+(defn- kind-of
+  {:params [:any] :ret :string}
+  "A one-word shape for a value: {N keys}, [N items], or its type."
+  [v]
   (cond
     (dictionary? v) (string "{" (length v) " key" (if (= 1 (length v)) "" "s") "}")
     (indexed? v) (string "[" (length v) " item" (if (= 1 (length v)) "" "s") "]")
     (string (type v))))
 
 (defn- addressable-key?
+  {:params [:any] :ret :boolean}
   "Can this key survive a JDN round trip through a URL? Anything else
   is shown inline instead of behind an expansion link."
   [k]
   (or (keyword? k) (string? k) (number? k) (boolean? k) (nil? k)))
 
 (defn table-view?
+  {:params [:any] :ret :boolean}
   "Does this value read as a table — a non-empty array of
   dictionaries?"
   [v]
@@ -99,6 +110,7 @@
        (all dictionary? v)))
 
 (defn to-jdn
+  {:params [:any] :ret :string}
   "The value as JDN (%j); a value JDN cannot say (a function in a
   table) falls back to %q, which says so honestly."
   [v]
@@ -106,24 +118,35 @@
   (if ok s (string/format "%q" v)))
 
 (defn- resolve-path
+  {:params [:any [:any]] :ret [:boolean :any]}
   "Walk `path` (a tuple of keys) into `value`; [ok v]."
   [value path]
   (protect (reduce (fn [acc k] (get acc k)) value path)))
 
 # -- the tree ------------------------------------------------------------
 
-(defn- node-url [id path]
+(defn- node-url
+  {:params [:number? [:any]] :ret :string :throws [:string]}
+  "Where one branch of a tapped value's tree expands from."
+  [id path]
   (string (ctx/at (string "/tap/" id "/node"))
           "?path=" (wire/url-encode (string/format "%j" path))))
 
-(defn- node-link [id path v]
+(defn- node-link
+  {:params [:number? [:any] :any] :ret :any :throws [:string]}
+  "A collapsed link that expands one branch of the tree in place."
+  [id path v]
   [:a (merge {:href (node-url id path)} (hx/get* (node-url id path) :swap :outer-html))
    (string "▸ " (kind-of v))])
 
-(defn- leaf [v]
+(defn- leaf
+  {:params [:any] :ret :any}
+  "A value with no children, printed and cut."
+  [v]
   [:code (view/value-str v 160)])
 
 (defn node-view
+  {:params [:number? [:any] :any] :ret :any :throws [:string]}
   ``One level of the tree: the node's children, each either a leaf or
   a collapsed link that expands in place. Depth per response is one —
   the laziness is the design, not an optimization.``
@@ -152,10 +175,22 @@
 
 # -- pages ---------------------------------------------------------------
 
-(defn- page [req content]
+(defn- page
+  {:params [:any :any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "A full Tap page: the frame around `content`."
+  [req content]
   (html/page content {:layout view/layout :context {:request req}}))
 
-(defn index [req]
+(defn index
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /tap: the held entries, newest first."
+  [req]
   (def held (entries))
   (page req
         [:div
@@ -177,7 +212,13 @@
                 [:td (kind-of (e :value))]
                 [:td [:code (view/value-str (e :value) 80)]]])]])]))
 
-(defn- gone [req id]
+(defn- gone
+  {:params [:any :any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "A 404 naming which tap id was evicted."
+  [req id]
   (def resp (page req [:div [:h1 (text/t :void.dash/tap)]
                        [:p {:class "vd-warn"}
                         (text/t :void.dash/tap-gone {:id id
@@ -187,10 +228,17 @@
   (put resp :status 404)
   resp)
 
-(defn- entry-id [req]
+(defn- entry-id
+  {:params [{:params {:keyword :string} & r}] :ret :number?}
+  "The :id path capture, as a number."
+  [req]
   (scan-number (string (get-in req [:params :id] ""))))
 
-(defn- table-of [v]
+(defn- table-of
+  {:params [(or @[{:any :any}] [{:any :any}])] :ret :any}
+  "A tapped array of dictionaries, as a table: every column that
+  appears in any row."
+  [v]
   (def cols (sorted-by view/value-str (distinct (mapcat keys v))))
   [:table {:class "vd-table"}
    [:thead [:tr ;(seq [c :in cols] [:th [:code (view/value-str c 40)]])]]
@@ -199,7 +247,13 @@
       [:tr ;(seq [c :in cols]
               [:td [:code (view/value-str (get row c) 80)]])])]])
 
-(defn show [req]
+(defn show
+  {:params [{:params {:keyword :string} & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /tap/:id: the value's tree, unfolded at the root."
+  [req]
   (def id (entry-id req))
   (def e (when id (find-entry id)))
   (if (nil? e)
@@ -219,7 +273,14 @@
            [:h2 (text/t :void.dash/tap-tree)]
            [:div {:class "vd-detail"} (node-view id [] (e :value))]])))
 
-(defn node [req]
+(defn node
+  {:params [{:params {:keyword :string} :query (or {:string :any} :nil)
+             :headers {:string :any} & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "GET /tap/:id/node?path=...: one lazily-expanded branch of the tree."
+  [req]
   (def id (entry-id req))
   (def e (when id (find-entry id)))
   (def raw (string (get-in req [:query "path"] "()")))
@@ -243,7 +304,11 @@
                      (text/t :void.dash/tap-whole)]]
                    [:div {:class "vd-detail"} content]])))))
 
-(defn jdn [req]
+(defn jdn
+  {:params [{:params {:keyword :string} & r}]
+   :ret @{:status :number :headers @{:string :string} :body :string}}
+  "GET /tap/:id/jdn: the value, as JDN — the copy that round-trips."
+  [req]
   (def id (entry-id req))
   (def e (when id (find-entry id)))
   (if (nil? e)

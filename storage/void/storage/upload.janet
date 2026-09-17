@@ -32,6 +32,8 @@
 (import ./state :as state)
 
 (defn file-part?
+  {:params [:any] :ret :boolean
+   :narrows {:filename (or :string :buffer) :value (or :string :buffer) & r}}
   "Is this multipart part an actual upload — a filename and bytes? A
   file input left empty submits a part with an empty filename and an
   empty value, and that is \"no file\", not a zero-byte upload."
@@ -43,13 +45,18 @@
        (not (empty? (part :value)))))
 
 (defn find-part
+  {:params [(or @[:any] [:any] :nil) :any] :ret :any}
   "The file part named `name` among a request's parts, or nil."
   [parts name]
   (def wanted (string name))
   (first (filter |(and (= wanted (string (or ($ :name) ""))) (file-part? $))
                  (or parts []))))
 
-(defn- content-type-of [part]
+(defn- content-type-of
+  {:params [{:content-type :any? & r}] :ret :string?}
+  "The part's bare declared media type, browser parameters (charset,
+  boundary) stripped."
+  [part]
   (when-let [ct (part :content-type)]
     # the bare media type: browsers may append parameters
     (string/ascii-lower (string/trim (first (string/split ";" (string ct)))))))
@@ -87,6 +94,7 @@
    "video/webm" ".webm"})
 
 (defn- filename-type
+  {:params [{:filename :any? & r}] :ret :string?}
   ``The media type the part's filename *extension* would be served as,
   or nil for no extension or one serving does not know. This is the
   claim the filename makes, checked against the declared type.``
@@ -96,7 +104,11 @@
     (when-let [mt (get static/mime-types (string/slice ext 1))]
       (string/trim (first (string/split ";" mt))))))
 
-(defn- accepted? [ct accept]
+(defn- accepted?
+  {:params [:string? (or @[:any] [:any] :nil)] :ret (or :boolean :nil)}
+  "Does `ct` match one of `accept`'s media types, `image/*`-style
+  wildcards included?"
+  [ct accept]
   (some (fn [a]
           (def want (string a))
           (or (= want ct)
@@ -107,6 +119,9 @@
         accept))
 
 (defn check-part!
+  {:params [{:value (or :string :buffer) :filename :any? & r}
+            (or {:max-bytes :number? :accept (or @[:any] [:any] :nil) & r} :nil)]
+   :ret :any :throws [:string]}
   ``Enforce :accept (media types, `image/*` allowed) and :max-bytes on
   one file part, and — always — that the filename's extension does not
   claim a different type than the part declares (see the module
@@ -132,6 +147,11 @@
   part)
 
 (defn save-part!
+  {:params [{:filename :any? :value (or :string :buffer) & r}
+            (or {:prefix :any? :key :any? :accept (or @[:any] [:any] :nil)
+                 :max-bytes :number? & r}
+                :nil)]
+   :ret {:filename :string & r} :throws [:string]}
   ``One file part into the active store: check, generate a key, put!.
   opts: :prefix (key namespace, default "uploads"), :key (skip
   generation), :accept, :max-bytes. Returns the store's metadata plus
@@ -152,6 +172,11 @@
   (merge meta {:filename (string (part :filename))}))
 
 (defn save-upload!
+  {:params [{:multipart (or @[:any] [:any] :nil) & r} :any
+            (or {:prefix :any? :key :any? :accept (or @[:any] [:any] :nil)
+                 :max-bytes :number? & r}
+                :nil)]
+   :ret :any :throws [:string]}
   ``The controller-side one-liner: the file part named `name` out of
   `(req :multipart)`, saved. Returns the metadata, or nil when the
   request carries no such file — an optional upload left empty is not
@@ -161,6 +186,9 @@
     (save-part! part opts)))
 
 (defn abort-invalid!
+  {:params [:any] :ret :never
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+             :status :number :http/status :number}]}
   ``Re-raise a `check-part!` refusal as a 422 with the message in the
   body — for a controller that saves an upload outside a form it
   re-renders. Inside an admin widget the refusal belongs on the field

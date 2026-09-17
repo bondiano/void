@@ -43,7 +43,18 @@
 
 # -- announcing ----------------------------------------------------------
 
-(defn- subject-of [req]
+(defn- subject-of
+  {:params [(or @{:method :keyword :path :string :raw-path :string :query-string :string?
+                 :query {:string :any} :headers {:string (or :string @[:string])}
+                 :http-version [:number :number] :body :any :received :number
+                 :arrived :number? :remote-addr :string? & r}
+                :nil)]
+   :ret :any}
+  ``The identity of the request, read by the same name void/authz
+  reads it under — the admin gains no edge on void/auth for it. `req`
+  is unused (the identity rides the dyn, not the request) and nil on
+  the one caller that has no request at all: the bulk job.``
+  [req]
   # the identity is read by the name void/auth publishes it under, the
   # way void/authz reads it — the admin gains no edge on void/auth for it
   (def id (dyn authz/identity-dyn))
@@ -51,14 +62,23 @@
     (or (get id :subject) (get id :id) (get id :email))))
 
 (defn snapshot-of
+  {:params [(or @{:any :any} :nil)] :ret (or {:any :any} :nil)}
   "An instance's own columns as a frozen struct — what :before and
   :after of an announcement carry, with the prototype left out."
   [row]
   (when row (freeze (tabseq [[k v] :pairs row] k v))))
 
 (defn announce!
-  "Publish the fact that a row changed. Handlers call this; nothing
-  here writes it down."
+  {:params [(or @{:method :keyword :path :string :raw-path :string :query-string :string?
+                 :query {:string :any} :headers {:string (or :string @[:string])}
+                 :http-version [:number :number] :body :any :received :number
+                 :arrived :number? :remote-addr :string? & r}
+                :nil)
+            {:name :keyword & r} :keyword :any (or {:any :any} :nil) (or {:any :any} :nil)]
+   :ret :nil}
+  ``Publish the fact that a row changed. Handlers call this; nothing
+  here writes it down. `req` may be nil — the bulk job announces
+  outside any request.``
   [req desc action id before after]
   (when-let [reg (ctx/setting :hooks)]
     (def fact {:resource (desc :name) :action action :id id
@@ -72,6 +92,18 @@
 # -- responses -----------------------------------------------------------
 
 (defn page
+  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            :any :keyword?
+            (or {:status :number? :headers (or {:any :any} :nil)
+                :context (or {:any :any} :nil) :engine :keyword?
+                :title :any :head :any :partial :any & r}
+               :nil)]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   ``A full admin page: the configured frame, and the widget resolution
   of this resource in the render context — which is what a replacement
   `:void.admin/layout` reads to draw anything of its own. The widgets'
@@ -89,6 +121,17 @@
 # -- loading -------------------------------------------------------------
 
 (defn load-row!
+  {:params [{:scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}]
+   :ret (or @{:any :any} :nil)
+   :throws [:string]}
   ``The row this request is about, inside the scope, memoized on the
   request. Returns nil when it does not exist or is not this
   subject's — deliberately the same answer.``
@@ -100,16 +143,48 @@
       r)))
 
 (defn row-loader
+  {:params [{:scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          (or @{:any :any} :nil))}
   "The `:void.authz/resource` of every single-row route."
   [desc]
   (fn admin-resource [req] (load-row! desc req)))
 
-(defn- row! [desc req]
+(defn- row!
+  {:params [{:scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}]
+   :ret @{:any :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
+  "The loaded row, or the request ends in a 404 — what every
+  single-row handler wants and does not want to spell out twice."
+  [desc req]
   (or (load-row! desc req) (errors/abort 404)))
 
 # -- values --------------------------------------------------------------
 
 (defn- submitted
+  {:params [{:name :keyword :readonly [:keyword] :form-fields [{:name :keyword & r}] & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}]
+   :ret [@{:keyword :any} @[{:path [:keyword] :code :keyword :message :any}]]
+   :throws [:any]}
   ``The form, keywordized, with each widget's `:parse` applied and the
   fields the declaration froze as read-only removed. A read-only field
   is not merely not drawn: a POST that names it is a POST that must
@@ -151,10 +226,16 @@
           (error value)))))
   [out errors])
 
-(defn- checked [desc values]
+(defn- checked
+  {:params [{:form-schema {:type :keyword :props {:any :any} :children [:any]} & r} :any]
+   :ret {:value :any :errors [:any]} :throws [:string]}
+  "The submitted values against the resource's form schema, coerced."
+  [desc values]
   (schema/check (desc :form-schema) values {:coerce true}))
 
 (defn writable
+  {:params [{:readonly [:keyword] :form-fields [{:name :keyword & r}] & r} {:keyword :any}]
+   :ret @{:keyword :any}}
   ``The values a caller may actually write: the fields the form
   declares, minus the ones it froze as read-only. The guard is here and
   not in each caller because both callers are writers — the form
@@ -169,6 +250,13 @@
     k v))
 
 (defn with-defaults
+  {:params [{:defaults {:keyword :function} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:keyword :any}]
+   :ret @{:keyword :any}}
   ``The attributes of a create, plus the columns the declaration says
   the server fills: a created-at, an owner, a tenant. They are not form
   fields — nobody types a timestamp — and they are not entity callbacks
@@ -183,7 +271,22 @@
 
 # -- index ---------------------------------------------------------------
 
-(defn index [desc]
+(defn index
+  {:params [{:name :keyword :per-page (or :number :nil) :sortable [:keyword]
+             :filters [{:field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        :param :string :name :keyword & r}]
+             :scope (or :function :nil) :search [:keyword] :order-by :any :preload :any
+             :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The list handler: the resource's rows for the URL's page, sort and
+  filters, with the count they are paged against."
+  [desc]
   (fn admin-index [req]
     (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
     (def rows (q/rows desc req st))
@@ -193,11 +296,30 @@
 
 # -- new / create --------------------------------------------------------
 
-(defn new [desc]
+(defn new
+  {:params [{:name :keyword & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The blank-form handler."
+  [desc]
   (fn admin-new [req]
     (page req (view/form-page desc {:values {} :request req}) (desc :name))))
 
-(defn create [desc]
+(defn create
+  {:params [{:name :keyword :readonly [:keyword] :form-fields [{:name :keyword & r}]
+             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :entity {:pk :keyword & r} :path :string :defaults {:keyword :function} & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The write handler behind the new form: validated and inserted, or
+  the form again with what was wrong."
+  [desc]
   (fn admin-create [req]
     (def [values refused] (submitted desc req))
     (def checked-result (checked desc values))
@@ -219,7 +341,16 @@
 
 # -- show / edit / update ------------------------------------------------
 
-(defn- inline-blocks [desc req row]
+(defn- inline-blocks
+  {:params [{:inlines {:keyword {:resource :keyword :rel :any :order-by :any :per-page :any & r}}
+             :entity {:pk :keyword & r} & r}
+            :any
+            @{:any :any}]
+   :ret @[:any]}
+  "One rendered block per declared inline whose target resource is
+  actually registered — an inline pointed at an undeclared resource
+  draws nothing rather than raising on every row."
+  [desc req row]
   (seq [iname :in (sorted (keys (desc :inlines)))
         :let [inline (get-in desc [:inlines iname])
               child (res/lookup (inline :resource))]
@@ -233,7 +364,20 @@
                          :limit (inline :per-page)}))
     (view/inline-block desc row inline child rows nil)))
 
-(defn show [desc]
+(defn show
+  {:params [{:name :keyword :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :inlines {:keyword {:resource :keyword :rel :any :order-by :any :per-page :any & r}}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The detail-page handler: the row, its inlines and its history."
+  [desc]
   (fn admin-show [req]
     (def row (row! desc req))
     (def history
@@ -244,16 +388,41 @@
     (page req (view/detail-page desc row (inline-blocks desc req row) history req)
           (desc :name))))
 
-(defn edit [desc]
+(defn edit
+  {:params [{:name :keyword :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The edit-form handler: the row, drawn through the same form
+  `create` writes through."
+  [desc]
   (fn admin-edit [req]
     (def row (row! desc req))
     (page req (view/form-page desc {:row row :values row :request req})
           (desc :name))))
 
-(defn- version-conflict? [err]
+(defn- version-conflict?
+  {:params [:any] :ret :boolean :narrows :any}
+  "Does this error's text say `save!` lost a version race?"
+  [err]
   (and (string? (string err)) (string/find "modified concurrently" (string err))))
 
 (defn update-row!
+  {:params [{:entity {:pk :keyword & r} :readonly [:keyword]
+             :form-fields [{:name :keyword & r}] & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            @{:any :any} {:keyword :any} :any?]
+   :ret [(enum :ok :conflict) :any]
+   :throws [:any]}
   ``Write `values` onto `row`, save it and announce it — the one write
   the form and the agent's `update` tool both go through, so the
   read-only fields, the version column, the transaction and the
@@ -277,7 +446,11 @@
   (def pk (get-in desc [:entity :pk]))
   (def before (snapshot-of row))
   (eachp [k v] (writable desc values) (put row k v))
-  (defn write []
+  (defn write
+    {:ret :nil}
+    "Save the row and announce the change — the one write both a
+    fresh transaction and an existing one run the same way."
+    []
     (db/save! row {:version version})
     (announce! req desc :update (get row pk) before (snapshot-of row)))
   (def [ok err]
@@ -287,7 +460,22 @@
     (version-conflict? err) [:conflict err]
     (error err)))
 
-(defn update [desc]
+(defn update
+  {:params [{:name :keyword :readonly [:keyword] :form-fields [{:name :keyword & r}]
+             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :path :string :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string :version (or :keyword :nil)
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The write handler behind the edit form: validated and saved, or a
+  version conflict, or the form again with what was wrong."
+  [desc]
   (fn admin-update [req]
     (def row (row! desc req))
     (def before (snapshot-of row))
@@ -295,7 +483,12 @@
     (def checked-result (checked desc values))
     (def result (merge checked-result
                        {:errors [;refused ;(checked-result :errors)]}))
-    (defn invalid [errors extra]
+    (defn invalid
+      {:params [(or [:any] :nil) {:keyword :any}]
+       :ret @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r}}
+      "The form again, 422, with what was wrong on it."
+      [errors extra]
       (def resp (page req (view/form-page desc (merge {:row row
                                                        :values (get req :form {})
                                                        :errors errors
@@ -321,7 +514,21 @@
           (htmx/redirect-back
             req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk]))))))))))
 
-(defn destroy [desc]
+(defn destroy
+  {:params [{:name :keyword :path :string :scope (or :function :nil) :search [:keyword]
+             :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The delete handler: the row is loaded once, deleted, and the
+  deletion is announced with what it was before it was gone."
+  [desc]
   (fn admin-destroy [req]
     (def row (row! desc req))
     (def id (get row (get-in desc [:entity :pk])))
@@ -333,13 +540,28 @@
 # -- one cell ------------------------------------------------------------
 
 (defn- list-column
+  {:params [{:list [{:name :keyword & r}] & r} :keyword] :ret {:name :keyword & r}}
   "The list column of a field — an :editable field is always one, since
   a cell that is not in the list has nowhere to be edited."
   [desc fname]
   (or (first (filter |(= fname ($ :name)) (desc :list)))
       {:name fname :label (string fname)}))
 
-(defn cell [desc]
+(defn cell
+  {:params [{:name :keyword :editable [:keyword] :list [{:name :keyword & r}]
+             :scope (or :function :nil) :search [:keyword] :preload :any :path :string
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :schema {:type :keyword :props {:any :any} :children [:any]}
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The one-cell write handler behind an :editable list column."
+  [desc]
   (fn admin-cell [req]
     (def row (row! desc req))
     (def fname (keyword (get-in req [:params :field])))
@@ -382,6 +604,7 @@
 # -- inlines -------------------------------------------------------------
 
 (defn- ensure-child!
+  {:params [{:name :keyword & r} :keyword :any] :ret :any :throws [:any]}
   ``The third policy an inline route enforces. The gate and the
   parent's `:show` are on the route; the child's own action policy is
   enforced here, because it decides about the *child* — an inline that
@@ -391,7 +614,17 @@
   (authz/ensure! (res/policy-name (child :name) action)
                  {:resource row :action action}))
 
-(defn- inline-of [desc req]
+(defn- inline-of
+  {:params [{:name :keyword :inlines {:keyword {:resource :keyword & r}} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}]
+   :ret [{:resource :keyword & r} {:name :keyword & r}]
+   :throws [:any :string]}
+  "The inline the URL names and the resource it points at, or a 404 /
+  a refusal naming the undeclared target."
+  [desc req]
   (def iname (keyword (get-in req [:params :rel])))
   (def inline (or (get-in desc [:inlines iname]) (errors/abort 404)))
   (def child (or (res/lookup (inline :resource))
@@ -402,7 +635,13 @@
                          (desc :name) iname (inline :resource))))
   [inline child])
 
-(defn- inline-rows [desc req row inline child]
+(defn- inline-rows
+  {:params [{:entity {:pk :keyword & r} & r} :any @{:any :any}
+            {:rel {:key :keyword & r} :order-by :any :per-page :any & r}
+            {:entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}]
+   :ret @[@{:any :any}]}
+  "The child rows an inline draws for one parent row."
+  [desc req row inline child]
   (db/query (child :entity)
             {:where [:= (keyword (get-in child [:entity :fields (get-in inline [:rel :key]) :column]))
                      (get row (get-in desc [:entity :pk]))]
@@ -410,13 +649,42 @@
                            [[(keyword (get-in child [:entity :pk-column])) :asc]])
              :limit (inline :per-page)}))
 
-(defn- inline-response [desc req row inline child errors]
+(defn- inline-response
+  {:params [{:entity {:pk :keyword & r} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            @{:any :any}
+            {:rel {:key :keyword & r} :order-by :any :per-page :any & r}
+            {:entity {:pk :keyword :pk-column :string
+                      :fields {:keyword {:column :string & r}} & r} & r}
+            (or [:any] :nil)]
+   :ret :any}
+  "After an inline write: the child block alone under htmx, else the
+  whole page again."
+  [desc req row inline child errors]
   (def rows (inline-rows desc req row inline child))
   (if (htmx/partial-request? req)
     (html/fragment (view/inline-block desc row inline child rows errors))
     (htmx/redirect-back req (ctx/url desc (string "/" (get row (get-in desc [:entity :pk])))))))
 
-(defn inline-create [desc]
+(defn inline-create
+  {:params [{:name :keyword :inlines {:keyword {:resource :keyword & r}}
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The add-row handler behind an inline: the child written under its
+  own policy, the parent's link taken from the URL and never the
+  form."
+  [desc]
   (fn admin-inline-create [req]
     (def row (row! desc req))
     (def [inline child] (inline-of desc req))
@@ -438,7 +706,23 @@
         (inline-response desc req row inline child nil))
       (inline-response desc req row inline child (result :errors)))))
 
-(defn- inline-child! [req inline child parent-id]
+(defn- inline-child!
+  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:rel {:key :keyword & r} & r}
+            {:entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            :any]
+   :ret @{:any :any}
+   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
+                     :status :number :http/status :number}]}
+  "The one child row an inline write is about, inside the parent — or
+  a 404, the same answer as a forged parent link."
+  [req inline child parent-id]
   (def cid (q/pk-value child (get-in req [:params :child])))
   (def found
     (db/one (child :entity)
@@ -448,7 +732,20 @@
                       parent-id]]}))
   (or found (errors/abort 404)))
 
-(defn inline-update [desc]
+(defn inline-update
+  {:params [{:name :keyword :inlines {:keyword {:resource :keyword & r}}
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The write handler behind an inline row's own edit."
+  [desc]
   (fn admin-inline-update [req]
     (def row (row! desc req))
     (def [inline child] (inline-of desc req))
@@ -469,7 +766,20 @@
         (inline-response desc req row inline child nil))
       (inline-response desc req row inline child (result :errors)))))
 
-(defn inline-destroy [desc]
+(defn inline-destroy
+  {:params [{:name :keyword :inlines {:keyword {:resource :keyword & r}}
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The delete handler behind an inline row."
+  [desc]
   (fn admin-inline-destroy [req]
     (def row (row! desc req))
     (def [inline child] (inline-of desc req))
@@ -484,6 +794,12 @@
 # -- bulk ----------------------------------------------------------------
 
 (defn action-of
+  {:params [{:name :keyword :action-set {:keyword :boolean}
+             :custom-actions {:keyword {:name :keyword :label :any & r}} & r}
+            :any :keyword]
+   :ret {:name :keyword :label :any & r}
+   :throws [:any {:void/error :keyword :message :string? :data {:keyword :any}
+                  :status :number :http/status :number}]}
   ``The action a bulk URL names: :destroy, or one the resource
   declared. The action is part of the *path*, so its policy cannot be
   written on the route the way the other six are — it is enforced here
@@ -508,6 +824,12 @@
   1000)
 
 (defn- cascade-counts
+  {:params [{:preload :any
+             :entity {:pk :keyword :pk-column :string
+                      :rels {:keyword {:kind :keyword :entity :keyword :key :keyword & r}} & r}
+             & r}
+            {:where (or :tuple :nil) & r}]
+   :ret @[[:string :number :boolean]]}
   "What a delete takes with it: one count per has-many, so the page
   says it out loud before anybody presses the button. Each entry is
   [label count capped?]."
@@ -527,7 +849,27 @@
         (when (pos? n) (array/push out [(string rname) n capped])))))
   (sorted-by first out))
 
-(defn bulk-confirm [desc]
+(defn bulk-confirm
+  {:params [{:name :keyword :action-set {:keyword :boolean}
+             :custom-actions {:keyword {:name :keyword :label :any & r}}
+             :per-page (or :number :nil) :sortable [:keyword]
+             :filters [{:field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        :param :string :name :keyword & r}]
+             :scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]}
+                      :rels {:keyword {:kind :keyword :entity :keyword :key :keyword & r}} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The confirmation page a bulk goes through: what it will do, how
+  many rows, a sample, and — for a destroy — what goes with them."
+  [desc]
   (fn admin-bulk-confirm [req]
     (def action (action-of desc req (keyword (get-in req [:params :action]))))
     (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
@@ -549,6 +891,14 @@
           (desc :name))))
 
 (defn- apply-one!
+  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:name :keyword :entity {:pk :keyword & r} & r}
+            {:name :keyword :apply (or :function :nil) & r}
+            @{:any :any}]
+   :ret :nil :throws [:any]}
   "One row through one action — and one policy decision per row, which
   is exactly why a big bulk belongs in a job."
   [req desc action row]
@@ -565,7 +915,26 @@
         (announce! req desc (action :name) id before
                    (snapshot-of (db/find (desc :entity) id))))))
 
-(defn bulk-apply [desc]
+(defn bulk-apply
+  {:params [{:name :keyword :action-set {:keyword :boolean}
+             :custom-actions {:keyword {:name :keyword :label :any & r}}
+             :per-page (or :number :nil) :sortable [:keyword]
+             :filters [{:field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        :param :string :name :keyword & r}]
+             :scope (or :function :nil) :search [:keyword] :preload :any :path :string
+             :entity {:pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)}
+  "The bulk itself: run inline in batches, or handed to the bulk
+  runner when the action declares :job or the selection is too big."
+  [desc]
   (fn admin-bulk-apply [req]
     (def action (action-of desc req (keyword (get-in req [:params :action]))))
     (def st (q/state desc req {:per-page (ctx/setting :per-page 25)}))
@@ -599,7 +968,17 @@
             (set after (get r (get-in desc [:entity :pk]))))) 
         (htmx/redirect-back req (ctx/base desc))))))
 
-(defn progress [desc]
+(defn progress
+  {:params [:any]
+   :ret (fn [@{:method :keyword :path :string :raw-path :string :query-string :string?
+               :query {:string :any} :headers {:string (or :string @[:string])}
+               :http-version [:number :number] :body :any :received :number
+               :arrived :number? :remote-addr :string? & r}]
+          :any)
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+            :status :number :http/status :number}]}
+  "The progress-fragment handler a page polls while a bulk job runs."
+  [desc]
   (fn admin-progress [req]
     (def runner (or (ctx/setting :bulk-runner) (errors/abort 404)))
     (def job-id (get-in req [:params :job]))
@@ -608,7 +987,17 @@
 
 # -- the admin's own pages -----------------------------------------------
 
-(defn dashboard [req]
+(defn dashboard
+  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
+  "The admin's front page: at-a-glance tiles, one per
+  :void.admin/dashboard-widget contribution."
+  [req]
   (def widgets
     (seq [w :in (ctx/setting :dashboard [])]
       # the label goes through as declared — a keyword is a translation

@@ -13,7 +13,13 @@
 (def plugins ["void/http/init" "void/html/init" "void/jobs/init"
               "void/mail/init" "void/mail/jobs"])
 
-(defn- start [&opt extra]
+(defn- start
+  {:params [(or :nil {:mail :any & r})]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot a test system with void/mail-jobs composed, `extra` config
+  merged over the suite's defaults."
+  [&opt extra]
   (test/start! {:plugins plugins
                 :only [:http/kernel :jobs/queue]
                 :profile :test

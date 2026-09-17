@@ -284,7 +284,7 @@
   (sorted (keys registry)))
 
 (defn forget!
-  {:params [:keyword] :ret :nil}
+  {:params [:keyword] :ret :table}
   "Drop a definition — for tests, and for a REPL that renamed one."
   [name]
   (put registry name nil))

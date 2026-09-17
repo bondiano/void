@@ -16,7 +16,10 @@
 
 (def plugins ["void/db/init" "void/db-mysql/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli {:any :any}}}
+  "The composition's `:config`, with `extra` merged into `:cli`."
+  [extra]
   {:env @{}
    :cli (merge {:db {:pool {:size 2} :n1-guard :strict}
                 :log {:level :error :levels {"void.db.query" :fatal}}}

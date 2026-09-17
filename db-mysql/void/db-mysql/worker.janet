@@ -56,6 +56,8 @@
   (int/u64 "18446744073709551615"))
 
 (defn- error-of
+  {:params [:pointer :any]
+   :ret {:message :string :code :number :sqlstate :string :context :any :lost :boolean}}
   ``The connection's current error as the dictionary that crosses the
   channel. `context` says what was being attempted, since a bare
   "Lost connection to MySQL server" does not.``
@@ -67,10 +69,17 @@
    :context context
    :lost (my/connection-lost? code)})
 
-(defn- fail [conn context]
+(defn- fail
+  {:params [:pointer :any]
+   :ret :never
+   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+  "Raise the connection's current error as the dictionary that crosses
+  the channel."
+  [conn context]
   (error (error-of conn context)))
 
 (defn- u64->number
+  {:params [:any] :ret :any}
   "A my_ulonglong count as a janet number, or an int/u64 past 2^53."
   [n]
   (if (< n (int/u64 9007199254740992)) (scan-number (string n)) n))
@@ -78,6 +87,7 @@
 # -- escaping ------------------------------------------------------------
 
 (defn escaper
+  {:params [:pointer] :ret (fn [:any] :string)}
   ``The library's own `mysql_real_escape_string`, bound to one
   connection: (fn [bytes]
   escaped), with no surrounding quotes — ./types adds those.
@@ -103,11 +113,16 @@
 
 # -- results -------------------------------------------------------------
 
-(defn- fields-of [res n]
+(defn- fields-of
+  {:params [:pointer :number]
+   :ret @[(or {:name :string? :length (or :number :nil) :type (or :keyword :number) :flags :number} :nil)]}
+  "The `n` field descriptors of a stored result, in column order."
+  [res n]
   (seq [i :range [0 n]]
     (my/field (my/mysql_fetch_field_direct res i))))
 
 (defn- read-rows
+  {:params [:pointer (or {:any :any} :nil)] :ret @[@{:keyword :any}]}
   ``Every row of a stored result, as tables with keyword column keys.
   A NULL column is *absent* from its row rather than nil — a janet
   table cannot hold nil, and it is the shape void/db-sqlite and
@@ -131,6 +146,8 @@
   rows)
 
 (defn- drain!
+  {:params [:pointer] :ret :nil
+   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
   ``Consume and discard any further result sets. Nothing this driver
   sends can produce one — CLIENT_MULTI_STATEMENTS is deliberately
   never set (see libmysql/client-flags) — but `CALL some_procedure()`
@@ -149,6 +166,10 @@
       (fail conn "reading the rest of a multi-result statement"))))
 
 (defn- execute-one
+  {:params [:pointer :string :any (or {:any :any} :nil)]
+   :ret (or {:rows @[@{:keyword :any}] :count :number}
+            {:rows @[@{:keyword :any}] :count :number :insert-id :number})
+   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
   ``Run one statement on this connection and collect its answer.
 
   `sql` is what the server is sent — parameters already rendered into
@@ -185,12 +206,18 @@
 
 # -- connecting ----------------------------------------------------------
 
-(defn- set-uint-option! [conn option value]
+(defn- set-uint-option!
+  {:params [:pointer :number :number] :ret :number}
+  "Set a `mysql_options` value that takes an `unsigned int *` — the
+  three timeout options — through a scratch cell."
+  [conn option value]
   (def cell (buffer/new-filled 4))
   (ffi/write :uint value cell 0)
   (my/mysql_options conn option cell))
 
 (defn- probe-layout!
+  {:params [:pointer] :ret :nil
+   :throws [:string {:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
   ``Prove that this library lays a MYSQL_FIELD out where ./libmysql
   says it does, before any caller depends on it.
 
@@ -225,6 +252,8 @@
               (or my/library-path "the client library") (get fld :type)))))
 
 (defn- scalar
+  {:params [:pointer :string] :ret (or :string :nil)
+   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
   "The one value of a one-row, one-column statement, as text."
   [conn sql]
   (unless (zero? (my/mysql_real_query conn sql (length sql)))
@@ -238,6 +267,8 @@
         (my/bytes-at cell (my/cell-ulong (my/mysql_fetch_lengths res) 0))))))
 
 (defn- check-escaping!
+  {:params [:pointer] :ret :nil
+   :throws [:string {:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
   ``Refuse NO_BACKSLASH_ESCAPES rather than work around it.
 
   Under that sql_mode a backslash is an ordinary character, and the
@@ -256,6 +287,17 @@
                     "with [:db-mysql :init-command] \"SET SESSION sql_mode = ...\""))))
 
 (defn connect!
+  {:params [{:connect-timeout (or :number :nil) :read-timeout (or :number :nil)
+             :write-timeout (or :number :nil) :charset (or :string :nil)
+             :init-command (or :string :nil) :ssl-mode (or :any :nil)
+             :ssl-ca (or :string :nil) :ssl-cert (or :string :nil) :ssl-key (or :string :nil)
+             :found-rows (or :any :nil) :host (or :string :nil) :user (or :string :nil)
+             :password (or :string :nil) :database (or :string :nil) :port (or :number :nil)
+             :socket (or :string :nil) & r}]
+   :ret :pointer
+   :throws [:string
+            {:message :string :code :number :sqlstate :string :context :any :lost :boolean}
+            {:message :string :code :number :sqlstate :string :lost :boolean}]}
   ``Open one connection from a plain-data `spec` (see ./config, which
   builds one) and return the MYSQL*. Everything that can be wrong
   with a configuration is wrong here, on a thread of its own, before
@@ -314,6 +356,9 @@
     conn))
 
 (defn info
+  {:params [:pointer]
+   :ret {:server :string? :server-version [:number :number :number] :client :string?
+         :library (or :string :nil) :host :string? :charset :string? :thread-id :any}}
   "What this connection is, for a log line and the component's health."
   [conn]
   {:server (my/mysql_get_server_info conn)
@@ -327,6 +372,7 @@
 # -- the loop ------------------------------------------------------------
 
 (defn serve
+  {:params [[:any :any :any]] :ret :nil}
   ``The worker thread's body. `payload` is [req resp spec] — two
   threaded channels and the plain-data connection spec.
 

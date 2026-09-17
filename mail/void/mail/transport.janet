@@ -35,6 +35,9 @@
 (def log-ns "void.mail")
 
 (defn receipt
+  {:params [:keyword {:id :any :message :any :at :any & r}
+            (or :nil {:accepted :any :rejected :any & r})]
+   :ret {:transport :keyword :id :any :accepted :any :rejected :any :at :any & r}}
   "The value a transport returns: what was accepted, what was refused
   and by whom."
   [name delivery &opt parts]
@@ -47,6 +50,9 @@
          parts))
 
 (defn normalize
+  {:params [{:name :any :send :any & r}]
+   :ret {:name :keyword :send :function :doc :any :health :any & r}
+   :throws [:string]}
   ``Check a `:void.mail/transport` contribution and fill in what it did
   not say. Runs at boot, so a transport that cannot send anything is a
   start error rather than a mail that disappears.``
@@ -75,12 +81,14 @@
 (var keep-count default-keep)
 
 (defn clear!
+  {:params [] :ret :nil}
   "Empty the memory outbox."
   []
   (set outbox @[])
   nil)
 
 (defn memory-transport
+  {:params [] :ret {:name :keyword :doc :string :send :function}}
   "The transport that delivers into `outbox` — the default, and what a
   test suite runs on."
   []
@@ -94,7 +102,12 @@
 
 # -- :file — one .eml per message ----------------------------------------
 
-(defn- ensure-dir [path]
+(defn- ensure-dir
+  {:params [:string] :ret :string}
+  "Create `path` and every parent it needs, then return it unchanged —
+  the .eml transport writes into a directory a fresh checkout has not
+  made yet."
+  [path]
   (def parts (filter |(not (empty? $)) (string/split "/" path)))
   (var acc (if (string/has-prefix? "/" path) "/" ""))
   (each p parts
@@ -102,12 +115,17 @@
     (unless (os/stat acc :mode) (os/mkdir acc)))
   path)
 
-(defn- safe-id [delivery]
+(defn- safe-id
+  {:params [{:id :any & r}] :ret :string}
+  "The delivery's Message-ID with the characters a filesystem does not
+  take (`<`, `>`, `/`) stripped, for the .eml's file name."
+  [delivery]
   (def id (string (get delivery :id "message")))
   (string/replace-all "/" "_"
     (string/replace-all "<" "" (string/replace-all ">" "" id))))
 
 (defn file-transport
+  {:params [:string] :ret {:name :keyword :doc :string :send :function}}
   ``The transport that writes each mail into a directory as a `.eml`
   file — the dev default in every framework that has one, because a
   .eml opens in a mail client and answers "what did it actually look
@@ -127,6 +145,7 @@
 # -- :log — the message in the log, and nowhere else ---------------------
 
 (defn log-transport
+  {:params [] :ret {:name :keyword :doc :string :send :function}}
   "The transport that logs a message instead of sending it."
   []
   {:name :log

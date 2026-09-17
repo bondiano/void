@@ -17,7 +17,11 @@
                                               :from "void <no-reply@example.com>"
                                               :base-url "https://example.com/"}}}}))
 
-(defn- layout [content _]
+(defn- layout
+  {:params [:any :any] :ret :any}
+  "A minimal layout: wrap `content` in the html/body shell a real
+  layout would provide."
+  [content _]
   [:html [:body {:style "margin: 0"} content]])
 
 (defer (test/stop! boot)

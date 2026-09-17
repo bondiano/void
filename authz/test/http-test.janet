@@ -43,16 +43,33 @@
 
 # -- the application -----------------------------------------------------
 
-(defn who [req] (ring/text 200 (or (auth/subject) "nobody")))
-(defn show-order [req]
+(defn who
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Text of the current subject, or \"nobody\" when the request is anonymous."
+  [req]
+  (ring/text 200 (or (auth/subject) "nobody")))
+(defn show-order
+  {:params [@{:params {:id :any & r} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Text naming the order id from the route params."
+  [req]
   (ring/text 200 (string "order " (get-in req [:params :id]))))
-(defn login [req]
+(defn login
+  {:params [@{:form {:any :any} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Check the submitted form against the password store and, on
+  success, start a session for the identity."
+  [req]
   (def result (auth/check-password (auth/user-store) (req :form)))
   (if-let [id (result :identity)]
     (do (auth-http/login! req id) (ring/text 200 "in"))
     (ring/text 401 "no")))
 
-(defn order-of [req]
+(defn order-of
+  {:params [@{:params {:id :any & r} & r}]
+   :ret (or {:id :number :brand-id :number :owner :string} :nil)}
+  "The order named by the route's :id param, or nil."
+  [req]
   (get orders (scan-number (get-in req [:params :id] "0"))))
 
 (def app-routes
@@ -93,7 +110,10 @@
 (set hash/settings {:hasher :scrypt :scrypt {:ln 10 :r 8 :p 1 :length 32 :salt-bytes 16}})
 (def pw (hash/hash "hunter2"))
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli @{:any :any}}}
+  "This suite's boot config, with `extra` merged into :cli."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}
                 :http {:port 0 :session {:enabled true} :access-log false}

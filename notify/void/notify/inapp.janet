@@ -84,6 +84,7 @@
   defaults)
 
 (defn recipient
+  {:params [] :ret :any}
   "Who this fiber is, as the store spells a recipient — or nil for an
   anonymous visitor, which is what makes the bell absent rather than
   empty."
@@ -91,12 +92,16 @@
   (when-let [id (dyn identity-dyn)]
     (get id :subject)))
 
-(defn- prefix [] (get settings :prefix "/notifications"))
-(defn badge-path "Where the bell polls." [] (string (prefix) "/badge"))
+(defn- prefix {:params [] :ret :string} "The mount path of the in-app routes." [] (get settings :prefix "/notifications"))
+(defn badge-path {:params [] :ret :string} "Where the bell polls." [] (string (prefix) "/badge"))
 
 # -- the channel ---------------------------------------------------------
 
 (defn project
+  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
+             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
+             :overrides @{:keyword (or {:any :any} @{:any :any})}}]
+   :ret :any}
   ``The row to write, or nil when the notification carries no subject
   to write it against. The `:inapp` override is merged here, so a
   notification can say a different title in the bell than in the
@@ -108,6 +113,7 @@
            {:recipient to})))
 
 (defn deliver
+  {:params [{:recipient :any & r}] :ret @{:channel :keyword :id :any :at :any & r}}
   "Write the row."
   [payload]
   (store/record! payload (payload :recipient) settings)
@@ -123,6 +129,7 @@
 # -- the views -----------------------------------------------------------
 
 (defn- panel-swap
+  {:params [:keyword :string] :ret @{:string :string} :throws [:string]}
   "The htmx half of anything that redraws the panel: `verb` the URL,
   into #void-notify-panel."
   [verb url]
@@ -162,6 +169,7 @@
        [:button (panel-swap :post (string base "/read-all")) "Mark all read"])]))
 
 (defn bell
+  {:params [] :ret :any}
   ``The one line a layout carries. Empty for an anonymous visitor —
   there is nobody to have notifications — and otherwise a container
   that fetches its own badge and holds the panel the badge opens.``
@@ -175,13 +183,21 @@
 
 # -- the routes ----------------------------------------------------------
 
-(defn- me []
+(defn- me
+  {:params [] :ret :any :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+                                  :status :number :http/status :number}]}
+  "The current recipient, or a 401 for a bell asking about nobody."
+  []
   (or (recipient)
       # a bell asking about nobody is not a 404: the request was
       # understood and it needs a session
       (errors/abort 401 "notifications are personal — sign in first")))
 
 (defn panel
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET the panel: the newest notifications, as a fragment."
   [req]
   (html/fragment (list-view (store/list-for (me)
@@ -189,11 +205,19 @@
                                             settings))))
 
 (defn badge
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "GET the bell's own count."
   [req]
   (html/fragment (badge-view (store/unread-count (me) settings))))
 
 (defn mark-read
+  {:params [{:params {:id :any & r} & r}]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "POST: mark one notification read and answer with the panel."
   [req]
   (def who (me))
@@ -201,6 +225,10 @@
   (panel req))
 
 (defn mark-all-read
+  {:params [:any]
+   :ret @{:status :number :headers @{:string :string} :void.html/content :any
+          :void.html/layout :any :void.html/context {:any :any} & r}
+   :throws [:string]}
   "POST: mark everything read and answer with the panel."
   [req]
   (def who (me))
@@ -209,6 +237,10 @@
   (panel req))
 
 (defn- own-routes
+  {:params [:any] :ret :any}
+  "The bell's routes, mounted under `[:notify-inapp :prefix]` (a
+  function of boot, since the prefix is only known once configuration
+  resolved)."
   # a function of boot, not a value: the mount prefix is configuration,
   # which is not known when this manifest freezes (the form)
   [_boot]

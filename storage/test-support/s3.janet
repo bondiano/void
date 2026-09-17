@@ -27,6 +27,8 @@
 (def skip "Announce a skipped suite the way a passing one announces itself." (gate :skip))
 
 (defn config
+  {:params [] :ret {:endpoint :any? :bucket :string :region :string
+                    :access-key :string :secret-key :string}}
   "The [:storage-s3] slice for it."
   []
   {:endpoint (endpoint)
@@ -36,6 +38,7 @@
    :secret-key (or (os/getenv "VOID_TEST_S3_SECRET") "minioadmin")})
 
 (defn prefix
+  {:params [:string] :ret :string}
   "A key prefix nothing else is using: the suite name and this process."
   [suite]
   (string "void-test/" suite "/" (os/getpid) "/"))

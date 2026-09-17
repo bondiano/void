@@ -12,10 +12,16 @@
 # A stand-in for mysql_real_escape_string. The real one is the
 # connection's (it knows the charset); this one is enough to tell
 # whether `interpolate` calls it where it should.
-(defn- esc [b]
+(defn- esc
+  {:params [:any] :ret :string}
+  "A stand-in escaper: doubles backslashes, then escapes a quote."
+  [b]
   (string/replace-all "'" "\\'" (string/replace-all "\\" "\\\\" (string b))))
 
-(defn- interp [sql params] (types/interpolate sql params esc))
+(defn- interp
+  {:params [:string (or @[:any] [:any] :nil)] :ret :string :throws [:string]}
+  "`sql` interpolated against `params` with the stand-in escaper."
+  [sql params] (types/interpolate sql params esc))
 
 # -- which `?` is a placeholder ------------------------------------------
 
@@ -122,7 +128,11 @@
 
 # -- decoding ------------------------------------------------------------
 
-(defn- fld [type &opt extra]
+(defn- fld
+  {:params [:keyword (or {:any :any} :nil)]
+   :ret {:name :any :type :any :length :any :flags :any & r}}
+  "A field descriptor for `type`, with `extra` overriding a key."
+  [type &opt extra]
   (merge {:name "c" :type type :length 11 :flags 0} (or extra {})))
 
 (assert (= 7 (types/decode (fld :long) "7")))

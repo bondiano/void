@@ -10,11 +10,18 @@
 
 (def- self (dyn *current-file*))
 
-(defn- dirname [p]
+(defn- dirname
+  {:params [:string] :ret :string}
+  "The directory part of a path, or \".\" when it has none."
+  [p]
   (def idxs (string/find-all "/" p))
   (if (empty? idxs) "." (string/slice p 0 (last idxs))))
 
-(defn- add-tree [root]
+(defn- add-tree
+  {:params [:string] :ret @[:any]}
+  "Push this root's :all: source templates onto module/paths, ahead of
+  the built-in ones, so it is checked before the installed copy."
+  [root]
   (array/insert module/paths 0 [(string root "/:all:/init.janet") :source])
   (array/insert module/paths 0 [(string root "/:all:.janet") :source]))
 
@@ -34,6 +41,7 @@
    :profile :prod})
 
 (defn main
+  {:params [:string] :ret :nil}
   "Binscript-style entrypoint: errors print to stderr and exit 1."
   [& args]
   (def [ok err]

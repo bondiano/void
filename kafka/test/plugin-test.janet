@@ -16,7 +16,14 @@
 
 (def plugins ["void/bus/init" "void/kafka/init" "void/kafka/bus"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:bus (or {:backend :keyword & br} :nil)
+            :kafka (or {:message-timeout (or :number :nil) & kr} :nil)
+            :kafka-bus (or {:prefix (or :any :nil) & kbr} :nil) & r}]
+   :ret {:env @{} :cli :any}}
+  "The kernel's config table for this file's boot calls: [:log :level]
+  forced quiet, `extra` layered under :cli."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}} extra)})
 

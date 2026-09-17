@@ -30,12 +30,14 @@
 (var- rules [])
 
 (defn configure!
+  {:params [(or {:rules (or @[:any] [:any] :nil) & r} :nil)] :ret :nil}
   "Called from the application's :before-start hook (src/app.janet)."
   [slice]
   (set rules (or (get slice :rules) []))
   (log/info "routing rules ready" :ns log-ns :rules (length rules)))
 
 (defn configured-rules
+  {:params [] :ret (or @[:any] [:any])}
   "The rules this process is running with."
   []
   rules)
@@ -43,6 +45,7 @@
 # -- matching ------------------------------------------------------------
 
 (defn value-matches?
+  {:params [:any :any] :ret :boolean}
   ``One field of `:when` against one field of the delivery. A string is
   exact; a list is "any of these"; anything else is a rule this
   application does not understand, and refusing to match is the safe
@@ -55,6 +58,7 @@
     false))
 
 (defn matches?
+  {:params [{:when (or {:any :any} :nil) & r} {:any :any}] :ret :boolean}
   "Does this rule cover this delivery? A rule with no `:when` covers
   every delivery — which is a thing somebody may well mean."
   [rule delivery]
@@ -64,6 +68,9 @@
   ok)
 
 (defn matching
+  {:params [{:any :any}]
+   :ret @[{:when (or {:any :any} :nil) :to (or @[:keyword] [:keyword] :nil)
+          :chat-id :string? & r}]}
   "Every rule that covers this delivery, in the order they were written."
   [delivery]
   (filter |(matches? $ delivery) rules))
@@ -71,6 +78,12 @@
 # -- dispatch ------------------------------------------------------------
 
 (defn dispatch!
+  {:params [{:repo :string? :source :string? :event :string? :sender :string?
+            :delivery-id :string? :body-key :string? & r}
+           :any]
+   :ret @[{:id :string? :key :any? :at :number?
+          :results @[{:channel :keyword :status :keyword & r}] & r}]
+   :throws [:string]}
   ``Send one notification per matching rule. Returns what `notify/send`
   said, per rule, so a caller (and a test) can see that a delivery
   nobody routed is a delivery nobody routed — which is a normal outcome,

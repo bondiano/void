@@ -34,6 +34,9 @@
   @{})
 
 (defn normalize
+  {:params [:any]
+   :ret {:name :keyword :fn :function :doc :string? & r}
+   :throws [:string]}
   "Validate a policy declaration: {:name :fn :doc?}."
   [p]
   (unless (dictionary? p)
@@ -46,6 +49,7 @@
   (freeze (merge @{:doc nil} p)))
 
 (defn register!
+  {:params [:any] :ret :keyword :throws [:string]}
   "Register (or replace) a policy. Returns its name — replacing is how
   a REPL redefinition takes effect without a restart."
   [p]
@@ -54,17 +58,22 @@
   (n :name))
 
 (defn deregister!
+  {:params [:keyword] :ret :nil}
   "Remove a policy."
   [name]
   (put registry name nil)
   nil)
 
 (defn lookup
+  {:params [:keyword] :ret (or {:name :keyword :fn :function :doc :string? & r} :nil)}
   "One policy by name, or nil."
   [name]
   (get registry name))
 
 (defn policy!
+  {:params [:keyword]
+   :ret {:name :keyword :fn :function :doc :string? & r}
+   :throws [:string]}
   "One policy by name, or an error naming what is registered — the
   message a typo in route metadata deserves."
   [name]
@@ -73,11 +82,13 @@
               (string/join (map string (sorted (keys registry))) " "))))
 
 (defn policies
+  {:params [] :ret @[:keyword]}
   "Every registered policy name, sorted."
   []
   (sorted (keys registry)))
 
 (defn describe
+  {:params [] :ret @[{:name :keyword :doc :string?}]}
   "Name, docstring and source of every policy — what `void authz
   policies` prints and what an audit reads."
   []
@@ -85,6 +96,7 @@
     {:name name :doc (p :doc)}))
 
 (defmacro defpolicy
+  {:params [:keyword :any] :ret :keyword}
   ``Define and register a policy:
 
       (defpolicy :orders/read

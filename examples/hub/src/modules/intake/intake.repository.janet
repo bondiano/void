@@ -11,16 +11,32 @@
 (import ./intake.model :as model)
 
 (defn by-delivery-id
+  {:params [:string?] :ret (or @{:id :number :source :string :event :string
+                                 :delivery-id :string :repo :string? :sender :string?
+                                 :body-key :string :size :number :received-at :string & r}
+                               :nil)
+   :throws [:string]}
   "The row a sender's delivery id points at, or nil."
   [delivery-id]
   (when delivery-id (db/one model/Delivery {:where [:= :delivery-id delivery-id]})))
 
 (defn by-id
+  {:params [:number?] :ret (or @{:id :number :source :string :event :string
+                                 :delivery-id :string :repo :string? :sender :string?
+                                 :body-key :string :size :number :received-at :string & r}
+                               :nil)
+   :throws [:string]}
   "The row this application's own id points at, or nil."
   [id]
   (when id (db/find model/Delivery id)))
 
 (defn create!
+  {:params [{:source :string :event :string :delivery-id :string?
+            :body-key :string :size :number & r}]
+   :ret @{:id :number :source :string :event :string :delivery-id :string
+          :repo :string? :sender :string? :body-key :string :size :number
+          :received-at :string & r}
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "Write what arrived: where the bytes went, and what a person filters
   by."
   [row]

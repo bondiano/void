@@ -39,6 +39,7 @@
 (import ../intake/intake.service :as intake)
 
 (defn- outcome-of
+  {:params [{:job :any? :why :any? :error :any? & r}] :ret :string}
   ``The end of one channel's line: the job when there is one, and
   otherwise the reason notify gave. A channel that was skipped because
   the notification is not addressed to it is a configuration question,

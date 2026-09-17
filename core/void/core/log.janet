@@ -333,7 +333,7 @@
 
 (defn set-sinks!
   {:params [(or [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)] :nil)]
-   :ret :nil}
+   :ret :table}
   "Replace the active sinks (tuple/array of (fn [record])). nil
   restores the default pretty stderr sink. Close previous async
   writers with (log/close!) BEFORE constructing replacements —
@@ -348,14 +348,14 @@
   (or (state :sinks) default-sinks))
 
 (defn set-serializers!
-  {:params [(or {:keyword (fn [:any] :any)} :nil)] :ret :nil}
+  {:params [(or {:keyword (fn [:any] :any)} :nil)] :ret :table}
   "Replace the serializer table (key -> fn). The :err serializer is
   merged in unless overridden."
   [sers]
   (put state :serializers (merge {:err err-serializer} (or sers {}))))
 
 (defn set-redact!
-  {:params [(or [[:keyword]] :nil)] :ret :nil}
+  {:params [(or [[:keyword]] :nil)] :ret :table}
   "Replace the redaction paths ([[:password] [:user :token] ...])."
   [paths]
   (put state :redact (or paths [])))

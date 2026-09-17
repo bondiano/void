@@ -76,6 +76,10 @@
    :serializable "SERIALIZABLE"})
 
 (defn begin-statements
+  {:params [(or :keyword {:level (or :keyword :nil) :read-only (or :any :nil) & r})
+            (or :keyword :nil)]
+   :ret @[:string]
+   :throws [:string]}
   ``The statements that open a transaction, in order.
 
   Two of them, where Postgres needs one: MySQL sets the level with a
@@ -112,6 +116,9 @@
 # -- the handle ----------------------------------------------------------
 
 (defn handle
+  {:params [:any (or {:reconnect :any & r} :nil)]
+   :ret @{:spec :any :conn :any :in-tx :boolean :generation :number :reconnect :boolean}
+   :throws [:string]}
   ``A pooled connection: the spec it is made of, the live worker, and
   whether a transaction is open on it.``
   [spec &opt opts]
@@ -125,11 +132,15 @@
   h)
 
 (defn live?
+  {:params [@{:conn :any & r}] :ret :boolean}
   "Is this handle's connection currently usable?"
   [h]
   (and (h :conn) (conn/live? (h :conn)) true))
 
 (defn reconnect!
+  {:params [@{:conn :any :spec :any :generation :number :in-tx :boolean & r}]
+   :ret :any
+   :throws [:string]}
   ``Replace the handle's connection — and, with it, its worker thread.
   Used by `ensure!`; exposed because a health check that finds a dead
   connection has the same repair to make.``
@@ -143,6 +154,10 @@
   (h :conn))
 
 (defn- ensure!
+  {:params [@{:conn :any :in-tx :boolean :reconnect :boolean :spec :any :generation :number & r}
+            (or :string :nil)]
+   :ret :any
+   :throws [:string]}
   ``The connection to run the next statement on. A dead one is
   replaced outside a transaction and refused inside it — `what` says
   which statement was about to run, so the message names the
@@ -162,6 +177,7 @@
     (reconnect! h)))
 
 (defn close-handle
+  {:params [@{:conn :any & r}] :ret :nil}
   "Close a handle's connection and end its thread. Safe twice."
   [h]
   (when-let [c (h :conn)]
@@ -172,6 +188,8 @@
 # -- the driver value ----------------------------------------------------
 
 (defn make
+  {:params [(or {:spec :any :tx-mode :any :reconnect :any & r} :nil)]
+   :ret {:name :keyword :dialect :keyword :returning :boolean :spec :any & r}}
   ``Build the :void/db-driver value. opts:
 
     :spec        the plain-data connection spec (see ./config)
@@ -188,10 +206,16 @@
   (def tx-mode (get opts :tx-mode))
   (def open-opts {:reconnect (not= false (get opts :reconnect))})
 
-  (defn run [h sql params]
+  (defn run
+    {:params [:any :any (or @[:any] [:any] :nil)] :ret :any :throws [:string]}
+    "Run one statement on the handle's live (or reconnected) connection."
+    [h sql params]
     (conn/execute (ensure! h sql) sql params))
 
-  (defn raw [h sql]
+  (defn raw
+    {:params [:any :any] :ret :any :throws [:string]}
+    "Run one parameterless statement — a savepoint command, mostly."
+    [h sql]
     (conn/execute (ensure! h sql) sql []))
 
   @{:name :mysql
@@ -275,6 +299,8 @@
         {:generation (h :generation) :transaction :closed}))})
 
 (defn from-config
+  {:params [(or {:any :any} :nil)]
+   :ret {:name :keyword :dialect :keyword :returning :boolean :spec :any & r}}
   ``The driver for a [:db-mysql] config slice — `config/spec` plus the
   behaviour keys, in one call.``
   [cfg0]

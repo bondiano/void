@@ -8,16 +8,35 @@
 (proto/load-file! "test/protos/orders.proto")
 (proto/load-file! "test/protos/streaming.proto")
 
-(defn- refused [f why]
+(defn- refused
+  {:params [(fn [] :any) :string] :ret :string}
+  "Assert that `f` throws, `why`, and answer its error as text."
+  [f why]
   (def [ok err] (protect (f)))
   (assert (not ok) why)
   (if (string? err) err (string/format "%q" err)))
 
-(defn get-order [msg _req] {:id (msg :id)})
-(defn count-orders [_msg _req] {:count 3})
-(defn place-order [msg _req] {:id "new" :total_cents (msg :total_cents)})
-(defn explode [_msg _req] (error "boom"))
-(defn slow [_msg _req] {:count 0})
+(defn get-order
+  {:params [{:id :any & r} :any] :ret {:id :any}}
+  "The RPC handler under test: echoes the id back as an order."
+  [msg _req] {:id (msg :id)})
+(defn count-orders
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: a fixed count, streaming refusal aside."
+  [_msg _req] {:count 3})
+(defn place-order
+  {:params [{:total_cents :any & r} :any] :ret {:id :string :total_cents :any}}
+  "The RPC handler under test: a new order at the given total."
+  [msg _req] {:id "new" :total_cents (msg :total_cents)})
+(defn explode
+  {:params [:any :any] :ret :never :throws [:string]}
+  "The RPC handler under test: always raises, to exercise the panic path."
+  [_msg _req] (error "boom"))
+(defn slow
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: answers with a fixed count, standing in
+  for a method whose only interesting property here is its name."
+  [_msg _req] {:count 0})
 
 # -- the shape comes from the .proto, the binding from here ---------------
 

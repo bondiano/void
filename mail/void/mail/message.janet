@@ -46,7 +46,12 @@
    :headers {}
    :to-override nil})
 
-(defn- normalize-attachment [a]
+(defn- normalize-attachment
+  {:params [{:content :any & r}]
+   :ret {:filename :string :content :any :type :string :inline :boolean}
+   :throws [:string]}
+  "One attachment, filled in with the defaults every attachment needs."
+  [a]
   (unless (dictionary? a)
     (errorf "an attachment is a table {:filename :content :type}, got %q" a))
   (unless (get a :content)
@@ -56,7 +61,11 @@
    :type (string (get a :type "application/octet-stream"))
    :inline (true? (get a :inline))})
 
-(defn- subject-of [msg cfg]
+(defn- subject-of
+  {:params [{:subject :any & r} {:subject-prefix :string? & r}] :ret :string}
+  "The message's subject with [:mail :subject-prefix] prepended, when
+  the slice sets one."
+  [msg cfg]
   (def raw (string (get msg :subject "")))
   (def prefix (get cfg :subject-prefix))
   (if (and prefix (not (empty? (string prefix))))
@@ -64,6 +73,24 @@
     raw))
 
 (defn normalize
+  {:params [{:from :any :to :any :cc :any :bcc :any :reply-to :any :subject :any
+             :text :any :html :any :headers :any :attachments :any :envelope-from :any
+             & r}
+            (or :nil {:from :any :reply-to :any :envelope-from :any :subject-prefix :string?
+                      :headers :any :to-override :string? & r})]
+   :ret @{:from {:name :string? :email :string}
+          :to @[{:name :string? :email :string}]
+          :cc @[{:name :string? :email :string}]
+          :bcc @[{:name :string? :email :string}]
+          :reply-to @[{:name :string? :email :string}]
+          :subject :string
+          :text :string?
+          :html :string?
+          :headers (or :nil {:string :any})
+          :attachments @[{:filename :string :content :any :type :string :inline :boolean}]
+          :envelope-from :string
+          :recipients @[:string]}
+   :throws [:string]}
   ``A message plus the [:mail] slice, resolved into the value every
   layer below reads: addresses parsed, subject prefixed, headers
   merged, recipients collected into the envelope.
@@ -113,6 +140,7 @@
   base)
 
 (defn normalized?
+  {:params [:any] :ret :boolean :narrows :any}
   "Has this message been through `normalize`? What a transport asserts
   before it puts anything on a socket."
   [msg]
@@ -121,6 +149,7 @@
        (indexed? (get msg :recipients))))
 
 (defn summary
+  {:params [{:from :any :recipients :any :subject :any & r}] :ret :string}
   "One line about a message, for a log record or a CLI listing."
   [msg]
   (string/format "%s -> %s: %s"

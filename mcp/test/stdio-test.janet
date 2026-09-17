@@ -17,6 +17,7 @@
 (log/set-level! "void" :fatal)
 
 (defn- run
+  {:params [(or @[:string] [:string]) (fn [:any] :any)] :ret [:number @[:any]]}
   ``Feed `frames` (already-encoded strings, joined by the caller into
   chunks) to a stdio server and collect what it writes. Returns
   [handled written].``
@@ -32,7 +33,13 @@
 
 # -- framing -------------------------------------------------------------
 
-(defn- echo-handler [msg]
+(defn- echo-handler
+  {:params [{:id :any :method :any & r}]
+   :ret (or @{:jsonrpc :string :id :any :result :any} :nil)
+   :throws [:string]}
+  "A handler that answers ping and throws on boom, for the transport
+  suite to drive."
+  [msg]
   (case (get msg :method)
     "ping" (rpc/result (msg :id) @{:pong true})
     "boom" (error "the handler broke")

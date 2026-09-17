@@ -107,6 +107,8 @@
   keys/identity)
 
 (defn auth-mode
+  {:params [(or {:auth :any :token :any :scopes (or @[:string] [:string] :nil) & r} :nil)]
+   :ret (enum :none :token :identity)}
   ``What this endpoint demands of a request:
 
     :none      nothing — a development default, and a boot error in :prod
@@ -129,6 +131,7 @@
 # -- the gate ------------------------------------------------------------
 
 (defn- same-secret?
+  {:params [:any :any] :ret :boolean}
   ``Compare two secrets without leaking their common prefix in the
   time it takes — the same comparison void/obs-http makes for
   /metrics, and for the same reason.``
@@ -141,7 +144,10 @@
     (set diff (bor diff (bxor (in x i) (in y i)))))
   (zero? diff))
 
-(defn- token-ok? [req]
+(defn- token-ok?
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret :boolean}
+  "Does this request carry `[:mcp-http :token]` as its bearer token?"
+  [req]
   (if-let [token (settings :token)]
     (if-let [given (ring/request-header req "authorization")]
       (same-secret? (string "Bearer " token) given)
@@ -151,6 +157,7 @@
     false))
 
 (defn- scopes-of
+  {:params [(or {:claims {:scope :any :scp :any & r} & r} :nil)] :ret @[:string]}
   ``The scopes an identity carries. `scope` is the space-delimited
   string RFC 6749 defines and `scp` the array some issuers send;
   reading both here rather than importing void/auth-oauth keeps this
@@ -163,7 +170,12 @@
     (indexed? raw) (map string raw)
     []))
 
-(defn- challenge [&opt error description scope]
+(defn- challenge
+  {:params [:string? :string? (or @[:string] [:string] :nil)] :ret :string}
+  "The `WWW-Authenticate` challenge for a refusal: the RFC 6750 error
+  code, its description, the scope this endpoint wants, and — when
+  configured — the pointer to the protected-resource document."
+  [&opt error description scope]
   (def parts @[(string/format "Bearer realm=%q" "mcp")])
   (when error (array/push parts (string/format "error=%q" error)))
   (when description (array/push parts (string/format "error_description=%q" description)))
@@ -178,6 +190,8 @@
   (string/join parts ", "))
 
 (defn- refusal
+  {:params [:number :string :string (or @[:string] [:string] :nil)]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``The answer to a request this endpoint will not serve: 401 when
   there is no acceptable credential, 403 when there is one and it may
   not do this — RFC 6750 draws that line, and it matters to a client,
@@ -189,6 +203,8 @@
                    "www-authenticate" (challenge error description scope)}))
 
 (defn- gate
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}} :nil)}
   "nil when the request may proceed, or the refusal it earned."
   [req]
   (case (auth-mode)
@@ -209,19 +225,31 @@
                      "the credential is valid and does not carry every scope this endpoint needs"
                      wanted)))))))
 
-(defn- origin-ok? [req]
+(defn- origin-ok?
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret :boolean}
+  "Is this request's Origin one `[:mcp-http :origins]` allows, or is
+  there no Origin at all — every agent on the same machine?"
+  [req]
   (if-let [origin (ring/request-header req "origin")]
     (truthy? (index-of origin (get settings :origins [])))
     true))
 
-(defn- protocol-ok? [req]
+(defn- protocol-ok?
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret :boolean}
+  "Does this request's `MCP-Protocol-Version` name a revision this
+  endpoint speaks — or none at all, which the specification's own
+  default resolves to one that it does?"
+  [req]
   (if-let [given (ring/request-header req "mcp-protocol-version")]
     (truthy? (index-of given accepted-protocol-versions))
     # absent means 2025-03-26 by the specification's own default, and
     # that is one of the two this endpoint speaks
     true))
 
-(defn- accepts-sse? [req]
+(defn- accepts-sse?
+  {:params [@{:headers {:string (or :string @[:string])} & r}] :ret :boolean}
+  "Did this request's `Accept` header name `text/event-stream`?"
+  [req]
   (if-let [accept (ring/request-header req "accept")]
     (truthy? (string/find "text/event-stream" (string/ascii-lower accept)))
     false))
@@ -232,16 +260,25 @@
   @{"content-type" "application/json"
     "mcp-protocol-version" mcp-server/protocol-version})
 
-(defn- json-response [status msg]
+(defn- json-response
+  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "A JSON-RPC message as a JSON response with this endpoint's headers."
+  [status msg]
   (ring/response status (rpc/encode msg) (merge @{} json-headers)))
 
-(defn- progress-notification [token progress message]
+(defn- progress-notification
+  {:params [:any :number :string] :ret @{:jsonrpc :string :method :string & r}}
+  "A `notifications/progress` message carrying what a tool has printed
+  since the last one, under the client's own `progressToken`."
+  [token progress message]
   (rpc/notification "notifications/progress"
                     @{:progressToken token
                       :progress progress
                       :message message}))
 
 (defn- streamed-call
+  {:params [:any {:name :string :call (or (fn [:any :any] :any) :nil) & r} :any :any :any]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``A tools/call answered as SSE: `notifications/progress` carrying
   what the command has printed since the last event, then the
   response, then the end of the stream.
@@ -286,25 +323,44 @@
       (yield {:data (rpc/encode (rpc/result id (first done)))}))
     @{"mcp-protocol-version" mcp-server/protocol-version}))
 
-(defn- streamable? [req msg]
+(defn- streamable?
+  {:params [@{:headers {:string (or :string @[:string])} & r} {:method :any :notification? :any :params :any & r}]
+   :ret :boolean}
+  "Should this `tools/call` be answered as SSE — a client that
+  accepts one, asking about a tool, with a progress token to narrate?"
+  [req msg]
   (and (= "tools/call" (get msg :method))
        (not (get msg :notification?))
        (accepts-sse? req)
        (not (nil? (get-in msg [:params :_meta :progressToken])))))
 
-(defn- origin-refusal [req]
+(defn- origin-refusal
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}} :nil)}
+  "403 when this request's Origin is not allowed, else nil."
+  [req]
   (unless (origin-ok? req)
     (ring/response 403 "403 Forbidden — this Origin is not in [:mcp-http :origins]"
                    @{"content-type" "text/plain; charset=utf-8"})))
 
-(defn- protocol-refusal [req]
+(defn- protocol-refusal
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret (or @{:status :number :body :any :headers @{:string :any}} :nil)}
+  "400 when this request's MCP-Protocol-Version is not one this
+  endpoint speaks, else nil."
+  [req]
   (unless (protocol-ok? req)
     (json-response 400
                    (rpc/fail nil :invalid-request
                              (string "unsupported MCP-Protocol-Version — this endpoint speaks "
                                      (string/join accepted-protocol-versions " and "))))))
 
-(defn- answer [req]
+(defn- answer
+  {:params [@{:headers {:string (or :string @[:string])} :body :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Decode the body and answer it — a notification with 202, a
+  streamable tools/call as SSE, everything else as one JSON response."
+  [req]
   (def decoded (rpc/decode (string (or (req :body) ""))))
   (if-let [err (get decoded :error)]
     (json-response 400 err)
@@ -326,6 +382,8 @@
         (json-response 200 (mcp-server/handle srv msg))))))
 
 (defn handler
+  {:params [@{:headers {:string (or :string @[:string])} :body :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
   ``POST /mcp — one JSON-RPC message in, one answer out. Public, so an
   application that wants the endpoint on another path, behind an
   authorization policy or inside a route group mounts it itself and
@@ -344,6 +402,7 @@
         (answer req))))
 
 (defn get-handler
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   ``GET /mcp — 405, because this server holds no stream to push
   messages down. Everything it says is an answer to something the
   client asked, and that answer travels on the POST that asked.``
@@ -360,6 +419,9 @@
 # -- config and the production gate --------------------------------------
 
 (defn build-settings
+  {:params [{:profile :keyword :config (or {:values @{:any :any} & r} :nil) & r}]
+   :ret {:keyword :any}
+   :throws [:string]}
   "The [:mcp-http] slice over the defaults. Normally called by the
   :before-start hook."
   [boot]

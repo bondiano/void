@@ -44,6 +44,8 @@
 (def log-ns "void.notify")
 
 (defn receipt
+  {:params [:keyword {:id :any :at :any? & r} (or {:keyword :any} :nil)]
+   :ret @{:channel :keyword :id :any :at :any & r}}
   "The value a channel returns: which channel, which notification, and
   whatever else it wants recorded."
   [name payload &opt parts]
@@ -54,6 +56,17 @@
          parts))
 
 (defn normalize
+  {:params [:any]
+   :ret @{:name :keyword
+          :deliver (fn [:any] :any)
+          :doc :string?
+          :address :keyword?
+          :project (or (fn [:any] :any) :nil)
+          :permanent? (or (fn [:any] :any) :nil)
+          :health (or (fn [] :any) :nil)
+          :needs (or @[:keyword] [:keyword])
+          & r}
+   :throws [:string]}
   ``Check a `:void.notify/channel` contribution and fill in what it did
   not say. Runs at boot, so a channel that cannot deliver anything is a
   start error rather than a notification that disappears.``
@@ -86,6 +99,7 @@
          c))
 
 (defn project
+  {:params [{:project (or (fn [:any] :any) :nil) & r} :any] :ret :any}
   ``The payload a channel is delivered, or nil when the notification
   was not its business. A channel without a `:project` takes the
   notification itself.``
@@ -95,6 +109,7 @@
     note))
 
 (defn permanent?
+  {:params [{:permanent? (or (fn [:any] :any) :nil) & r} :any] :ret :boolean}
   ``Has this channel already had its final answer? A channel that says
   yes turns a failure into a recorded rejection instead of a retry —
   the argument void/mail-jobs makes about a 5xx, asked of every
@@ -122,12 +137,14 @@
 (var keep-count default-keep)
 
 (defn clear!
+  {:params [] :ret :nil}
   "Empty the memory outbox."
   []
   (set outbox @[])
   nil)
 
 (defn memory-channel
+  {:params [] :ret {:name :keyword :doc :string :deliver (fn [:any] :any)}}
   "The channel that delivers into `outbox` — what a test suite runs on."
   []
   {:name :memory
@@ -141,6 +158,7 @@
 # -- :log — the notification in the log, and nowhere else ----------------
 
 (defn log-channel
+  {:params [] :ret {:name :keyword :doc :string :deliver (fn [:any] :any)}}
   "The channel that logs a notification instead of delivering it."
   []
   {:name :log

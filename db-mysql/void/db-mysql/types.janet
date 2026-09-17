@@ -74,7 +74,11 @@
   bigint has to come back as an int/s64 to survive the trip."
   9007199254740992)
 
-(defn- decode-bigint [s unsigned?]
+(defn- decode-bigint
+  {:params [:string :any] :ret :any}
+  "A BIGINT column's text as a number when it fits one exactly, else
+  an int/s64 (int/u64 when the column is UNSIGNED)."
+  [s unsigned?]
   (def n (scan-number s))
   (cond
     (and n (< (math/abs n) max-exact-int)) n
@@ -82,6 +86,7 @@
     (int/s64 s)))
 
 (defn decode-bit
+  {:params [:string] :ret :any}
   ``A BIT(n) column, which the text protocol sends as the raw bytes
   big-endian rather than as digits. Returned as a number while it
   fits one, and as an int/u64 past that — the same rule bigint gets.``
@@ -90,13 +95,22 @@
   (each byte s (set n (+ (* n 256) byte)))
   (if (< n (int/u64 max-exact-int)) (scan-number (string n)) n))
 
-(defn- binary? [fld]
+(defn- binary?
+  {:params [{:flags (or :number :nil) & r}] :ret :boolean}
+  "Is this column's collation binary — a BLOB rather than the TEXT it
+  shares a type number with?"
+  [fld]
   (not (zero? (band (get fld :flags 0) my/BINARY-FLAG))))
 
-(defn- unsigned? [fld]
+(defn- unsigned?
+  {:params [{:flags (or :number :nil) & r}] :ret :boolean}
+  "Does this column's UNSIGNED flag bit read set?"
+  [fld]
   (not (zero? (band (get fld :flags 0) my/UNSIGNED-FLAG))))
 
 (defn decode-tiny
+  {:params [:string {:length (or :number :nil) & r} :any]
+   :ret (or :boolean :number :nil)}
   ``TINYINT, and the one heuristic in this file. MySQL's BOOLEAN is an
   alias for TINYINT(1) and the server keeps no record of which word
   the migration used, so `true` and `1` are the same column and no
@@ -114,6 +128,9 @@
     (scan-number s)))
 
 (defn decoder-for
+  {:params [{:type :any :length (or :number :nil) :flags (or :number :nil) & r}
+            (or {:json (or :any :nil) :booleans (or :any :nil) & r} :nil)]
+   :ret (fn [:string] :any)}
   ``The function that turns one column's text into a janet value, for
   a field descriptor (`libmysql/field`) and the decoding options
   {:json true :booleans true}.``
@@ -149,13 +166,21 @@
     string))
 
 (defn decode
+  {:params [{:type :any :length (or :number :nil) :flags (or :number :nil) & r}
+            :string
+            (or {:json (or :any :nil) :booleans (or :any :nil) & r} :nil)]
+   :ret :any}
   "One text value from MySQL, by field descriptor."
   [fld text &opt opts]
   ((decoder-for fld opts) text))
 
 # -- encoding ------------------------------------------------------------
 
-(defn- number->literal [n]
+(defn- number->literal
+  {:params [:number] :ret :string :throws [:string]}
+  "A number as the SQL literal MySQL will parse — decimal, or 17
+  significant digits when that is what round-trips a double exactly."
+  [n]
   (cond
     # MySQL has no NaN and no infinity, and a column that received one
     # would hold something else — a rounded maximum, or nothing
@@ -168,6 +193,7 @@
     (string/format "%.17g" n)))
 
 (defn literal
+  {:params [:any (fn [:any] :string)] :ret :string :throws [:string]}
   ``One parameter as the SQL literal MySQL will parse. `escape` is
   (fn [bytes] escaped) — `mysql_real_escape_string` bound to the
   connection, which is what makes the escaping correct rather than
@@ -211,6 +237,7 @@
 (def- star-byte 42)       # *
 
 (defn- skip-quoted
+  {:params [:string :number :number :any] :ret :number :throws [:string]}
   ``Past the closing delimiter of a literal or a quoted identifier
   that starts at `i`. Both escape forms are honoured: a doubled
   delimiter, and — for the two string quotes — a backslash, which
@@ -234,12 +261,19 @@
             (cond (= delim quote-byte) "'" (= delim dquote-byte) `"` "`")))
   j)
 
-(defn- skip-line-comment [sql i]
+(defn- skip-line-comment
+  {:params [:string :number] :ret :number}
+  "Past the end of a `--`/`#` comment starting at `i` — the next
+  newline, or the end of the statement."
+  [sql i]
   (var j i)
   (while (and (< j (length sql)) (not= newline-byte (sql j))) (++ j))
   j)
 
-(defn- skip-block-comment [sql i]
+(defn- skip-block-comment
+  {:params [:string :number] :ret :number}
+  "Past the closing `*/` of a `/* */` comment starting at `i`."
+  [sql i]
   (var j (+ i 2))
   (while (and (< j (dec (length sql)))
               (not (and (= star-byte (sql j)) (= slash-byte (sql (inc j))))))
@@ -247,6 +281,7 @@
   (min (length sql) (+ j 2)))
 
 (defn placeholder-positions
+  {:params [:string] :ret @[:number] :throws [:string]}
   ``Where the `?` placeholders of a statement are — the ones SQL reads
   as placeholders, which is why this is a scanner and not
   `string/find-all`. A `?` inside a literal, inside a quoted
@@ -276,6 +311,9 @@
   out)
 
 (defn interpolate
+  {:params [:string (or @[:any] [:any] :nil) (fn [:any] :string)]
+   :ret :string
+   :throws [:string]}
   ``A statement and its parameters as the one string MySQL is sent.
   Every parameter goes through `literal`, so nothing reaches the
   server as anything but a quoted, escaped literal or a number.

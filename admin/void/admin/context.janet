@@ -18,44 +18,52 @@
   nil)
 
 (defn context
+  {:ret @{:keyword :any} :throws [:string]}
   "The admin context, or a refusal naming why it is not there."
   []
   (or current
       (error "void/admin is not booted — plugin/start! builds the admin context at :before-start")))
 
 (defn setting
+  {:params [:keyword :any] :ret :any}
   "One key of the context."
   [k &opt dflt]
   (get (context) k dflt))
 
 (defn prefix
+  {:ret :string}
   "Where the admin is mounted ([:admin :prefix], default \"/admin\")."
   []
   (setting :prefix "/admin"))
 
 (defn base
+  {:params [{:path :string & r}] :ret :string}
   "The URL prefix of one resource: \"/admin/articles\"."
   [desc]
   (string (prefix) (desc :path)))
 
 (defn at
+  {:params [:string (or {:string :any} :nil)] :ret :string}
   ``A URL under the admin prefix: (at "/jobs"), (at "/jobs" {"state"
   :dead}) — chrome/url-under over [:admin :prefix].``
   [path &opt query]
   (chrome/url-under (prefix) path query))
 
 (defn url
+  {:params [{:path :string & r} :string? (or {:string :any} :nil)] :ret :string}
   ``A URL inside a resource: (url desc "/7/edit"), (url desc) for the
   list — `at`, over the resource's own path.``
   [desc &opt suffix query]
   (at (string (desc :path) (or suffix "")) query))
 
 (defn widget-entries
+  {:params [:keyword] :ret {:keyword {:widget :any :why :keyword :field :any}}}
   "The widget resolution of one resource, computed at mount."
   [rname]
   (get-in (context) [:resolved rname] {}))
 
 (defn widget-entry
+  {:params [:keyword :keyword] :ret (or {:widget :any :why :keyword :field :any} :nil)}
   "The resolved widget of one field, or nil."
   [rname fname]
   (get (widget-entries rname) fname))

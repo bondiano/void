@@ -52,11 +52,17 @@
 (def filler (string/repeat "x" (max 0 payload-bytes)))
 
 (defn live
+  {:params [:any]
+   :ret (or @{:status :number :body :any :headers @{:string :any}}
+            @{:status :number :body :any :headers @{:string :any}
+              :void.http/upgrade :function})
+   :throws [:string]}
   "The socket: join the room, say nothing, listen."
   [req]
   (ws/accept req {:rooms [room]}))
 
 (defn stats
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
   "GET /stats — what the fan-out has done, for the generator's report
   and for a human watching a run."
   [req]
@@ -146,5 +152,8 @@
                        # and the closed connections are in /stats
                        :send-queue 256}}}})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret @{:keyword :any}}
+  "Process entrypoint: start the B4 app and block until stopped."
+  [& args]
   (void/run! app))

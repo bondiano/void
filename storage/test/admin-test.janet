@@ -54,7 +54,10 @@
 (def db-path (string (or (os/getenv "TMPDIR") "/tmp")
                      "/void-storage-admin-" (os/time) ".sqlite3"))
 
-(defn- rm-rf [path]
+(defn- rm-rf
+  {:params [:string] :ret :any}
+  "Recursively delete a path, tolerating one that is already gone."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each e (os/dir path) (rm-rf (string path "/" e)))
                    (os/rmdir path))
@@ -84,11 +87,22 @@
     [] {:kind :write :prepared false})
 
   (def c (test/client boot))
-  (defn- text [resp] (test/text resp))
-  (defn- csrf-of [resp]
+  (defn- text
+    {:params [{:body :any & r}] :ret :string}
+    [resp] (test/text resp))
+  (defn- csrf-of
+    {:params [{:body :any & r}] :ret :string?}
+    [resp]
     (first (peg/match ~(* (thru `name="_csrf"`) (thru `value="`) (<- (to `"`))) (text resp))))
 
-  (defn- upload [uri token parts]
+  (defn- upload
+    {:params [:string :any
+              (or @[{:name :string? :filename :string? :content-type :string?
+                     :value :any :headers (or @{:any :any} :nil) & r}]
+                  [{:name :string? :filename :string? :content-type :string?
+                    :value :any :headers (or @{:any :any} :nil) & r}])]
+     :ret @{:raw :string & r}}
+    [uri token parts]
     (def enc (multipart/encode parts))
     (test/inject c {:method :post :uri uri
                     :headers @{"x-csrf-token" token

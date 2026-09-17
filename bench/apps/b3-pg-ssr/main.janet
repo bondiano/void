@@ -41,7 +41,10 @@
   (string "SELECT id, number, label FROM " seed/table
           " WHERE id >= $1 ORDER BY id LIMIT " page-size))
 
-(defn- row-view [r]
+(defn- row-view
+  {:params [{:id :any :number :any :label :any & r}] :ret :tuple}
+  "One table row as hiccup: id, number, label and open/edit links."
+  [r]
   [:tr
    [:td {:class "id"} (r :id)]
    [:td {:class "number"} (r :number)]
@@ -51,7 +54,10 @@
     " · "
     [:a {:href (string "/rows/" (r :id) "/edit")} "edit"]]])
 
-(defn- document [rows]
+(defn- document
+  {:params [:any] :ret @[:any]}
+  "The rows page: a table of rows inside a bare HTML5 document."
+  [rows]
   (html/html5
     [:head
      [:meta {:charset "utf-8"}]
@@ -65,6 +71,10 @@
        [:tbody (map row-view rows)]]]]))
 
 (defn rows
+  {:params [:any]
+   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
+              :void.html/layout :any :void.html/context {:any :any} & r}
+            @{:status :number :body :any :headers @{:string :any}})}
   "GET /rows — a page of rows, server-rendered."
   [req]
   # the listener opens in system/start and the seeding runs at
@@ -108,5 +118,8 @@
                   :db {:pool {:size 8}}
                   :db-postgres (pg/config)}}})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret @{:keyword :any}}
+  "Process entrypoint: start the B3 app and block until stopped."
+  [& args]
   (void/run! app))

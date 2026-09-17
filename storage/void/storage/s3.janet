@@ -72,6 +72,7 @@
    :presign-max-expires (* 7 24 3600)})
 
 (defn- reveal
+  {:params [:keyword :any] :ret :string :throws [:string]}
   "A credential out of the config: a plain string, or a resolved
   secret box."
   [what value]
@@ -82,13 +83,25 @@
     (errorf "storage-s3: [:storage-s3 %q] must be a string or a {:secret \"NAME\"} reference, got %q"
             what value)))
 
-(defn- require-str [cfg k]
+(defn- require-str
+  {:params [{:any :any} :keyword] :ret :string :throws [:string]}
+  "A required string config key, refusing an unset or empty one by
+  name."
+  [cfg k]
   (def v (get cfg k))
   (unless (and (string? v) (not (empty? v)))
     (errorf "storage-s3: [:storage-s3 %q] must be set (a minio on a laptop is {:endpoint \"http://127.0.0.1:9000\" :bucket \"...\"})" k))
   v)
 
 (defn make
+  {:params [(or {:endpoint :any? :bucket :any? :region :string? :access-key :any?
+                 :secret-key :any? :public-url :string? :timeout :number?
+                 :max-object :number? :presign-max-expires :number? & r}
+                :nil)]
+   :ret @{:client :any :scheme :string :authority :string :bucket :string
+          :region :string :access-key :string :secret-key :string
+          :public-url :string? :max-object :any :presign-max-expires :any}
+   :throws [:string]}
   ``The store table for one [:storage-s3] slice: the parsed endpoint,
   the client, the revealed credentials. Parsing the endpoint is the
   https gate — a composition without void/tls is refused here, at
@@ -114,15 +127,24 @@
     :max-object (cfg :max-object)
     :presign-max-expires (cfg :presign-max-expires)})
 
-(defn- object-path [s k]
-  # the *raw* path — sigv4/canonical-path encodes it, exactly once,
-  # both under the signature and on the wire. Encoding it here too was
-  # the classic SigV4 mistake: the signature covered `%2520` while the
-  # request said `%20`, and every key with a space or a non-ASCII byte
-  # answered 403 SignatureDoesNotMatch
+(defn- object-path
+  {:params [{:bucket :string & r} :string] :ret :string}
+  "The *raw* path of key `k` in bucket `s`'s bucket —
+  sigv4/canonical-path encodes it, exactly once, both under the
+  signature and on the wire. Encoding it here too was the classic
+  SigV4 mistake: the signature covered `%2520` while the request said
+  `%20`, and every key with a space or a non-ASCII byte answered 403
+  SignatureDoesNotMatch."
+  [s k]
   (string "/" (s :bucket) "/" k))
 
 (defn- request!
+  {:params [{:authority :string :region :string :access-key :string
+             :secret-key :string :client :any & r}
+            :keyword :string (or {:body :any? :content-type :any? & r} :nil)]
+   :ret @{:status :number :message :string :http-version [:number :number]
+          :headers @{:any :any} :body (or :string :nil) :bytes :number :close :boolean}
+   :throws [:any]}
   "One signed request. Returns the client response, whatever the
   status — the operations decide what a 404 means."
   [s method k &opt opts]
@@ -155,6 +177,9 @@
                  :body (opts :body)}))
 
 (defn- refuse
+  {:params [{:authority :string :bucket :string & r} :string :string
+            {:body :any? :status :number & r}]
+   :ret :never :throws [:string]}
   "A non-answer from the S3 end, with the useful line of its XML body."
   [s what k resp]
   (def body (string/slice (string (or (resp :body) "")) 0
@@ -164,10 +189,19 @@
           (if (empty? body) "" (string " — " body))))
 
 (defn store
+  {:params [@{:client :any :bucket :string :region :string :access-key :string
+              :secret-key :string :scheme :string :authority :string
+              :public-url :string? :presign-max-expires :any & r}]
+   :ret {:name (enum :s3) :shared? :boolean :put! (fn [a b c] d) :get (fn [a] b)
+         :stream (fn [a] b) :delete! (fn [a] b) :stat (fn [a] b) :url (fn [a b] c)
+         :close (fn [] d)}}
   "The :void/storage-store dictionary over one `make` table."
   [s]
 
-  (defn s3-put! [k value opts]
+  (defn s3-put!
+    {:params [:string :any (or {:content-type :any? & r} :nil)]
+     :ret {:key :string :size :number :content-type :any :etag :any}}
+    [k value opts]
     (key/check! k)
     (def ct (get (or opts {}) :content-type))
     (def resp (request! s :put k {:body value :content-type ct}))
@@ -178,7 +212,9 @@
      :content-type ct
      :etag (client/header resp "etag")})
 
-  (defn s3-get [k]
+  (defn s3-get
+    {:params [:string] :ret :any}
+    [k]
     (key/check! k)
     (def resp (request! s :get k))
     (case (resp :status)
@@ -186,13 +222,17 @@
       404 nil
       (refuse s "GET" k resp)))
 
-  (defn s3-stream [k]
+  (defn s3-stream
+    {:params [:string] :ret (or [:any] :nil)}
+    [k]
     # one chunk: the client buffers the response whole (see the module
     # docstring), and pretending otherwise here would not change that
     (when-let [bytes (s3-get k)]
       [bytes]))
 
-  (defn s3-delete! [k]
+  (defn s3-delete!
+    {:params [:string] :ret :boolean}
+    [k]
     (key/check! k)
     # S3 answers 204 whether or not the key held anything, so "was it
     # there" costs a HEAD first — and is worth it: the contract's
@@ -204,7 +244,9 @@
       (refuse s "DELETE" k resp))
     there)
 
-  (defn s3-stat [k]
+  (defn s3-stat
+    {:params [:string] :ret :any}
+    [k]
     (key/check! k)
     (def resp (request! s :head k))
     (case (resp :status)
@@ -216,7 +258,9 @@
       404 nil
       (refuse s "HEAD" k resp)))
 
-  (defn s3-url [k opts]
+  (defn s3-url
+    {:params [:string (or {:expires :number? & r} :nil)] :ret :string :throws [:string]}
+    [k opts]
     (key/check! k)
     (def path (object-path s k))
     (def wire-path (sigv4/canonical-path path))

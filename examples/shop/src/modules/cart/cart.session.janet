@@ -43,7 +43,7 @@
         cart)))
 
 (defn forget!
-  {:params [@{:session @{:keyword :any} & r}] :ret :nil}
+  {:params [@{:session @{:keyword :any} & r}] :ret :table}
   ``Drop the cart from this session. The row is gone (the checkout
   deleted it) and a session pointing at a token that no longer exists
   would make the next `ensure!` create a second one.``

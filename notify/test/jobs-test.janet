@@ -15,7 +15,12 @@
 
 (def plugins ["void/jobs/init" "void/notify/init" "void/notify/jobs"])
 
-(defn- start [&opt extra]
+(defn- start
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot the queue-routed notifier, with `extra` merged into the CLI config."
+  [&opt extra]
   (test/start! {:plugins plugins
                 :only [:jobs/queue]
                 :profile :test

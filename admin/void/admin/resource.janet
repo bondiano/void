@@ -39,6 +39,7 @@
 (def- standard-set (tabseq [a :in standard-actions] a true))
 
 (defn policy-name
+  {:params [:keyword :keyword] :ret :keyword}
   ``The policy every route of one action carries besides the gate:
   `:admin.articles/destroy`. It exists so that "only the owner may
   delete" has a name already written on the route — the application
@@ -48,6 +49,7 @@
   (keyword "admin." rname "/" action))
 
 (defn route-name
+  {:params [:keyword :keyword] :ret :keyword}
   "The route name of one action of one resource — the same string the
   policy carries, which is why `void routes` and `void authz routes`
   read as one listing."
@@ -65,22 +67,42 @@
    :scope true :widgets true :inlines true :doc true :defaults true
    :slots true})
 
-(defn- check-opts [rname opts]
+(defn- check-opts
+  {:params [:keyword {:keyword :any}] :ret :nil :throws [:string]}
+  "Refuse an option `resource` does not know, naming what is allowed."
+  [rname opts]
   (eachk k opts
     (unless (in allowed-opts k)
       (errorf "admin resource %q: unknown option %q (allowed: %s)"
               rname k
               (util/names-str (keys allowed-opts))))))
 
-(defn- humanize [k] (form/humanize k))
+(defn- humanize
+  {:params [:keyword] :ret :string}
+  "A field or resource name as words — html/form's own humanizer."
+  [k] (form/humanize k))
 
-(defn- titleize [k]
+(defn- titleize
+  {:params [:keyword] :ret :string}
+  "A resource or entity name as a title — currently the same reading
+  as a field's label."
+  [k]
   (humanize k))
 
-(defn- known-fields [ent]
+(defn- known-fields
+  {:params [{:field-order [:keyword] & r}] :ret :string}
+  "Every field name of an entity, quoted and space-joined, for an
+  error that names what was actually declared."
+  [ent]
   (string/join (map |(string/format "%q" $) (ent :field-order)) " "))
 
-(defn- check-field [rname ent where k]
+(defn- check-field
+  {:params [:keyword {:name :keyword :fields {:keyword :any} :field-order [:keyword] & r}
+            :string :keyword]
+   :ret :keyword :throws [:string]}
+  "A field name, or a refusal naming the resource, the option that
+  named it and the fields the entity actually has."
+  [rname ent where k]
   (unless (get-in ent [:fields k])
     (errorf "admin resource %q: %s names %q, which %q has no field for (fields: %s)"
             rname where k (ent :name) (known-fields ent)))
@@ -96,6 +118,12 @@
 # re-deriving it per render.
 
 (defn- fk-relation
+  {:params [{:rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
+                              :through (or {:entity :keyword :key :keyword} :nil) & r}} & r}
+            :keyword]
+   :ret (or {:name :keyword :kind :keyword :entity :keyword :key :keyword
+             :through (or {:entity :keyword :key :keyword} :nil) & r}
+            :nil)}
   "The belongs-to relation whose key is this field, or nil — a column
   is drawn as a link picker because the *entity* says it points
   somewhere, never because the admin declared a second time that it
@@ -110,6 +138,24 @@
   out)
 
 (defn field-descriptor
+  {:params [{:name :keyword
+             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+             :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+            :keyword]
+   :ret {:name :keyword
+         :label (or :string :keyword :nil)
+         :required :boolean
+         :node {:type :keyword :props {:any :any} :children [:any]}
+         :schema {:type :keyword :props {:any :any} :children [:any]}
+         :type :keyword
+         :column :string
+         :db {:keyword :any}
+         :pk :boolean
+         :version :boolean
+         :rel (or {:name :keyword :kind :keyword :entity :keyword :key :keyword
+                   :through (or {:entity :keyword :key :keyword} :nil) & r}
+                  :nil)}
+   :throws [:string]}
   ``What a widget is handed as `:field`: the name, the label **as
   declared**, whether the schema made it required, the unwrapped schema
   node, the :db/* annotations and the relation this column is the
@@ -153,7 +199,22 @@
 # and a `:value` that only one of them accepted would mean "a computed
 # column is a list feature" — which is not a property of a column.
 
-(defn- column-spec [rname ent where spec]
+(defn- column-spec
+  {:params [:keyword
+            {:name :keyword
+             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+             :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+            :string (or :keyword {:keyword :any})]
+   :ret {:name :keyword :label :any
+         :field (or {:name :keyword :label (or :string :keyword :nil) :required :boolean
+                     :node :any :schema :any :type :keyword :column :string :db {:keyword :any}
+                     :pk :boolean :version :boolean :rel :any}
+                    :nil)
+         & r}
+   :throws [:string]}
+  "A `:list`/`:detail` column: a bare field keyword, or a table naming
+  a computed `:value` — the one shape both projections read."
+  [rname ent where spec]
   (cond
     (keyword? spec)
     (freeze {:name spec
@@ -182,7 +243,21 @@
 
 # -- filters -------------------------------------------------------------
 
-(defn- filter-spec [rname ent spec]
+(defn- filter-spec
+  {:params [:keyword
+            {:name :keyword
+             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+             :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+            (or :keyword {:keyword :any})]
+   :ret {:label :any :param :string :name :keyword
+         :field {:name :keyword :label (or :string :keyword :nil) :required :boolean
+                 :node :any :schema :any :type :keyword :column :string :db {:keyword :any}
+                 :pk :boolean :version :boolean :rel :any}
+         & r}
+   :throws [:string]}
+  "A `:filters` entry: a bare field keyword, or a table naming the
+  `:field` it narrows plus whatever the filter panel needs about it."
+  [rname ent spec]
   (def base
     (cond
       (keyword? spec) {:field spec}
@@ -204,7 +279,21 @@
   {:style true :fields true :per-page true :order-by true
    :can-add true :can-delete true :label true :resource true})
 
-(defn- inline-spec [rname ent iname spec]
+(defn- inline-spec
+  {:params [:keyword
+            {:rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
+                              :through (or {:entity :keyword :key :keyword} :nil) & r}} & r}
+            :keyword {:keyword :any}]
+   :ret {:name :keyword :label :any :style :keyword :per-page :number
+         :can-add :boolean :can-delete :boolean :resource :keyword
+         :rel {:name :keyword :kind :keyword :entity :keyword :key :keyword
+               :through (or {:entity :keyword :key :keyword} :nil) & r}
+         & r}
+   :throws [:string]}
+  "One `:inlines` entry: the has-many/has-one relation edited on the
+  parent's own page, with its style, its page size and whether rows
+  may be added or deleted from it."
+  [rname ent iname spec]
   (unless (dictionary? spec)
     (errorf "admin resource %q: inline %q must be a table, got %q" rname iname spec))
   (eachk k spec
@@ -246,6 +335,9 @@
 (def- slot-places {:before true :after true})
 
 (defn- slots-spec
+  {:params [:keyword {:keyword :any}]
+   :ret {:keyword {:keyword (fn [:any] :tuple)}}
+   :throws [:string]}
   ``What a resource puts above or below one of its three pages:
   `{:detail {:before (fn [ctx] hiccup)}}`. A slot is per *resource*,
   which is why it is a declaration and not an extension point: a note
@@ -278,7 +370,13 @@
   {:label true :doc true :apply true :job true :progress true
    :read-only? true :confirm true :danger true :needs-selection true})
 
-(defn- action-spec [rname aname spec]
+(defn- action-spec
+  {:params [:keyword :keyword {:keyword :any}]
+   :ret {:name :keyword :label :any :needs-selection :boolean :danger :boolean & r}
+   :throws [:string]}
+  "One `:actions` entry: a custom confirmation-page action, named
+  distinctly from the seven conventional ones."
+  [rname aname spec]
   (unless (dictionary? spec)
     (errorf "admin resource %q: action %q must be a table, got %q" rname aname spec))
   (when (in standard-set aname)
@@ -304,10 +402,22 @@
 
 # -- the descriptor ------------------------------------------------------
 
-(defn- enabled-actions [rname opts]
+(defn- enabled-actions
+  {:params [:keyword {:only (or @[:keyword] [:keyword] :nil)
+                       :except (or @[:keyword] [:keyword] :nil) & r}]
+   :ret [:keyword]
+   :throws [:string]}
+  "The conventional actions this resource actually gets, honoring
+  `:only`/`:except` — the whole seven when neither was said."
+  [rname opts]
   (when (and (get opts :only) (get opts :except))
     (errorf "admin resource %q: :only and :except are two answers to one question" rname))
-  (defn check [where names]
+  (defn check
+    {:params [:string (or @[:keyword] [:keyword])] :ret (or @[:keyword] [:keyword])
+     :throws [:string]}
+    "Every name in `names` is one of the seven conventional actions, or
+    a refusal naming the option and what is actually allowed."
+    [where names]
     (each a names
       (unless (in standard-set a)
         (errorf "admin resource %q: %s names %q, which is not one of %s"
@@ -323,6 +433,59 @@
     (tuple ;standard-actions)))
 
 (defn resource
+  {:params [:keyword :any :any]
+   :ret {:name :keyword
+         :doc :any
+         :entity {:name :keyword :table :string
+                  :schema {:type :keyword :props {:any :any} :children [:any]}
+                  :pk :keyword :pk-column :string :version (or :keyword :nil)
+                  :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                  :columns [:string] :field-order [:keyword] :column->field {:keyword :keyword}
+                  :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
+                                   :through (or {:entity :keyword :key :keyword} :nil) & r}}
+                  & r}
+         :title :string :singular :string :path :string :mount :boolean
+         :group (or :string :nil)
+         :actions [:keyword]
+         :action-set {:keyword :boolean}
+         :custom-actions {:keyword {:name :keyword :label :any
+                                    :needs-selection :boolean :danger :boolean & r}}
+         :list [{:name :keyword :label :any
+                 :field (or {:name :keyword :label (or :string :keyword :nil) :required :boolean
+                             :node :any :schema :any :type :keyword :column :string
+                             :db {:keyword :any} :pk :boolean :version :boolean :rel :any}
+                            :nil)
+                 & r}]
+         :detail [{:name :keyword :label :any
+                   :field (or {:name :keyword :label (or :string :keyword :nil) :required :boolean
+                               :node :any :schema :any :type :keyword :column :string
+                               :db {:keyword :any} :pk :boolean :version :boolean :rel :any}
+                              :nil)
+                   & r}]
+         :list-derived? :boolean :detail-derived? :boolean
+         :form [:keyword]
+         :form-schema {:type :keyword :props {:any :any} :children [:any]}
+         :form-fields [{:name :keyword :label (or :string :keyword :nil) :required :boolean
+                        :node :any :schema :any :type :keyword :column :string
+                        :db {:keyword :any} :pk :boolean :version :boolean :rel :any}]
+         :readonly [:keyword]
+         :filters [{:label :any :param :string :name :keyword
+                    :field {:name :keyword :label (or :string :keyword :nil) :required :boolean
+                            :node :any :schema :any :type :keyword :column :string
+                            :db {:keyword :any} :pk :boolean :version :boolean :rel :any}
+                    & r}]
+         :search [:keyword] :sortable [:keyword] :editable [:keyword]
+         :order-by :any :per-page (or :number :nil) :preload :any
+         :scope (or :function :nil)
+         :defaults {:keyword :function}
+         :slots {:keyword {:keyword (fn [:any] :tuple)}}
+         :widgets {:keyword :any}
+         :inlines {:keyword {:name :keyword :label :any :style :keyword :per-page :number
+                             :can-add :boolean :can-delete :boolean :resource :keyword
+                             :rel {:name :keyword :kind :keyword :entity :keyword :key :keyword
+                                   :through (or {:entity :keyword :key :keyword} :nil) & r}
+                             & r}}}
+   :throws [:string]}
   ``Build an admin resource descriptor — a frozen value, the single
   declaration `./mount` and `./mcp` both project:
 
@@ -445,29 +608,34 @@
 (def- registry @{})
 
 (defn register!
+  {:params [{:name :keyword & r}] :ret {:name :keyword & r}}
   "Register (or replace) a descriptor. Returns it."
   [desc]
   (put registry (desc :name) desc)
   desc)
 
 (defn deregister!
+  {:params [:keyword] :ret :nil}
   "Forget a resource."
   [rname]
   (put registry rname nil)
   nil)
 
 (defn resources
+  {:ret @[:keyword]}
   "Every declared resource name, sorted — what `void admin resources`
   prints and what both projections iterate."
   []
   (sorted (keys registry)))
 
 (defn lookup
+  {:params [:keyword] :ret (or {:name :keyword & r} :nil)}
   "One descriptor by name, or nil."
   [rname]
   (get registry rname))
 
 (defn resource!
+  {:params [:keyword] :ret {:name :keyword & r} :throws [:string]}
   "One descriptor by name, or an error naming what is declared."
   [rname]
   (or (get registry rname)
@@ -476,18 +644,21 @@
               (string/join (map |(string/format "%q" $) (resources)) " "))))
 
 (defn mounted
+  {:ret @[:keyword]}
   "The resources that get top-level routes — the whole registry minus
   the ones declared with :mount false."
   []
   (filter |((lookup $) :mount) (resources)))
 
 (defn define!
+  {:params [:keyword :any (or @[:any] [:any])] :ret {:name :keyword & r}}
   "Build, register and return a descriptor — the runtime half of
   `defresource-admin`, so there is one implementation."
   [rname ent kvs]
   (register! (resource rname ent ;kvs)))
 
 (defmacro defresource-admin
+  {:params [:symbol :any :any] :ret :any}
   ``Declare an admin resource (sugar over `resource` + `register!`):
 
       (defresource-admin articles Article

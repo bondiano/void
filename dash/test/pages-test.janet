@@ -22,6 +22,23 @@
   ["void/http/init" "void/html/init" "void/htmx/init" "void/dash/init"])
 
 (defn- gate
+  {:params [(fn [:any] :any)]
+   :ret {:name :keyword
+         :doc :string?
+         :void-api :number
+         :version :string
+         :requires {:keyword (or :boolean :string)}
+         :config-key :keyword?
+         :config-schema :any
+         :config-defaults (or {:keyword :any} :nil)
+         :when (or (fn [:any] :boolean) :nil)
+         :components [{:key :keyword :start (or :function :cfunction) :plugin :keyword & r}]
+         :contributes {:keyword [:any]}
+         :extension-points {:keyword :any}
+         :hooks [:keyword]
+         :on-load (or (fn [:any] :any) :nil)
+         :source :string?}
+   :throws [:string]}
   "A manifest contributing one :void.dash/gate predicate."
   [pred]
   (plugin/manifest 'test/gate
@@ -29,7 +46,13 @@
     :requires {:void/dash ">=0.0.1"}
     :contributes {:void.dash/gate [{:name :test/gate :fn pred}]}))
 
-(defn- start [profile &opt dash-cfg extra-plugins]
+(defn- start
+  {:params [:keyword (or {:keyword :any} :nil) (or @[:any] [:any] :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot the plugins under test, in `profile`, with `dash-cfg` as the
+  [:dash] slice and `extra-plugins` added to the composition."
+  [profile &opt dash-cfg extra-plugins]
   (test/start! {:plugins [;plugins ;(or extra-plugins [])]
                 :profile profile
                 :config {:env @{"APP_TOKEN" "s3cr3t-value"}

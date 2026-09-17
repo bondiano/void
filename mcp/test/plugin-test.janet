@@ -15,7 +15,10 @@
 
 (log/set-level! "void" :error)
 
-(defn- config [extra]
+(defn- config
+  {:params [:any] :ret {:env :any :cli :any}}
+  "Boot config with `extra` merged into the CLI slice."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error} :http {:port 0}} extra)})
 
 # -- phases 1-5 ----------------------------------------------------------
@@ -43,7 +46,11 @@
 
 # -- two contributions cannot claim the same name ------------------------
 
-(defn- with-contributions [contribs]
+(defn- with-contributions
+  {:params [:any] :ret :any}
+  "A one-off manifest carrying `contribs`, for a composition that
+  tries to make two contributions clash."
+  [contribs]
   (plugin/manifest 'clash/app
     :version "0.1.0"
     :requires {:void/mcp ">=0.0.1"}

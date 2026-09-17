@@ -8,7 +8,10 @@
 
 (def plugins ["void/pressure/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli @{:any :any}}}
+  "This suite's boot config, with `extra` merged into :cli."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error}} extra)})
 
 # -- phases 1-5 ----------------------------------------------------------

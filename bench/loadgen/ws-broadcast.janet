@@ -50,7 +50,13 @@
    :duration 30
    :warmup 3})
 
-(defn parse-args [args]
+(defn parse-args
+  {:params [(or @[:string] [:string])]
+   :ret @{:url :string :connections :number :duration :number :warmup :number
+          :help :boolean? :report :string?}
+   :throws [:string]}
+  "Parse the command-line flags into an options table, over `defaults`."
+  [args]
   (def out (merge @{} defaults))
   (var i 0)
   (while (< i (length args))
@@ -77,6 +83,7 @@
 # -- percentiles ---------------------------------------------------------
 
 (defn percentile
+  {:params [@[:number] :number] :ret :number?}
   "The p-th percentile of a *sorted* array of numbers, in milliseconds."
   [sorted-values p]
   (def n (length sorted-values))
@@ -85,6 +92,10 @@
     (in sorted-values idx)))
 
 (defn summarize
+  {:params [@[:number]]
+   :ret (or {:samples :number}
+            {:samples :number :p50 :number :p90 :number :p99 :number
+             :p999 :number :max :number :mean :number})}
   "Latency samples (seconds) -> the report's delivery block, in ms."
   [samples]
   (def ms (sorted (map |(* 1000 $) samples)))
@@ -101,6 +112,12 @@
 # -- one connection ------------------------------------------------------
 
 (defn- reader
+  {:params [@{:socket :any :buffer :buffer :config @{:keyword :any}
+              :state :keyword :received :number & r}
+            @{:running :boolean :measuring :boolean :received :number
+              :errors :number :closed :number :undecodable :number
+              :samples @[:number]}]
+   :ret [:boolean :any]}
   ``One connection's fiber: read forever, and while `state :measuring`
   is on, record the delivery delay of each message.``
   [client state]
@@ -124,7 +141,18 @@
 
 # -- the run -------------------------------------------------------------
 
-(defn run [opts]
+(defn run
+  {:params [@{:url :string :connections :number :duration :number :warmup :number & r}]
+   :ret @{:connections :number :requested :number :duration :number
+         :messages :number :rps :number
+         :delivery (or {:samples :number}
+                       {:samples :number :p50 :number :p90 :number :p99 :number
+                        :p999 :number :max :number :mean :number})
+         :errors :number :closed :number :undecodable :number}
+   :throws [:string]}
+  "Open `opts :connections` sockets, warm up, measure for `opts
+  :duration`, and return the delivery report."
+  [opts]
   (def state @{:running true :measuring false
                :received 0 :errors 0 :closed 0 :undecodable 0
                :samples @[]})
@@ -174,7 +202,10 @@
   (each c clients (protect (wsc/close! c :going-away nil 0.05)))
   report)
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret :nil}
+  "CLI entrypoint: parse flags, run the load, print the BENCH-WS report line."
+  [& args]
   (def opts (parse-args (tuple ;(drop 1 args))))
   (when (opts :help)
     (print usage)

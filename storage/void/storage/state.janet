@@ -24,43 +24,51 @@
   (store-ambient :dyn))
 
 (defn active-store
+  {:params [] :ret :any}
   "The store this fiber runs against: the `storage-dyn` override, else
   the started component."
   []
   (system/active store-ambient))
 
 (defn put!
+  {:params [:string :any (or {:content-type :any? & r} :nil)] :ret :any :throws [:string]}
   ``Store `value` (bytes) under `key`. opts: :content-type. Returns the
   store's metadata — {:key :size :content-type ...}.``
   [k value &opt opts]
   (((active-store) :put!) (key/check! k) value (or opts {})))
 
 (defn fetch
+  {:params [:string] :ret :any :throws [:string]}
   "The object's bytes, or nil when the key holds nothing."
   [k]
   (((active-store) :get) (key/check! k)))
 
 (defn stream
+  {:params [:string] :ret :any :throws [:string]}
   "An iterable of the object's chunks — a ring response body — or nil."
   [k]
   (((active-store) :stream) (key/check! k)))
 
 (defn delete!
+  {:params [:string] :ret :boolean :throws [:string]}
   "Drop the object. True when there was one."
   [k]
   (((active-store) :delete!) (key/check! k)))
 
 (defn stat
+  {:params [:string] :ret :any :throws [:string]}
   "The object's metadata without its bytes, or nil."
   [k]
   (((active-store) :stat) (key/check! k)))
 
 (defn exists?
+  {:params [:string] :ret :boolean :narrows :any :throws [:string]}
   "Does the key hold an object?"
   [k]
   (not (nil? (stat k))))
 
 (defn url
+  {:params [:string (or {:expires :number? & r} :nil)] :ret :string? :throws [:string]}
   ``Where a browser reads the object. opts {:expires seconds} asks for
   a temporary URL. nil when this store cannot produce one (a local
   store in a composition without void/storage-http).``
@@ -68,6 +76,7 @@
   (((active-store) :url) (key/check! k) (or opts {})))
 
 (defn shared?
+  {:params [] :ret :boolean}
   "Does every replica see the objects of the active store?"
   []
   (store/shared? (active-store)))

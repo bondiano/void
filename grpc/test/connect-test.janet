@@ -19,11 +19,24 @@
 (def orders @{"A-1" {:id "A-1" :total_cents 990 :status :STATUS_PLACED
                      :labels ["web"] :placed_at {:seconds 1000000}}})
 
-(defn get-order [msg _req]
+(defn get-order
+  {:params [{:id :any & r} :any]
+   :ret @{:id :string :total_cents :number :status :keyword :labels [:string]
+         :placed_at @{:seconds :number}}
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+  "The RPC handler under test: the order by id, or not_found."
+  [msg _req]
   (or (orders (msg :id))
       (grpc/fail! :not_found (string "no order " (msg :id)))))
 
-(defn count-orders [_msg _req]
+(defn count-orders
+  {:params [:any :any]
+   :ret @{:void.grpc/response :boolean :message :any :headers @{:string :string}
+         :trailers @{:string :string}}}
+  "The RPC handler under test: the count, sent via `grpc/respond` so a
+  trailer rides along — and a check that `grpc/current-call` sees this
+  call while it runs."
+  [_msg _req]
   # the call this fiber is answering, for the layer under a handler
   # that wants to know which method it is inside without being passed it
   (def call (grpc/current-call))
@@ -32,16 +45,29 @@
   (assert (call :req) "and the request that brought it")
   (grpc/respond {:count (length orders)} {:trailers {"x-source" "memory"}}))
 
-(defn place-order [msg _req]
+(defn place-order
+  {:params [{:total_cents :any & r} :any]
+   :ret {:id :string :total_cents :any :status :keyword}
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+  "The RPC handler under test: refuses a non-positive total, else
+  places the order."
+  [msg _req]
   (when (<= (msg :total_cents) 0)
     (grpc/fail! :invalid_argument "an order costs something"
                 {:details [{:type "shop.orders.BadField"
                             :value {:field "total_cents" :reason "must be positive"}}]}))
   {:id "A-2" :total_cents (msg :total_cents) :status :STATUS_PLACED})
 
-(defn explode [_msg _req] (error "a secret from the innards"))
+(defn explode
+  {:params [:any :any] :ret :never :throws [:string]}
+  "The RPC handler under test: raises a bare string, to check that
+  its text never reaches the client."
+  [_msg _req] (error "a secret from the innards"))
 
-(defn slow [_msg _req] (ev/sleep 0.5) {:count 0})
+(defn slow
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: sleeps past a short client deadline."
+  [_msg _req] (ev/sleep 0.5) {:count 0})
 
 (grpc/defservice :shop.orders/OrderService
   (rpc :GetOrder get-order)
@@ -57,7 +83,11 @@
 
 (def path "/shop.orders.OrderService/")
 
-(defn- call [c method body &opt opts]
+(defn- call
+  {:params [:any :string :string (or {:content-type (or :string :nil) :request :any & r} :nil)]
+   :ret :any}
+  "One HTTP call through the injected test client, at `path` + `method`."
+  [c method body &opt opts]
   (default opts {})
   (test/inject c (merge {:method :post
                          :uri (string path method)
@@ -66,17 +96,26 @@
                          :body body}
                         (get opts :request {}))))
 
-(defn- proto-call [c method message &opt opts]
+(defn- proto-call
+  {:params [:any :string :any (or {:input (or :keyword :nil) & r} :nil)] :ret :any}
+  "One HTTP call, the message encoded as protobuf."
+  [c method message &opt opts]
   (default opts {})
   (call c method (string (proto/encode (get opts :input :shop.orders/GetOrderRequest) message))
         opts))
 
-(defn- json-call [c method message &opt opts]
+(defn- json-call
+  {:params [:any :string :any (or {:input (or :keyword :nil) & r} :nil)] :ret :any}
+  "One HTTP call, the message encoded as proto3 JSON."
+  [c method message &opt opts]
   (default opts {})
   (call c method (proto/encode-json (get opts :input :shop.orders/GetOrderRequest) message)
         (merge {:content-type "application/json"} opts)))
 
-(defn- error-of [resp] (json/decode (string (resp :body))))
+(defn- error-of
+  {:params [{:body :any & r}] :ret :any}
+  "A response's body, decoded as the Connect error JSON it carries."
+  [resp] (json/decode (string (resp :body))))
 
 (test/with-http [c {:plugins [:void/http :void/proto :void/grpc app]
                     :config {:env @{}

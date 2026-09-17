@@ -29,7 +29,11 @@
   ["alpha" "bravo" "charlie" "delta" "echo" "foxtrot" "golf" "hotel"
    "india" "juliet" "kilo" "lima" "mike" "november" "oscar" "papa"])
 
-(defn- label-for [i]
+(defn- label-for
+  {:params [:number] :ret :string}
+  "One deterministic row label: a pooled word, the padded index, and
+  filler text sized so the row looks like a real record."
+  [i]
   (string (in labels (% i (length labels)))
           "-" (string/format "%05d" i)
           " lorem ipsum dolor sit amet consectetur"))
@@ -37,6 +41,7 @@
 (var- filled false)
 
 (defn seeded?
+  {:params [] :ret :boolean :narrows :any}
   ``Has `ensure!` finished in this process?
 
   The apps seed at `:after-start`, which runs *after* `system/start`
@@ -50,6 +55,8 @@
   filled)
 
 (defn ensure!
+  {:params [] :ret :number
+   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``Create `bench_rows` if it is not there and fill it if it is empty.
   Idempotent: a second boot against the same database does nothing but
   one count.``

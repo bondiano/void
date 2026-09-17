@@ -10,7 +10,11 @@
 
 (def plugins ["void/http/init" "void/html/init" "void/mail/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:keyword :any}] :ret {:env @{:any :any} :cli {:any :any}}}
+  "The boot config for this suite's defaults, with `extra` merged over
+  the :mail slice."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}
                 :http {:port 0 :access-log false}
@@ -19,7 +23,13 @@
                        :base-url "https://example.com"}}
                extra)})
 
-(defn- start [&opt extra profile]
+(defn- start
+  {:params [(or :nil {:keyword :any}) :keyword?]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot a test system for this suite, `extra` config and `profile`
+  overriding the defaults (:test unless said otherwise)."
+  [&opt extra profile]
   (test/start! {:plugins plugins :only [:http/kernel]
                 :profile (or profile :test)
                 :config (config (or extra {}))}))

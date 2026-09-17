@@ -28,6 +28,7 @@
 (def- booleans {:found-rows true :reconnect true})
 
 (defn config
+  {:params [(or {:any :any} :nil)] :ret {:any :any} :throws [:string]}
   ``The [:db-mysql] config slice for the configured server. A URL goes
   in as :url, which the slice already understands; a key=value list is
   read into the keys it names, so a CI environment can pass either.``
@@ -49,6 +50,7 @@
   (merge base (or extra {})))
 
 (defn table-name
+  {:params [:string] :ret :string}
   ``A table name nothing else in this run will pick. The suite creates
   and drops its own tables in whatever database it was pointed at, so
   the names have to be unlikely rather than pretty.``

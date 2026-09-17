@@ -35,6 +35,9 @@
 (def log-ns "void.kafka.consumer")
 
 (defn- on-fetch
+  {:params [@{:group :any :deliver (fn [:any] :any)
+              :stats @{:errors :number :received :number :delivered :number & sr} & r}]
+   :ret (fn [:pointer :any] :nil)}
   ``One fetch event = one message (librdkafka's contract for FETCH).
   The event stays alive while `deliver` runs — every pointer in the
   message table is valid exactly that long, which is also why the
@@ -66,6 +69,15 @@
           (put-in co [:stats :delivered] (inc (get-in co [:stats :delivered] 0))))))))
 
 (defn make
+  {:params [@[[:string :string]] (or [:string] @[:string]) {:group :any & r} (fn [:any] :any)]
+   :ret @{:client @{:kind :keyword :handle :pointer :queue :pointer :rfd :number
+                    :wfd :number :pair :any :stopped :boolean :pump-done :any
+                    :last-error :any :handlers @{:keyword :any}
+                    :stats @{:events :number :errors :number}}
+          :group :any :topics (or [:string] @[:string]) :deliver (fn [:any] :any)
+          :closed :boolean
+          :stats @{:received :number :delivered :number :errors :number}}
+   :throws [:string]}
   ``A consumer over property pairs, subscribed to `topics` (exact
   names, or one "^regex" — Kafka's own spelling), delivering each
   message to `deliver`:
@@ -106,6 +118,10 @@
   co)
 
 (defn close!
+  {:params [@{:client @{:handle :pointer :queue :pointer & cr} :closed :boolean
+              :group :any & r}
+            :number?]
+   :ret :nil}
   ``Leave the group, stop the pump, release the handle. The leave is
   the polite half of at-least-once: a consumer that says goodbye hands
   its partitions over now, one that vanishes makes the group wait out
@@ -137,6 +153,8 @@
   nil)
 
 (defn stats
+  {:params [@{:stats @{:received :number :delivered :number :errors :number} & r}]
+   :ret {:received :number :delivered :number :errors :number}}
   "The counters."
   [co]
   (table/to-struct (co :stats)))

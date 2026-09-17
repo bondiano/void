@@ -42,6 +42,8 @@
 (import ../store :as store)
 
 (defn run!
+  {:params [:string :any (or {:ttl :number? :settle :number? & r} :nil)]
+   :ret :boolean :throws [:string]}
   ``Assert that `store0` behaves like a `:void/cache-store`. `name`
   names the backend in the failure messages, because "the counter did
   not expire" is a different bug in each of them.

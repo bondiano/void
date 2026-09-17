@@ -31,6 +31,7 @@
 (import ./sign :as sign)
 
 (defn- mkdirs!
+  {:params [:string] :ret :string :throws [:string]}
   "Create every missing directory on the way to `dir`."
   [dir]
   (var built (if (string/has-prefix? "/" dir) "/" ""))
@@ -42,21 +43,31 @@
     (errorf "storage: cannot create directory %s" dir))
   dir)
 
-(defn- path-of [root k]
-  # the key is validated at the contract boundary (key/check!), so a
-  # plain join cannot climb — the same property static/safe-join
-  # enforces for URL paths
+(defn- path-of
+  {:params [:string :string] :ret :string}
+  "The filesystem path for `k` under `root`. The key is validated at
+  the contract boundary (key/check!), so a plain join cannot climb —
+  the same property static/safe-join enforces for URL paths."
+  [root k]
   (string root "/" k))
 
-(defn- dirname [p]
+(defn- dirname
+  {:params [:string] :ret :string}
+  "The directory part of a path — everything before the last slash,
+  or \"\" when there is none."
+  [p]
   (def idxs (string/find-all "/" p))
   (if (empty? idxs) "" (string/slice p 0 (last idxs))))
 
-(defn- tmp-name [p]
+(defn- tmp-name
+  {:params [:string] :ret :string}
+  "A sibling temp path `put!` writes to before the atomic rename."
+  [p]
   (string p ".tmp."
           (string/join (seq [x :in (os/cryptorand 4)] (string/format "%02x" x)))))
 
 (defn encoded-path
+  {:params [:string] :ret :string}
   "A key as URL path segments: each segment percent-encoded, the
   slashes kept."
   [k]
@@ -67,6 +78,8 @@
   65536)
 
 (defn make
+  {:params [{:local {:root :any & r} :serve :any? & r}] :ret @{:root :string :serve :any}
+   :throws [:string]}
   ``The store table for the [:storage] slice: {:root :serve}. The root
   is created eagerly — a store that cannot write is a :start error, not
   a 500 on the first upload.``
@@ -79,12 +92,19 @@
   @{:root root :serve serve})
 
 (defn store
+  {:params [@{:root :string :serve (or {:prefix :string? & r} :nil) & r}]
+   :ret {:name (enum :local) :shared? :boolean :replacement :string :put! (fn [a b c] d)
+         :get (fn [a] b) :stream (fn [a] b) :delete! (fn [a] b) :stat (fn [a] b)
+         :url (fn [a b] c)}}
   "The :void/storage-store dictionary over one `make` table."
   [m]
   (def root (m :root))
   (def prefix (get-in m [:serve :prefix]))
 
-  (defn local-put! [k value opts]
+  (defn local-put!
+    {:params [:string :any (or {:content-type :any? & r} :nil)]
+     :ret {:key :string :size :number :content-type :any}}
+    [k value opts]
     (key/check! k)
     (def path (path-of root k))
     (def dir (dirname path))
@@ -97,13 +117,17 @@
      :content-type (or (get (or opts {}) :content-type)
                        (static/mime-type k))})
 
-  (defn local-get [k]
+  (defn local-get
+    {:params [:string] :ret :any}
+    [k]
     (key/check! k)
     (def path (path-of root k))
     (when (= :file (os/stat path :mode))
       (slurp path)))
 
-  (defn local-stream [k]
+  (defn local-stream
+    {:params [:string] :ret :any}
+    [k]
     (key/check! k)
     (def path (path-of root k))
     (when (= :file (os/stat path :mode))
@@ -114,14 +138,18 @@
             (when (or (nil? chunk) (empty? chunk)) (break))
             (yield chunk))))))
 
-  (defn local-delete! [k]
+  (defn local-delete!
+    {:params [:string] :ret :boolean}
+    [k]
     (key/check! k)
     (def path (path-of root k))
     (if (= :file (os/stat path :mode))
       (do (os/rm path) true)
       false))
 
-  (defn local-stat [k]
+  (defn local-stat
+    {:params [:string] :ret :any}
+    [k]
     (key/check! k)
     (def path (path-of root k))
     (when-let [st (os/stat path)]
@@ -131,7 +159,9 @@
          :modified (st :modified)
          :content-type (static/mime-type k)})))
 
-  (defn local-url [k opts]
+  (defn local-url
+    {:params [:string (or {:expires :number? & r} :nil)] :ret :string?}
+    [k opts]
     (key/check! k)
     (when prefix
       (def base (string prefix "/" (encoded-path k)))

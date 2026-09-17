@@ -77,6 +77,7 @@
   {:janet true :bytes true})
 
 (defn normalize
+  {:params [:any] :ret :struct :throws [:string]}
   ``Validate a store dictionary and fill in the documented fallbacks.
   Returns a frozen store value; throws with the offending key on any
   contract violation.``
@@ -132,6 +133,7 @@
       {:atomic-incr own-incr})))
 
 (defn shared?
+  {:params [:any] :ret :boolean :narrows :any}
   "True when several processes see the same entries — the question
   `[:deploy :shape] :fleet` asks of every store it can reach
 ."
@@ -139,6 +141,7 @@
   (truthy? (get st :shared?)))
 
 (defn atomic-incr?
+  {:params [:any] :ret :boolean :narrows :any}
   "True when the store implements :incr itself — that is, when the
   counter is exact even with several processes sharing the store."
   [st]

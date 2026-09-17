@@ -21,16 +21,27 @@
 (import void/db :as db)
 (import ./resource :as res)
 
-(defn- qparam [req name]
+(defn- qparam
+  {:params [@{:query {:string :any} & r} :string] :ret (or :string :nil)}
+  "One non-empty query-string value, or nil — an empty string is the
+  same as absent, so a cleared filter clears rather than matching ''."
+  [req name]
   (def v (get-in req [:query name]))
   (when (and v (not (empty? (string v)))) (string v)))
 
-(defn- column [desc fname]
+(defn- column
+  {:params [{:entity {:fields {:keyword {:column :string & r}} & r} & r} :keyword]
+   :ret :keyword}
+  "The SQL column of one declared field, as a keyword — what `:where`
+  and `:order-by` are actually built from."
+  [desc fname]
   (keyword (get-in desc [:entity :fields fname :column])))
 
 # -- value coercion ------------------------------------------------------
 
 (defn coerce
+  {:params [{:type :keyword :node {:type :keyword :props {:any :any} :children [:any]} & r} :any]
+   :ret (or :number :boolean :string :keyword :nil)}
   ``One query-string value -> a domain value, using the schema node the
   entity already carries. Unparseable input is not an error and not a
   guess: it is `nil`, and a nil filter is no filter. A filter panel is
@@ -57,6 +68,18 @@
 # -- the state -----------------------------------------------------------
 
 (defn state
+  {:params [{:per-page (or :number :nil) :sortable [:keyword]
+             :filters [{:field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        :param :string :name :keyword & r}]
+             & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            (or {:per-page (or :number :nil) & r} :nil)]
+   :ret {:page :number :per-page :number :offset :number :sort (or :keyword :nil)
+         :dir :keyword :q (or :string :nil) :filters {:keyword {:keyword :any}}}}
   ``The list state this request asks for: page, per-page, sort column
   and direction, the search term and the value of every declared
   filter. Nothing here trusts a name it was given — sorting happens on
@@ -97,7 +120,13 @@
 
 # -- the where clause ----------------------------------------------------
 
-(defn- search-clause [desc term]
+(defn- search-clause
+  {:params [{:search [:keyword] :entity {:fields {:keyword {:column :string & r}} & r} & r}
+            :string]
+   :ret (or :tuple :nil)}
+  "The :like-over-:or clause matching `term` against every :search
+  column, or nil when the resource declared none."
+  [desc term]
   (def pat (string "%" term "%"))
   (def cs (seq [c :in (desc :search)] [:like (column desc c) pat]))
   (case (length cs)
@@ -105,7 +134,13 @@
     1 (first cs)
     [:or ;cs]))
 
-(defn- filter-clauses [desc st]
+(defn- filter-clauses
+  {:params [{:entity {:fields {:keyword {:column :string & r}} & r} & r}
+            {:filters {:keyword {:keyword :any}} & r}]
+   :ret @[:tuple]}
+  "One `[:= col v]`/`[:>= col v]`/`[:<= col v]` clause per filter the
+  state carries a value for."
+  [desc st]
   (def out @[])
   (eachp [fname spec] (st :filters)
     (def col (column desc fname))
@@ -117,6 +152,15 @@
   out)
 
 (defn where
+  {:params [{:scope (or :function :nil) :search [:keyword]
+             :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:filters {:keyword {:keyword :any}} :q (or :string :nil) & r}
+            :any?]
+   :ret (or :tuple :nil)}
   ``The one clause both `query` and `count` are given: the resource's
   `:scope` for this request, the declared filters that carry a value,
   and the search term. `extra` is folded in the same way — that is how
@@ -146,6 +190,14 @@
     [:and ;parts]))
 
 (defn scoped
+  {:params [{:scope (or :function :nil) :search [:keyword]
+             :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            :any?]
+   :ret (or :tuple :nil)}
   ``The scope alone (plus `extra`) — what every single-row action reads
   through. A row outside the scope is not a 403 by accident: it is
   simply not found, and the policy on the loaded row is the second
@@ -154,6 +206,9 @@
   (where desc req {:filters {}} extra))
 
 (defn order-by
+  {:params [{:order-by :any :entity {:fields {:keyword {:column :string & r}} & r} & r}
+            {:sort (or :keyword :nil) :dir :keyword & r}]
+   :ret [[:keyword :keyword]]}
   "The ORDER BY: the sortable column the URL asked for, else the
   resource's declared default."
   [desc st]
@@ -167,12 +222,31 @@
 # -- reading -------------------------------------------------------------
 
 (defn total
+  {:params [{:scope (or :function :nil) :search [:keyword]
+             :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:filters {:keyword {:keyword :any}} :q (or :string :nil) & r}
+            :any?]
+   :ret :number}
   "How many rows this list has under its scope and filters — counted
   with the very clause the page is about to select with."
   [desc req st &opt extra]
   (db/count (desc :entity) {:where (where desc req st extra)}))
 
 (defn rows
+  {:params [{:scope (or :function :nil) :search [:keyword] :order-by :any :preload :any
+             :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:filters {:keyword {:keyword :any}} :q (or :string :nil)
+             :sort (or :keyword :nil) :dir :keyword :per-page :number :offset :number & r}
+            :any?]
+   :ret @[@{:any :any}]}
   "One page of the list."
   [desc req st &opt extra]
   (db/query (desc :entity)
@@ -183,17 +257,49 @@
                    (if-let [p (desc :preload)] {:preload p} {}))))
 
 (defn pk-field
+  {:params [{:entity {:name :keyword :pk :keyword
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}]
+   :ret {:name :keyword :label (or :string :keyword :nil) :required :boolean
+         :node {:type :keyword :props {:any :any} :children [:any]}
+         :schema {:type :keyword :props {:any :any} :children [:any]}
+         :type :keyword :column :string :db {:keyword :any}
+         :pk :boolean :version :boolean
+         :rel (or {:name :keyword :kind :keyword :entity :keyword :key :keyword
+                   :through (or {:entity :keyword :key :keyword} :nil) & r}
+                  :nil)}
+   :throws [:string]}
   "The primary key's field descriptor — what a path parameter has to be
   coerced through before it reaches a query."
   [desc]
   (res/field-descriptor (desc :entity) (get-in desc [:entity :pk])))
 
 (defn pk-value
+  {:params [{:entity {:name :keyword :pk :keyword
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            :string]
+   :ret (or :number :boolean :string :keyword :nil)
+   :throws [:string]}
   "A path parameter (always a string) as the primary key's own type."
   [desc raw]
   (coerce (pk-field desc) raw))
 
 (defn find-scoped
+  {:params [{:scope (or :function :nil) :search [:keyword] :preload :any
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            :string]
+   :ret (or @{:any :any} :nil)
+   :throws [:string]}
   ``One row by primary key, inside the scope. Returns nil when the row
   does not exist *or* is not this subject's — the two are the same
   answer on purpose.``
@@ -208,6 +314,18 @@
 # -- selections ----------------------------------------------------------
 
 (defn selection
+  {:params [{:scope (or :function :nil) :search [:keyword]
+             :entity {:name :keyword :pk :keyword :pk-column :string
+                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
+                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             & r}
+            @{:method :keyword :path :string :raw-path :string :query-string :string?
+              :query {:string :any} :headers {:string (or :string @[:string])}
+              :http-version [:number :number] :body :any :received :number
+              :arrived :number? :remote-addr :string? & r}
+            {:filters {:keyword {:keyword :any}} :q (or :string :nil) & r}]
+   :ret {:all :boolean :where (or :tuple :nil) & r}
+   :throws [:string]}
   ``What a bulk action is about to touch, as data:
 
       {:all true  :where <clause>}     the whole filtered list
@@ -241,6 +359,10 @@
                 (where desc req st [:in (keyword (ent :pk-column)) (tuple ;ids)]))})))
 
 (defn selected-rows
+  {:params [{:preload :any
+             :entity {:pk-column :string & r} & r}
+            {:where (or :tuple :nil) & r} :number? :any?]
+   :ret @[@{:any :any}]}
   ``The rows a selection resolves to, one batch at a time — a bulk over
   forty thousand rows must not become forty thousand instances at once.
 
@@ -265,6 +387,7 @@
                    (if-let [p (desc :preload)] {:preload p} {}))))
 
 (defn selected-count
+  {:params [{:entity :any & r} {:where (or :tuple :nil) & r}] :ret :number}
   "How many rows a selection resolves to — counted on the server, with
   the clause the apply step will use."
   [desc sel]

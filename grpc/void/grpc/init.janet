@@ -66,6 +66,16 @@
 # -- what a handler uses -------------------------------------------------
 
 (defn fail!
+  {:params [(enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
+                  :already_exists :permission_denied :resource_exhausted :failed_precondition
+                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
+                  :unauthenticated)
+            :string
+            (or {:http/status (or :number :nil) :details (or [:any] :nil)
+                :headers (or @{:string :string} :nil) & r}
+                :nil)]
+   :ret :never
+   :throws [:string {:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``Raise an RPC failure — the code, and a message for a person:
 
       (grpc/fail! :not_found "no order A-1")
@@ -75,27 +85,49 @@
   (codes/fail! code message opts))
 
 (defn error-value
+  {:params [(enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
+                  :already_exists :permission_denied :resource_exhausted :failed_precondition
+                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
+                  :unauthenticated)
+            :string
+            (or {:http/status (or :number :nil) :details (or [:any] :nil)
+                :headers (or @{:string :string} :nil) & r}
+                :nil)]
+   :ret {:void.grpc/code :keyword :status :number :http/status :number & r}
+   :throws [:string]}
   "Build an RPC failure without raising it."
   [code message &opt opts]
   (codes/error-value code message opts))
 
 (defn respond
+  {:params [:any (or {:headers (or @{:string :string} :nil) :trailers (or @{:string :string} :nil) & r} :nil)]
+   :ret @{:void.grpc/response :boolean :message :any :headers @{:string :string}
+         :trailers @{:string :string}}}
   "A response message plus headers or trailers — see connect/respond."
   [message &opt opts]
   (connect/respond message opts))
 
 (defn current-call
+  {:params []
+   :ret (or :nil {:service :keyword :method :keyword :descriptor :any :codec :keyword :req :any})}
   "The call this fiber is answering: {:service :method :descriptor
   :codec :req}, or nil."
   []
   (mount/current-call))
 
 (defn services
+  {:params []
+   :ret @[{:name :keyword :descriptor :any :proto-name :string :path :string
+          :meta :any :env :any :doc (or :string :nil) :methods [:any] :by-name @{:keyword :any}}]}
   "Every registered service value."
   []
   (service/services))
 
 (defn methods
+  {:params []
+   :ret @[{:service :keyword :method :keyword :path :string :route :keyword
+          :get-route (or :keyword :nil) :input :any :output :any :idempotent :boolean
+          :meta @{:keyword :any} :service-meta :any}]}
   "Every mounted method, as data — what `void grpc services` prints."
   []
   (mount/describe))
@@ -103,6 +135,12 @@
 # -- the other end -------------------------------------------------------
 
 (defn client
+  {:params [:any
+            (or {:encoding (or :keyword :nil) :headers (or @{:string :string} :nil)
+                :timeout (or :number :nil) & r}
+                :nil)]
+   :ret @{:url :string :encoding :keyword :headers @{:string :string} :timeout (or :number :nil)}
+   :throws [:string]}
   ``A Connect client against a base URL — see client/client:
 
       (def orders (grpc/client "http://127.0.0.1:8080"))``
@@ -110,6 +148,14 @@
   (client-module/client base-url opts))
 
 (defn call
+  {:params [@{:url :string :encoding :keyword :headers @{:string :string}
+              :timeout (or :number :nil)}
+            :keyword :keyword :any
+            (or {:headers (or @{:string :string} :nil) :timeout (or :number :nil)
+                :get (or :boolean :nil) :full (or :boolean :nil) & r}
+                :nil)]
+   :ret (or :any @{:message :any :headers @{:string :any} :trailers @{:string :any}})
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``One unary call through a client. Returns the response message and
   raises the RPC failure when the server sent one — see client/call
   for the options (`:headers`, `:timeout`, `:get`, `:full`):
@@ -123,6 +169,7 @@
   client-module/trailers)
 
 (defmacro defservice
+  {:params [:any :any] :ret :any}
   ``Declare and register an RPC service — the macro service/defservice
   documents, exported here so an application imports one module:
 
@@ -154,7 +201,12 @@
   "The [:grpc] slice, read at :before-start."
   nil)
 
-(defn- json-options []
+(defn- json-options
+  {:params []
+   :ret {:emit-defaults (or :boolean :nil) :proto-names (or :boolean :nil)
+        :ignore-unknown (or :boolean :nil) :enums-as-numbers (or :boolean :nil) & r}}
+  "The [:grpc :json] slice — proto3 JSON mapping options for the JSON codec."
+  []
   (get settings :json {}))
 
 (plugin/contribute! :void.grpc/codec
@@ -184,6 +236,7 @@
 # -- error details -------------------------------------------------------
 
 (defn- encode-detail
+  {:params [:any] :ret @{:string :any}}
   ``One `details` entry of a Connect error. `{:type "shop.orders.BadField"
   :value <message>}` encodes the value with the descriptor its type
   names and carries it as base64, which is what a generated client
@@ -246,6 +299,9 @@
    :json {}})
 
 (defn build-settings
+  {:params [{:config :any :profile :keyword & r}]
+   :ret @{:mount :boolean :require-protocol-version :boolean :json :any
+          :describe-errors :boolean & r}}
   "The [:grpc] slice over the defaults. `:describe-errors` defaults to
   on outside :prod, because an unhandled error's text is a stack of
   somebody's internals and a client is not who should read it."
@@ -269,7 +325,11 @@
 
 # -- the route source ----------------------------------------------------
 
-(defn- own-routes [_boot]
+(defn- own-routes
+  {:params [:any] :ret :any}
+  "This plugin's own route source: every registered method, or an
+  empty route source when [:grpc :mount] is off."
+  [_boot]
   (if (get settings :mount true)
     (mount/routes)
     (router/routes {})))

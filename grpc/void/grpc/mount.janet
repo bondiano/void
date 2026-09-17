@@ -59,6 +59,8 @@
   :void.grpc/call)
 
 (defn current-call
+  {:params []
+   :ret (or :nil {:service :keyword :method :keyword :descriptor :any :codec :keyword :req :any})}
   "The call this fiber is answering, or nil."
   []
   (dyn call-dyn))
@@ -66,6 +68,10 @@
 # -- one call ------------------------------------------------------------
 
 (defn- run-handler
+  {:params [{:service :keyword :method :keyword :descriptor :any :codec :keyword :req :any}
+            (fn [:any :any] :any) :any :any (or :number :nil)]
+   :ret :any
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``Call the handler, honouring the client's `Connect-Timeout-Ms`.
 
   With a deadline the call runs as its own task (void/core/deadline),
@@ -81,6 +87,7 @@
                                                (math/round (* 1000 timeout)))))))
 
 (defn- panic-message
+  {:params [:any] :ret :string}
   ``What a client is told when a handler raised something that is not
   an RPC failure. In :prod that is a sentence and nothing else: an
   unhandled error's text is a stack of somebody's internals, and the
@@ -92,6 +99,7 @@
     "the server failed to answer this call"))
 
 (defn error-response
+  {:params [:any] :ret (or :nil @{:status :number :headers @{:string :string} :body :string})}
   ``The Connect error response for a raised value, or nil when the
   value is not a failure an RPC client can be told about (a dictionary
   that is neither ours nor an HTTP error — somebody else's). The one
@@ -104,6 +112,13 @@
     (connect/error-response failure detail-encoder)))
 
 (defn answer
+  {:params [{:name :keyword & sr}
+            {:input :any :output :any :route-name :keyword & mr}
+            (fn [:any :any] :any)
+            {:method (or :keyword :nil) :body (or :string :nil)
+             :query (or @{:string :any} :nil) & r}]
+   :ret @{:status :number :headers @{:string :string} :body :string}
+   :throws [:any]}
   ``Answer one Connect call against a service and a method. Public
   because it is the whole protocol in one function, and a test that
   wants to drive it without a route table can.``
@@ -144,6 +159,7 @@
         (error result))))
 
 (defn- env-of
+  {:params [{:env :any & r}] :ret :any}
   ``The declaring module's environment. `defservice` stores it wrapped
   in `router/env-ref` for the same reason a route source does: a
   service value is frozen, and freezing a raw env table would walk the
@@ -153,6 +169,8 @@
   (if (function? env) (env) env))
 
 (defn handler-for
+  {:params [{:env :any & sr} {:handler :any :route-name :keyword & mr}]
+   :ret (fn [:any] @{:status :number :headers @{:string :string} :body :string})}
   "The route handler of one method — a closure over the service, the
   method and the handler resolved against the declaring module's
   environment (late binding, void/core/bind)."
@@ -166,6 +184,7 @@
 # -- the route table -----------------------------------------------------
 
 (defn method-meta
+  {:params [:any {:route-name :keyword :name :keyword :meta :any & r}] :ret @{:keyword :any}}
   ``The metadata one method's *route* carries. The service's own layer
   is not merged in here: it is the route group's, and merging it is
   the router's job — with provenance, and with `:restrict` keys that
@@ -182,6 +201,7 @@
          (m :meta)))
 
 (defn routes
+  {:params [] :ret :any}
   ``Every registered service, as routes. A function rather than a
   value, because the registry it projects is filled by the
   application's own modules long after this plugin's manifest froze —
@@ -208,6 +228,10 @@
   (router/routes {} ;children))
 
 (defn describe
+  {:params []
+   :ret @[{:service :keyword :method :keyword :path :string :route :keyword
+          :get-route (or :keyword :nil) :input :any :output :any :idempotent :boolean
+          :meta @{:keyword :any} :service-meta :any}]}
   ``Every mounted method as a line — what `void grpc services` prints
   and what a test asserts the projection produced.``
   []

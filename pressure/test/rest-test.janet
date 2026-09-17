@@ -16,7 +16,11 @@
 # rendering without it" — is a claim about a plugin this package does
 # not depend on, so it is only true if something loads both and looks.
 
-(defn orders [req] (rest/json {:orders []}))
+(defn orders
+  {:params [:any] :ret @{:status :number :headers @{:string :any} :void.rest/data :any}}
+  "Handler for the route this suite checks the shed response's
+  content-type and Retry-After through."
+  [req] (rest/json {:orders []}))
 
 (def app-routes
   (router/routes {}

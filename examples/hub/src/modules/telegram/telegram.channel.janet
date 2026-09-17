@@ -36,6 +36,7 @@
 (var- settings defaults)
 
 (defn- reveal-token
+  {:params [@{:any :any}] :ret @{:any :any} :throws [:string]}
   "The token out of its box (void/mail does this with an SMTP
   password): a secret reference is resolved at load and revealed here,
   once, rather than travelling through the code as a string."
@@ -45,6 +46,7 @@
   cfg)
 
 (defn- without-blanks
+  {:params [@{:any :any}] :ret @{:any :any}}
   ``Drop keys whose value is an empty string. A compose file cannot
   leave a variable out conditionally — `${TELEGRAM_BOT_TOKEN:-}` sets it
   to nothing — and a token that is the empty string would be a bot this
@@ -57,6 +59,7 @@
   out)
 
 (defn configure!
+  {:params [(or {:telegram (or @{:any :any} :nil) & r} :nil)] :ret :nil}
   "Called from the application's :before-start hook (src/app.janet) —
   the bot token and the chat to fall back on."
   [slice]
@@ -69,6 +72,7 @@
             :chat (truthy? (get cfg :chat-id))))
 
 (defn configured?
+  {:params [] :ret :boolean}
   "Does this process have a bot to speak as?"
   []
   (truthy? (get settings :token)))
@@ -76,6 +80,7 @@
 # -- the message ---------------------------------------------------------
 
 (defn text-of
+  {:params [{:title :any :body :any? & r}] :ret :string}
   ``The message body: the title, then whatever the notification had room
   to add. Plain text on purpose — telegram's HTML mode would make every
   commit message a thing this application has to escape, and a commit
@@ -87,6 +92,8 @@
     (string (note :title))))
 
 (defn project
+  {:params [{:id :any? :at :any? :key :any? :title :any :body :any? & r}]
+   :ret (or {:id :any? :at :any? :key :any? :chat-id :string :text :string} :nil)}
   ``The chat and the text, or nil when this notification names no chat
   and none is configured — the shape a channel says "not my business" in
 .``
@@ -103,6 +110,7 @@
 # -- the network ---------------------------------------------------------
 
 (defn telegram-error
+  {:params [:number :any] :ret {:hub/telegram :boolean :status :number :message :string}}
   "What a failed delivery throws: telegram's own answer, so that
   `permanent?` can read the status off it."
   [status body]
@@ -119,6 +127,7 @@
   [408 429])
 
 (defn permanent?
+  {:params [{:status :any? & r}] :ret :boolean}
   "Has telegram already answered for good?"
   [err]
   (def status (get err :status))
@@ -127,6 +136,9 @@
                 (not (index-of status retry-anyway)))))
 
 (defn deliver
+  {:params [{:chat-id :string :text :string :id :any? & r}]
+   :ret @{:channel :keyword :id :any :at :any :status :number :chat :string}
+   :throws [:string {:hub/telegram :boolean :status :number? :message :string}]}
   "POST sendMessage, and let the status decide whether there is anything
   left to retry."
   [payload]

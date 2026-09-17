@@ -11,7 +11,12 @@
                  :manager [:orders/read :orders/write]
                  :support [:orders/read]})
 
-(defn- ctx-for [claims]
+(defn- ctx-for
+  {:params [{:any :any}]
+   :ret @{:subject :any :action :any :resource :any :env {:keyword :any}
+          :attrs @{:keyword :any} :used @[:keyword]}}
+  "A context for a subject with these claims — this suite's fixture."
+  [claims]
   (context/make {:subject {:subject "user:1" :claims claims}}))
 
 # -- roles are an attribute of the subject -------------------------------

@@ -17,7 +17,13 @@
 (def plugins
   ["void/http/init" "void/html/init" "void/htmx/init" "void/dash/init"])
 
-(defn- boot-opts [&opt dash-cfg profile]
+(defn- boot-opts
+  {:params [(or {:keyword :any} :nil) :keyword?]
+   :ret {:plugins [:string] :profile :keyword
+         :config {:env @{:any :any} :cli {:http {:port :number} :dash {:keyword :any}}}}}
+  "Boot options for this plugin set, :dev by default, with `dash-cfg`
+  as the [:dash] slice."
+  [&opt dash-cfg profile]
   {:plugins plugins
    :profile (or profile :dev)
    :config {:env @{} :cli {:http {:port 0}
@@ -42,7 +48,10 @@
 (assert tile-point "the :void.dash/tile point is declared")
 (assert (= :void/dash (tile-point :owner)) "and owned by void/dash")
 
-(defn- contributes? [point name]
+(defn- contributes?
+  {:params [:keyword :keyword] :ret (or :any :nil)}
+  "The contribution to `point` named `name`, or nil."
+  [point name]
   (some |(= name (get-in $ [:value :name]))
         (get-in boot [:extensions point :contributions] [])))
 
@@ -63,7 +72,10 @@
 
 # -- wrong configs are boot errors, batched and named --------------------
 
-(defn- refused? [dash-cfg]
+(defn- refused?
+  {:params [(or {:keyword :any} :nil)] :ret (or :boolean :number :nil)}
+  "Does this [:dash] slice fail to boot, naming void/dash in the refusal?"
+  [dash-cfg]
   (def [ok err] (protect (plugin/bootstrap (boot-opts dash-cfg) true)))
   (and (not ok)
        (string/find "void/dash" (string err))))

@@ -15,11 +15,13 @@
 (import void/crypto :as crypto)
 
 (defn verifier
+  {:params [] :ret :string}
   "A fresh code verifier: 43 characters of the unreserved alphabet."
   []
   (crypto/base64url (crypto/random-bytes 32)))
 
 (defn challenge
+  {:params [:string] :ret :string}
   "The S256 code challenge for a verifier — what goes into the
   authorization request, while the verifier waits for the exchange."
   [verifier]

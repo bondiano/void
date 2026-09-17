@@ -31,10 +31,14 @@
   "Defaults of the [:notify-inapp] keys this module reads."
   {:table "notifications"})
 
-(defn- table-name [&opt cfg]
+(defn- table-name
+  {:params [(or {:table :any & r} :nil)] :ret :any}
+  "This channel's table name — `[:notify-inapp :table]`, or the default."
+  [&opt cfg]
   (get (merge defaults (or cfg {})) :table))
 
 (defn tables
+  {:params [(or {:table :any & r} :nil)] :ret [:any]}
   ``The table void owns, as `void/db/builder` statements — put them in
   a migration of the application's own. `cfg` is the [:notify-inapp]
   slice, when the table name was changed.``
@@ -59,22 +63,35 @@
    {:create-index (string t "_recipient_idx") :on t :columns [:recipient :created]}])
 
 (defn drop-tables
+  {:params [(or {:table :any & r} :nil)] :ret [:any]}
   "The other direction, for a migration's `down`."
   [&opt cfg]
   [{:drop-table (table-name cfg)}])
 
 # -- rows in and out -----------------------------------------------------
 
-(defn- json-out [value]
+(defn- json-out
+  {:params [:any] :ret :string?}
+  "The JSON text of a non-empty dictionary, or nil to leave the column
+  unset."
+  [value]
   (when (and (dictionary? value) (not (empty? value)))
     (json/encode value)))
 
-(defn- json-in [text]
+(defn- json-in
+  {:params [:any] :ret :any}
+  "The decoded value of a JSON column, or nil when it carries none."
+  [text]
   (when (and text (not (empty? (string text))))
     (def [ok value] (protect (json/decode text true)))
     (when ok value)))
 
 (defn row->record
+  {:params [(or {:id :any :recipient :any :key :any :title :any :body :any
+                :url :any :data :any :created :any :seen :any & r} :nil)]
+   :ret (or @{:id :any :recipient :any :key :keyword :title :any :body :any :url :any
+             :data (or {:any :any} @{:any :any}) :created :any :seen :any :read? :boolean}
+            :nil)}
   "A row as the views read it: `:key` back to a keyword, `:data` back
   to a table, `:read?` the question the template asks."
   [row]
@@ -91,6 +108,9 @@
      :read? (not (nil? (row :seen)))}))
 
 (defn record!
+  {:params [{:id :any :key :any :title :any :body :any :url :any :data :any :at :any & r}
+            :any (or {:table :any & r} :nil)]
+   :ret :any}
   ``Write one notification into `recipient`'s list. The row id **is**
   the notification id, so the letter, the webhook body and this row all
   name the same event — and a redelivery of the same notification
@@ -113,6 +133,7 @@
 # -- what the bell and the panel ask -------------------------------------
 
 (defn unread-count
+  {:params [:any (or {:table :any & r} :nil)] :ret :number}
   "How many unread notifications `recipient` has — the number in the
   bell, and a count rather than a list because that is all it shows."
   [recipient &opt cfg]
@@ -122,6 +143,10 @@
       0))
 
 (defn list-for
+  {:params [:any (or {:limit :any :unread :any & r} :nil) (or {:table :any & r} :nil)]
+   :ret @[(or @{:id :any :recipient :any :key :keyword :title :any :body :any :url :any
+                :data (or {:any :any} @{:any :any}) :created :any :seen :any :read? :boolean}
+              :nil)]}
   ``A recipient's notifications, newest first. `opts`: `:limit` (25),
   `:unread` (only the unread ones).``
   [recipient &opt opts cfg]
@@ -138,6 +163,10 @@
                       :limit (get opts :limit 25)})))
 
 (defn find-for
+  {:params [:any :any (or {:table :any & r} :nil)]
+   :ret (or @{:id :any :recipient :any :key :keyword :title :any :body :any :url :any
+             :data (or {:any :any} @{:any :any}) :created :any :seen :any :read? :boolean}
+            :nil)}
   "One of `recipient`'s notifications by id, or nil — nil for a row
   that exists and belongs to somebody else, which is the same answer
   for the same reason."
@@ -148,6 +177,7 @@
                             :limit 1})))
 
 (defn mark-read!
+  {:params [:any :any :any? (or {:table :any & r} :nil)] :ret :boolean}
   "Mark one of `recipient`'s notifications read. Returns whether a row
   changed — false for somebody else's id, and for one already read."
   [recipient id &opt at cfg]
@@ -159,6 +189,7 @@
                               [:= :seen db/null]]})))
 
 (defn mark-all-read!
+  {:params [:any :any? (or {:table :any & r} :nil)] :ret :any}
   "Mark everything `recipient` has not read as read. Returns how many
   rows changed."
   [recipient &opt at cfg]
@@ -169,6 +200,7 @@
                 :where [:and [:= :recipient recipient] [:= :seen db/null]]}))
 
 (defn delete-for!
+  {:params [:any :any (or {:table :any & r} :nil)] :ret :boolean}
   "Remove one of `recipient`'s notifications. What a person's own
   \"clear\" button calls, and what an account deletion loops over."
   [recipient id &opt cfg]

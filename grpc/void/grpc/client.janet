@@ -49,6 +49,12 @@
           :decode (fn [m bytes] (proto/decode-json m (string bytes)))}})
 
 (defn client
+  {:params [:any
+            (or {:encoding (or :keyword :nil) :headers (or @{:string :string} :nil)
+                :timeout (or :number :nil) & r}
+                :nil)]
+   :ret @{:url :string :encoding :keyword :headers @{:string :string} :timeout (or :number :nil)}
+   :throws [:string]}
   ``A Connect client against a base URL:
 
       (grpc/client "http://127.0.0.1:8080")
@@ -70,7 +76,15 @@
     :headers (merge @{} (get opts :headers {}))
     :timeout (opts :timeout)})
 
-(defn- method-of [svc-name method-name]
+(defn- method-of
+  {:params [:keyword :keyword]
+   :ret [:any {:input :any :output :any :proto-name :string
+              :client-streaming (or :boolean :nil) :server-streaming (or :boolean :nil)
+              :idempotent (or :boolean :nil) & r}]
+   :throws [:string]}
+  "The service descriptor and one of its methods, by name — or an
+  error naming what the service does have."
+  [svc-name method-name]
   (def d (pdesc/service! svc-name))
   (or (get-in d [:by-name method-name])
       (errorf "void/grpc: %q has no rpc %q (it has %s)"
@@ -78,12 +92,17 @@
               (string/join (map |(string ($ :name)) (d :methods)) " ")))
   [d (get-in d [:by-name method-name])])
 
-(defn- base64url [s]
+(defn- base64url
+  {:params [:any] :ret :string}
+  "URL-safe base64: `+`/`/` swapped for `-`/`_`, padding dropped."
+  [s]
   (string/replace-all "=" ""
                       (string/replace-all "/" "_"
                                           (string/replace-all "+" "-" (string s)))))
 
 (defn- failure-of
+  {:params [{:body (or :string :nil) :status :number & r}]
+   :ret {:void.grpc/code :keyword :status :number :http/status :number & r}}
   ``The failure a non-200 answer carries. A Connect error body names
   its own code; anything else (a proxy's 502 page, an HTML error from
   something in between) is read from the status, because a client that
@@ -107,6 +126,7 @@
                               {}))))
 
 (defn trailers
+  {:params [{:headers (or @{:string :any} :nil) & r}] :ret @{:string :any}}
   ``The trailing metadata of an answered call: Connect carries a unary
   call's trailers as `Trailer-`-prefixed response headers, and this is
   them with the prefix taken off.``
@@ -116,6 +136,14 @@
     (string/slice (string/ascii-lower (string k)) 8) v))
 
 (defn call
+  {:params [@{:url :string :encoding :keyword :headers @{:string :string}
+              :timeout (or :number :nil)}
+            :keyword :keyword :any
+            (or {:headers (or @{:string :string} :nil) :timeout (or :number :nil)
+                :get (or :boolean :nil) :full (or :boolean :nil) & r}
+                :nil)]
+   :ret (or :any @{:message :any :headers @{:string :any} :trailers @{:string :any}})
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``One unary call. Returns the response message; raises the RPC
   failure when the server answered with one.
 

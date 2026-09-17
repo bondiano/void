@@ -7,7 +7,11 @@
 (log/set-level! "void" :error)
 
 (def cfg {:from "void <no-reply@example.com>"})
-(defn- delivery [&opt to]
+(defn- delivery
+  {:params [:string?] :ret {:message :any :bytes :string :id :string :at :number}
+   :throws [:string]}
+  "A ready-to-send delivery, to whichever recipient the test wants."
+  [&opt to]
   (def m (message/normalize {:to (or to "ada@example.com") :subject "hi" :text "body"} cfg))
   {:message m :bytes (mime/render m {:message-id "<id@example.com>"})
    :id "<id@example.com>" :at 1756400000})

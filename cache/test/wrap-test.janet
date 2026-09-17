@@ -10,7 +10,11 @@
 (def c (state/make (memory/store m) {:ttl 60}))
 
 (var calls 0)
-(defn fetch-rates [currency] (++ calls) {:currency currency :rate 1.5})
+(defn fetch-rates
+  {:params [:any] :ret {:currency :any :rate :number}}
+  "Test function to memoize: counts its own calls, so a cache hit can
+  be told from a recompute."
+  [currency] (++ calls) {:currency currency :rate 1.5})
 
 (with-dyns [state/cache-dyn c]
   (def rates (wrap/wrap fetch-rates))

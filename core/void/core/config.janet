@@ -124,7 +124,7 @@
   out)
 
 (defn- assoc-path!
-  {:params [@{:any :any} (or @[:any] [:any]) :any] :ret :nil}
+  {:params [@{:any :any} (or @[:any] [:any]) :any] :ret :table}
   "Set `value` at `path` in the nested table `root`, creating the
   tables on the way — and replacing a scalar found there, since the
   later layer wins."

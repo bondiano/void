@@ -51,7 +51,10 @@
                          :dev {:netrepl {:enabled false}
                                :watch {:enabled false}}}}}))
 
-(defn- delivery [id]
+(defn- delivery
+  {:params [:string] :ret {:uri :string :method :keyword :headers {:string :string} :body :string}}
+  "One delivery as GitHub sends it, signed over the fixture body."
+  [id]
   {:uri "/in/github"
    :method :post
    :headers {"x-github-event" "push"
@@ -61,6 +64,7 @@
    :body body})
 
 (defn- pending
+  {:params [] :ret :number}
   ``How much work the queue still owes, across every queue in it. The
   states are void/jobs' own (`record-live-states`) rather than a list
   copied into this file, which is the difference between a suite that

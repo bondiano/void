@@ -8,6 +8,8 @@
 (def- bytes-of @{})
 
 (defn- minimal
+  {:params [] :ret {:name (enum :test) :put! (fn [a b c] d) :get (fn [a] b)
+                    :stream (fn [a] b) :delete! (fn [a] b) :url (fn [a b] c)}}
   "The smallest thing that is a store."
   []
   @{:name :test
@@ -41,7 +43,11 @@
 
 # -- validation ----------------------------------------------------------
 
-(defn- without [k]
+(defn- without
+  {:params [:keyword] :ret @{:any :any}}
+  "A minimal store with one required key knocked out, for the
+  refusal tests."
+  [k]
   (def m (minimal))
   (put m k nil)
   m)

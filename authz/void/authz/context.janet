@@ -55,6 +55,9 @@
   @[])
 
 (defn normalize-provider
+  {:params [:any]
+   :ret {:name :keyword :for (enum :subject :resource :env) :fn :function & r}
+   :throws [:string]}
   "Validate a provider: {:name :for :fn :keys? :doc?}."
   [p]
   (unless (dictionary? p)
@@ -73,6 +76,7 @@
   (freeze p))
 
 (defn register-provider!
+  {:params [:any] :ret :keyword :throws [:string]}
   "Add an attribute provider (replacing one of the same name)."
   [p]
   (def n (normalize-provider p))
@@ -81,6 +85,7 @@
   (n :name))
 
 (defn deregister-provider!
+  {:params [:keyword] :ret :nil}
   "Remove a provider by name."
   [name]
   (def i (find-index |(= name ($ :name)) providers))
@@ -88,11 +93,13 @@
   nil)
 
 (defn provider-names
+  {:params [] :ret @[:keyword]}
   "Every registered provider, in resolution order."
   []
   (map |($ :name) providers))
 
 (defn split-key
+  {:params [:keyword] :ret [:keyword :keyword] :throws [:string]}
   ``Split :subject/brand-id into [:subject :brand-id]. A key without a
   namespace is an error: an attribute nobody can tell apart from
   another group's is how a policy comes to read the wrong thing.``
@@ -104,6 +111,9 @@
   [(keyword (string/slice s 0 i)) (keyword (string/slice s (inc i)))])
 
 (defn make
+  {:params [(or {:subject :any :action :any :resource :any :env :any :attrs :any & r} :nil)]
+   :ret @{:subject :any :action :any :resource :any :env {:keyword :any}
+          :attrs @{:keyword :any} :used @[:keyword]}}
   ``Build a decision context. `opts`:
 
     :subject   the identity (defaults to the one in the dyn)
@@ -122,7 +132,14 @@
     # `explain` prints it, and it is how a policy's cost is read
     :used @[]})
 
-(defn- subject-fallback [ctx bare]
+(defn- subject-fallback
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            :keyword]
+   :ret :any}
+  "The built-in reading of a `:subject/*` attribute straight off the
+  identity, when no provider claimed the key."
+  [ctx bare]
   (def id (ctx :subject))
   (when id
     (case bare
@@ -136,14 +153,35 @@
       :via (get id :via)
       (get-in id [:claims bare]))))
 
-(defn- resource-fallback [ctx bare]
+(defn- resource-fallback
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            :keyword]
+   :ret :any}
+  "The built-in reading of a `:resource/*` attribute: the bare key off
+  the resource dictionary, when no provider claimed it."
+  [ctx bare]
   (when-let [r (ctx :resource)]
     (when (dictionary? r) (get r bare))))
 
-(defn- env-fallback [ctx bare]
+(defn- env-fallback
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            :keyword]
+   :ret :any}
+  "The built-in reading of an `:env/*` attribute: the bare key off the
+  env map."
+  [ctx bare]
   (get-in ctx [:env bare]))
 
-(defn- from-providers [ctx group key]
+(defn- from-providers
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            :keyword :keyword]
+   :ret :nil}
+  "Ask every provider registered for `group` in turn, memoizing
+  whatever each one returns, until `key` is found."
+  [ctx group key]
   (var found nil)
   (each p providers
     (when (and (nil? found)
@@ -168,6 +206,10 @@
   nil)
 
 (defn attr
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}
+            :keyword :any]
+   :ret :any}
   ``One attribute of the context, resolved on first use and memoized
   for the rest of this decision. Namespaced keys only:
   `:subject/brand-id`, `:resource/owner-id`, `:env/ip`.``
@@ -189,6 +231,9 @@
       (if (nil? v) default v))))
 
 (defn used
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}]
+   :ret @[:keyword]}
   "The attributes this decision looked at, in order and without
   repeats — the profile of a policy, and what `explain` prints."
   [ctx]
@@ -196,11 +241,17 @@
   (seq [k :in (ctx :used) :when (not (in seen k)) :before (put seen k true)] k))
 
 (defn subject
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}]
+   :ret :any}
   "The identity behind a context, or nil for an anonymous decision."
   [ctx]
   (ctx :subject))
 
 (defn subject-string
+  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
+              :attrs @{:keyword :any} :used @[:keyword] & r}]
+   :ret (or :string :nil)}
   "The subject string, or nil."
   [ctx]
   (when-let [id (ctx :subject)] (get id :subject)))

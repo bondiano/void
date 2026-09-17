@@ -132,7 +132,11 @@
 
 # -- enforcement ---------------------------------------------------------
 
-(defn- policies-of [rmeta]
+(defn- policies-of
+  {:params [{:void.authz/policy (or :keyword @[:keyword] [:keyword] :nil) & r}]
+   :ret (or @[:keyword] [:keyword])}
+  "The policy names declared on a route's merged metadata, as a list."
+  [rmeta]
   (def declared (get rmeta :void.authz/policy))
   (cond
     (nil? declared) []
@@ -140,6 +144,11 @@
     declared))
 
 (defn forbidden
+  {:params [:any
+            {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
+             :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
+             :action :any :us :number}]
+   :ret :any}
   ``The response for a decision that said no: the configured status
   through the error renderers. The decision rides along on the error
   value for a custom renderer to read, and never reaches the body.``
@@ -182,6 +191,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn print-routes
+  {:params [] :ret :nil}
   "Print route -> policies — the body of `void authz routes`."
   []
   # routes-table hands back the table, whose :routes are the entries

@@ -58,6 +58,12 @@
          (set root (get-in slice [:local :root] "storage")))})
 
 (defn serve-file
+  {:params [{:headers {:any :any} :params (or {:key :any? & r} :nil)
+             :query (or {:any :any} :nil) & r}]
+   :ret @{:status :number :body (or :nil :string) :headers @{:any :any}}
+   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
+             :status :number :http/status :number}
+            :string]}
   ``The handler: decode the splat, validate it as a key (the traversal
   rules live there), demand the signature when the prefix is private,
   and hand the path to static/file-response — 304, 206 and 416
@@ -80,8 +86,11 @@
       (errors/abort 404)))
 
 (defn- own-routes
-  # a function of boot, not a value: the mount prefix is configuration,
-  # which is not known when this manifest freezes (the form)
+  {:params [:any] :ret {:routes :boolean :global {:keyword :any} :children [:any]}
+   :throws [:string]}
+  "A function of boot, not a value: the mount prefix is
+  configuration, which is not known when this manifest freezes (the
+  form)."
   [_boot]
   (router/routes (if-let [policy (settings :policy)]
                    {:void.authz/policy policy}

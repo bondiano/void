@@ -20,7 +20,11 @@
 
 (def received @[])
 
-(defn- receiver [req]
+(defn- receiver
+  {:params [@{:path :any :headers :any :body :any & r}]
+   :ret @{:status :number :body :any :headers @{:string :any}}}
+  "The void/http server the webhook channel POSTs to in this suite."
+  [req]
   (array/push received {:path (req :path)
                         :headers (req :headers)
                         :body (req :body)})
@@ -37,7 +41,12 @@
 
 (def plugins ["void/crypto/init" "void/notify/init" "void/notify/webhook"])
 
-(defn- start [&opt extra]
+(defn- start
+  {:params [(or {:keyword :any} :nil)]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot the webhook-routed notifier, with `extra` merged into the CLI config."
+  [&opt extra]
   (test/start! {:plugins plugins
                 :profile :test
                 :config {:env @{}

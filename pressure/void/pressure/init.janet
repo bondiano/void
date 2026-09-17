@@ -138,7 +138,10 @@
    :redis-pool-max-waiting checks/default-max-waiting
    :redis-pool-wait-grace checks/default-wait-grace})
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [(or {:any :any} :nil)] :ret @{:any :any}}
+  "The [:pressure] slice with defaults filled in."
+  [cfg]
   (merge defaults (or cfg {})))
 
 # -- public surface (re-exports) -----------------------------------------
@@ -170,6 +173,8 @@
 # -- the sampler component -----------------------------------------------
 
 (defn- resolved-checks
+  {:params [{:extensions {:keyword :any} & r}]
+   :ret (or @[{:name :keyword :fn (fn [] :any)}] [{:name :keyword :fn (fn [] :any)}])}
   "The :void.pressure/check contributions of the boot this sampler was
   started in."
   [boot]
@@ -238,7 +243,11 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- fmt-bytes [n]
+(defn- fmt-bytes
+  {:params [:any] :ret :string}
+  "Human-readable byte count, GiB/MiB/B, or an em dash when `n` is not
+  a number."
+  [n]
   (cond
     (not (number? n)) "—"
     (>= n 1073741824) (string/format "%.2f GiB" (/ n 1073741824))
@@ -246,6 +255,24 @@
     (string/format "%d B" n)))
 
 (defn print-status
+  {:params [{:under-pressure :boolean
+             :mode :keyword
+             :reasons [(or {:signal :any :value :number :limit :number :bar :number}
+                           {:signal :any :check :boolean :reason :string})]
+             :samples {:keyword :number}
+             :peaks {:keyword :number}
+             :available {:loop-lag :boolean :rss :boolean :heap :boolean}
+             :limits {:max-loop-lag (or :number :nil) :max-rss-bytes (or :number :nil)}
+             :recovery {:ratio :any :samples :any :clean :number}
+             :interval :any
+             :sampling :boolean
+             :sampled :number
+             :shed :number
+             :episodes :number
+             :for :number
+             :checks [:keyword]
+             :pid :number}]
+   :ret :nil}
   "Print a status table — the body of `void pressure status`."
   [s]
   (printf "under pressure  %s" (if (s :under-pressure) "yes" "no"))

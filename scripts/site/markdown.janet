@@ -28,6 +28,7 @@
 # -- inline spans --------------------------------------------------------
 
 (defn- find-run
+  {:params [:string :number] :ret :number}
   "End index of the backtick run starting at i."
   [s i]
   (var j i)
@@ -35,6 +36,7 @@
   j)
 
 (defn- find-close
+  {:params [:string :number :number] :ret :number?}
   "Index of the next backtick run of exactly `n` at or after i, or nil."
   [s i n]
   (var at i)
@@ -51,6 +53,7 @@
 (var- inline nil) # forward declaration: emphasis recurses
 
 (defn- try-code
+  {:params [:string :number] :ret (or [:any :number] :nil)}
   "A `code span` at i, as [node next-i], or nil."
   [s i]
   (when (= 96 (s i))
@@ -60,6 +63,7 @@
       [[:code (string/slice s open-end close)] (+ close n)])))
 
 (defn- try-strong
+  {:params [:string :number] :ret (or [:any :number] :nil)}
   "**strong** at i, as [node next-i], or nil."
   [s i]
   (when (and (= 42 (s i)) (= 42 (get s (inc i))))
@@ -68,6 +72,7 @@
         [[:strong ;(inline (string/slice s (+ i 2) close))] (+ close 2)]))))
 
 (defn- try-em
+  {:params [:string :number] :ret (or [:any :number] :nil)}
   "*emphasis* at i, as [node next-i], or nil. A lone asterisk followed
   by whitespace is a character, not markup."
   [s i]
@@ -84,6 +89,7 @@
       [[:em ;(inline (string/slice s (inc i) close))] (inc close)])))
 
 (defn- try-link
+  {:params [:string :number] :ret (or [:any :number] :nil)}
   "[text](url) at i, as [node next-i], or nil. The url is left for the
   caller's rewriter; nested brackets are not in the corpus."
   [s i]
@@ -128,6 +134,7 @@
   out)
 
 (defn- rewrite-links
+  {:params [:any (or (fn [:string] :string) :nil)] :ret :any}
   "Apply the link rewriter to every :a in an inline tree — including
   the ones nested inside :strong/:em, which is where a bold link lives."
   [nodes rewrite]
@@ -146,6 +153,7 @@
 # -- slugs ---------------------------------------------------------------
 
 (defn slug
+  {:params [:string] :ret :string}
   ``A header's anchor id, the way GitHub spells it closely enough for
   the corpus's own #links: lowercased ASCII, everything that is not a
   letter, digit or hyphen dropped, spaces to hyphens. Non-ASCII bytes
@@ -162,6 +170,7 @@
   (string b))
 
 (defn- strip-markup
+  {:params [:any] :ret :string}
   "Inline nodes as their visible text, for slugs."
   [nodes]
   (string/join
@@ -192,13 +201,20 @@
                    (capture (+ (set "-*") (* (some (range "09")) ".")))
                    " " (capture (any 1)))))
 
-(defn- table-cells [line]
+(defn- table-cells
+  {:params [:string] :ret @[:string]}
+  "One pipe-table row, split into trimmed cells."
+  [line]
   (def trimmed (string/trim (string/trim line) "|"))
   (map string/trim (string/split "|" trimmed)))
 
 (var- blocks nil) # forward declaration: blockquotes and list items recurse
 
-(defn- parse-table [lines i rewrite]
+(defn- parse-table
+  {:params [(or @[:string] [:string]) :number (or (fn [:string] :string) :nil)]
+   :ret [:any :number]}
+  "A pipe table starting at line i, as [node next-i]."
+  [lines i rewrite]
   (def head (table-cells (lines i)))
   (var j (+ i 2))
   (def rows @[])
@@ -213,6 +229,7 @@
    j])
 
 (defn- checkbox
+  {:params [:string] :ret (or [:any :string] :nil)}
   "A task-list item's [x]/[ ] prefix as a marker span, or nil."
   [text]
   (cond
@@ -220,7 +237,12 @@
     (string/has-prefix? "[ ] " text) [[:span {:class "task"} ""] (string/slice text 4)]
     nil))
 
-(defn- parse-list [lines i rewrite]
+(defn- parse-list
+  {:params [(or @[:string] [:string]) :number (or (fn [:string] :string) :nil)]
+   :ret [:any :number]}
+  "A bullet/ordered list (with nested sublists and task checkboxes)
+  starting at line i, as [node next-i]."
+  [lines i rewrite]
   (def m (peg/match item-peg (lines i)))
   (def indent (length (m 0)))
   (def ordered (not (index-of (m 1) ["-" "*"])))
@@ -258,7 +280,11 @@
       (break)))
   [[(if ordered :ol :ul) ;(map |(tuple ;$) items)] j])
 
-(defn- parse-quote [lines i rewrite]
+(defn- parse-quote
+  {:params [(or @[:string] [:string]) :number (or (fn [:string] :string) :nil)]
+   :ret [:any :number]}
+  "A blockquote starting at line i, as [node next-i]."
+  [lines i rewrite]
   (def inner @[])
   (var j i)
   (while (and (< j (length lines)) (string/has-prefix? ">" (lines j)))
@@ -271,12 +297,16 @@
   "Bytes that end a symbol or keyword in janet source."
   (tabseq [c :in " \t\n()[]{}\"'`,;"] c true))
 
-(defn- word-end [s i]
+(defn- word-end
+  {:params [:string :number] :ret :number}
+  "End index of the symbol/keyword token starting at i."
+  [s i]
   (var j i)
   (while (and (< j (length s)) (not (delim-bytes (s j)))) (++ j))
   j)
 
 (defn- highlight-janet
+  {:params [:string] :ret @[:any]}
   ``A janet code block as hiccup spans: comments, strings, keywords and
   the head symbol of each form tinted, everything else left as text.
   A lexer rather than a parser — which is all a code block needs, and
@@ -284,11 +314,13 @@
   [src]
   (def out @[])
   (def plain (buffer))
-  (defn flush! []
+  (defn flush! {:params [] :ret :buffer?}
+    []
     (unless (empty? plain)
       (array/push out (string plain))
       (buffer/clear plain)))
-  (defn tok! [cls text]
+  (defn tok! {:params [:string :string] :ret :any}
+    [cls text]
     (flush!)
     (array/push out [:span {:class cls} text]))
   (var i 0)
@@ -341,12 +373,16 @@
   (flush!)
   out)
 
-(defn- parse-fence [lines i]
+(defn- parse-fence
+  {:params [(or @[:string] [:string]) :number] :ret [:any :number]}
+  "A fenced code block starting at line i, as [node next-i]."
+  [lines i]
   # matched on the trimmed line: a fence indented under a list item is
   # still a fence, and the indent comes off the body by the same amount
   (def indent (- (length (lines i)) (length (string/triml (lines i)))))
   (def lang (or (first (peg/match fence-peg (string/trim (lines i)))) ""))
-  (defn dedent [l] (if (<= (length l) indent) "" (string/slice l indent)))
+  (defn dedent {:params [:string] :ret :string}
+    [l] (if (<= (length l) indent) "" (string/slice l indent)))
   (def body @[])
   (var j (inc i))
   (while (and (< j (length lines)) (not (peg/match fence-peg (string/trim (lines j)))))
@@ -360,6 +396,7 @@
 (def- code-indent 4)
 
 (defn- indented-code?
+  {:params [(or @[:string] [:string]) :number] :ret :boolean :narrows :any}
   ``An indented code block starts here: four spaces on a line that
   stands on its own after a blank one. CommonMark's rule that matters for
   this corpus is the second half — a code block cannot interrupt a
@@ -371,7 +408,10 @@
   (and (string/has-prefix? "    " (lines i))
        (or (zero? i) (empty? (string/trim (get lines (dec i) ""))))))
 
-(defn- parse-indented-code [lines i]
+(defn- parse-indented-code
+  {:params [(or @[:string] [:string]) :number] :ret [:any :number]}
+  "An indented (4-space) code block starting at line i, as [node next-i]."
+  [lines i]
   (def body @[])
   (var j i)
   (var last i)
@@ -394,6 +434,7 @@
   (peg/compile ~(* "<" (? "/") :a)))
 
 (defn- parse-html-block
+  {:params [(or @[:string] [:string]) :number] :ret [:any :number]}
   "An HTML block — every line up to the next blank one, verbatim."
   [lines i]
   (var j i)
@@ -478,6 +519,8 @@
 # -- the public face -----------------------------------------------------
 
 (defn parse
+  {:params [:string (or {:rewrite-link (or (fn [:string] :string) :nil) & r} :nil)]
+   :ret @[:any]}
   ``A Markdown document as an array of hiccup blocks.
 
       (parse src)
@@ -490,6 +533,7 @@
   (blocks (string/split "\n" src) (get opts :rewrite-link)))
 
 (defn inline-markup
+  {:params [:string] :ret :any}
   ``One line of prose as inline hiccup nodes — the inline half of the
   parser on its own, for generated pages (the module reference) that
   build their block structure directly but want `code spans`, links
@@ -498,6 +542,7 @@
   (inline s))
 
 (defn title
+  {:params [:string] :ret :string?}
   "The text of the document's first # header, or nil."
   [src]
   (var found nil)

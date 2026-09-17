@@ -39,10 +39,14 @@
 ### case and an **error** when the notification goes to several, because
 ### "which of these is that address for" has no answer worth guessing.
 
-(defn- token [n]
+(defn- token
+  {:params [:number] :ret :string}
+  "`n` random bytes as a hex string."
+  [n]
   (string/join (map |(string/format "%02x" $) (os/cryptorand n)) ""))
 
 (defn make-id
+  {:params [] :ret :string}
   ``A notification's id — minted once, in `notify/send`, and carried by
   every channel: the row in the bell, the `X-Void-Notification` header
   of the letter and the `id` field of the webhook body are the same
@@ -52,6 +56,11 @@
   (string "ntf_" (token 12)))
 
 (defn normalize
+  {:params [:any (or @[:keyword] [:keyword]) (or {:id :any :at :any & r} :nil)]
+   :ret @{:id :string :at :number :key :keyword :title :string
+          :body :string? :url :string? :data (or {:any :any} @{:any :any}) :to :any
+          :channels [:keyword] :overrides @{:keyword (or {:any :any} @{:any :any})}}
+   :throws [:string]}
   ``A notification plus the channels it is going to, resolved into the
   value every channel below reads. `channels` is the ordered list of
   channel names; `opts` may carry `:id` and `:at`, so a test compares
@@ -110,6 +119,7 @@
                  c (get note c))})
 
 (defn normalized?
+  {:params [:any] :ret :boolean :narrows {:key :keyword :id :string :channels :any & r}}
   "Has this notification been through `normalize`? What a channel
   asserts before it projects anything."
   [note]
@@ -119,6 +129,7 @@
        (indexed? (get note :channels))))
 
 (defn address-for
+  {:params [{:to :any & r} {:address :keyword? & r}] :ret :string?}
   ``The address `channel` reads off this notification, or nil when
   there is none. `channel` is a normalized contribution: its
   `:address` names the key of `:to` it takes (`:email`, `:subject`,
@@ -137,11 +148,13 @@
     (when-let [v (get to want)] (string v))))
 
 (defn override-for
+  {:params [{:overrides (or @{:keyword :any} :nil) & r} :keyword] :ret (or {:any :any} @{:any :any})}
   "What this notification says about `channel-name`, or an empty table."
   [note channel-name]
   (get-in note [:overrides channel-name] {}))
 
 (defn summary
+  {:params [{:id :any? :key :any? :to :any :title :any? & r}] :ret :string}
   "One line about a notification, for a log record or a CLI listing."
   [note]
   (string/format "%s %q -> %s: %s"

@@ -61,6 +61,7 @@
   defaults)
 
 (defn app-name
+  {:params [] :ret :string :throws [:string]}
   "What the letter calls this application: [:mail-auth :app-name], or
   the display name of the sender."
   []
@@ -70,6 +71,7 @@
       "this application"))
 
 (defn link-for
+  {:params [{:handle :any :code :any & r}] :ret :string :throws [:string]}
   ``The URL a magic link points at. The handle is hex and the code is
   base64url (void/auth mints both), so neither needs escaping — which
   is why this is a string and not a query builder.``
@@ -78,12 +80,20 @@
                     "?h=" (challenge :handle)
                     "&c=" (challenge :code))))
 
-(defn- minutes-left [challenge]
+(defn- minutes-left
+  {:params [{:expires :any & r}] :ret :number?}
+  "How many minutes until the challenge expires, rounded up to at
+  least one — or nil when it carries no expiry at all."
+  [challenge]
   (def expires (get challenge :expires))
   (when expires
     (max 1 (math/round (/ (- expires (os/time)) 60)))))
 
-(defn- expiry-line [challenge]
+(defn- expiry-line
+  {:params [{:expires :any & r}] :ret :string}
+  "One sentence about how long the link or code is good for, worded
+  for whichever is left: a count of minutes, or just \"once\"."
+  [challenge]
   (if-let [m (minutes-left challenge)]
     (string "The link works for " m " more minute" (if (= 1 m) "" "s") " and once.")
     "The link can be used once."))
@@ -118,7 +128,13 @@
      [:p {:style "color: #666; font-size: 14px"}
       "If you did not ask to sign in, you can ignore this message."]]))
 
-(defn- text-for [challenge]
+(defn- text-for
+  {:params [{:kind :any :code :any :handle :any :expires :any & r}]
+   :ret :string
+   :throws [:string]}
+  "The plain-text part of the letter — the code for an OTP challenge,
+  the link and its expiry for a magic link."
+  [challenge]
   (if (= :otp (get challenge :kind))
     (string "Your sign-in code for " (app-name) ": " (challenge :code) "\n\n"
             "If you did not ask to sign in, you can ignore this message.\n")
@@ -127,13 +143,21 @@
             (expiry-line challenge) "\n"
             "If you did not ask to sign in, you can ignore this message.\n")))
 
-(defn subject-for [challenge]
+(defn subject-for
+  {:params [{:kind :any & r}] :ret :string :throws [:string]}
+  "The letter's subject: [:mail-auth :subject] or :otp-subject for the
+  challenge's kind, or \"Sign in to <app-name>\" when the slice sets
+  neither."
+  [challenge]
   (or (if (= :otp (get challenge :kind))
         (get settings :otp-subject)
         (get settings :subject))
       (string "Sign in to " (app-name))))
 
 (defn letter
+  {:params [{:to :any :kind :any :code :any :handle :any :expires :any & r}]
+   :ret {:to :any :subject :string :view :any :text :string}
+   :throws [:string]}
   ``The message for a challenge — public, because a preview in a REPL
   (`(mail/preview (mail-auth/letter ch))`) is how anybody checks what
   a visitor will actually see.``
@@ -144,6 +168,10 @@
    :text (text-for challenge)})
 
 (defn deliver-challenge
+  {:params [{:channel :any :to :any :claims :any :kind :any :code :any :handle :any
+             :expires :any :subject :any & r}]
+   :ret :any
+   :throws [:string]}
   ``The `:void.auth/deliver` function. Returns the receipt when it
   sent something and nil when the challenge was not its business — a
   channel it does not serve, or a payload with no address in it.``

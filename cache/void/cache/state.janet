@@ -82,28 +82,33 @@
   10)
 
 (defn active-cache
+  {:params [] :ret :any}
   "The cache this fiber runs against: the `cache-dyn` override, else
   the started component."
   []
   (system/active cache))
 
 (defn active-store
+  {:params [] :ret :any}
   "The backend behind the active cache."
   []
   ((active-cache) :store))
 
 (defn key-prefix
+  {:params [] :ret :string}
   "The string every key built through this cache is prefixed with."
   []
   ((active-cache) :prefix))
 
 (defn full-key
+  {:params [:any] :ret :string}
   ``A key as the store sees it: the application's spelling (see
   key/cache-key) under the cache prefix.``
   [k]
   (string (key-prefix) (key/cache-key k)))
 
 (defn enabled?
+  {:params [] :ret :boolean}
   "False when `[:cache :enabled] false` turned this cache into a
   well-behaved hole: every read misses, every write is dropped, and
   nothing else in the application has to know."
@@ -112,11 +117,19 @@
 
 # -- counters and the error policy ---------------------------------------
 
-(defn- bump [cache k &opt by]
+(defn- bump
+  {:params [@{:stats @{:keyword :number} & r} :keyword :number?] :ret :table}
+  "Add `by` (1) to the `k` counter of `cache`'s stats table."
+  [cache k &opt by]
   (def s (cache :stats))
   (put s k (+ (or by 1) (s k))))
 
-(defn- note-failure [cache what err]
+(defn- note-failure
+  {:params [@{:last-error-at :number? & r} :any :any] :ret :nil}
+  "Count a store failure and, at most once per `error-log-interval`,
+  log it — an outage that logged per request would be an outage
+  twice."
+  [cache what err]
   (bump cache :errors)
   (def t (os/clock :monotonic))
   (when (> (- t (get cache :last-error-at -1e9)) error-log-interval)
@@ -128,6 +141,7 @@
   nil)
 
 (defn- attempt
+  {:params [@{:on-error :keyword? & r} :any (fn [] :any) :any?] :ret :any :throws [:any]}
   ``Run a store operation under the configured error policy: with
   `:degrade` a failure is counted, occasionally logged, and answered
   with `fallback`; with `:raise` it is the caller's problem.``
@@ -141,6 +155,8 @@
 # -- ttl -----------------------------------------------------------------
 
 (defn resolve-ttl
+  {:params [@{:ttl (or :number (enum :none) :nil) & r} (or :number (enum :none) :nil)]
+   :ret (or :number :nil)}
   ``Seconds to live for a write: nil takes the cache's default,
   `:none` means no expiry, and a number is itself. 0 means "do not
   store this", which is how a route or a call opts out of a default
@@ -152,16 +168,25 @@
     (nil? v) nil
     v))
 
-(defn- skip-write? [cache ttl]
+(defn- skip-write?
+  {:params [@{:ttl (or :number (enum :none) :nil) & r} (or :number (enum :none) :nil)]
+   :ret :boolean :narrows :any}
+  "Does this ttl mean \"do not store\"? True only for a resolved 0."
+  [cache ttl]
   (def v (if (nil? ttl) (get cache :ttl) ttl))
   (and (number? v) (not (pos? v))))
 
 # -- reads ---------------------------------------------------------------
 
-(defn- decode-hit [v]
+(defn- decode-hit
+  {:params [:any] :ret :any}
+  "The stored value a raw read produced, with `nil-sentinel` turned
+  back into a real nil."
+  [v]
   (if (= nil-sentinel v) nil v))
 
 (defn fetch
+  {:params [:any] :ret [:boolean :any] :throws [:any]}
   ``The reader that can tell a cached nil from a miss: `[found? value]`.
 
       (def [found v] (cache/fetch "user:42"))
@@ -178,6 +203,7 @@
         (do (bump cache :hits) [true (decode-hit raw)])))))
 
 (defn get-value
+  {:params [:any :any?] :ret :any :throws [:any]}
   "The value under `k`, or `dflt` (nil) when it is not cached. A cached
   nil is indistinguishable from a miss here — `fetch` is the reader
   that tells them apart."
@@ -186,6 +212,7 @@
   (if (and found (not (nil? v))) v dflt))
 
 (defn has?
+  {:params [:any] :ret :boolean :throws [:any]}
   "Is `k` cached? Cheaper than a read on a store that can answer
   without moving the value (redis: EXISTS)."
   [k]
@@ -195,6 +222,7 @@
     (truthy? (attempt cache :has? (fn [] (((cache :store) :has?) (full-key k))) false))))
 
 (defn get-many
+  {:params [(or @[:any] [:any])] :ret @[:any] :throws [:any]}
   ``The values under `ks`, in order, nil where a key is not cached. One
   round trip on a store that can do it (redis: MGET).``
   [ks]
@@ -214,7 +242,12 @@
 
 # -- writes --------------------------------------------------------------
 
-(defn- encode-value [cache v]
+(defn- encode-value
+  {:params [@{:store @{:values :keyword? & r} & r} :any] :ret :any :throws [:string]}
+  "The form `v` is stored in: `nil-sentinel` for a nil (unless the
+  store round-trips only bytes, which is an error instead), `v` itself
+  otherwise."
+  [cache v]
   (if (nil? v)
     (do
       (when (= :bytes (get-in cache [:store :values]))
@@ -227,6 +260,7 @@
     v))
 
 (defn put!
+  {:params [:any :any :any?] :ret :any :throws [:any]}
   ``Store `v` under `k` for `ttl` seconds — nil takes `[:cache :ttl]`,
   `:none` means no expiry, 0 means do not store. Returns `v`, so it
   drops into a computation without restructuring it.
@@ -244,6 +278,8 @@
   v)
 
 (defn put-many!
+  {:params [(or @{:any :any} {:any :any} @[[:any :any]] [[:any :any]]) :any?]
+   :ret :nil :throws [:any]}
   "Store several entries — `{k v}` or `[[k v] ...]` — under one ttl.
   One round trip on a store that can do it."
   [entries &opt ttl]
@@ -258,6 +294,7 @@
   nil)
 
 (defn delete!
+  {:params [:any] :ret :boolean :throws [:any]}
   "Drop one key. True when it was there (as far as the store knows)."
   [k]
   (def cache (active-cache))
@@ -265,6 +302,7 @@
   (truthy? (attempt cache :delete (fn [] (((cache :store) :delete) (full-key k))) false)))
 
 (defn forget
+  {:params [:any] :ret :number :throws [:any]}
   "Drop keys. The plural of `delete!`, spelled the way an invalidation
   reads."
   [& ks]
@@ -273,6 +311,7 @@
   n)
 
 (defn clear!
+  {:params [(or (enum :everything) :nil)] :ret :number :throws [:string :any]}
   ``Drop every key this cache holds — everything under `[:cache
   :prefix]`, and nothing else. On a shared redis that is a walk of the
   keyspace rather than one command, and it is not atomic: keys written
@@ -292,6 +331,7 @@
   (or (attempt cache :clear (fn [] (((cache :store) :clear) (key-prefix))) 0) 0))
 
 (defn incr!
+  {:params [:any :number? (or :number (enum :none) :nil)] :ret :number? :throws [:any]}
   ``Add `delta` (1) to the number under `k` and return it, storing it
   with `ttl` when the key is new. Exact wherever the store implements
   it (redis: INCRBY); on a store where this module has to read-add-
@@ -306,18 +346,28 @@
 
 # -- single flight -------------------------------------------------------
 
-(defn- flight-options [cache opts]
+(defn- flight-options
+  {:params [@{:single-flight :any? & r} {:single-flight :any? & r}] :ret :any}
+  "Whether to single-flight this call: the option, else the cache's
+  own default."
+  [cache opts]
   (def sf (get opts :single-flight))
   (if (nil? sf) (not= false (cache :single-flight)) sf))
 
 (defn- flight-leaders
-  # key -> the root fiber of the task leading that key's flight —
-  # created lazily so a cache value from an older `make` still works
+  {:params [@{:flight-leaders (or @{:any :fiber} :nil) & r}] :ret @{:any :fiber}}
+  "Key -> the root fiber of the task leading that key's flight,
+  created lazily so a cache value from an older `make` still works."
   [cache]
   (or (cache :flight-leaders)
       (let [t @{}] (put cache :flight-leaders t) t)))
 
 (defn- single-flight
+  {:params [@{:in-flight (or @{:any @[:abstract]} :nil)
+              :flight-leaders (or @{:any :fiber} :nil)
+              :stats @{:keyword :number} & r}
+            :any (fn [] :any)]
+   :ret :any :throws [:any]}
   ``Run `f` once per key, however many fibers ask at the same moment.
   The first caller computes; the rest park on a channel of their own
   and take whatever it produced — the value, or the error, which is
@@ -359,6 +409,7 @@
         (if ok res (error res))))))
 
 (defn in-flight
+  {:params [] :ret :number}
   "How many keys are being computed right now — a number worth looking
   at when a cache seems to be doing more work than it should."
   []
@@ -367,6 +418,11 @@
 # -- read-through --------------------------------------------------------
 
 (defn remember
+  {:params [:any
+            (or :number (enum :none) :nil
+                {:ttl :any? :cache-nil :any? :single-flight :any? :refresh :any? & r})
+            (fn [] :any)]
+   :ret :any :throws [:any]}
   ``The value under `k`, or — when there is none — the result of
   `thunk`, stored and returned.
 
@@ -412,6 +468,9 @@
 # -- introspection -------------------------------------------------------
 
 (defn stats
+  {:params []
+   :ret {:hit-rate :number :in-flight :number :prefix :string :ttl :any?
+         :enabled :boolean & r}}
   ``What this cache has been doing: hits, misses, writes, deletes,
   store failures, single-flight waits — plus whatever the store counts
   and its hit rate, which is the number anyone actually asks for.``
@@ -431,6 +490,11 @@
           :enabled (enabled?)}))
 
 (defn make
+  {:params [:any (or {:prefix :string? :ttl :any? :enabled :any? :single-flight :any?
+                       :on-error :keyword? & r} :nil)]
+   :ret @{:store :struct :prefix :string :ttl :any? :enabled :boolean
+          :single-flight :boolean :on-error :keyword :in-flight @{:any :any}
+          :flight-leaders @{:any :any} :stats @{:keyword :number}}}
   ``A cache value — a normalized store, a prefix, a default ttl and the
   policies — without a plugin bootstrap behind it. `cache-dyn` takes
   one of these, which is what makes every layer above a store testable

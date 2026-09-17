@@ -61,6 +61,7 @@
   tapmod/tap*)
 
 (defmacro tap
+  {:params [:any] :ret :any}
   ``tap*, with the call site written down — the REPL and in-code
   helper the Tap page reads:
 
@@ -119,6 +120,10 @@
 # -- the context ---------------------------------------------------------
 
 (defn build-context
+  {:params [{:config {:values {:dash :any & r} & r} :profile :keyword
+             :extensions {:keyword :any} :system {:components {:keyword :any} & r} & r}]
+   :ret @{:keyword :any}
+   :throws [:string]}
   "Assemble the dash context from a boot value: the [:dash] slice, the
   gate posture for this profile, the tile contributions, and the three
   rings sized to their config. Normally called by the :before-start

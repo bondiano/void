@@ -113,10 +113,19 @@
 
 # -- keys ----------------------------------------------------------------
 
-(defn- vary-values [req names]
+(defn- vary-values
+  {:params [@{:headers {:string (or :string @[:string])} & r} (or @[:any] [:any])]
+   :ret @[:string?]}
+  "The values of the request headers named in `names`, lowercased and
+  in order — the part of the cache key a route's :vary adds."
+  [req names]
   (seq [n :in names] (ring/request-header req (string/ascii-lower (string n)))))
 
 (defn response-key
+  {:params [@{:headers {:string (or :string @[:string])} :method :any? :path :string?
+              :query :any? & r}
+            {:vary (or @[:any] :nil) & r}]
+   :ret :string}
   ``The key one request is cached under: method, host (two virtual
   hosts behind one process are two caches), path, the query rendered
   canonically (so `?b=2&a=1` and `?a=1&b=2` are one entry), and the
@@ -135,6 +144,7 @@
 (def- warned @{})
 
 (defn- warn-once
+  {:params [@{:path :string? & r} :any] :ret :nil}
   ``Say once per route why its responses are not being cached. Once,
   because a misconfiguration that logs per request is a second
   incident on top of the first.``
@@ -147,6 +157,7 @@
               :route route :reason reason)))
 
 (defn- response-header
+  {:params [{:headers (or {:any :any} :nil) & r} :string] :ret :any}
   ``A response header by its lowercase name, whatever spelling the
   handler used — handlers write headers by hand, and "Set-Cookie" must
   refuse storage as surely as "set-cookie".``
@@ -159,12 +170,22 @@
         (set found v))))
   found)
 
-(defn- private-response? [resp]
+(defn- private-response?
+  {:params [{:headers (or {:any :any} :nil) & r}] :ret (or :number :nil) :narrows :any}
+  "Does this response's cache-control say `no-store` or `private`?"
+  [resp]
   (when-let [cc (response-header resp "cache-control")]
     (def s (string/ascii-lower (if (indexed? cc) (string/join (map string cc) ",") (string cc))))
     (or (string/find "no-store" s) (string/find "private" s))))
 
-(defn- cacheable-request? [req spec]
+(defn- cacheable-request?
+  {:params [@{:headers {:string (or :string @[:string])} :method :any? & r}
+            {:vary (or @[:any] :nil) :vary-cookie :any? & r}]
+   :ret :boolean :narrows :any}
+  "May this request's response be read from or stored in the shared
+  cache — GET/HEAD, and clear of the identity headers unless the route
+  opted in?"
+  [req spec]
   (def method (get req :method :get))
   (cond
     (not (or (= :get method) (= :head method))) false
@@ -184,7 +205,12 @@
     false
     true))
 
-(defn- storable-response? [req resp]
+(defn- storable-response?
+  {:params [@{:path :string? & r} {:status :any? :body :any? :headers (or {:any :any} :nil) & r}]
+   :ret :boolean :narrows :any}
+  "May this response be stored: a 200, a real body, no Set-Cookie, and
+  no cache-control that refuses storage?"
+  [req resp]
   (cond
     (not (dictionary? resp)) false
     (not= 200 (get resp :status)) false
@@ -198,13 +224,22 @@
 
 # -- the middleware ------------------------------------------------------
 
-(defn- mark [resp value]
+(defn- mark
+  {:params [:any :string] :ret :any}
+  "Set the hit/miss header on `resp` when the config asked for one,
+  and return `resp` regardless."
+  [resp value]
   (def h (settings :header))
   (when (and (string? h) (dictionary? resp) (table? (get resp :headers)))
     (put (resp :headers) h value))
   resp)
 
-(defn- stored-response [entry]
+(defn- stored-response
+  {:params [{:status :any? :headers (or {:any :any} :nil) :body :any? :stored-at :number? & r}]
+   :ret :any}
+  "Rebuild a response from a cached entry, with a fresh `age` header
+  and the HIT marker."
+  [entry]
   (def resp @{:status (entry :status)
               :headers (merge-into @{} (get entry :headers {}))
               :body (entry :body)})
@@ -213,6 +248,11 @@
   (mark resp "HIT"))
 
 (defn respond
+  {:params [(fn [a] b)
+            {:ttl :number? :vary (or @[:any] :nil) :vary-cookie :any? & r}
+            @{:headers {:string (or :string @[:string])} :method :any? :path :string?
+              :query :any? & r}]
+   :ret :any}
   ``Serve one request through the cache: a hit is replayed, a miss
   reaches `handler` and its response is stored when it may be (see the
   module docstring). `spec` is the route's `:void.cache/response`

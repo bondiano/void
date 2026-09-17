@@ -10,7 +10,10 @@
 
 (def root (string "tmp/plugin-test-" (os/getpid)))
 
-(defn- rm-rf [path]
+(defn- rm-rf
+  {:params [:string] :ret :any}
+  "Recursively delete a path, tolerating one that is already gone."
+  [path]
   (case (os/stat path :mode)
     :directory (do (each e (os/dir path) (rm-rf (string path "/" e)))
                    (os/rmdir path))
@@ -22,10 +25,13 @@
 
 (def plugins ["void/storage/init"])
 
-(defn- config [extra]
-  # the [:storage] slice is merged a level down on purpose: `merge`
-  # replaces whole values, and a caller passing {:storage {:serve ...}}
-  # would otherwise drop the root and write into the package directory
+(defn- config
+  {:params [:any] :ret {:env @{:any :any} :cli :any}}
+  "Boot config for this suite's plugin composition. The [:storage]
+  slice is merged a level down on purpose: `merge` replaces whole
+  values, and a caller passing {:storage {:serve ...}} would
+  otherwise drop the root and write into the package directory."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}} extra
                {:storage (merge {:local {:root root}} (get extra :storage {}))})})

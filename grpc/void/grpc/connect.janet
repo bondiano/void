@@ -50,6 +50,9 @@
   :void.grpc/response)
 
 (defn respond
+  {:params [:any (or {:headers (or @{:string :string} :nil) :trailers (or @{:string :string} :nil) & r} :nil)]
+   :ret @{:void.grpc/response :boolean :message :any :headers @{:string :string}
+          :trailers @{:string :string}}}
   ``A response message plus metadata, for a handler that has something
   to say besides the message:
 
@@ -66,17 +69,32 @@
     :trailers (get opts :trailers {})})
 
 (defn response?
+  {:params [:any] :ret :boolean :narrows {:void.grpc/response :boolean :message :any & r}}
   "Is this a `respond` value rather than a bare message?"
   [v]
   (and (dictionary? v) (v response-key)))
 
 # -- codecs --------------------------------------------------------------
 
-(defn- normalize-ct [ct]
+(defn- normalize-ct
+  {:params [:any] :ret :string}
+  "A content type, lower-cased and its `;` parameters stripped, so
+  \"application/json; charset=utf-8\" compares equal to \"application/json\"."
+  [ct]
   (def s (string/ascii-lower (string (or ct ""))))
   (string/trim (if-let [semi (string/find ";" s)] (string/slice s 0 semi) s)))
 
 (defn codec-for
+  {:params [(or [{:name :keyword :content-type :string :encoding :string
+                 :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                 :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}]
+                @[{:name :keyword :content-type :string :encoding :string
+                  :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                  :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}])
+            :any]
+   :ret (or :nil {:name :keyword :content-type :string :encoding :string
+                  :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                  :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r})}
   ``The codec a content type selects, or nil. `codecs` is the resolved
   :void.grpc/codec point — a list, in contribution order, and the
   first match wins.``
@@ -88,6 +106,16 @@
         codecs))
 
 (defn codec-by-name
+  {:params [(or [{:name :keyword :content-type :string :encoding :string
+                 :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                 :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}]
+                @[{:name :keyword :content-type :string :encoding :string
+                  :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                  :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}])
+            :any]
+   :ret (or :nil {:name :keyword :content-type :string :encoding :string
+                  :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                  :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r})}
   "The codec whose Connect `encoding` name this is (`json`, `proto`)."
   [codecs name]
   (def want (string/ascii-lower (string (or name ""))))
@@ -96,6 +124,7 @@
         codecs))
 
 (defn content-types
+  {:params [(or [{:content-type :string & r}] @[{:content-type :string & r}])] :ret @[:string]}
   "Every content type this server will accept a call in — what a 415
   lists."
   [codecs]
@@ -103,13 +132,20 @@
 
 # -- reading a call ------------------------------------------------------
 
-(defn- base64url-decode [s]
+(defn- base64url-decode
+  {:params [:any] :ret :string}
+  "Connect's GET form uses the URL-safe alphabet without padding —
+  swapped back and re-padded so `base64/decode` can read it."
+  [s]
   # Connect's GET form uses the URL-safe alphabet without padding
   (def t (string/replace-all "_" "/" (string/replace-all "-" "+" (string s))))
   (def pad (% (length t) 4))
   (string t (case pad 2 "==" 3 "=" 0 "" "=")))
 
 (defn timeout-of
+  {:params [:any]
+   :ret (or :nil :number)
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``The client's deadline in seconds, from `Connect-Timeout-Ms`, or
   nil. A header that is not a number is refused rather than ignored:
   a client that asked for a deadline and silently did not get one is
@@ -136,6 +172,9 @@
     (/ ms 1000)))
 
 (defn check-protocol-version!
+  {:params [:any :boolean]
+   :ret :nil
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``Refuse a call whose `Connect-Protocol-Version` is not this one.
   Present-and-wrong is always refused; absent is refused only when
   `required?` — see [:grpc :require-protocol-version] for why that is
@@ -154,6 +193,9 @@
                                 (string given) protocol-version))))
 
 (defn check-encoding!
+  {:params [:any]
+   :ret :nil
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``Refuse a compressed request. The status is 415 rather than the 501
   the code would otherwise carry: the Connect protocol says a
   Content-Type or Content-Encoding the server does not recognise is an
@@ -169,6 +211,18 @@
                   :headers {"accept-encoding" "identity"}})))
 
 (defn read-post
+  {:params [{:body (or :string :nil) & r}
+            (or [{:name :keyword :content-type :string :encoding :string
+                 :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                 :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}]
+                @[{:name :keyword :content-type :string :encoding :string
+                  :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                  :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}])]
+   :ret [{:name :keyword :content-type :string :encoding :string
+         :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+         :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}
+        :string]
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``The [codec bytes] of a POST call, or an RPC failure. An
   unrecognised — or missing — content type is a 415 carrying the code
   `unimplemented`: the protocol calls it an unsupported media type,
@@ -188,6 +242,18 @@
   [codec (string (or (req :body) ""))])
 
 (defn read-get
+  {:params [{:query (or @{:string :any} :nil) & r}
+            (or [{:name :keyword :content-type :string :encoding :string
+                 :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                 :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}]
+                @[{:name :keyword :content-type :string :encoding :string
+                  :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+                  :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}])]
+   :ret [{:name :keyword :content-type :string :encoding :string
+         :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+         :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}
+        :string]
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   ``The [codec bytes] of a GET call. Connect puts the message in the
   query string: `encoding` names the codec, `message` carries the
   value and `base64=1` says it is URL-safe base64 — which a binary
@@ -227,6 +293,12 @@
            raw)])
 
 (defn decode-message
+  {:params [{:name :keyword :content-type :string :encoding :string
+            :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+            :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}
+           :any :string]
+   :ret :any
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   "Decode a call's bytes into a message, turning a codec's complaint
   into `invalid_argument` — which is what a body the server cannot
   read is."
@@ -241,13 +313,24 @@
 
 # -- writing an answer ---------------------------------------------------
 
-(defn- trailer-headers [trailers]
+(defn- trailer-headers
+  {:params [(or @{:string :any} :nil)] :ret @{:string :string}}
+  "Trailing metadata as `Trailer-`-prefixed header names, Connect's
+  own way of carrying a unary call's trailers."
+  [trailers]
   (tabseq [[k v] :pairs (or trailers {})]
     (let [name (string/ascii-lower (string k))]
       (if (string/has-prefix? "trailer-" name) name (string "trailer-" name)))
     (string v)))
 
 (defn ok-response
+  {:params [{:name :keyword :content-type :string :encoding :string
+            :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
+            :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}
+           :any :any
+           (or {:headers (or @{:string :any} :nil) :trailers (or @{:string :any} :nil) & mr} :nil)]
+   :ret @{:status :number :headers @{:string :string} :body :string}
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
   "The 200 an answered call goes out as."
   [codec message value &opt meta]
   (default meta {})
@@ -268,6 +351,10 @@
     :body (string body)})
 
 (defn error-body
+  {:params [{:void.grpc/code :keyword :message (or :string :nil)
+            :details (or [:any] :nil) & r}
+           (fn [:any] :any)]
+   :ret :string}
   ``A Connect error as JSON. The shape is the protocol's:
 
       {"code":"not_found","message":"no order A-1","details":[...]}
@@ -285,6 +372,11 @@
   (json/encode out))
 
 (defn error-response
+  {:params [{:void.grpc/code :keyword :http/status (or :number :nil)
+            :headers (or @{:string :any} :nil) :message (or :string :nil)
+            :details (or [:any] :nil) & r}
+           (fn [:any] :any)]
+   :ret @{:status :number :headers @{:string :string} :body :string}}
   "The response an RPC failure goes out as: the status its code maps
   to, and the JSON body naming it — whatever codec the call used,
   because an error a client cannot read is not an error message."

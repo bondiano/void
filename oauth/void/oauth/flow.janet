@@ -26,6 +26,9 @@
 (def log-ns "void.oauth")
 
 (defn pending
+  {:params [{:name :any & r} (or :string :nil) (or :number :nil)]
+   :ret {:provider :any :state :string :verifier :string :nonce (or :string :nil)
+         :next (or :string :nil) :at :number}}
   ``A fresh pending record for a provider: the state the callback will
   demand back, the PKCE verifier the exchange will present, a nonce
   when an id_token is expected, and where to land afterwards.``
@@ -39,6 +42,12 @@
    :at at})
 
 (defn authorize-url
+  {:params [{:client-id :any :scopes (or @[:string] [:string] :nil) :params :any & r}
+            {:state :string :verifier :string :nonce (or :string :nil) & r}
+            (or :any :nil)
+            (or @{:any :any} :nil)]
+   :ret :string
+   :throws [:string]}
   ``The URL the browser is redirected to: `response_type=code`, the
   exact registered redirect URI, the scopes, the state, the S256
   challenge for the pending verifier, the nonce when openid is asked
@@ -65,6 +74,9 @@
 # -- the exchanges, as data ----------------------------------------------
 
 (defn- client-auth
+  {:params [{:client-id :any :client-secret :any :auth (or :any :nil) & r}
+            @{:any :any} @{:any :any}]
+   :ret :nil}
   "Put the client credentials on a token-endpoint request: Basic by
   default (RFC 6749 §2.3.1 — the form every server has), or in the
   form body for an issuer that insists."
@@ -78,6 +90,12 @@
          (string "Basic " (crypto/base64 (string id ":" (or secret "")))))))
 
 (defn token-request
+  {:params [{:client-id :any :client-secret :any :auth (or :any :nil)
+             :redirect-uri (or :string :nil) :name :any & r}
+            :any {:verifier :string & r}
+            (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+   :ret {:method :keyword :url :string :form @{:any :any} :headers @{:any :any} :timeout :any}
+   :throws [:string]}
   "The code exchange as a request table — grant, code, the same
   redirect URI the authorization request named, and the PKCE verifier
   whose challenge went out with it."
@@ -97,6 +115,10 @@
    :timeout (cfg :timeout)})
 
 (defn refresh-request
+  {:params [{:client-id :any :client-secret :any :auth (or :any :nil) :name :any & r}
+            :any (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+   :ret {:method :keyword :url :string :form @{:any :any} :headers @{:any :any} :timeout :any}
+   :throws [:string]}
   "A refresh as a request table — the same endpoint, the other grant."
   [p refresh-token &opt cfg ring]
   (default cfg provider/settings)
@@ -113,9 +135,17 @@
 
 # -- running them --------------------------------------------------------
 
-(defn- no [reason] {:ok false :reason reason})
+(defn- no
+  {:params [:any] :ret {:ok :boolean :reason :any}}
+  "A refusal value carrying `reason`, for the log."
+  [reason] {:ok false :reason reason})
 
 (defn- token-response
+  {:params [{:status :number :body :any & r}]
+   :ret (or {:ok :boolean :reason :any}
+            {:ok :boolean
+             :tokens {:access-token :any :token-type :any :expires-in :any
+                      :refresh-token :any :id-token :any :scope :any :raw :any}})}
   ``A token endpoint's answer, normalized: keyword keys, the raw body
   kept for whatever a provider added. A refusal is a value with the
   issuer's error code in it — for the log, never for the visitor.``
@@ -142,7 +172,15 @@
                   :scope (get body :scope)
                   :raw body}}))))
 
-(defn- run-exchange [req p what]
+(defn- run-exchange
+  {:params [{:method :keyword :url :string & r} {:name :any & r} :keyword]
+   :ret (or {:ok :boolean :reason :any}
+            {:ok :boolean
+             :tokens {:access-token :any :token-type :any :expires-in :any
+                      :refresh-token :any :id-token :any :scope :any :raw :any}})}
+  "Run one of the token-endpoint requests and normalize its answer, or
+  a refusal when the endpoint could not be reached at all."
+  [req p what]
   (def [ok resp] (protect (client/request req)))
   (if ok
     (token-response resp)
@@ -152,18 +190,34 @@
         (no "the token endpoint could not be reached"))))
 
 (defn exchange!
+  {:params [{:client-id :any :client-secret :any :auth (or :any :nil)
+             :redirect-uri (or :string :nil) :name :any & r}
+            :any {:verifier :string & r}
+            (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+   :ret (or {:ok :boolean :reason :any}
+            {:ok :boolean
+             :tokens {:access-token :any :token-type :any :expires-in :any
+                      :refresh-token :any :id-token :any :scope :any :raw :any}})}
   "Exchange an authorization code. Returns `{:ok true :tokens ...}` or
   `{:ok false :reason}`."
   [p code pend &opt cfg ring]
   (run-exchange (token-request p code pend cfg ring) p :code))
 
 (defn refresh!
+  {:params [{:client-id :any :client-secret :any :auth (or :any :nil) :name :any & r}
+            :any (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+   :ret (or {:ok :boolean :reason :any}
+            {:ok :boolean
+             :tokens {:access-token :any :token-type :any :expires-in :any
+                      :refresh-token :any :id-token :any :scope :any :raw :any}})}
   ``Exchange a refresh token for fresh tokens — the half an
   application that stored one (its own column; this package stores nothing) calls later. The same shape as `exchange!`.``
   [p refresh-token &opt cfg ring]
   (run-exchange (refresh-request p refresh-token cfg ring) p :refresh))
 
 (defn userinfo!
+  {:params [{:name :any & r} :any (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+   :ret (or :any :nil)}
   ``The provider's userinfo document for an access token, or nil —
   when there is no endpoint, and when the call fails (logged): a
   sign-in hook that needs more than nil fetches the profile itself

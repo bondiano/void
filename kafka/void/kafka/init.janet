@@ -61,11 +61,30 @@
   produce!/consume! reach for, the way void/db-mysql's current does."
   nil)
 
-(defn- client-now []
+(defn- client-now
+  {:params []
+   :ret @{:producer @{:client :any :timeout :number :next-token :number
+                      :waiters @{:number :any}
+                      :stats @{:produced :number :delivered :number :failed :number}}
+          :cfg {:brokers (or :string [:string] :nil) :client-id (or :string :nil)
+               :properties (or @{:string (or :string :number :boolean)} :nil)
+               :library (or :string :nil) & r}
+          :consumers @[:any]
+          :probe (enum :ok :skipped :off)}
+   :throws [:string]}
+  "The started :kafka/client component's value, or an error naming
+  what is missing — every module-level call below needs one running."
+  []
   (or current
       (error "void/kafka is not started — no :kafka/client component")))
 
 (defn produce!
+  {:params [:any (or :string :nil)
+            (or {:key (or :string :nil) :headers (or @{:string :string} :nil)
+                :wait? (or :boolean :nil) & r}
+                :nil)]
+   :ret (or :nil {:partition :number :offset :number})
+   :throws [:string]}
   ``Produce through the started client:
 
       (kafka/produce! "audit.log" bytes)
@@ -80,6 +99,15 @@
                      (merge opts {:topic topic :value value})))
 
 (defn consume!
+  {:params [{:group :any :topics (or [:string] @[:string] :nil) & r} (fn [:any] :any)]
+   :ret @{:client @{:kind :keyword :handle :pointer :queue :pointer :rfd :number
+                    :wfd :number :pair :any :stopped :boolean :pump-done :any
+                    :last-error :any :handlers @{:keyword :any}
+                    :stats @{:events :number :errors :number}}
+          :group :any :topics (or [:string] @[:string]) :deliver (fn [:any] :any)
+          :closed :boolean
+          :stats @{:received :number :delivered :number :errors :number}}
+   :throws [:string]}
   ``Start a consumer through the started client's configuration:
 
       (kafka/consume! {:group "importer" :topics ["their.topic"]}

@@ -152,17 +152,24 @@
   @{})
 
 (defn listen!
+  {:params [:keyword (fn [:any] :any)] :ret (fn [:any] :any)}
   "Hear about every delivery without contributing a hook."
   [name f]
   (put listeners name f)
   f)
 
 (defn unlisten!
+  {:params [:keyword] :ret :table}
   "Remove a listener."
   [name]
   (put listeners name nil))
 
-(defn- emit! [receipt]
+(defn- emit!
+  {:params [:any] :ret :any}
+  "Pass a receipt through the `:void.mail/sent` hook and every var
+  listener, logging rather than raising when one of them fails, and
+  answer the receipt unchanged."
+  [receipt]
   # the hook registry of the boot in force — see void/notify's emit!
   # for why this is no longer a var captured at :before-start
   (when-let [reg (get (plugin/running-boot) :hooks)]
@@ -179,7 +186,11 @@
 
 # -- the transports this package ships -----------------------------------
 
-(defn- file-dir [] (get-in settings [:file :dir] "tmp/mail"))
+(defn- file-dir
+  {:params [] :ret :string}
+  "Where the :file transport writes — [:mail :file :dir], read fresh
+  on every send so a REPL change lands on the next mail."
+  [] (get-in settings [:file :dir] "tmp/mail"))
 
 (plugin/contribute! :void.mail/transport
   # built lazily so that [:mail :file :dir] changed from a REPL is
@@ -195,10 +206,31 @@
 
 # -- building a delivery -------------------------------------------------
 
-(defn- token [n]
+(defn- token
+  {:params [:number] :ret :string}
+  "`n` random bytes as a hex string, for a Message-ID or a boundary."
+  [n]
   (string/join (map |(string/format "%02x" $) (os/cryptorand n)) ""))
 
 (defn build
+  {:params [{:view :any :layout :any :engine :any :context :any :check-urls :any & r}
+            (or :nil {:at :any :id :any :boundaries :any & r})]
+   :ret {:message @{:from {:name :string? :email :string}
+                    :to @[{:name :string? :email :string}]
+                    :cc @[{:name :string? :email :string}]
+                    :bcc @[{:name :string? :email :string}]
+                    :reply-to @[{:name :string? :email :string}]
+                    :subject :string
+                    :text :string?
+                    :html :string?
+                    :headers (or :nil {:string :any})
+                    :attachments @[{:filename :string :content :any :type :string :inline :boolean}]
+                    :envelope-from :string
+                    :recipients @[:string]}
+         :bytes :string
+         :id :string
+         :at :number}
+   :throws [:string]}
   ``A message, resolved into the delivery a transport receives:
 
       {:message <normalized>  :bytes <RFC 5322>  :id <Message-ID>  :at <time>}
@@ -222,6 +254,7 @@
    :at at})
 
 (defn active-transport
+  {:params [] :ret {:name :keyword :send :function :doc :any & r} :throws [:string]}
   "The transport this process sends through."
   []
   (def name (get settings :transport :file))
@@ -231,6 +264,7 @@
               (util/names-str (keys transports)))))
 
 (defn deliver!
+  {:params [{:message :any & r}] :ret :any :throws [:string]}
   ``Send a delivery **now**, on this fiber, through the active
   transport — the primitive, and what the queued job calls on the
   worker. `mail/send` is the call an application makes.
@@ -247,6 +281,7 @@
   receipt)
 
 (defn queued?
+  {:params [] :ret :boolean}
   ``Will `mail/send` hand this composition's mail to a queue?
   `[:mail :queue]` is `:auto` (yes when void/mail-jobs is composed),
   true (yes, and its absence is a boot error) or false (never).``
@@ -256,6 +291,7 @@
     (not (nil? enqueue))))
 
 (defn send-delivery
+  {:params [{:id :any :message :any & r}] :ret :any :throws [:string]}
   ``Send a delivery that is already built, applying this composition's
   queue decision — the second half of `send`, and what a caller with a
   rendered letter in hand calls directly (void/notify's mail channel,
@@ -273,6 +309,10 @@
     (deliver! delivery)))
 
 (defn send
+  {:params [{:view :any :layout :any :engine :any :context :any :check-urls :any & r}
+            (or :nil {:at :any :id :any :boundaries :any & r})]
+   :ret :any
+   :throws [:string]}
   ``Send a message. With a queue in the composition it is rendered
   here — so that what the worker sends is what this request meant,
   claims, locale and all — and delivered there; without one it goes
@@ -297,16 +337,22 @@
 (def permanent-failure? "See smtp/permanent? — did the server give its final answer?" smtp/permanent?)
 
 (defn outbox
+  {:params [] :ret @[:any]}
   "What the :memory transport kept, oldest first."
   []
   transport/outbox)
 
 (defn clear-outbox!
+  {:params [] :ret :nil}
   "Empty the memory outbox — what a test does between cases."
   []
   (transport/clear!))
 
 (defn preview
+  {:params [{:view :any :layout :any :engine :any :context :any :check-urls :any & r}
+            (or :nil {:at :any :id :any :boundaries :any & r})]
+   :ret :string
+   :throws [:string]}
   "The octets a message would go out as, without sending it — what a
   REPL and a snapshot test look at."
   [msg &opt opts]
@@ -314,7 +360,15 @@
 
 # -- boot ----------------------------------------------------------------
 
-(defn- merge-slice [cfg]
+(defn- merge-slice
+  {:params [(or :nil {:smtp :any :file :any :memory :any & r})]
+   :ret {:transport :any :from :any :reply-to :any :envelope-from :any :subject-prefix :any
+         :headers :any :to-override :any :base-url :any :queue :any
+         :smtp :any :file :any :memory :any & r}}
+  "The [:mail] config as written merged over `defaults`, with the
+  :smtp, :file and :memory sub-slices merged one level deeper so that
+  a deployment can set one key of them without repeating the rest."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   (each key [:smtp :file :memory]
     (put c key (merge (defaults key) (get cfg key {}))))
@@ -325,7 +379,13 @@
   of them is a boot error."
   [:memory :file :log])
 
-(defn- check-transport [cfg profile]
+(defn- check-transport
+  {:params [{:transport :any :smtp :any & r} :keyword] :ret :nil :throws [:string]}
+  "Refuse a resolved [:mail] slice at boot: a transport nobody
+  contributed, an :smtp transport whose TLS or AUTH settings are
+  unsafe, or (in :prod) a transport that keeps mail rather than
+  sending it."
+  [cfg profile]
   (def name (get cfg :transport :file))
   (unless (get transports name)
     (errorf "[:mail :transport] names %q, which no plugin contributed (have %s)"
@@ -344,7 +404,11 @@
                     "contributed")
             name name)))
 
-(defn- reveal-password [cfg]
+(defn- reveal-password
+  {:params [{:smtp {:password :any & r} & r}] :ret {:smtp {:password :any & r} & r}}
+  "Unwrap [:mail :smtp :password] when it is a secret box, so the SMTP
+  client below never has to know about void/core/config's secrets."
+  [cfg]
   (def p (get-in cfg [:smtp :password]))
   (when (config/secret? p)
     (put (cfg :smtp) :password (config/reveal p)))
@@ -382,6 +446,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn print-status
+  {:params [] :ret :nil :throws [:string]}
   "What this process will do with a message — the body of `void mail
   status`."
   []

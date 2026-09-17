@@ -63,6 +63,7 @@
 # -- labels ---------------------------------------------------------------
 
 (defn label-of
+  {:params [{:label (or :string :keyword :nil) :name :keyword & r} :keyword?] :ret :string}
   ``The words of anything the declaration labelled — a column, a field,
   a filter, a resource. `:label` is kept as it was written, because a
   declaration is frozen once and a locale is known per request: a
@@ -72,17 +73,20 @@
   (core-text/label-of (get spec :label) (or key (get spec :name))))
 
 (defn- action-label
+  {:params [{:label (or :string :keyword :nil) :name :keyword & r}] :ret :string}
   "What a bulk action is called: the label it declared, else its name."
   [action]
   (label-of action))
 
 (defn- title-of
+  {:params [{:title (or :string :keyword :nil) :name :keyword & r}] :ret :string}
   "What a resource is called in the plural — its `:title`, which may be
   a translation key."
   [desc]
   (core-text/label-of (desc :title) (desc :name)))
 
 (defn- singular-of
+  {:params [{:singular (or :string :keyword :nil) :entity {:name :keyword & r} & r}] :ret :string}
   "What one row of a resource is called — its `:singular`."
   [desc]
   (core-text/label-of (desc :singular) (get-in desc [:entity :name])))
@@ -95,6 +99,13 @@
   :void.admin/ungrouped)
 
 (defn- nav-links
+  {:params [(or @{:method :keyword :path :string :raw-path :string :query-string :string?
+                  :query {:string :any} :headers {:string (or :string @[:string])}
+                  :http-version [:number :number] :body :any :received :number
+                  :arrived :number? :remote-addr :string? & r}
+                :nil)]
+   :ret @[:tuple]
+   :throws [:string]}
   ``The navigation: the mounted resources and the contributed menu
   items, each under the group it named. Ungrouped links come first and
   keep their order, then the groups by name — a back office grows one
@@ -118,7 +129,11 @@
     (def g (or (get i :group) ungrouped))
     (unless (get by-group g) (put by-group g @[]))
     (array/push (get by-group g) i))
-  (defn link [i]
+  (defn link
+    {:params [{:href :string :label :any & r}] :ret :tuple}
+    "One navigation link, marked active when the current path starts
+    with its href."
+    [i]
     [:a {:href (i :href)
          :class (when (string/has-prefix? (i :href) here) "active")}
      (i :label)])
@@ -137,12 +152,21 @@
 # named, cached and served is void/html/chrome's (`served-asset`,
 # `asset-route`).
 
-(defn- join-assets [pairs key]
+(defn- join-assets
+  {:params [(or @[[:keyword {:keyword :any}]] [[:keyword {:keyword :any}]]) :keyword]
+   :ret :string}
+  "One kind of asset (:style or :script), concatenated across every
+  distinct widget that has one."
+  [pairs key]
   (def parts (filter |(not (empty? $))
                      (seq [[_ a] :in pairs :let [v (get a key)] :when v] (string v))))
   (string/join parts "\n"))
 
 (defn asset-bundle
+  {:params [(or :string :nil)
+            (or {:keyword {:keyword {:widget :any :why :keyword :field :any}}} :nil)]
+   :ret {:style (or {:file :string :body :string} :nil)
+         :script (or {:file :string :body :string} :nil)}}
   ``The admin's served assets, as data: `{:style {:file :body}
   :script {:file :body}}`, either half nil when there is nothing in it.
   A pure function of the sheet in force and the whole widget
@@ -157,11 +181,21 @@
    :script (chrome/served-asset "admin.js" (join-assets pairs :script))})
 
 (defn asset-url
+  {:params [:keyword] :ret :string?}
   "Where one half of the bundle is served, or nil when it is empty."
   [half]
   (chrome/asset-href (ctx/prefix) (get (ctx/setting :assets {}) half)))
 
 (defn layout
+  {:params [:any {:request (or @{:method :keyword :path :string :raw-path :string
+                                 :query-string :string? :query {:string :any}
+                                 :headers {:string (or :string @[:string])}
+                                 :http-version [:number :number] :body :any :received :number
+                                 :arrived :number? :remote-addr :string? & r}
+                                :nil)
+                  & r}]
+   :ret @[:any]
+   :throws [:string]}
   ``The default frame. Replaceable whole through a `:void.admin/layout`
   contribution — an application that already has a chrome should not
   have to live inside a second one. The page's head slots are
@@ -187,21 +221,34 @@
      [:main {:class "vd-main"} content]]))
 
 (defn frame
+  {:ret :function}
   "The layout in force: the configured one, or the built-in."
   []
   (or (ctx/setting :layout) layout))
 
 # -- small pieces --------------------------------------------------------
 
-(defn- id-of [desc row]
+(defn- id-of
+  {:params [{:entity {:pk :keyword & r} & r} @{:any :any}] :ret :string}
+  "The primary key of a loaded row, as the string every URL builds
+  with."
+  [desc row]
   (string (get row (get-in desc [:entity :pk]))))
 
-(defn- cell-value [desc row col]
+(defn- cell-value
+  {:params [:any @{:any :any} {:value (or :function :nil) :name :keyword & r}] :ret :any}
+  "One column's value: computed through its `:value`, else the field
+  it names."
+  [desc row col]
   (if-let [f (get col :value)]
     (f row)
     (get row (col :name))))
 
 (defn- column-cell
+  {:params [{:name :keyword & r} @{:any :any}
+            {:field (or {:name :keyword & r} :nil) :value (or :function :nil) :name :keyword & r}
+            :keyword]
+   :ret :any}
   ``One column of one row, drawn through the widget resolved for its
   field — or, for a computed column, through the plain text
   projection, since a `:value` answers with a value and no widget was
@@ -214,6 +261,9 @@
     (widget/text-of value)))
 
 (defn slot
+  {:params [{:slots {:keyword {:keyword (fn [:any] :tuple)}} & r}
+            :keyword :keyword (or {:keyword :any} :nil)]
+   :ret (or :tuple :nil)}
   ``One of a resource's own `:before`/`:after` slots, or nil. The
   context carries what the page has — the resource, the request and,
   where there is one, the row.``
@@ -221,10 +271,14 @@
   (when-let [f (get-in desc [:slots page place])]
     (f (merge {:resource desc} (or context {})))))
 
-(defn- csrf-slot []
+(defn- csrf-slot
+  {:ret :any}
+  "The hidden CSRF field, when void/security bound one."
+  []
   (when-let [f (dyn keys/csrf-field)] (f)))
 
 (defn post-form
+  {:params [:keyword :string (or {:keyword :any} :nil) :any] :ret :tuple}
   ``A form that posts. `verb` is the verb the route actually declares:
   anything but :post rides `?_method=`, which the edge rewrites for
   admin paths and only out of a POST.``
@@ -242,6 +296,10 @@
 # -- the list ------------------------------------------------------------
 
 (defn list-params
+  {:params [{:filters [{:name :keyword :param :string & r}] & r}
+            {:q (or :string :nil) :sort (or :keyword :nil) :dir :keyword
+             :filters {:keyword {:keyword :any}} & r}]
+   :ret @{:string :any}}
   ``The query parameters that describe the current list, so a sort
   link, a page link and a bulk confirmation all carry the same view of
   it. Filters that are ranges carry both ends.``
@@ -258,7 +316,15 @@
       (put out (string (f :param) "-to") (get v :to))))
   out)
 
-(defn- sort-link [desc st col]
+(defn- sort-link
+  {:params [{:path :string :filters [{:name :keyword :param :string & r}] & r}
+            {:sort (or :keyword :nil) :dir :keyword :q (or :string :nil)
+             :filters {:keyword {:keyword :any}} & r}
+            {:name :keyword & r}]
+   :ret :string}
+  "The URL that sorts by this column, flipping direction when it is
+  already the sort."
+  [desc st col]
   (def active (= (st :sort) (col :name)))
   (def next-dir (if (and active (= :desc (st :dir))) :asc :desc))
   (def params (list-params desc st))
@@ -267,12 +333,23 @@
   (ctx/url desc "" params))
 
 (defn- rows-swap
+  {:params [:string] :ret @{:string :string} :throws [:string]}
   "The htmx half of a list link: fetch `url` into the rows, and put it
   in the address bar — the same three attributes on every link."
   [url]
   (hx/get* url :target "#admin-rows" :swap :outer-html :push-url true))
 
-(defn- header-cell [desc st col]
+(defn- header-cell
+  {:params [{:sortable [:keyword] :path :string
+             :filters [{:name :keyword :param :string & r}] & r}
+            {:sort (or :keyword :nil) :dir :keyword :q (or :string :nil)
+             :filters {:keyword {:keyword :any}} & r}
+            {:name :keyword :label (or :string :keyword :nil) & r}]
+   :ret :tuple
+   :throws [:string]}
+  "One list column's header: a sort link when the column is
+  :sortable, the plain label otherwise."
+  [desc st col]
   (def sortable (truthy? (index-of (col :name) (desc :sortable))))
   [:th
    (if sortable
@@ -283,6 +360,13 @@
      (label-of col))])
 
 (defn cell
+  {:params [{:name :keyword :path :string :entity {:pk :keyword & r} & r}
+            @{:any :any}
+            {:name :keyword :label (or :string :keyword :nil)
+             :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}
+            :boolean]
+   :ret :tuple
+   :throws [:string]}
   ``One list cell. An `:editable` column renders as a tiny form that
   patches itself and swaps itself back — with no htmx it is simply the
   value, and the edit page is one click away, which is the honest
@@ -307,6 +391,13 @@
     [:td shown]))
 
 (defn row
+  {:params [{:name :keyword :path :string :entity {:pk :keyword & r}
+             :list [{:name :keyword :label (or :string :keyword :nil)
+                     :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}]
+             :editable [:keyword] :action-set {:keyword :boolean} & r}
+            @{:any :any} :any]
+   :ret :tuple
+   :throws [:string]}
   "One list row: the selection box, the cells, and the per-row links."
   [desc r st]
   (def id (id-of desc r))
@@ -325,7 +416,15 @@
       [:a {:href (ctx/url desc "/-/bulk/destroy" {"ids" id})}
        (text/t :void.admin/delete)])]])
 
-(defn- pager [desc st total]
+(defn- pager
+  {:params [{:path :string :filters [{:name :keyword :param :string & r}] & r}
+            {:page :number :per-page :number :sort (or :keyword :nil) :dir :keyword
+             :q (or :string :nil) :filters {:keyword {:keyword :any}} & r}
+            :number]
+   :ret :tuple
+   :throws [:string]}
+  "The pager for one list page."
+  [desc st total]
   (html/pager {:page (st :page) :per-page (st :per-page) :total total
                :attrs rows-swap
                :href (fn [p]
@@ -334,6 +433,17 @@
                        (ctx/url desc "" params))}))
 
 (defn rows-fragment
+  {:params [{:name :keyword :path :string :entity {:pk :keyword & r}
+             :list [{:name :keyword :label (or :string :keyword :nil)
+                     :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}]
+             :editable [:keyword] :action-set {:keyword :boolean} :sortable [:keyword]
+             :filters [{:name :keyword :param :string & r}] & r}
+            (or @[@{:any :any}] [@{:any :any}])
+            {:page :number :per-page :number :sort (or :keyword :nil) :dir :keyword
+             :q (or :string :nil) :filters {:keyword {:keyword :any}} & r}
+            :number]
+   :ret :tuple
+   :throws [:string]}
   ``The part of a list that filtering, searching, sorting and paging
   replace — `<tbody>` plus the pager, wrapped in one element so a
   single swap can carry both. This is the whole of the htmx story on
@@ -352,7 +462,19 @@
        (seq [r :in rows] (row desc r st)))]]
    (pager desc st total)])
 
-(defn- filter-panel [desc st]
+(defn- filter-panel
+  {:params [{:name :keyword :path :string :search [:keyword]
+             :filters [{:name :keyword :param :string
+                        :field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        & r}]
+             & r}
+            {:q (or :string :nil) :filters {:keyword {:keyword :any}} & r}]
+   :ret (or :tuple :nil)
+   :throws [:string]}
+  "The list's filter panel: the search box, then one control per
+  declared filter — its widget's own, or the plain fallback by type."
+  [desc st]
   (when (or (not (empty? (desc :search))) (not (empty? (desc :filters))))
     [:form (merge {:id "admin-filters"
                    :method "get"
@@ -393,7 +515,15 @@
                           :value (when (not (nil? value)) (string value))}])))])
      [:div {:class "field"} [:button {:type "submit"} (text/t :void.admin/filter)]]]))
 
-(defn- bulk-bar [desc]
+(defn- bulk-bar
+  {:params [{:action-set {:keyword :boolean} :path :string
+             :custom-actions {:keyword {:name :keyword :label (or :string :nil)
+                                        :danger (or :boolean :nil) & r}}
+             & r}]
+   :ret (or :tuple :nil)}
+  "The bulk-action bar: destroy plus every custom action, offered
+  only when there is at least one."
+  [desc]
   (def actions
     (array/concat
       (if (in (desc :action-set) :destroy)
@@ -412,6 +542,31 @@
       " " (text/t :void.admin/every-matching-row)]]))
 
 (defn list-page
+  {:params [{:name :keyword :path :string :title (or :string :keyword :nil)
+             :entity {:pk :keyword & r}
+             :list [{:name :keyword :label (or :string :keyword :nil)
+                     :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}]
+             :editable [:keyword] :action-set {:keyword :boolean} :sortable [:keyword]
+             :search [:keyword]
+             :filters [{:name :keyword :param :string
+                        :field {:type :keyword
+                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                        & r}]
+             :custom-actions {:keyword {:name :keyword :label (or :string :nil)
+                                        :danger (or :boolean :nil) & r}}
+             :slots {:keyword {:keyword (fn [:any] :tuple)}}
+             & r}
+            (or @[@{:any :any}] [@{:any :any}])
+            {:page :number :per-page :number :sort (or :keyword :nil) :dir :keyword
+             :q (or :string :nil) :filters {:keyword {:keyword :any}} & r}
+            :number
+            (or @{:method :keyword :path :string :raw-path :string :query-string :string?
+                  :query {:string :any} :headers {:string (or :string @[:string])}
+                  :http-version [:number :number] :body :any :received :number
+                  :arrived :number? :remote-addr :string? & r}
+                :nil)]
+   :ret :tuple
+   :throws [:string]}
   "The list: toolbar, selection form, rows, pager."
   [desc rows st total &opt request]
   (def slot-ctx {:request request :rows rows :state st :total total})
@@ -431,11 +586,19 @@
 
 # -- forms ---------------------------------------------------------------
 
-(defn- field-block [desc fd values errors row]
+(defn- field-block
+  {:params [{:name :keyword :readonly [:keyword] & r}
+            {:name :keyword :label (or :string :keyword :nil) & r}
+            {:keyword :any}
+            (or [{:path :any & r}] :nil)
+            (or @{:any :any} :nil)]
+   :ret :tuple
+   :throws [:string]}
   ``One labeled field, drawn through html/form's `field` with the
   control delegated to the widget — `:render` is the seam, so a widget
   field and a plain field are one block with one class vocabulary
   (and one place that learns what an invalid field looks like).``
+  [desc fd values errors row]
   (def entry (ctx/widget-entry (desc :name) (fd :name)))
   (def errs (get (form/errors-by-field errors) (fd :name)))
   (def readonly (truthy? (index-of (fd :name) (desc :readonly))))
@@ -456,6 +619,9 @@
     errs))
 
 (defn- form-attrs
+  {:params [{:name :keyword & r} (or @[{:name :keyword & r}] [{:name :keyword & r}])
+            (or {:keyword :any} :nil)]
+   :ret @{:keyword :any}}
   ``The <form> attributes of a form drawing `fields` of `desc`: the
   class, plus the enctype when a widget on it says its control needs
   one.``
@@ -466,6 +632,23 @@
          (or extra {})))
 
 (defn form-page
+  {:params [{:name :keyword :title (or :string :keyword :nil) :singular (or :string :keyword :nil)
+             :path :string :readonly [:keyword]
+             :form-fields [{:name :keyword :label (or :string :keyword :nil) & r}]
+             :slots {:keyword {:keyword (fn [:any] :tuple)}}
+             :entity {:name :keyword :pk :keyword :version (or :keyword :nil) & r}
+             & r}
+            {:row (or @{:any :any} :nil) :values (or {:keyword :any} :nil)
+             :errors (or [{:path :any & r}] :nil) :conflict :any
+             :request (or @{:method :keyword :path :string :raw-path :string
+                            :query-string :string? :query {:string :any}
+                            :headers {:string (or :string @[:string])}
+                            :http-version [:number :number] :body :any :received :number
+                            :arrived :number? :remote-addr :string? & r}
+                           :nil)
+             & r}]
+   :ret :tuple
+   :throws [:string]}
   ``The create/edit form — `opts` is `{:row :values :errors :conflict
   :request}`. The version column, when the entity declares one, rides
   along as a hidden field: `save!` compares it and a lost race becomes
@@ -501,6 +684,22 @@
 # -- detail --------------------------------------------------------------
 
 (defn detail-page
+  {:params [{:name :keyword :singular (or :string :keyword :nil) :entity {:pk :keyword & r}
+             :action-set {:keyword :boolean} :path :string
+             :detail [{:name :keyword :label (or :string :keyword :nil)
+                       :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}]
+             :slots {:keyword {:keyword (fn [:any] :tuple)}}
+             & r}
+            @{:any :any}
+            (or [:any] :nil)
+            (or [{:keyword :any}] :nil)
+            (or @{:method :keyword :path :string :raw-path :string :query-string :string?
+                 :query {:string :any} :headers {:string (or :string @[:string])}
+                 :http-version [:number :number] :body :any :received :number
+                 :arrived :number? :remote-addr :string? & r}
+                :nil)]
+   :ret :tuple
+   :throws [:string]}
   "One row, its fields, its inlines and its history."
   [desc row inlines history &opt request]
   (def id (id-of desc row))
@@ -536,6 +735,17 @@
 # -- confirmation --------------------------------------------------------
 
 (defn confirm-page
+  {:params [{:title (or :string :keyword :nil) :path :string
+             :list [{:name :keyword :label (or :string :keyword :nil)
+                     :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}]
+             & r}
+            {:name :keyword :label (or :string :nil) :confirm :any
+             :danger (or :boolean :nil) & r}
+            {:total (or :number :nil) :sample (or [@{:any :any}] [@{:any :any}] :nil)
+             :cascade (or @[[:string :number :boolean]] :nil)
+             :all :any :ids (or [:any] [:any] :nil) :carry (or [[:any :any]] :nil) & r}]
+   :ret :tuple
+   :throws [:string]}
   ``The page every action that touches rows goes through: what it will
   do, **how many rows**, a sample, and what goes with them. Deleting
   one row takes the same road as deleting forty thousand — the special
@@ -585,6 +795,9 @@
         [:a {:href (ctx/base desc)} (text/t :void.admin/cancel)]]))])
 
 (defn progress-fragment
+  {:params [{:path :string & r} :any {:state :any :percent :any :label :any & r}]
+   :ret :tuple
+   :throws [:string]}
   ``What a running bulk shows and re-shows: the state of the job
   record, which the queue backend already stores. A percentage bar is
   drawn only when the action left one behind — a progress *column*
@@ -607,6 +820,10 @@
    (when done [:p [:a {:href (ctx/base desc)} (text/t :void.admin/back-to-list)]])])
 
 (defn progress-page
+  {:params [{:path :string & r} {:name :keyword :label (or :string :nil) & r}
+            :any {:state :any :percent :any :label :any & r}]
+   :ret :tuple
+   :throws [:string]}
   "The page a bulk that went to the queue becomes."
   [desc action job-id state]
   [:div
@@ -616,6 +833,15 @@
 # -- inlines -------------------------------------------------------------
 
 (defn inline-block
+  {:params [{:path :string :entity {:pk :keyword & r} & r}
+            @{:any :any}
+            {:name :keyword :label (or :string :keyword :nil) :fields (or [:keyword] :nil)
+             :can-add (or :boolean :nil) :can-delete (or :boolean :nil) & r}
+            {:name :keyword :form-fields [{:name :keyword & r}] :entity {:pk :keyword & r} & r}
+            (or @[@{:any :any}] [@{:any :any}])
+            (or [{:path :any & r}] :nil)]
+   :ret :tuple
+   :throws [:string]}
   ``One inline: the child rows, each an ordinary form, plus an add
   form. The foreign key back to the parent is **not here** — it is put
   on by the server from the URL, so a forged POST cannot reparent a
@@ -669,6 +895,11 @@
 # -- dashboard -----------------------------------------------------------
 
 (defn dashboard
+  {:params [(or @[{:label :any :name :any :render (fn [] :any) & r}]
+                [{:label :any :name :any :render (fn [] :any) & r}]
+                :nil)]
+   :ret :tuple
+   :throws [:string]}
   "The index of the admin: one card per resource, plus whatever was
   contributed to :void.admin/dashboard-widget."
   [widgets]

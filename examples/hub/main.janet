@@ -66,6 +66,7 @@
    :postgres (fn [] (require "void/db-postgres/init") :void/db-postgres)})
 
 (defn- bucket-plugins
+  {:params [] :ret [:keyword]}
   ``The bucket, when this deployment has one. Required rather than
   imported for the reason the driver is: a laptop keeping delivery
   bodies in ./storage never loads a signer. void/tls is imported
@@ -76,6 +77,9 @@
   [:void/storage-s3])
 
 (defn plugins
+  {:params [:keyword (or {:database :keyword? :bucket :any? & r} :nil)]
+   :ret @[:keyword]
+   :throws [:string]}
   ``The composition, as a function of the two things a deployment
   changes and the profile it runs under.
 
@@ -162,6 +166,7 @@
      :hub/app]))
 
 (defn database
+  {:params [] :ret :keyword}
   ``Which database this process boots on: `:sqlite` (the default — a
   file, nothing to install) or `:postgres`. `VOID_HUB_DB=postgres void
   dev` is the whole of the change; the connection itself is
@@ -171,6 +176,7 @@
   (keyword (or (os/getenv "VOID_HUB_DB") "sqlite")))
 
 (defn bucket?
+  {:params [] :ret :boolean}
   ``Whether delivery bodies live in a bucket. Off on a laptop (a
   directory, nothing to install), on in the compose file — where the
   web tier is more than one process, and a body written to one
@@ -181,6 +187,7 @@
              (and v (= "s3" (string/ascii-lower v))))))
 
 (defn profile
+  {:params [] :ret :keyword}
   "The profile this process runs under."
   []
   (keyword (or (os/getenv "VOID_PROFILE") "dev")))
@@ -198,7 +205,12 @@
   {:plugins (plugins (profile) {:database (database) :bucket (bucket?)})
    :profile (profile)})
 
-(defn main [& args]
+(defn main
+  {:params [:string] :ret :nil :throws [:string]}
+  "Boot this process: read the environment once, build the
+  composition it names, and hand the rest of the argument list to
+  `cli/app-main`."
+  [& args]
   # Every one of these is read *now*, in the process that is starting,
   # rather than in a value a build would have frozen.
   (def prof (profile))

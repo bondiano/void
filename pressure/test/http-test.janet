@@ -14,11 +14,17 @@
 
 (var served 0)
 
-(defn work [req]
+(defn work
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Handler for the route that may be shed."
+  [req]
   (++ served)
   (ring/text 200 "worked"))
 
-(defn health [req]
+(defn health
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  "Handler for the exempt route."
+  [req]
   (++ served)
   (ring/text 200 "ok"))
 
@@ -44,7 +50,10 @@
 
 (def plugins [:void/http :void/pressure :void/pressure-http app-manifest])
 
-(defn- config [extra]
+(defn- config
+  {:params [{:any :any}] :ret {:env @{:any :any} :cli @{:any :any}}}
+  "This suite's boot config, with `extra` merged into :cli."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}
                 :http {:port 0 :strict-meta true}

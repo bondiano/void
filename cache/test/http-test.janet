@@ -13,38 +13,74 @@
 
 (var computed 0)
 
-(defn rates [req]
+(defn rates
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler: counts its own calls, so a hit can be told from a
+  recompute."
+  [req]
   (++ computed)
   (ring/text 200 (string "rates " computed)))
 
-(defn greet [req]
+(defn greet
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler whose answer varies on accept-language."
+  [req]
   (++ computed)
   (ring/text 200 (string "hello " (get-in req [:headers "accept-language"] "?"))))
 
-(defn with-cookie [req]
+(defn with-cookie
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler that sets a Set-Cookie, which a shared cache must
+  never store."
+  [req]
   (++ computed)
   (ring/set-cookie (ring/text 200 "personal") "sid" "abc123"))
 
-(defn private [req]
+(defn private
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler that marks its own response private."
+  [req]
   (++ computed)
   (ring/header (ring/text 200 "mine") "cache-control" "private, max-age=0"))
 
-(defn streamed [req]
+(defn streamed
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler with a streaming body, which cannot be replayed from
+  a cache."
+  [req]
   (++ computed)
   (ring/response 200 (coro (yield "chunk"))))
 
-(defn plain [req]
+(defn plain
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler on a route that never asked for caching."
+  [req]
   (++ computed)
   (ring/text 200 "uncached"))
 
-(defn capitalized-cookie [req]
+(defn capitalized-cookie
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler that spells its Set-Cookie header capitalized, the
+  way a handler written by hand does."
+  [req]
   (++ computed)
   # a handler that spells the header by hand, the way handlers do
   (def resp (ring/text 200 "personal"))
   (put (resp :headers) "Set-Cookie" "sid=xyz")
   resp)
 
-(defn secret [req]
+(defn secret
+  {:params [@{:headers {:string (or :string @[:string])} & r}]
+   :ret @{:status :number :body :any :headers @{:string :any} & r}}
+  "Test handler behind the stand-in authz guard below."
+  [req]
   (++ computed)
   (ring/text 200 "members only"))
 
@@ -96,7 +132,11 @@
 
 (def plugins [:void/http :void/cache :void/cache-http app-manifest])
 
-(defn- config [extra]
+(defn- config
+  {:params [:any] :ret {:env @{:any :any} :cli :any}}
+  "Boot config for this suite's plugin composition, with `extra`
+  merged into the :cli slice."
+  [extra]
   {:env @{} :cli (merge {:log {:level :error} :http {:port 0 :strict-meta true}} extra)})
 
 # -- the declaration -----------------------------------------------------

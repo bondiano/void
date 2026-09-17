@@ -42,6 +42,8 @@
   "2025-06-18")
 
 (defn capabilities
+  {:params [:any]
+   :ret @{:tools @{:listChanged :boolean} :resources @{:subscribe :boolean :listChanged :boolean}}}
   "What this server offers. Both lists are static for the life of a
   process — the tools are the composition's CLI commands and the
   resources its schemas — so nothing subscribes and nothing is
@@ -53,11 +55,16 @@
 # -- tools ---------------------------------------------------------------
 
 (defn find-tool
+  {:params [{:tools (or @[{:name :string & r}] [{:name :string & r}] :nil) & r} :string]
+   :ret (or {:name :string & r} :nil)}
   "The tool exposed under `name`, or nil."
   [srv name]
   (find |(= name ($ :name)) (get srv :tools [])))
 
 (defn tool-descriptor
+  {:params [{:name :string :description :string? :input-schema :any
+             :title :string? :annotations :any & r}]
+   :ret @{:name :string :description :string :inputSchema :any & r}}
   "One entry of tools/list: the tool as the client sees it."
   [tool]
   (def out @{:name (tool :name)
@@ -68,11 +75,14 @@
   out)
 
 (defn text-content
+  {:params [:any] :ret @[@{:type :string :text :string}]}
   "The `content` array of a tool result: one text block."
   [text]
   @[@{:type "text" :text (string text)}])
 
 (defn call-tool
+  {:params [{:name :string :call (or (fn [:any :any] :any) :nil) & r} :any :any]
+   :ret @{:content @[@{:type :string :text :string}] :isError :boolean}}
   ``Run a tool and shape its answer as a tools/call result. Anything
   the tool throws becomes `isError` with the message as text: the
   model is the one that has to read it (see the header).
@@ -101,11 +111,16 @@
 # -- resources -----------------------------------------------------------
 
 (defn find-resource
+  {:params [{:resources (or @[{:uri :string & r}] [{:uri :string & r}] :nil) & r} :string]
+   :ret (or {:uri :string & r} :nil)}
   "The resource published under `uri`, or nil."
   [srv uri]
   (find |(= uri ($ :uri)) (get srv :resources [])))
 
 (defn resource-descriptor
+  {:params [{:uri :string :name :string :mime-type :string?
+             :title :string? :description :string? & r}]
+   :ret @{:uri :string :name :string :mimeType :string & r}}
   "One entry of resources/list."
   [res]
   (def out @{:uri (res :uri)
@@ -116,6 +131,9 @@
   out)
 
 (defn read-resource
+  {:params [{:uri :string :read (fn [] :any) :mime-type :string? & r}]
+   :ret @[@{:uri :string :mimeType :string :text :string}]
+   :throws [:any]}
   "The `contents` of one resources/read. Throws what the reader
   throws — a resource that cannot be read is a protocol error, unlike
   a tool that fails (see the header)."
@@ -129,7 +147,17 @@
 
 # -- dispatch ------------------------------------------------------------
 
-(defn- initialize-result [srv params]
+(defn- initialize-result
+  {:params [{:info (or @{:name :string :version :string} :nil) & r} {:protocolVersion :any & r}]
+   :ret @{:protocolVersion :string
+          :capabilities @{:tools @{:listChanged :boolean}
+                          :resources @{:subscribe :boolean :listChanged :boolean}}
+          :serverInfo @{:name :string :version :string}
+          :instructions :any & r}}
+  "The result of an `initialize` call: this server's protocol version,
+  capabilities and info, plus a note when the client asked for a
+  version we do not speak."
+  [srv params]
   (def asked (get params :protocolVersion))
   @{:protocolVersion protocol-version
     :capabilities (capabilities srv)
@@ -142,6 +170,15 @@
              @{:void/requestedProtocolVersion asked})})
 
 (defn handle
+  {:params [{:info :any :instructions :any
+             :tools (or @[{:name :string & r}] [{:name :string & r}] :nil)
+             :resources (or @[{:uri :string & r}] [{:uri :string & r}] :nil)
+             & r}
+            {:id :any :params :any :response? :any :notification? :any :method :string? & r}]
+   :ret (or @{:jsonrpc :string :id :any :result :any}
+            @{:jsonrpc :string :id :any
+              :error @{:code (or :keyword :number) :message :string & r}}
+            :nil)}
   ``Answer one decoded message (see jsonrpc/decode) against a server
   value. Returns the response message, or nil when there is nothing to
   say — a notification, or a response the client sent us.

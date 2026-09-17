@@ -75,6 +75,7 @@
   256)
 
 (defn- glob-quote
+  {:params [:string] :ret :string}
   ``A key prefix as a SCAN pattern that matches it literally: a prefix
   containing a glob character is a prefix, not a pattern, and a
   `clear` that treated `myapp[1]:` as a character class would delete
@@ -87,10 +88,19 @@
     (buffer/push-byte out c))
   (string out))
 
-(defn- ms [ttl]
+(defn- ms
+  {:params [:number] :ret :number}
+  "Seconds as the milliseconds redis's PX/PEXPIRE want, rounded and
+  never zero (a zero PX would expire the key on arrival)."
+  [ttl]
   (max 1 (math/round (* 1000 ttl))))
 
 (defn make
+  {:params [{:codec :any :scan-count :number? & r}]
+   :ret {:name (enum :redis) :shared? :boolean :values (enum :janet :bytes) :codec :any
+         :get (fn [a] b) :put (fn [a b c] d) :delete (fn [a] b) :has? (fn [a] b)
+         :get-many (fn [a] b) :put-many (fn [a b] c) :incr (fn [a b c] d)
+         :clear (fn [a] b) :stats (fn [] b) :close (fn [] b)}}
   ``A `:void/cache-store` over the running redis client. Options:
 
     :codec       a codec from the :void.redis/codec registry
@@ -173,7 +183,11 @@
 
 # -- the component -------------------------------------------------------
 
-(defn- pick-codec [client name]
+(defn- pick-codec
+  {:params [{:codecs :any? & r} :any] :ret :any}
+  "The named codec from the client's own registry, falling back to
+  the built-in ones when the client did not customize it."
+  [client name]
   (def registry (or (get client :codecs)
                     (tabseq [c :in rcodec/builtin] (c :name) c)))
   (rcodec/find-codec registry name))

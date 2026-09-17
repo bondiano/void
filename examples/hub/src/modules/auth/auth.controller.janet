@@ -19,11 +19,15 @@
 (import ./auth.view :as view)
 
 (defn register-form
+  {:params [:any] :ret @{:status :number & r} :throws [:string]}
   "GET /register"
   [req]
   (layout/page (view/register-view)))
 
 (defn register
+  {:params [{:form (or @{:any :any} :nil) :session :any & r}]
+   :ret @{:status :number & r}
+   :throws [:string :any]}
   "POST /register — an account with a password."
   [req]
   (form/submit dto/Registration (req :form)
@@ -40,11 +44,18 @@
                 (layout/page (view/register-view {:values values :errors errors})))}))
 
 (defn login-form
+  {:params [{:query (or @{:any :any} :nil) & r}]
+   :ret @{:status :number & r}
+   :throws [:string]}
   "GET /login — where [:auth-http :login-path] points."
   [req]
   (layout/page (view/login-view {:next (get (or (req :query) {}) "next")})))
 
 (defn login
+  {:params [{:form (or @{:any :any} :nil) :query (or @{:any :any} :nil)
+            :session :any & r}]
+   :ret @{:status :number & r}
+   :throws [:string]}
   ``POST /login — the password path, and nothing else.
 
   Whatever went wrong, the page says the same thing: the service spends
@@ -52,7 +63,11 @@
   telling the visitor which it was would hand that distinction straight
   back.``
   [req]
-  (defn refused [values]
+  (defn refused
+    {:params [(or @{:any :any} :nil)] :ret @{:status :number & r} :throws [:string]}
+    "The login page again, with a message that does not say what went
+    wrong."
+    [values]
     (layout/page (view/login-view {:values values
                                    :next (get (or (req :query) {}) "next")
                                    :message "Those credentials do not match an account."})))
@@ -72,17 +87,22 @@
      :invalid (fn [values _] (refused values))}))
 
 (defn logout
+  {:params [{:session :any & r}] :ret @{:status :number & r}}
   "POST /logout — drop the identity and rotate the session id."
   [req]
   (auth-http/logout! req)
   (ring/redirect "/"))
 
 (defn reset-form
+  {:params [:any] :ret @{:status :number & r} :throws [:string]}
   "GET /password/reset"
   [req]
   (layout/page (view/reset-view)))
 
 (defn request-reset
+  {:params [{:form (or @{:any :any} :nil) & r}]
+   :ret @{:status :number & r}
+   :throws [:string :any]}
   ``POST /password/reset — mail a link that signs them in long enough to
   choose a new password.
 
@@ -104,6 +124,9 @@
                                 :message "That does not look like an email address."})))}))
 
 (defn link
+  {:params [{:query (or @{:any :any} :nil) :session :any & r}]
+   :ret @{:status :number & r}
+   :throws [:string]}
   "GET /auth/link?h=&c= — the one path a letter points at
   ([:mail-auth :link-path]), for both challenges."
   [req]
@@ -120,11 +143,15 @@
                    {:message "That link has expired or has already been used."}))))
 
 (defn password-form
+  {:params [:any] :ret @{:status :number & r} :throws [:string]}
   "GET /password/edit"
   [req]
   (layout/page (view/password-view)))
 
 (defn update-password
+  {:params [{:form (or @{:any :any} :nil) & r}]
+   :ret @{:status :number & r}
+   :throws [:string]}
   "POST /password — the route is :required, so there is somebody to
   change the password of."
   [req]
@@ -140,11 +167,13 @@
                 (layout/page (view/password-view {:values values :errors errors})))}))
 
 (defn verify-form
+  {:params [:any] :ret @{:status :number & r} :throws [:string]}
   "GET /verify"
   [req]
   (layout/page (view/verify-view (accounts/current-record))))
 
 (defn resend-verification
+  {:params [:any] :ret @{:status :number & r} :throws [:string :any]}
   "POST /verify — another confirmation link for the signed-in account.
   A confirmed address does not get one: the link signs whoever holds it
   in, and there is no reason to keep minting those."

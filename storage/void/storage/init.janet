@@ -120,7 +120,18 @@
            :signed false
            :max-file-size 10485760}})
 
-(defn- slice [cfg0]
+(defn- slice
+  {:params [(or {:local (or {:root :string? & r} :nil)
+                 :serve (or {:prefix :string? :signed :boolean? :policy :keyword?
+                             :max-file-size :number? & r}
+                            :nil)
+                 & r}
+                :nil)]
+   :ret @{:local @{:root :any} :serve @{:prefix :any :signed :any
+                                        :max-file-size :any :policy :any?} & r}}
+  "The [:storage] slice with defaults filled in, :local and :serve
+  merged one level deeper than a flat `merge` would go."
+  [cfg0]
   (def cfg (merge defaults (or cfg0 {})))
   (put cfg :local (merge (defaults :local) (get (or cfg0 {}) :local {})))
   (put cfg :serve (merge (defaults :serve) (get (or cfg0 {}) :serve {})))
@@ -218,7 +229,11 @@
 
 # -- CLI -----------------------------------------------------------------
 
-(defn- with-store [st f]
+(defn- with-store
+  {:params [:any (fn [] :any)] :ret :any}
+  "Run `f` with `st` bound as the active store — how the CLI commands
+  reach a specific instance without going through the component."
+  [st f]
   (with-dyns [state/storage-dyn st] (f)))
 
 (plugin/contribute! :void.core/cli

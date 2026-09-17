@@ -44,6 +44,7 @@
 (def github "https://github.com/bondiano/void")
 
 (defn entry
+  {:params [:string] :ret (or [:string :string] :nil)}
   "The [group label] of the nav entry with this href, or nil."
   [href]
   (var found nil)
@@ -54,6 +55,7 @@
   found)
 
 (defn section
+  {:params [:string] :ret :string}
   ``«Group · Label» for a page's :here — the line a search result
   prints under a page hit, so a reader sees which part of the site it
   lives in before going there.``
@@ -63,6 +65,7 @@
     ""))
 
 (defn short-name
+  {:params [:string :string?] :ret :string}
   ``What to call a page in one or two words: its nav label when it is
   a nav entry (a document's own heading can be a sentence), and otherwise
   its own
@@ -355,6 +358,9 @@ footer {
   ```)
 
 (defn- side-links
+  {:params [:string :string? :string? (or [[:string :string]] :nil)
+            {:title :string :items [[:string :string]]}]
+   :ret @[:any]}
   "One sidebar group's links, with the active entry's children unfolded
   under it."
   [up here self subnav group]
@@ -372,14 +378,21 @@ footer {
                      :aria-current (when (= h self) "page")}
                  l]])])]))
 
-(defn- sidebar [up here self subnav]
+(defn- sidebar
+  {:params [:string :string? :string? (or [[:string :string]] :nil)] :ret :any}
+  "The sidebar nav element: every group, with the active page's
+  children unfolded."
+  [up here self subnav]
   [:nav {:class "side" :aria-label "Sections"}
    ;(seq [g :in nav]
       [:div {:class "side-group"}
        [:div {:class "side-title"} (g :title)]
        [:ul ;(side-links up here self subnav g)]])])
 
-(defn- topbar [up]
+(defn- topbar
+  {:params [:string] :ret :any}
+  "The sticky top bar: wordmark, tagline, search, GitHub link."
+  [up]
   [:header {:class "top"}
    [:div {:class "row"}
     [:a {:class "wordmark" :href (string up "index.html")} "void"]
@@ -393,6 +406,11 @@ footer {
     [:a {:class "gh" :href github} "GitHub ↗"]]])
 
 (defn render
+  {:params [{:title :string? :here :string? :self :string? :depth :number?
+             :body :any :toc :any :generated :any :lang :string?
+             :description :string? :subnav (or [[:string :string]] :nil)
+             :layout :keyword?}]
+   :ret :string}
   ``One page as an HTML string.
 
  (render {:title "" :here "spec.html" :self "spec.html" :depth 0 :body [...] :toc [...]})

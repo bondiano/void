@@ -15,16 +15,36 @@
 
 (def orders @{"A-1" {:id "A-1" :total_cents 990 :status :STATUS_PLACED}})
 
-(defn get-order [msg _req]
+(defn get-order
+  {:params [{:id :any & r} :any]
+   :ret @{:id :string :total_cents :number :status :keyword}
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+  "The RPC handler under test: the order by id, or not_found."
+  [msg _req]
   (or (orders (msg :id))
       (grpc/fail! :not_found (string "no order " (msg :id)))))
-(defn count-orders [_msg _req] {:count (length orders)})
-(defn place-order [msg _req]
+(defn count-orders
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: how many orders exist."
+  [_msg _req] {:count (length orders)})
+(defn place-order
+  {:params [{:total_cents :any & r} :any]
+   :ret @{:id :string :total_cents :any :status :keyword}}
+  "The RPC handler under test: places a new order and remembers it."
+  [msg _req]
   (def order {:id "A-2" :total_cents (msg :total_cents) :status :STATUS_PLACED})
   (put orders "A-2" order)
   order)
-(defn explode [_msg _req] (grpc/fail! :resource_exhausted "too many orders"))
-(defn slow [_msg _req] (ev/sleep 1) {:count 0})
+(defn explode
+  {:params [:any :any]
+   :ret :never
+   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+  "The RPC handler under test: always refuses, resource_exhausted."
+  [_msg _req] (grpc/fail! :resource_exhausted "too many orders"))
+(defn slow
+  {:params [:any :any] :ret {:count :number}}
+  "The RPC handler under test: sleeps past a short client deadline."
+  [_msg _req] (ev/sleep 1) {:count 0})
 
 (grpc/defservice :shop.orders/OrderService
   (rpc :GetOrder get-order)

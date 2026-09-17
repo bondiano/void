@@ -18,13 +18,20 @@
 
 (import ./packages :as packages)
 
-(defn- run [& args]
+(defn- run
+  {:params [:string] :ret :nil :throws [:string]}
+  "Print and run one shell command; throw on a non-zero exit."
+  [& args]
   (print "  $ " (string/join args " "))
   (def code (os/execute args :p))
   (unless (zero? code)
     (errorf "%s failed with exit code %d" (first args) code)))
 
-(defn main [_ & jpm-args]
+(defn main
+  {:params [:string :string] :ret :nil :throws [:string]}
+  "Install every external jpm dependency in the graph and build
+  void/fdwait. `jpm-args` (e.g. --local) are passed through to jpm."
+  [_ & jpm-args]
   (def problems (packages/check))
   (unless (empty? problems)
     (each p problems (eprint "  " p))

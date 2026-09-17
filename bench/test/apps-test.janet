@@ -9,7 +9,11 @@
 (import void/bench/ws :as bws)
 (import void/ws/client :as wsc)
 
-(defn- http-request [port req]
+(defn- http-request
+  {:params [:number :string] :ret :string :throws [:string]}
+  "A raw HTTP/1.1 request over a fresh connection; the response is
+  read until the peer closes (every call here sends Connection: close)."
+  [port req]
   (def s (net/connect "127.0.0.1" (string port)))
   (defer (:close s)
     (net/write s req)

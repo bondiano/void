@@ -35,6 +35,8 @@
           "where the dashboard is open on the developer's own machine."))
 
 (defn- refuse
+  {:params [:any] :ret (or @{:status :number :headers @{:string :string} :body :string} :nil)
+   :throws [:string]}
   "The gate: nil to pass, a 403 to stop."
   [req]
   (def deny @{:status 403
@@ -52,7 +54,11 @@
                   verdict
                   "the :void.dash/gate predicate refused this request.")}))))
 
-(defn- guarded [handler]
+(defn- guarded
+  {:params [(fn [:any] :any)] :ret (fn [:any] :any)}
+  "Wrap `handler` so every request meets the gate first — nil from
+  `refuse` passes through to it, a 403 stops there."
+  [handler]
   (fn dash-gate [req]
     (or (refuse req) (handler req))))
 
@@ -66,15 +72,27 @@
 # stays filtered when it is morphed. Both were what the idiom got wrong
 # here first — ADR-0043 §5, folded back into ADR-0037.
 
-(defn- overview-live [req]
+(defn- overview-live
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}} :throws [:string]}
+  "The overview's morph-stream, or the datastar-absent refusal."
+  [req]
   (live/stream req (fn [] (pages/overview req)) [live/overview-room]))
 
-(defn- logs-live [req]
+(defn- logs-live
+  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}} :throws [:string]}
+  "The logs page's morph-stream, or the datastar-absent refusal."
+  [req]
   (live/stream req (fn [] (logs/index req)) [live/logs-room]))
 
 # -- the served sheet ----------------------------------------------------
 
-(defn- asset-routes []
+(defn- asset-routes
+  {:params []
+   :ret @[{:route :boolean :method :keyword :pattern :string
+           :handler (or :symbol :function) :meta {:keyword :any}}]
+   :throws [:string]}
+  "The dash's own stylesheet and script, each behind the gate."
+  []
   (filter truthy?
           (seq [half :in [:style :script]]
             (chrome/asset-route half (get (ctx/setting :assets {}) half)
@@ -84,6 +102,7 @@
 # -- the whole thing -----------------------------------------------------
 
 (defn routes
+  {:params [] :ret {:routes :boolean :global {:keyword :any} :children [:any]} :throws [:string]}
   ``The route source: every dash page under `[:dash :prefix]`, each
   behind the gate. Called once per route-table build. The group
   carries `[:dash :route-meta]` — how an application says something

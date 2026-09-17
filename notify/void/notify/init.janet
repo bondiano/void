@@ -131,17 +131,24 @@
   @{})
 
 (defn listen!
+  {:params [:keyword (fn [:any] :any)] :ret (fn [:any] :any)}
   "Hear about every delivery without contributing a hook."
   [name f]
   (put listeners name f)
   f)
 
 (defn unlisten!
+  {:params [:keyword] :ret @{:keyword (fn [:any] :any)}}
   "Remove a listener."
   [name]
   (put listeners name nil))
 
-(defn- emit! [receipt]
+(defn- emit!
+  {:params [:any] :ret :any}
+  "Run `receipt` through the :void.notify/sent hook and every
+  `listen!`ed listener, logging rather than raising a listener's own
+  failure."
+  [receipt]
   # the hook registry of the boot in force. This was a var captured at
   # :before-start, because the global used to be the process's most
   # recent *bootstrap* and a fixture's is untracked; it is now the boot
@@ -167,6 +174,7 @@
 # -- which channels a notification goes out on ---------------------------
 
 (defn delivering
+  {:params [(or @{:keyword :any} :nil)] :ret @[:keyword]}
   "Contributed channels that deliver somewhere — every name but the two
   the kernel ships for a test and a log."
   [&opt table]
@@ -174,12 +182,24 @@
   (sorted (filter |(not (index-of $ keeps-only)) (keys table))))
 
 (defn active
+  {:params [] :ret (or @[:keyword] [:keyword])}
   ``The channel names this process delivers on: `[:notify :channels]`,
   or every contributed channel that delivers something.``
   []
   (or (get settings :channels) (delivering)))
 
 (defn channel-named
+  {:params [:keyword]
+   :ret @{:name :keyword
+          :deliver (fn [:any] :any)
+          :doc :string?
+          :address :keyword?
+          :project (or (fn [:any] :any) :nil)
+          :permanent? (or (fn [:any] :any) :nil)
+          :health (or (fn [] :any) :nil)
+          :needs (or @[:keyword] [:keyword])
+          & r}
+   :throws [:string]}
   "A contributed channel by name, or an error naming the ones there
   are — the message `[:mail :transport]` gives, in the plural."
   [name]
@@ -188,7 +208,13 @@
               name
               (util/names-str (keys channels)))))
 
-(defn- channels-for [note]
+(defn- channels-for
+  {:params [{:channels (or @[:keyword] [:keyword] :nil) & r}]
+   :ret (or @[:keyword] [:keyword])
+   :throws [:string]}
+  "The channel names `note` goes to: its own `:channels`, or every
+  active one."
+  [note]
   (def names (or (get note :channels) (active)))
   (unless (indexed? names)
     (errorf ":channels is a list of channel names, got %q" names))
@@ -196,6 +222,7 @@
   names)
 
 (defn queued?
+  {:params [] :ret :boolean}
   ``Will `notify/send` hand this composition's notifications to a
   queue? `[:notify :queue]` is `:auto` (yes when void/notify-jobs is
   composed), true (its absence is a boot error) or false (never).``
@@ -207,6 +234,7 @@
 # -- delivering ----------------------------------------------------------
 
 (defn deliver!
+  {:params [:keyword :any] :ret :any}
   ``Deliver one projected payload **now**, on this fiber, through the
   named channel — the primitive, and what the queued job calls on the
   worker. `notify/send` is the call an application makes.``
@@ -216,7 +244,11 @@
   (emit! receipt)
   receipt)
 
-(defn- dispatch [note name]
+(defn- dispatch
+  {:params [{:id :any :key :any & r} :keyword] :ret @{:channel :keyword :status :keyword & r}}
+  "Project and deliver (or queue) one notification through one
+  channel, catching either half's failure as a `:failed` result."
+  [note name]
   (def c (channel-named name))
   (def [ok payload] (protect (channel/project c note)))
   (cond
@@ -250,6 +282,8 @@
           {:channel name :status :failed :stage :deliver :error (string result)})))))
 
 (defn send
+  {:params [:any (or {:id :any :at :any & r} :nil)]
+   :ret @{:id :string :key :keyword :at :number :results [@{:channel :keyword :status :keyword & r}]}}
   ``Send a notification on every channel it is addressed for. Returns
   what happened, per channel:
 
@@ -281,6 +315,7 @@
    :results (tuple ;results)})
 
 (defn delivered?
+  {:params [{:results (or @[{:status :any & r}] [{:status :any & r}] :nil) & r}] :ret :boolean}
   "Did at least one channel take this notification — sent it, or handed
   it to a queue? What a caller asks when it wants to know that
   something happened."
@@ -296,23 +331,35 @@
 (def permanent? "See channel/permanent? — has this channel had its final answer?" channel/permanent?)
 
 (defn outbox
+  {:params [] :ret @[:any]}
   "What the :memory channel kept, oldest first."
   []
   channel/outbox)
 
 (defn clear-outbox!
+  {:params [] :ret :nil}
   "Empty the memory outbox — what a test does between cases."
   []
   (channel/clear!))
 
 # -- boot ----------------------------------------------------------------
 
-(defn- merge-slice [cfg]
+(defn- merge-slice
+  {:params [(or {:memory :any & r} :nil)] :ret @{:keyword :any}}
+  "The [:notify] slice over the defaults, with :memory merged a level
+  deeper than a flat `merge` would."
+  [cfg]
   (def c (merge defaults (or cfg {})))
   (put c :memory (merge (defaults :memory) (get cfg :memory {})))
   c)
 
-(defn- check-channels [cfg profile resolved]
+(defn- check-channels
+  {:params [{:channels (or @[:keyword] [:keyword] :nil) & r} :keyword @{:keyword :any}]
+   :ret :nil
+   :throws [:string]}
+  "Refuse a `[:notify :channels]` entry nobody contributed, and — in
+  :prod — a composition that delivers nowhere at all."
+  [cfg profile resolved]
   (def named (get cfg :channels))
   (when named
     (each n named
@@ -362,6 +409,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn print-status
+  {:params [] :ret :nil}
   "What this process will do with a notification — the body of `void
   notify status`."
   []

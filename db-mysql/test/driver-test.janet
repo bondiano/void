@@ -18,7 +18,10 @@
 (def cfg (server/config))
 (def drv (db/normalize-driver (mysql/from-config cfg)))
 
-(defn- exec [h sql &opt params]
+(defn- exec
+  {:params [:any :string (or @[:any] [:any] :nil)] :ret :any :throws [:string]}
+  "Run one statement through the normalized driver's :execute."
+  [h sql &opt params]
   ((drv :execute) h sql (or params []) {:kind :write}))
 
 (def h ((drv :connect)))

@@ -31,12 +31,20 @@
              (ev/sleep 0.15)
              (print "second"))}]}))
 
-(defn- options [&opt extra]
+(defn- options
+  {:params [(or {:keyword :any} :nil)] :ret {:plugins [:any] :config {:env :any :cli :any}}}
+  "Boot options for this suite's app, with `extra` merged into the CLI config."
+  [&opt extra]
   {:plugins [:void/http :void/mcp :void/mcp-http app]
    :config {:env @{}
             :cli (merge {:log {:level :error} :http {:port 0}} (or extra {}))}})
 
-(defn- rpc-post [c msg &opt headers]
+(defn- rpc-post
+  {:params [@{:kernel :any :cookies @{:string :string} :headers @{:string :any} & r}
+            :any (or @{:string :any} :nil)]
+   :ret @{:raw :string & r}}
+  "POST one JSON-RPC message to /mcp through the test client."
+  [c msg &opt headers]
   (test/inject c {:method :post :uri "/mcp"
                   :body (rpc/encode msg)
                   :headers (merge @{"content-type" "application/json"} (or headers @{}))}))
@@ -148,7 +156,10 @@
                  (with-dyns [:void.auth/identity presented]
                    (handler req))))}]}))
 
-(defn- as-agent [id body]
+(defn- as-agent
+  {:params [:any (fn [] :any)] :ret :any}
+  "Run `body` as though `id` were the identity void/auth published."
+  [id body]
   (set presented id)
   (defer (set presented nil) (body)))
 

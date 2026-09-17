@@ -21,6 +21,7 @@
 # -- environment ---------------------------------------------------------
 
 (defn- capture
+  {:params [:string] :ret :string?}
   "First line of a shell command's stdout, or nil — environment
   capture is best-effort everywhere."
   [cmd]
@@ -36,6 +37,9 @@
   (when (and ok v (not (empty? v))) v))
 
 (defn environment
+  {:params []
+   :ret @{:janet :string :os :keyword :uname :string? :cpus :number?
+          :cpu :string? :governor :string? :commit :string? :date :string?}}
   "The run context the method asks for: janet version, CPU,
   frequency governor, plus os/commit/date for the record."
   []
@@ -52,7 +56,10 @@
 
 # -- files ---------------------------------------------------------------
 
-(defn- ensure-parent [path]
+(defn- ensure-parent
+  {:params [:string] :ret :nil}
+  "Create every missing directory in path's parent chain."
+  [path]
   (def parts (string/split "/" path))
   (var cur (if (string/has-prefix? "/" path) "" "."))
   (each part (drop -1 parts)
@@ -62,24 +69,43 @@
         (os/mkdir cur)))))
 
 (defn write-file
+  {:params [:string :any] :ret :nil}
   "Write a result set as jdn."
   [path results]
   (ensure-parent path)
   (spit path (string/format "%j\n" results)))
 
 (defn read-file
+  {:params [:string] :ret :any :throws [:string]}
   "Read a result set back."
   [path]
   (parse (slurp path)))
 
 # -- comparison ----------------------------------------------------------
 
-(defn- entry [target mode metric base current]
+(defn- entry
+  {:params [:keyword :keyword :keyword :number :number]
+   :ret {:target :keyword :mode :keyword :metric :keyword
+         :base :number :current :number :delta :number}}
+  "One base -> current comparison for a metric, with the relative delta."
+  [target mode metric base current]
   {:target target :mode mode :metric metric
    :base base :current current
    :delta (/ (- current base) base)})
 
 (defn compare-results
+  {:params [{:rows @{:keyword @{:throughput :any :latency :any
+                                :broadcast :any :runtime :any & r}}
+             & r}
+            {:rows @{:keyword @{:throughput :any :latency :any
+                                :broadcast :any :runtime :any & r}}
+             & r}
+            :number?]
+   :ret {:regressions @[{:target :keyword :mode :keyword :metric :keyword
+                        :base :number :current :number :delta :number}]
+        :improvements @[{:target :keyword :mode :keyword :metric :keyword
+                        :base :number :current :number :delta :number}]
+        :missing @[:keyword]}}
   ``Compare two result sets under a relative threshold (default 5%).
   Returns {:regressions [entry...] :improvements [entry...]
   :missing [target...]} — :missing lists baseline targets the current
@@ -155,12 +181,25 @@
               (array/push improvements e)))))))
   {:regressions regressions :improvements improvements :missing missing})
 
-(defn- fmt-value [metric v]
+(defn- fmt-value
+  {:params [:keyword :number] :ret :string}
+  "Format one metric's value for the human-readable comparison."
+  [metric v]
   (if (= metric :rps)
     (string/format "%.0f rps" v)
     (string/format "%.2fms" v)))
 
 (defn print-comparison
+  {:params [{:regressions @[{:target :keyword :mode :keyword :metric :keyword
+                            :base :number :current :number :delta :number}]
+            :improvements @[{:target :keyword :mode :keyword :metric :keyword
+                            :base :number :current :number :delta :number}]
+            :missing @[:keyword]}]
+   :ret {:regressions @[{:target :keyword :mode :keyword :metric :keyword
+                        :base :number :current :number :delta :number}]
+        :improvements @[{:target :keyword :mode :keyword :metric :keyword
+                        :base :number :current :number :delta :number}]
+        :missing @[:keyword]}}
   "Human-readable comparison; returns the comparison value."
   [cmp]
   (each [label entries] [["regressions" (cmp :regressions)]
@@ -183,6 +222,10 @@
 # -- budgets -------------------------------------------------------------
 
 (defn- broadcast-notes
+  {:params [@{:broadcast :any & r}
+            {:connections :number :rps :number :delivery-p99 :number & r}
+            (fn [:keyword :string] :any)]
+   :ret :any}
   ``B4's budget: delivery under 50 ms to a thousand
   connections at 10k messages a second. Nothing else applies to it —
   there is no request throughput and no request latency in a fan-out,
@@ -214,6 +257,11 @@
           (note :miss (string/format "%d %s during the run" n k)))))))
 
 (defn budget-notes
+  {:params [@{:throughput :any :latency :any :broadcast :any :runtime :any & r}
+            {:kind :keyword? :p50 :number? :p99 :number? :rps :number
+             :loop-lag-p99 :number? :loop-lag-max :number?
+             :delivery-p99 :number? :connections :number?}]
+   :ret @[[:keyword :string]]}
   ``Check one row against a budget ({:p50 :p99 :rps} plus the
   optional runtime keys :loop-lag-p99 and :loop-lag-max). Latency and
   the runtime numbers come from the fixed-rate mode only; a missing
@@ -222,7 +270,9 @@
   Returns [[:ok|:miss|:skip text] ...].``
   [row budget]
   (def notes @[])
-  (defn note [status text] (array/push notes [status text]))
+  (defn note
+    {:params [:keyword :string] :ret @[[:keyword :string]]}
+    [status text] (array/push notes [status text]))
   (when (= :broadcast (get budget :kind))
     (broadcast-notes row budget note)
     (when-let [limit (budget :loop-lag-p99)]

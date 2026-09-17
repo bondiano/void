@@ -61,7 +61,13 @@
   {:prefix ""
    :redeliver {:interval 0.5 :max-interval 10}})
 
-(defn- slice [cfg]
+(defn- slice
+  {:params [{:prefix (or :string :nil)
+            :redeliver (or {:interval (or :number :nil) :max-interval (or :number :nil)} :nil)
+            & r}]
+   :ret {:prefix :string :redeliver @{:interval :number :max-interval :number}}}
+  "The [:kafka-bus] slice over its defaults."
+  [cfg]
   (def d defaults)
   {:prefix (get cfg :prefix (d :prefix))
    :redeliver (merge (d :redeliver) (get cfg :redeliver {}))})
@@ -79,6 +85,7 @@
   (peg/compile ~(* (some (+ (range "az" "AZ" "09") (set "_-/"))) -1)))
 
 (defn kafka-topic
+  {:params [:string :any] :ret :string :throws [:string]}
   "A bus topic keyword as the Kafka topic name it travels on."
   [prefix topic]
   (def s (string topic))
@@ -89,6 +96,7 @@
   (string prefix (string/replace-all "/" "." s)))
 
 (defn bus-topic
+  {:params [:string :string] :ret :keyword}
   "The keyword a Kafka topic name comes back as, or nil for one
   outside our prefix — a foreign topic a consumer was pointed at
   stays addressable by its own spelling."
@@ -97,12 +105,16 @@
     (keyword (string/replace-all "." "/" (string/slice name (length prefix))))
     (keyword name)))
 
-(defn- regex-quote [s]
+(defn- regex-quote
+  {:params [:string] :ret :string}
+  "Backslash-escape a prefix's one regex metacharacter, the dot."
+  [s]
   # the prefix alphabet is ours to keep small; the dot is the one
   # regex metacharacter in it
   (string/replace-all "." "\\." s))
 
 (defn subscription
+  {:params [:string (or [:keyword] :nil) :any] :ret [:string]}
   ``What to subscribe for a consumer's topic hint: the exact Kafka
   names when the router's list is fully exact, else one ^regex over
   the prefix — the backend contract allows over-delivery (the router
@@ -119,6 +131,9 @@
 (def meta-header "void-meta")
 
 (defn- envelope-of
+  {:params [:string {:headers (or @{:string :string?} :nil) :topic :string
+                     :partition :number :offset :number :value :string & r}]
+   :ret @{:id :string :topic :keyword :body :string :meta-body (or :string :nil)}}
   "A fetched Kafka message as the envelope the broker hydrates."
   [prefix msg]
   (def headers (get msg :headers {}))
@@ -131,11 +146,31 @@
 
 # -- the backend ---------------------------------------------------------
 
-(defn- backoff [redeliver attempt]
+(defn- backoff
+  {:params [@{:interval :number :max-interval :number & r} :number] :ret :number}
+  "The delay before the next redelivery attempt: exponential, capped
+  at `:max-interval`."
+  [redeliver attempt]
   (min (redeliver :max-interval)
        (* (redeliver :interval) (math/exp2 (min attempt 16)))))
 
 (defn store
+  {:params [{:brokers (or :string [:string] :nil) :client-id (or :string :nil)
+             :properties (or @{:string (or :string :number :boolean)} :nil)
+             :library (or :string :nil) & kr}
+            {:prefix :string :redeliver @{:interval :number :max-interval :number}}
+            @{:client :any :timeout :number :next-token :number
+              :waiters @{:number :any}
+              :stats @{:produced :number :delivered :number :failed :number}}]
+   :ret {:name :keyword
+         :encoded? :boolean
+         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean :shared :boolean}
+         :publish! (fn [:any] :nil)
+         :consume! (fn [:any :any] :any)
+         :stop! (fn [:any] :nil)
+         :close (fn [] :nil)
+         :health (fn [] :any)
+         :stats (fn [] :any)}}
   ``The backend value over a producer and the two config slices —
   what ./backend in void/bus normalizes.``
   [kcfg bcfg p]

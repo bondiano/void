@@ -25,7 +25,11 @@
 ### misses forever, or worse, hits on a recycled one — so it is an
 ### error with the value in the message.
 
-(defn- render [out v]
+(defn- render
+  {:params [:buffer :any] :ret :buffer :throws [:string]}
+  "Append the canonical rendering of `v` to `out` and return `out`;
+  the recursive worker `canonical` builds a fresh buffer around."
+  [out v]
   (cond
     (nil? v) (buffer/push out "n")
     (true? v) (buffer/push out "T")
@@ -58,6 +62,7 @@
   out)
 
 (defn canonical
+  {:params [:any] :ret :string :throws [:string]}
   ``A deterministic, injective rendering of a cacheable value: the same
   value renders the same way in every process and no two different
   values render the same way.
@@ -72,6 +77,7 @@
   (string (render (buffer/new 32) v)))
 
 (defn cache-key
+  {:params [:any] :ret :string :throws [:string]}
   ``A key as the store sees it. The spellings a key is *written* in —
   bytes, keywords, symbols, numbers — are used verbatim, so
   `(cache-key :rates)` is `"rates"` and `(cache-key 42)` is `"42"`,
@@ -93,6 +99,7 @@
     (canonical k)))
 
 (defn for-call
+  {:params [:any [:any]] :ret :string :throws [:string]}
   ``The key a memoized call is stored under: the name, then the
   argument tuple rendered canonically.
 

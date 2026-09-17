@@ -13,11 +13,20 @@
 
 (def plugins ["void/notify/init"])
 
-(defn- config [extra]
+(defn- config
+  {:params [:any] :ret {:env :any :cli :any}}
+  "Boot config with `extra` merged into the CLI slice."
+  [extra]
   {:env @{}
    :cli (merge {:log {:level :error}} extra)})
 
-(defn- start [&opt extra profile]
+(defn- start
+  {:params [(or {:keyword :any} :nil) :keyword?]
+   :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
+   :throws [:string]}
+  "Boot the kernel-only notifier, with `extra` merged into the CLI
+  config and `profile` (default :test)."
+  [&opt extra profile]
   (test/start! {:plugins plugins
                 :profile (or profile :test)
                 :config (config (or extra {}))}))

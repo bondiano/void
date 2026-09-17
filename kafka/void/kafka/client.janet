@@ -32,6 +32,7 @@
 (def- errstr-size 512)
 
 (defn- conf!
+  {:params [@[[:string :string]] :number] :ret :pointer :throws [:string]}
   ``An rd_kafka_conf_t over the property pairs, with events enabled.
   On any failure the conf is destroyed here — it is only ever owned by
   us until rd_kafka_new accepts it.``
@@ -51,6 +52,12 @@
   conf)
 
 (defn create
+  {:params [(enum :producer :consumer) @[[:string :string]] :number
+            (or {:library (or :string :nil) & r} :nil)]
+   :ret @{:kind :keyword :handle :pointer :queue :pointer :rfd :number :wfd :number
+          :pair :any :stopped :boolean :pump-done :any :last-error :nil
+          :handlers @{:keyword :any} :stats @{:events :number :errors :number}}
+   :throws [:string]}
   ``A client: the rd_kafka_t, its event queue, the pipe and the pump.
 
       (create :producer properties (bor (rk/events :dr) (rk/events :error))
@@ -95,6 +102,8 @@
     :stats @{:events 0 :errors 0}})
 
 (defn on!
+  {:params [@{:handlers @{:keyword :any} & r} :keyword (fn [:any :any] :any)]
+   :ret @{:handlers @{:keyword :any} & r}}
   "Install the handler for one event type (:dr, :fetch, ...)."
   [c type f]
   (put-in c [:handlers type] f)
@@ -108,6 +117,7 @@
 (def- lib-log-ns "void.kafka.lib")
 
 (defn- forward-log!
+  {:params [:pointer @{:kind :keyword & r}] :ret :nil}
   ``One of the library's own log lines, through void/core/log under
   its own namespace — so `[:log :levels {"void.kafka.lib" ...}]` turns
   the connection chatter of a broker that is allowed to be down up or
@@ -127,7 +137,16 @@
 
       (log/debug (line :text) :ns lib-log-ns :kind (c :kind) :fac (line :fac)))))
 
-(defn- dispatch! [c ev]
+(defn- dispatch!
+  {:params [@{:kind :keyword :last-error :any
+              :stats @{:events :number :errors :number & sr}
+              :handlers @{:keyword :any} & r}
+            :pointer]
+   :ret :any}
+  "Route one event to its handler: log lines forwarded, error events
+  counted and logged, everything else handed to whatever `on!`
+  installed for its type."
+  [c ev]
   (def type (get type-names (rk/rd_kafka_event_type ev)))
   (put-in c [:stats :events] (inc (get-in c [:stats :events] 0)))
   (when (= type :log)
@@ -146,6 +165,14 @@
     (f ev c)))
 
 (defn pump!
+  {:params [@{:kind :keyword :queue :pointer :stopped :boolean :rfd :number
+              :pair :any :pump-done :any :last-error :any
+              :stats @{:events :number :errors :number & sr}
+              :handlers @{:keyword :any} & r}]
+   :ret @{:kind :keyword :queue :pointer :stopped :boolean :rfd :number
+          :pair :any :pump-done :any :last-error :any
+          :stats @{:events :number :errors :number & sr}
+          :handlers @{:keyword :any} & r}}
   ``Start the pump fiber: drain the queue, park on the pipe, repeat
   until the client is stopped. Every librdkafka call the client ever
   makes after `create` happens on the loop thread — the library's own
@@ -178,6 +205,7 @@
   c)
 
 (defn stop-pump!
+  {:params [@{:kind :keyword :wfd :number :pair :any :pump-done :any & r}] :ret :nil}
   ``Stop the pump and wait for it. The flag alone is not enough: a
   pump parked on the pipe stays parked until a byte arrives, and a
   pump that read the flag as false a microsecond ago is about to park.
@@ -193,6 +221,7 @@
   nil)
 
 (defn destroy!
+  {:params [@{:queue :pointer :handle :pointer :rfd :number :wfd :number & r}] :ret :nil}
   ``Release everything after the pump is down. `rd_kafka_destroy`
   joins the library's threads — the one deliberately blocking call
 , made at :stop where a bounded block is the shutdown
@@ -205,6 +234,7 @@
   nil)
 
 (defn outq-len
+  {:params [@{:handle :pointer & r}] :ret :number}
   "Messages and requests the library still holds — what a producer's
   flush watches."
   [c]
@@ -213,6 +243,10 @@
 # -- the boot probe ------------------------------------------------------
 
 (defn probe!
+  {:params [@{:handle :pointer :queue :pointer :handlers @{:keyword :any} & r}
+            :string :number]
+   :ret (enum :ok :skipped)
+   :throws [:string]}
   ``Prove the cluster answers: DescribeCluster through the same event
   API, parked on the pump, bounded by `timeout` seconds. The
   keeper-connection bargain (every db driver holds one from :start)
