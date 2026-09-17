@@ -319,7 +319,7 @@
     (unless (empty? plain)
       (array/push out (string plain))
       (buffer/clear plain)))
-  (defn tok! {:params [:string :string] :ret :any}
+  (defn tok! {:params [:string :string] :ret @[:any]}
     [cls text]
     (flush!)
     (array/push out [:span {:class cls} text]))

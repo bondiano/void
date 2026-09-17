@@ -178,7 +178,7 @@
 (defn- render-release
   {:params [:buffer :string :string? :string? (or @[{:hash :string :subject :string}]
                                                   [{:hash :string :subject :string}])]
-   :ret :any}
+   :ret (or :buffer :nil)}
   "Append one release section (a tagged release or Unreleased) to buf."
   [buf title date theme cs]
   (buffer/push buf "## " title)
