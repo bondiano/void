@@ -73,13 +73,13 @@
 # here first — ADR-0043 §5, folded back into ADR-0037.
 
 (defn- overview-live
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}} :throws [:string]}
+  {:params [:any] :ret HttpResponseTable :throws [:string]}
   "The overview's morph-stream, or the datastar-absent refusal."
   [req]
   (live/stream req (fn [] (pages/overview req)) [live/overview-room]))
 
 (defn- logs-live
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}} :throws [:string]}
+  {:params [:any] :ret HttpResponseTable :throws [:string]}
   "The logs page's morph-stream, or the datastar-absent refusal."
   [req]
   (live/stream req (fn [] (logs/index req)) [live/logs-room]))

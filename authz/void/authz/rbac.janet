@@ -29,9 +29,7 @@
   {})
 
 (defn roles-of
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}]
-   :ret @[:keyword]}
+  {:params [AuthzContext] :ret @[:keyword]}
   ``The roles of the context's subject: `:subject/roles` if there is
   one, else `:subject/role` as a list of one, else nothing.``
   [ctx]
@@ -42,9 +40,8 @@
     (if-let [one (context/attr ctx :subject/role)] [(keyword one)] [])))
 
 (defn has-role?
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
-            (or :keyword @[:keyword] [:keyword])]
+  {:params [AuthzContext
+            (or :keyword [:keyword])]
    :ret :boolean
    :narrows :any}
   "Does the subject hold this role (or any of these roles)?"
@@ -55,8 +52,7 @@
     (truthy? (index-of role held))))
 
 (defn permissions-of
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}]
+  {:params [AuthzContext]
    :ret @{:keyword :boolean}}
   "Every permission the subject's roles grant, as a set-shaped table."
   [ctx]
@@ -67,8 +63,7 @@
   out)
 
 (defn permitted?
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
+  {:params [AuthzContext
             :keyword]
    :ret :boolean
    :narrows :any}
@@ -80,10 +75,8 @@
   (truthy? (or (granted :*) (granted permission))))
 
 (defn role-policy
-  {:params [(or :keyword @[:keyword] [:keyword])]
-   :ret (fn [@{:subject :any :action :any :resource :any :env {:keyword :any}
-               :attrs @{:keyword :any} :used @[:keyword] & r}]
-          (or :boolean :string))}
+  {:params [(or :keyword [:keyword])]
+   :ret (fn [AuthzContext] (or :boolean :string))}
   ``A policy function that allows exactly the holders of `role` — the
   shortcut for a route that needs nothing cleverer:
 
@@ -95,9 +88,7 @@
 
 (defn permission-policy
   {:params [:keyword]
-   :ret (fn [@{:subject :any :action :any :resource :any :env {:keyword :any}
-               :attrs @{:keyword :any} :used @[:keyword] & r}]
-          (or :boolean :string))}
+   :ret (fn [AuthzContext] (or :boolean :string))}
   "A policy function that allows whoever the role table grants
   `permission` to."
   [permission]

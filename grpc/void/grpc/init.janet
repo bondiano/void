@@ -20,8 +20,8 @@
 ### **A method is a route, and that is the whole design.** ./mount
 ### projects every registered method into the one route table, so an
 ### RPC method carries the same metadata a page does and every policy
-### that protects a route protects it: `:void.authz/policy` in phase
-### 5000, `:void.db/txn`, void/security's headers and limits,
+### that protects a route protects it: `:void.authz/policy` at
+### :void.http/authorized, `:void.db/txn`, void/security's headers and limits,
 ### void/pressure's shedding, void/obs' RED metrics labelled by route
 ### name, `void routes` and `explain-route`. Nothing here
 ### re-implements any of it, and nothing else in void had to learn
@@ -66,16 +66,9 @@
 # -- what a handler uses -------------------------------------------------
 
 (defn fail!
-  {:params [(enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
-                  :already_exists :permission_denied :resource_exhausted :failed_precondition
-                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
-                  :unauthenticated)
-            :string
-            (or {:http/status (or :number :nil) :details (or [:any] :nil)
-                :headers (or @{:string :string} :nil) & r}
-                :nil)]
+  {:params [GrpcCode :string GrpcFailureOptions?]
    :ret :never
-   :throws [:string {:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [:string GrpcFailure]}
   ``Raise an RPC failure — the code, and a message for a person:
 
       (grpc/fail! :not_found "no order A-1")
@@ -85,15 +78,8 @@
   (codes/fail! code message opts))
 
 (defn error-value
-  {:params [(enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
-                  :already_exists :permission_denied :resource_exhausted :failed_precondition
-                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
-                  :unauthenticated)
-            :string
-            (or {:http/status (or :number :nil) :details (or [:any] :nil)
-                :headers (or @{:string :string} :nil) & r}
-                :nil)]
-   :ret {:void.grpc/code :keyword :status :number :http/status :number & r}
+  {:params [GrpcCode :string GrpcFailureOptions?]
+   :ret GrpcFailure
    :throws [:string]}
   "Build an RPC failure without raising it."
   [code message &opt opts]
@@ -155,7 +141,7 @@
                 :get (or :boolean :nil) :full (or :boolean :nil) & r}
                 :nil)]
    :ret (or :any @{:message :any :headers @{:string :any} :trailers @{:string :any}})
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``One unary call through a client. Returns the response message and
   raises the RPC failure when the server sent one — see client/call
   for the options (`:headers`, `:timeout`, `:get`, `:full`):
@@ -269,10 +255,11 @@
 
 (plugin/contribute! :void.http/error-renderer
   {:name :void.grpc/error
-   # ahead of void/rest's problem+json (900): on an RPC route the
-   # client is a generated stub that reads Connect errors and nothing
-   # else, and an RFC 7807 body would reach it as an unparseable 403
-   :priority 800
+   # a protocol renderer, ahead of every general one (void/rest's
+   # problem+json among them): on an RPC route the client is a
+   # generated stub that reads Connect errors and nothing else, and an
+   # RFC 7807 body would reach it as an unparseable 403
+   :before :void.http.error/protocol
    :fn (fn render-connect [err req _ctx]
          (when (get (keys/route-meta req) :void.grpc/method)
            (mount/error-response err)))})
@@ -314,7 +301,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :grpc/capture-config
    :doc "Read the [:grpc] slice and resolve the codecs before the route table is built"
    :fn (fn capture [boot]

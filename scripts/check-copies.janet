@@ -217,7 +217,31 @@
     :pattern ~(* "(sorted (seq [[k v] :pairs (or query {})")
     :allow ["html/void/html/chrome.janet"]
     :why "chrome/url-under is the one builder; admin/context and dash/context each carried it as `at` (wave 8.8)."
-    :samples ["(sorted (seq [[k v] :pairs (or query {})\n :when (and (not (nil? v)) (not (empty? (string v))))]"]}])
+    :samples ["(sorted (seq [[k v] :pairs (or query {})\n :when (and (not (nil? v)) (not (empty? (string v))))]"]}
+
+   {:name "numeric ordering: a :phase number or a phase constant"
+    :pattern ~(+ (* ":phase" :s+ (+ (range "09") "(+" "(-"
+                                  (* (any (if-not "phase" (+ (range "az") (set "-/.")))) "phase")))
+                 (* "phase/" (range "az")))
+    :allow []
+    :no-implementation true
+    :why "ADR-0051: order is edges to named anchors (void/core/order); the 0-10000 scale, phase/* and middleware/phases are gone. A boot's :phase (:validated, :ready, :stopped) and the chunked decoder's are states, not order, and never a number."
+    :samples ["{:name :x :phase 4000 :wrap w}" ":phase\n   9500" ":phase (+ middleware/auth 1)"
+              ":phase middleware/phase-auth" ":phase mw/phase" "(get phase/auth 0)"]
+    :not [":phase :validated" "(boot :phase)" "{:phase :size :pos 0}" ":phase :keyword"
+          ":phase (enum :validated :ready :stopped)" "\"(:phase was removed in ADR-0051)\""]}
+
+   {:name "numeric ordering: :priority on a first-wins list"
+    :pattern ~(* ":priority" :s+ (+ (range "09") "(+" "(-"))
+    # jobs' :priority is a queue's priority, admin's a widget's
+    # specificity — neither is an order of execution, so neither
+    # package is walked
+    :only (filter |(not (index-of $ [:void/jobs :void/admin])) (packages/packages))
+    :allow []
+    :no-implementation true
+    :why "ADR-0051: error renderers, auth strategies and config sources are ordered by :after/:before (order/first-wins); a leftover :priority fails the boot."
+    :samples ["{:name :grpc/connect :priority 800 :fn f}" ":priority\n 10"]
+    :not [":priority [:optional :int]" "(x :priority)" ":priority :number"]}])
 
 # -- the walk ------------------------------------------------------------
 

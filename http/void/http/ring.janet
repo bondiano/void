@@ -17,7 +17,7 @@
 
 (defn response
   {:params [:number :any (or {:string :any} :nil)]
-   :ret HttpResponse}
+   :ret HttpResponseTable}
   "A response table: status, optional body and headers."
   [status &opt body headers]
   @{:status status
@@ -57,33 +57,33 @@
   (header resp "content-type" mime))
 
 (defn text
-  {:params [:number :any] :ret HttpResponse}
+  {:params [:number :any] :ret HttpResponseTable}
   "A text/plain response."
   [status body]
   (response status body @{"content-type" "text/plain; charset=utf-8"}))
 
 (defn html
-  {:params [:number :any] :ret HttpResponse}
+  {:params [:number :any] :ret HttpResponseTable}
   "A text/html response."
   [status body]
   (response status body @{"content-type" "text/html; charset=utf-8"}))
 
 (defn redirect
-  {:params [:string :number?] :ret HttpResponse}
+  {:params [:string :number?] :ret HttpResponseTable}
   "A redirect response (302 by default)."
   [location &opt status]
   (default status 302)
   (response status nil @{"location" location}))
 
 (defn not-found
-  {:params [:any] :ret HttpResponse}
+  {:params [:any] :ret HttpResponseTable}
   "The default 404."
   [&opt body]
   (text 404 (or body "not found")))
 
 (defn upgrade
-  {:params [{:string :any} :function :number?]
-   :ret HttpResponse
+  {:params [{:string :any} (fn [:any :any] :any) :number?]
+   :ret HttpUpgradeResponse
    :throws [:string]}
   ``A protocol-upgrade response: the head goes out as an ordinary
   response (101 by default, with `headers`), and then `take-over` —
@@ -214,7 +214,7 @@
   (string out))
 
 (defn sse
-  {:params [:any (or {:string :any} :nil)] :ret HttpResponse}
+  {:params [:any (or {:string :any} :nil)] :ret HttpResponseTable}
   ``An SSE response streaming a fiber (or any iterable) of events; each
   yielded value goes through sse-event, so both plain strings and
   {:event :data :id :retry} tables work:

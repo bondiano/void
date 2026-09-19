@@ -60,7 +60,7 @@
   nothing is on the bus while the transaction is open, a commit is not
   lost, a rollback is not published, and the one window the outbox
   does leave is a duplicate rather than a loss."
-  [label table settle]
+  [engine table settle]
   (def b (backend/normalize (busdb/store {:table table :poll-interval 0.05})))
   (def delivered @[])
   (each n (router/defined) (router/forget! n))
@@ -68,7 +68,7 @@
                   {:fn (fn [m] (array/push delivered (m :payload)))})
 
   (def br (state/make b (codec/normalize codec/json)
-                      {:group (keyword "outbox-" label)
+                      {:group (keyword "outbox-" engine)
                        :dedup {:enabled true :window 300}
                        :poison {:enabled false} :retry {:enabled false}}))
   (put br :outbox (b :outbox-write!))
@@ -84,19 +84,19 @@
       (state/publish-tx! :money/debited {:account "a" :amount 10})
       (set seen-inside (length delivered)))
     (assert (zero? seen-inside)
-            (string label ": nothing is on the bus while the transaction is still open"))
+            (string engine ": nothing is on the bus while the transaction is still open"))
 
     # -- it is not lost -------------------------------------------------
 
     (assert (= 1 (pending b))
-            (string label ": a committed publish-tx! is a row the forwarder owes"))
+            (string engine ": a committed publish-tx! is a row the forwarder owes"))
     (def f (busdb/start-forwarder! (busdb/make-forwarder b {:interval 0.02 :batch 10})))
     (ev/sleep (* 4 settle))
     (busdb/stop-forwarder! f)
     (assert (zero? (pending b))
-            (string label ": the forwarder drains what committed"))
+            (string engine ": the forwarder drains what committed"))
     (assert (= 1 (length delivered))
-            (string label ": and the message reaches a consumer — it is not lost"))
+            (string engine ": and the message reaches a consumer — it is not lost"))
     (assert (= 10 (get-in delivered [0 "amount"])))
 
     # -- it is not published when the transaction rolls back -----------
@@ -106,23 +106,23 @@
     (assert (nil? (db/with-tx
                     (state/publish-tx! :money/debited {:account "b" :amount 20})
                     (db/rollback!)))
-            (string label ": an explicit rollback returns nil"))
+            (string engine ": an explicit rollback returns nil"))
     (assert (zero? (pending b))
-            (string label ": and takes the outbox row with it"))
+            (string engine ": and takes the outbox row with it"))
 
     (def [ok _]
       (protect (db/with-tx
                  (state/publish-tx! :money/debited {:account "c" :amount 30})
                  (error "the business rule said no"))))
-    (assert (not ok) (string label ": the error propagates"))
+    (assert (not ok) (string engine ": the error propagates"))
     (assert (zero? (pending b))
-            (string label ": and an aborted transaction publishes nothing"))
+            (string engine ": and an aborted transaction publishes nothing"))
 
     (def f2 (busdb/start-forwarder! (busdb/make-forwarder b {:interval 0.02 :batch 10})))
     (ev/sleep (* 4 settle))
     (busdb/stop-forwarder! f2)
     (assert (empty? delivered)
-            (string label ": a message whose transaction rolled back never reaches a consumer"))
+            (string engine ": a message whose transaction rolled back never reaches a consumer"))
 
     # -- the window the outbox does leave: a duplicate, not a loss -----
     #
@@ -142,16 +142,16 @@
     (ev/sleep (* 2 settle))                 # ...and the process dies here
     (assert (= 1 (length delivered)))
     (assert (= 1 (pending b))
-            (string label ": the row is still owed, because nothing marked it"))
+            (string engine ": the row is still owed, because nothing marked it"))
 
     (busdb/forward-once! b 10)              # the next pass republishes
     (ev/sleep (* 2 settle))
     (assert (= 1 (length delivered))
-            (string label ": the republished message is the same row, and is handled once"))
+            (string engine ": the republished message is the same row, and is handled once"))
     (assert (zero? (pending b)))
 
     (state/stop-consumers! br))
-  (printf "%s: outbox OK (log %d)" label (log-size table))
+  (printf "%s: outbox OK (log %d)" engine (log-size table))
   true)
 
 # -- sqlite ---------------------------------------------------------------

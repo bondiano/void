@@ -83,24 +83,7 @@
 
 (defn active
   {:params []
-   :ret (or @{:config {:keyword :any}
-              :checks @[{:name :keyword :fn (fn [] :any)}]
-              :under-pressure :boolean
-              :reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                            {:signal :any :check :boolean :reason :string})]
-              :samples @{:keyword :number}
-              :peaks @{:keyword :number}
-              :clean :number
-              :sampled :number
-              :sheds :number
-              :episodes :number
-              :since :number
-              :changed-at :number
-              :sampling :boolean
-              :fiber (or :fiber :nil)
-              :pid :number
-              & r}
-           :nil)}
+   :ret PressureState?}
   "The state this fiber reads: the `state-dyn` override, else the
   started component's."
   []
@@ -172,25 +155,8 @@
    [:rss :max-rss-bytes]])
 
 (defn make
-  {:params [{:any :any}
-            (or @[{:name :keyword :fn (fn [] :any)}]
-                [{:name :keyword :fn (fn [] :any)}] :nil)]
-   :ret @{:config {:keyword :any}
-          :checks @[{:name :keyword :fn (fn [] :any)}]
-          :under-pressure :boolean
-          :reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                        {:signal :any :check :boolean :reason :string})]
-          :samples @{:keyword :number}
-          :peaks @{:keyword :number}
-          :clean :number
-          :sampled :number
-          :sheds :number
-          :episodes :number
-          :since :number
-          :changed-at :number
-          :sampling :boolean
-          :fiber (or :fiber :nil)
-          :pid :number}}
+  {:params [{:any :any} (or [PressureCheck] :nil)]
+   :ret PressureState}
   ``A pressure state from the [:pressure] slice and the resolved
   `:void.pressure/check` contributions ({:name :fn} each). Nothing is
   sampled until `start-sampler!`.``
@@ -220,8 +186,7 @@
   (when (and (number? v) (pos? v)) v))
 
 (defn- threshold-reasons
-  {:params [@{:config {:keyword :any} :under-pressure :boolean & r}
-            @{:keyword :number}]
+  {:params [@{:config {:keyword :any} :under-pressure :boolean & r} PressureSamples]
    :ret @[{:signal :any :value :number :limit :number :bar :number}]}
   ``The sampled signals that are over their bar. Under pressure the
   bar is `:recovery-ratio` × the limit — the same sample answers
@@ -240,7 +205,7 @@
   out)
 
 (defn- check-reasons
-  {:params [@{:checks @[{:name :keyword :fn (fn [] :any)}] & r}]
+  {:params [@{:checks @[PressureCheck] & r}]
    :ret @[{:signal :any :check :boolean :reason :string}]}
   "The custom checks that said no — or threw, which counts as no."
   [st]
@@ -259,7 +224,7 @@
   out)
 
 (defn- record-peaks!
-  {:params [@{:peaks @{:keyword :number} & r} @{:keyword :number}] :ret :nil}
+  {:params [@{:peaks @{:keyword :number} & r} PressureSamples] :ret :nil}
   "Raise this state's per-signal high-water marks with one set of
   samples."
   [st samples]
@@ -268,22 +233,8 @@
       (put (st :peaks) k (max v (get-in st [:peaks k] 0))))))
 
 (defn observe!
-  {:params [@{:config {:keyword :any}
-              :checks @[{:name :keyword :fn (fn [] :any)}]
-              :under-pressure :boolean
-              :reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                            {:signal :any :check :boolean :reason :string})]
-              :samples @{:keyword :number}
-              :peaks @{:keyword :number}
-              :clean :number
-              :sampled :number
-              :sheds :number
-              :episodes :number
-              :since :number
-              :changed-at :number
-              & r}
-            @{:keyword :number}]
-   :ret (or :keyword :nil)}
+  {:params [PressureState PressureSamples]
+   :ret (or (enum :high :recovered) :nil)}
   ``Feed one set of samples ({:loop-lag <ms> :rss <bytes>}) into the
   state: evaluate the thresholds and the custom checks, apply the
   hysteresis, and fire :high / :recovered on an edge. Returns the
@@ -340,11 +291,10 @@
   transition)
 
 (defn shed!
-  {:params [@{:sheds :number & r}]
-   :ret @{:sheds :number & r}}
+  {:params [@{:sheds :number & r}] :ret :number}
   "Count one shed request. Returns the running count for this state."
   [st]
-  (update st :sheds inc))
+  ((update st :sheds inc) :sheds))
 
 # -- the sampler fiber ---------------------------------------------------
 
@@ -414,12 +364,8 @@
 # -- reading it ----------------------------------------------------------
 
 (defn reasons
-  {:params [(or @{:reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                               {:signal :any :check :boolean :reason :string})]
-                  & r}
-                :nil)]
-   :ret [(or {:signal :any :value :number :limit :number :bar :number}
-             {:signal :any :check :boolean :reason :string})]}
+  {:params [(or @{:reasons [PressureReason] & r} :nil)]
+   :ret [PressureReason]}
   "Why this state is shedding — a tuple of {:signal :value :limit} (a
   threshold) or {:signal :check :reason} (a custom check). Empty when
   it is not."
@@ -428,40 +374,8 @@
   (if st (st :reasons) []))
 
 (defn status
-  {:params [(or @{:config {:keyword :any}
-                  :under-pressure :boolean
-                  :reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                                {:signal :any :check :boolean :reason :string})]
-                  :samples @{:keyword :number}
-                  :peaks @{:keyword :number}
-                  :clean :number
-                  :sampling :boolean
-                  :sampled :number
-                  :sheds :number
-                  :episodes :number
-                  :since :number
-                  :checks @[{:name :keyword :fn (fn [] :any)}]
-                  :pid :number
-                  & r}
-                :nil)]
-   :ret (or {:under-pressure :boolean
-             :mode :keyword
-             :reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                           {:signal :any :check :boolean :reason :string})]
-             :samples {:keyword :number}
-             :peaks {:keyword :number}
-             :available {:loop-lag :boolean :rss :boolean :heap :boolean}
-             :limits {:max-loop-lag (or :number :nil) :max-rss-bytes (or :number :nil)}
-             :recovery {:ratio :any :samples :any :clean :number}
-             :interval :any
-             :sampling :boolean
-             :sampled :number
-             :shed :number
-             :episodes :number
-             :for :number
-             :checks [:keyword]
-             :pid :number}
-            :nil)}
+  {:params [PressureState?]
+   :ret PressureStatus?}
   ``What the sampler knows, for `(pressure/status)`, the health
   contribution and `void pressure status`. Without `st`, the active
   state — nil when void/pressure is not started.``
@@ -491,9 +405,9 @@
 # -- checks registered outside a manifest --------------------------------
 
 (defn add-check!
-  {:params [@{:checks @[{:name :keyword :fn (fn [] :any)}] & r}
+  {:params [@{:checks @[PressureCheck] & r}
             :keyword (fn [] :any)]
-   :ret @{:checks @[{:name :keyword :fn (fn [] :any)}] & r}}
+   :ret @{:checks @[PressureCheck] & r}}
   ``Register a custom check on a state at runtime: (fn [] {:ok bool
   :reason ...}). The extension-point way is a `:void.pressure/check`
   contribution; this is for a test, a REPL and anything else with no
@@ -505,8 +419,8 @@
   st)
 
 (defn remove-check!
-  {:params [@{:checks @[{:name :keyword :fn (fn [] :any)}] & r} :keyword]
-   :ret @{:checks @[{:name :keyword :fn (fn [] :any)}] & r}}
+  {:params [@{:checks @[PressureCheck] & r} :keyword]
+   :ret @{:checks @[PressureCheck] & r}}
   "Drop a check by name."
   [st name]
   (put st :checks (array ;(filter |(not= name ($ :name)) (st :checks))))

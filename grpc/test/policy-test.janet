@@ -14,7 +14,7 @@
 ### The promise, checked: one policy stack (auth/authz/obs/validation)
 ### over HTTP and over RPC. An RPC method carries route metadata,
 ### so `:void.authz/policy` is *the same key* enforced by the same
-### middleware in the same phase as on a page — and this file is the
+### middleware in the same place as on a page — and this file is the
 ### assertion that nothing in void/grpc had to know that.
 
 (proto/load-file! "test/protos/orders.proto")
@@ -82,7 +82,7 @@
 
 (def path "/shop.orders.OrderService/")
 
-(defn- rpc
+(defn- call-rpc
   {:params [:any :string :any :keyword? :any] :ret :any}
   "One RPC call through the injected test client, under the given identity."
   [c method message &opt input identity]
@@ -116,7 +116,7 @@
   # or its own. That is the authz gate closing over routes this
   # package generated, with no cooperation from this package.
 
-  (def denied (rpc c "GetOrder" {:id "A-1"}))
+  (def denied (call-rpc c "GetOrder" {:id "A-1"}))
   (assert (= 403 (denied :status)))
   (def body (json/decode (string (denied :body))))
   (assert (= "permission_denied" (body "code"))
@@ -124,17 +124,17 @@
   (assert (not (string/find "no identity" (string (denied :body))))
           "and the *reason* stays in the log, exactly as it does for a page")
 
-  (def allowed (rpc c "GetOrder" {:id "A-1"} nil {:subject "user:someone"}))
+  (def allowed (call-rpc c "GetOrder" {:id "A-1"} nil {:subject "user:someone"}))
   (assert (= 200 (allowed :status)))
   (assert (= "A-1" ((json/decode (string (allowed :body))) "id")))
 
   # the method's own policy is stricter than the service's, and the
   # router merged them — this package did not
-  (def wrong-subject (rpc c "PlaceOrder" {:total_cents 5}
-                          :shop.orders/PlaceOrderRequest {:subject "user:someone"}))
+  (def wrong-subject (call-rpc c "PlaceOrder" {:total_cents 5}
+                               :shop.orders/PlaceOrderRequest {:subject "user:someone"}))
   (assert (= 403 (wrong-subject :status)))
-  (def buyer (rpc c "PlaceOrder" {:total_cents 5}
-                  :shop.orders/PlaceOrderRequest {:subject "user:buyer"}))
+  (def buyer (call-rpc c "PlaceOrder" {:total_cents 5}
+                       :shop.orders/PlaceOrderRequest {:subject "user:buyer"}))
   (assert (= 200 (buyer :status)))
   (assert (= "5" ((json/decode (string (buyer :body))) "totalCents")))
 

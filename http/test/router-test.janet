@@ -51,13 +51,18 @@
       (handler req))))
 
 (def middleware
-  [{:plugin :void/obs :value {:name :obs :phase mw/phase/observability
+  [{:plugin :void/obs :value {:name :obs
+                              :after :void.http.stage/on-send
+                              :before :void.http.stage/on-request
                               :wrap (tracing :obs)}}
-   {:plugin :void/http :value {:name :guard :phase mw/phase/panic-guard
+   {:plugin :void/http :value {:name :guard :before :void.http/guarded
                                :wrap (tracing :guard)}}
-   {:plugin :my-app :value {:name :audit :phase mw/phase/business :named true
+   {:plugin :my-app :value {:name :audit
+                            :after :void.http/validated :before :void.http/responding
+                            :named true
                             :wrap (tracing :audit)}}
-   {:plugin :my-app :value {:name :admin-only :phase mw/phase/authz
+   {:plugin :my-app :value {:name :admin-only
+                            :after :void.http/loaded :before :void.http/authorized
                             :when |(get $ :app/flag)
                             :wrap (tracing :admin-only)}}])
 
@@ -81,17 +86,17 @@
 (assert (= 4 (length (table :routes))) "all routes built")
 
 # static + dynamic matching
-(def [health hp] (router/match table :get "/health"))
+(def [health hp] (router/lookup table :get "/health"))
 (assert (= :health (health :name)) "static route matches by lookup")
 (assert (= {} hp))
 
-(def [orders op] (router/match table :get "/orders/42"))
+(def [orders op] (router/lookup table :get "/orders/42"))
 (assert (= :orders/show (orders :name)))
 (assert (= "42" (op :id)) "captures land in params by name")
 
-(assert (nil? (router/match table :post "/orders/42")) "wrong method does not match")
-(assert (router/match table :head "/health") "HEAD falls back to GET")
-(assert (router/match table :delete "/misc/a/b") ":any matches every method")
+(assert (nil? (router/lookup table :post "/orders/42")) "wrong method does not match")
+(assert (router/lookup table :head "/health") "HEAD falls back to GET")
+(assert (router/lookup table :delete "/misc/a/b") ":any matches every method")
 (assert (= [:get :head] (freeze (router/allowed-methods table "/orders/42")))
         "allowed-methods lists the 405 Allow set")
 (assert (empty? (router/allowed-methods table "/nope")) "no methods for unknown path")
@@ -119,12 +124,12 @@
 (assert (= 26214400 (get-in raised [:by-name :in/receive :meta :void.http/max-body]))
         "a route under no ceiling names its own")
 
-# middleware chains: phases, :when by metadata, :named opt-in
+# middleware chains: edge order, :when by metadata, :named opt-in
 (array/clear trace)
 (def resp (router/dispatch table @{:method :get :path "/orders/42"}))
 (assert (= "42" (resp :body)) "dispatch runs the chain and the symbol handler")
 (assert (= [:guard :obs] (freeze trace))
-        "global middleware in phase order; :named and failing :when excluded")
+        "global middleware in edge order; :named and failing :when excluded")
 
 (array/clear trace)
 (router/dispatch table @{:method :get :path "/admin/users"})
@@ -150,7 +155,9 @@
      :middleware
      [;middleware
       {:plugin :my-app
-       :value {:name :timeout-tag :phase mw/phase/business :route-aware true
+       :value {:name :timeout-tag
+               :after :void.http/validated :before :void.http/responding
+               :route-aware true
                :when |(not (nil? (get $ :void.http/timeout)))
                :wrap (fn [handler rmeta]
                        (array/push seen-at-build (rmeta :name))
@@ -161,7 +168,7 @@
                          (def resp (handler req))
                          (merge resp {:body (string (resp :body) " " tag)})))}}
       {:plugin :my-app
-       :value {:name :plain :phase mw/phase/observability
+       :value {:name :plain :after :void.http/guarded
                :wrap (fn [handler] handler)}}]}))
 (assert (deep= (sorted seen-at-build) @[:admin/users :health :misc :orders/show])
         "a :route-aware :wrap is called once per route at table build, with that route's merged meta")
@@ -169,7 +176,7 @@
         "the wrapper used the route's own value (5 overrides the group's 30)")
 (assert (= "up t=30" ((router/dispatch aware-table @{:method :get :path "/health"}) :body))
         "and the inherited one where the route did not override")
-(def [aware-entry _] (router/match aware-table :get "/orders/1"))
+(def [aware-entry _] (router/lookup aware-table :get "/orders/1"))
 (assert (= "1 t=5" (((aware-entry :chain)
                      @{:method :get :path "/orders/1" :params {:id "1"}
                        :void/route {:meta {:void.http/timeout 999 :name :forged}}})
@@ -181,27 +188,30 @@
                                 :middleware
                                 [;middleware
                                  {:plugin :my-app
-                                  :value {:name :unary :phase 100
+                                  :value {:name :unary :after :void.http/guarded
                                           # a v1 :wrap of one argument, wrongly flagged
                                           :route-aware true
                                           :wrap (fn [handler] handler)}}]}))))
         "a :route-aware contribution whose :wrap takes one argument fails the table build, not a request")
 
-# -- the chain as data: phases, plugins, and who declined why ------------
+# -- the chain as data: edges, plugins, and who declined why -------------
 
 (def ex-orders (router/explain-route table "/orders/42"))
-(assert (deep= (map |[($ :name) ($ :phase) ($ :plugin)] (ex-orders :chain))
-               @[[:guard 0 :void/http] [:obs 1000 :void/obs]])
-        ":chain carries name, phase and the contributing plugin, outermost first")
+(assert (deep= (map |[($ :name) ($ :plugin) ($ :before)] (ex-orders :chain))
+               @[[:guard :void/http :void.http/guarded]
+                 [:obs :void/obs :void.http.stage/on-request]])
+        ":chain carries name, the contributing plugin and its edges, outermost first")
+(assert (deep= (sorted (keys (get-in ex-orders [:chain 0]))) @[:before :name :plugin])
+        "and nothing else — there is no phase")
 (assert (deep= (map |[($ :name) ($ :reason)] (ex-orders :declined))
                @[[:admin-only :when] [:audit :named]])
-        "the declined are kept with their reason: :when refused the meta, :named was not listed")
+        "the declined are kept with their reason, in chain order: :when refused the meta, :named was not listed")
 (assert (string/find "declined:" (ex-orders :text)) "and the human text lists them")
-(assert (string/find ":admin-only@5000 (:my-app) — :when declined" (ex-orders :text)))
+(assert (string/find ":admin-only (:my-app) — :when declined" (ex-orders :text)))
 (assert (empty? ((router/explain-route table "/admin/users") :declined))
         "a route that takes everything declines nothing")
 
-# -- placement by name: :before/:after resolve to a number at build ------
+# -- placement by neighbour: an edge to another middleware ----------------
 
 (def placed
   (router/build-table
@@ -213,65 +223,116 @@
       {:plugin :my-app :value {:name :chained :after :after-obs :wrap (tracing :chained)}}
       {:plugin :my-app :value {:name :outermost :before :guard :wrap (tracing :outermost)}}]}))
 (def placed-ex (router/explain-route placed "/health"))
-(assert (deep= (map |[($ :name) ($ :phase)] (placed-ex :chain))
-               @[[:outermost 0] [:guard 0] [:obs 1000] [:after-obs 1001] [:chained 1002]])
-        ":after is the target's phase + 1, :before its phase - 1 clamped to the scale, and a relative may target a relative")
+(assert (deep= (map |($ :name) (placed-ex :chain))
+               @[:outermost :guard :obs :after-obs :chained])
+        ":after a neighbour is right after it, :before right before it, and a relative may target a relative")
 (assert (= :obs (get-in placed-ex [:chain 3 :after])) "the step remembers what it was placed after")
-(assert (string/find ":after-obs@1001 (after :obs)" (placed-ex :text)))
+(assert (string/find ":after-obs (after :obs)" (placed-ex :text)))
 (array/clear trace)
 (router/dispatch placed @{:method :get :path "/health"})
 (assert (= [:outermost :guard :obs :after-obs :chained] (freeze trace))
-        "and the chain runs in the resolved order")
+        "and the chain runs in that order")
 
 (defn- build-error
-  {:params [[:any]] :ret :string}
-  "Builds the route table with `mws` appended to the base middleware,
-  asserts the build fails, and returns the error text for the caller
-  to search."
-  [mws]
+  {:params [[:any] (or {:keyword :any} :nil)] :ret :string}
+  "Builds the route table with `mws` appended to the base middleware
+  (and `requires` when given), asserts the build fails, and returns
+  the error text for the caller to search."
+  [mws &opt requires]
   (def [ok err] (protect (router/build-table {:sources [{:name :app :routes src}]
                                               :meta-keys meta-keys
+                                              :requires requires
                                               :middleware [;middleware ;mws]})))
   (assert (not ok))
   (string err))
 
 (def unknown (build-error [{:plugin :my-app :value {:name :lost :after :obz :wrap identity}}]))
-(assert (string/find "placed :after :obz, which no active plugin contributes" unknown)
-        "a target nobody contributes fails the build")
+(assert (string/find "middleware :lost (from :my-app): :after :obz is unknown" unknown)
+        "a name nobody contributes fails the build")
 (assert (string/find "did you mean :obs?" unknown) "with a did-you-mean")
-(def ring (build-error [{:plugin :my-app :value {:name :a :after :b :wrap identity}}
-                        {:plugin :my-app :value {:name :b :before :a :wrap identity}}]))
-(assert (string/find "in a ring: :a :b" ring) "relatives that point at each other are refused")
+(assert (string/find "route table errors:" unknown) "batched with the other table errors")
 
-(assert (not (first (protect (mw/check-placement [{:name :both :phase 10 :after :obs :wrap identity}]))))
-        "a contribution placed two ways fails the point's cross-check")
-(assert (not (first (protect (mw/check-placement [{:name :neither :wrap identity}]))))
-        "and so does one placed no way")
-(mw/check-placement [{:name :one :phase 10 :wrap identity} {:name :two :after :one :wrap identity}])
+(def cycle (build-error [{:plugin :my-app :value {:name :a :after [:void.http/guarded :b] :wrap identity}}
+                         {:plugin :my-app :value {:name :b :after :a :wrap identity}}]))
+(assert (string/find "middleware order is a cycle: :a -> :b -> :a" cycle)
+        "middleware that point at each other are refused with the path")
 
-# -- one phase, two plugins: ordered by plugin name, and said so ---------
+(def loose (build-error [{:plugin :my-app :value {:name :loose :wrap identity}}]))
+(assert (string/find "middleware :loose (from :my-app) is not placed" loose)
+        "a middleware tied to no anchor fails the build")
+(def stale (build-error [{:plugin :my-app :value {:name :old :phase 7000 :wrap identity}}]))
+(assert (string/find "(:phase was removed in ADR-0051)" stale)
+        "a leftover :phase is told where it went")
 
-(def shared
+(def unrequired
+  (build-error [{:plugin :my-app :value {:name :spy :after :obs :wrap identity}}]
+               {:my-app {:void/http ">=0.0.1"} :void/obs {:void/http ">=0.0.1"}}))
+(assert (string/find "middleware :spy (from :my-app): :after :obs belongs to :void/obs, which :my-app does not require"
+                     unrequired)
+        "a neighbour of a plugin the contributor does not require is refused")
+(assert (router/build-table {:sources [{:name :app :routes src}]
+                             :meta-keys meta-keys
+                             :requires {:my-app {:void/obs ">=0.0.1"}}
+                             :middleware [;middleware
+                                          {:plugin :my-app
+                                           :value {:name :spy :after :obs :wrap identity}}]})
+        "and allowed once it is required")
+
+# the point's cross-check, at boot: what it can tell without plugins
+(def check (mw/placement-check mw/anchors "middleware"))
+(assert (nil? (check [{:name :one :after :void.http/guarded :wrap identity}
+                      {:name :two :after :one :wrap identity}])))
+(assert (string/find "ADR-0051"
+                     (last (protect (check [{:name :old :phase 10 :after :void.http/guarded
+                                             :wrap identity}]))))
+        "a leftover :phase fails the boot even when the contribution is placed")
+(assert (not (first (protect (check [{:name :neither :wrap identity}]))))
+        "and so does one placed nowhere")
+(assert (not (first (protect (check [{:name :lost :after :nobody :wrap identity}]))))
+        "and one pointing at a name nobody has")
+
+# -- stages are anchors: a route's hooks go in at theirs -----------------
+
+(def staged
   (router/build-table
     {:sources [{:name :app :routes src}]
      :meta-keys meta-keys
-     :middleware
-     # plugin order says :void/a before :void/b; name order says the
-     # opposite — the chain follows the plugin, through the merge with
-     # the stage wrappers too
-     [;middleware
-      {:plugin :void/b :value {:name :alpha :phase 7000 :wrap (tracing :b-alpha)}}
-      {:plugin :void/a :value {:name :zeta :phase 7000 :wrap (tracing :a-zeta)}}]}))
+     :middleware middleware
+     :stage-hooks {:on-request [(fn [_] (array/push trace :on-request) nil)]
+                   :pre-handler [(fn [_] (array/push trace :pre-handler) nil)]
+                   :on-send [(fn [_ resp] (array/push trace :on-send) resp)]}}))
 (array/clear trace)
-(router/dispatch shared @{:method :get :path "/health"})
-(assert (= [:guard :obs :a-zeta :b-alpha] (freeze trace))
-        "the tie-break is the plugin name first, then the middleware name")
-(def shared-ex (router/explain-route shared "/health"))
-(assert (= 1 (length (shared-ex :warnings))))
-(assert (string/find "phase 7000 is shared by :zeta (:void/a), :alpha (:void/b)" (first (shared-ex :warnings)))
-        "and the route's warnings say the order was nobody's decision")
+(router/dispatch staged @{:method :get :path "/admin/users"})
+(assert (= [:guard :obs :on-request :admin-only :audit :pre-handler :on-send] (freeze trace))
+        "request hooks run at their anchor; the response hook at :on-send runs on the way out")
+(assert (deep= (get-in staged [:by-name :admin/users :middleware])
+               [:guard :void.http.stage/on-send :obs :void.http.stage/on-request
+                :admin-only :audit :void.http.stage/pre-handler])
+        "a stage wrapper sits at its anchor; an anchor with no hooks is not in the chain")
+(def staged-ex (router/explain-route staged "/admin/users"))
+(assert (get-in staged-ex [:chain 1 :stage]) "a stage wrapper is marked as one")
+(assert (string/find ":void.http.stage/on-send (stage)" (staged-ex :text)))
+
+# -- no path between two middleware: the order is still one --------------
+
+(defn- two-plugins
+  {:params [[:any]] :ret @[:keyword]}
+  "The /health chain names with `extra` appended to the base
+  middleware."
+  [extra]
+  (def t (router/build-table {:sources [{:name :app :routes src}]
+                              :meta-keys meta-keys
+                              :middleware [;middleware ;extra]}))
+  (get-in t [:by-name :health :middleware]))
+
+(def zeta {:plugin :void/a :value {:name :zeta :after :void.http/validated :wrap identity}})
+(def alpha {:plugin :void/b :value {:name :alpha :after :void.http/validated :wrap identity}})
+(assert (deep= [:guard :obs :alpha :zeta] (two-plugins [zeta alpha]))
+        "two middleware at one anchor go by name")
+(assert (deep= (two-plugins [zeta alpha]) (two-plugins [alpha zeta]))
+        "whichever came first")
 (assert (empty? ((router/explain-route table "/health") :warnings))
-        "one plugin per phase warns about nothing")
+        "and nothing is warned about: no path between them is what was declared")
 
 # -- late binding --------------------------------------------------------
 
@@ -391,22 +452,22 @@
 (def sugar-table
   (router/build-table {:sources [sugar-source] :meta-keys meta-keys}))
 
-(def [sugar-home _] (router/match sugar-table :get "/"))
+(def [sugar-home _] (router/lookup sugar-table :get "/"))
 (assert (= :dr-home (sugar-home :name)) "a bare handler symbol names its route")
 (assert (= 'dr-home (sugar-home :handler)) "and is quoted for late binding")
 (assert (not (sugar-home :no-reload)) "so the route reloads with the module")
 (assert (= 30 (get-in sugar-home [:meta :void.http/timeout]))
         "the leading dictionary is the global metadata layer")
 
-(def [sugar-create _] (router/match sugar-table :post "/entries"))
+(def [sugar-create _] (router/lookup sugar-table :post "/entries"))
 (assert (= :entries/create (sugar-create :name)) "an explicit :name wins")
 (assert (get-in sugar-create [:meta :app/flag]) "route metadata is kept")
 
-(def [sugar-users _] (router/match sugar-table :get "/admin/users"))
+(def [sugar-users _] (router/lookup sugar-table :get "/admin/users"))
 (assert (= :dr-users (sugar-users :name)) "group children expand too")
 (assert (get-in sugar-users [:meta :app/flag]) "under the group metadata layer")
 
-(def [sugar-raw _] (router/match sugar-table :get "/raw"))
+(def [sugar-raw _] (router/lookup sugar-table :get "/raw"))
 (assert (sugar-raw :no-reload) "an unrecognized form is spliced in as plain data")
 
 (assert (= "home" ((router/dispatch sugar-table @{:method :get :path "/"}) :body))

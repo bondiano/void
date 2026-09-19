@@ -21,7 +21,7 @@
 (defn show-order
   {:params [HttpRequest]
    :ret HttpResponse
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   "Looks an order up by its routed :id, aborting 404 for the one id
   this suite treats as missing — the custom error-renderer and
   render-error path both exercise this abort."
@@ -74,13 +74,13 @@
      :void.http/route-meta-key [{:key :app/audited :schema :boolean
                                  :doc "Marks audited endpoints"}]
      :void.http/middleware [{:name :test/audit
-                             :phase middleware/phase/business
+                             :after :void.http/validated
+                             :before :void.http/responding
                              :when |(get $ :app/audited)
                              :wrap (fn [h] (fn [req]
                                              (array/push hits (req :path))
                                              (h req)))}]
      :void.http/error-renderer [{:name :test/teapot
-                                 :priority 10
                                  :fn (fn [err req ctx]
                                        (when (= 404 (ctx :status))
                                          (ring/text 404 "custom 404")))}]
@@ -102,6 +102,20 @@
 (assert (deep= [:http/kernel :http/server] (freeze (report :components)))
         "kernel + server components")
 (assert (= :void/http (get-in report [:extensions :void.http/middleware :owner])))
+
+# an error renderer is placed by edges; a leftover :priority fails the boot
+(def [stale-ok stale-err]
+  (protect
+    (plugin/dry-run {:plugins ["void/http/init"
+                               (plugin/manifest 'test/stale-renderer
+                                 :contributes {:void.http/error-renderer
+                                               [{:name :test/stale :priority 10
+                                                 :fn (fn [_ _ _] nil)}]})]
+                     :profile :test :config {:env @{}}})))
+(assert (not stale-ok) "a renderer with :priority is refused")
+(assert (string/find "error renderer :test/stale has :priority, which was removed in ADR-0051"
+                     (string/format "%s" stale-err))
+        (string/format "%q" stale-err))
 
 # -- full boot -----------------------------------------------------------
 
@@ -138,7 +152,7 @@
   # abort + custom error renderer
   (def r404 (http/with-request {:uri "/orders/0"}))
   (assert (= 404 (r404 :status)))
-  (assert (= "custom 404" (r404 :body)) "contributed renderer wins by priority")
+  (assert (= "custom 404" (r404 :body)) "a contributed renderer is asked before the built-in floor")
 
   # an unrouted path is a refusal like any other: it goes through the
   # same renderers, so the contributed one answers it too
@@ -276,13 +290,13 @@
     {:void.http/route-source [{:name :test/edge :routes edge-routes
                                :env (router/env-ref (curenv))}]
      :void.http/edge [{:name :test/stamp
-                       :phase 9000
+                       :after :test/outer
                        :wrap (fn [handler]
                                (fn [req]
                                  (def resp (handler req))
                                  (ring/header resp "x-stamped" "yes")))}
                       {:name :test/outer
-                       :phase 100
+                       :after :void.http.edge/scoped
                        :wrap (fn [handler]
                                (fn [req]
                                  (def resp (handler req))
@@ -307,22 +321,22 @@
   (assert (= "yes" (get-in blown [:headers "x-stamped"]))
           "and a 500 the panic guard rendered, because the edge is outside it")
   (assert (= "yes" (get-in blown [:headers "x-order"]))
-          "lowest phase is outermost, so the phase-100 wrapper sees what the phase-9000 one did")
+          "the first in order is outermost, so :test/outer sees what :test/stamp, placed after it, did")
   # explain-route names the edge layer, outermost first, with its plugin
   (assert (deep= ((http/explain-route "/fine") :edge)
-                 [{:name :test/outer :phase 100 :plugin :test/edge}
-                  {:name :test/stamp :phase 9000 :plugin :test/edge}])
+                 [{:name :test/outer :plugin :test/edge :after :void.http.edge/scoped}
+                  {:name :test/stamp :plugin :test/edge :after :test/outer}])
           "explain-route lists the edge wrappers every response passes through")
-  (assert (some |(string/find "edge     :test/outer@100  :test/edge" $)
+  (assert (some |(string/find "edge     :test/outer  :test/edge  after :void.http.edge/scoped" $)
                 (http/chain-lines (http/explain-route "/fine")))
           "and `void routes --chain` prints them on the edge line"))
 
 # -- an early refusal carries a request id -------------------------------
 #
-# request-id sits at phase 50: a refusal made at 100 (void/pressure's
-# 503) or 200 (void/security's address-keyed 429) never reaches the
-# observability phase, and still has to be findable in the log and
-# identifiable in :on-response. :on-send (500) is *inside* such a
+# request-id sits right inside the guard: a refusal made after it and
+# before :on-send (void/pressure's 503, void/security's address-keyed
+# 429) never reaches observability, and still has to be findable in the
+# log and identifiable in :on-response. :on-send is *inside* such a
 # refusal by design, and does not see it — the transport's :on-response
 # is the hook that does.
 
@@ -335,7 +349,8 @@
     {:void.http/route-source [{:name :test/refuser :routes edge-routes
                                :env (router/env-ref (curenv))}]
      :void.http/middleware [{:name :test/shed
-                             :phase 100
+                             :after :void.http/request-id
+                             :before :void.http.stage/on-send
                              :wrap (fn [handler]
                                      (fn [req]
                                        (ring/text 503 (string "shed " (req :request-id)))))}]
@@ -355,7 +370,7 @@
   (def ex (http/explain-route "/fine"))
   (assert (< (index-of :void.http/request-id (ex :middleware))
              (index-of :test/shed (ex :middleware)))
-          "request-id wraps the phase-100 refusal")
+          "request-id wraps the early refusal")
   # drive the kernel the way the server and test/inject do: the handler,
   # then the transport's :on-response notification with the same request
   (def kernel (get-in refuser-boot [:system :instances :http/kernel]))
@@ -364,9 +379,9 @@
   (assert (= 503 (shed :status)))
   (assert (string? (req :request-id)) "the refused request was given an id")
   (assert (= (string "shed " (req :request-id)) (string (shed :body)))
-          "and the phase-100 refusal already saw it")
+          "and the early refusal already saw it")
   (assert (nil? (get-in shed [:headers "x-on-send"]))
-          ":on-send (500) is inside a phase-100 refusal and does not see it — by design")
+          ":on-send is inside an early refusal and does not see it — by design")
   ((kernel :notify-response) req shed)
   (assert (deep= @[[503 (req :request-id)]] refused-ids)
           ":on-response, out of chain, sees the refusal and its id"))

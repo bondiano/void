@@ -49,9 +49,9 @@
   [href]
   (var found nil)
   (each g nav
-    (each [label h] (g :items)
+    (each [caption h] (g :items)
       (when (and (nil? found) (= h href))
-        (set found [(g :title) label]))))
+        (set found [(g :title) caption]))))
   found)
 
 (defn section
@@ -60,8 +60,8 @@
   prints under a page hit, so a reader sees which part of the site it
   lives in before going there.``
   [here]
-  (if-let [[group label] (entry here)]
-    (string group " · " label)
+  (if-let [[group caption] (entry here)]
+    (string group " · " caption)
     ""))
 
 (defn short-name
@@ -72,7 +72,7 @@
   title — an ADR, a cookbook recipe and a package page each have a name
   already.``
   [out title]
-  (if-let [[_ label] (entry out)] label (or title "void")))
+  (if-let [[_ caption] (entry out)] caption (or title "void")))
 
 (def description
   "The site-wide description meta/OG tags carry; a page may override
@@ -364,12 +364,12 @@ footer {
   "One sidebar group's links, with the active entry's children unfolded
   under it."
   [up here self subnav group]
-  (seq [[label href] :in (get group :items)]
+  (seq [[caption href] :in (get group :items)]
     [:li
      [:a {:href (string up href)
           :class (when (= href here) "here")
           :aria-current (when (= href self) "page")}
-      label]
+      caption]
      (when (and (= href here) subnav (not (empty? subnav)))
        [:ul {:class "side-sub"}
         ;(seq [[l h] :in subnav]

@@ -43,11 +43,8 @@
 
 (defn auth-spec
   {:params [:string?
-            (or @[{:name :keyword :type :keyword :optional? :boolean
-                   :entity :keyword? :rel :keyword? :table :string?}]
-                [{:name :keyword :type :keyword :optional? :boolean
-                  :entity :keyword? :rel :keyword? :table :string?}]
-                :nil)
+            (or [{:name :keyword :type :keyword :optional? :boolean
+                  :entity :keyword? :rel :keyword? :table :string?}] :nil)
             (or {:dir :string? :table :string? :plural :string? :project :string?
                  :migrations-dir :string? :test-dir :string? :version :string?
                  :link-path :string? :driver :keyword? & r}
@@ -109,7 +106,7 @@
    :fields (tuple ;fields)})
 
 (defn- block
-  {:params [:number (or @[:string] [:string])] :ret :string}
+  {:params [:number [:string]] :ret :string}
   "Extra lines, indented under a line the template already opened —
   empty when there are no extra fields, which is the common case."
   [n lines]
@@ -1066,8 +1063,8 @@
   (def width (max ;(map |(length (first $)) composition)))
   (heading "main.janet — :plugins")
   (say)
-  (each [names doc] composition
-    (say "       " names (string/repeat " " (- width (length names))) "  " doc))
+  (each [names purpose] composition
+    (say "       " names (string/repeat " " (- width (length names))) "  " purpose))
 
   (heading "config/dev.janet (or default.janet)")
   (say)

@@ -70,9 +70,10 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   # after :notify/configure (400), so the queue is installed on a
-   # notifier that already knows its channels
-   :phase 500
+   # after :void.core/configured, which :notify/configure runs before,
+   # so the queue is installed on a notifier that already knows its
+   # channels
+   :after :void.core/configured
    :name :notify-jobs/install
    :doc "Route notify/send through void/jobs"
    :fn (fn install [_]

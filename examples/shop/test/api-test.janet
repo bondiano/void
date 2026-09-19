@@ -128,7 +128,7 @@
     [payload sku]
     (get-in (find |(= sku ($ :sku)) (payload :data)) [:price :cents]))
 
-  # The cache sits inside authz (phase 5500), and void/security
+  # The cache sits inside authz (:after :void.http/authorized), and void/security
   # decorates the response *outside* it — so what the cache stores never
   # carries the CSRF cookie, and the very first request of this suite
   # already stored the entry. A request carrying a cookie would skip the

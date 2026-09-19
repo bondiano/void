@@ -1,7 +1,11 @@
 (import ../test-support/paths)
 (import void/core/log :as log)
+(import void/bus/backend :as backend)
+(import void/bus/codec :as codec)
+(import void/bus/memory :as memory)
 (import void/bus/message :as message)
 (import void/bus/middleware :as mw)
+(import void/bus/state :as state)
 
 (log/set-level! "void" :fatal)
 
@@ -20,56 +24,130 @@
   [m handler &opt in opts]
   (((m :wrap) handler (or opts {})) (or in (msg))))
 
-# -- the phase scale is void/http's ---------------------------------------
+(defn- fails-with
+  {:params [:string (fn [] :any)] :ret :nil :throws [:string]}
+  "Assert that `thunk` raises an error whose text contains `needle`."
+  [needle thunk]
+  (def [ok err] (protect (thunk)))
+  (assert (not ok) (string "expected an error mentioning " needle))
+  (assert (string/find needle (string err))
+          (string/format "expected %q in %q" needle (string err)))
+  nil)
 
-(assert (= 0 (mw/phases :panic-guard)))
-(assert (= 1000 (mw/phases :observability)))
-(assert (= 6000 (mw/phases :validation)))
-(assert (= 7000 (mw/phases :business)))
-(assert (= 9000 (mw/phases :response))
-        "the constants a bus shares with a request keep their numbers")
+(defn- names
+  {:params [[{:name :keyword & r}]] :ret @[:keyword]}
+  "The names of a chain, in order."
+  [chain]
+  (map |($ :name) chain))
 
-# -- order: lowest phase outermost ---------------------------------------
+(defn- noop-wrap
+  {:params [(fn [:any] :any) :any] :ret (fn [:any] :any)}
+  "A :wrap that wraps nothing."
+  [h _]
+  h)
+
+# -- the anchors ---------------------------------------------------------
+
+(assert (deep= [:void.bus/guarded :void.bus/observed :void.bus/admitted :void.bus/validated]
+               mw/anchors)
+        "the bus chain has four named places, outermost first")
+
+# -- the built-in spine --------------------------------------------------
+
+(def tracer
+  {:with-span (fn [_ _ f] (f)) :parse (fn [_] nil) :traceparent (fn [] nil)})
+
+(defn- broker
+  {:params [{:keyword :any} (or :nil [:any])] :ret @{:chain [:any] & r}}
+  "A broker over a fresh in-process backend, with `cfg` and the
+  contributions `contribs`."
+  [cfg &opt contribs]
+  (state/make (backend/normalize (memory/store (memory/make {})))
+              (codec/normalize codec/jdn)
+              (merge {:group :default} cfg)
+              contribs
+              (get cfg :tracer)))
+
+(def everything
+  {:retry {:enabled true} :throttle {:max 100} :tracer tracer})
+
+(assert (deep= @[:bus/panic-guard :bus/correlation :bus/tracing :bus/poison
+                 :bus/retry :bus/dedup :bus/throttle :bus/validate]
+               (names ((broker everything) :chain)))
+        "panic-guard < correlation < tracing < poison < retry < dedup < throttle < validate")
+
+(assert (deep= @[:bus/panic-guard :bus/correlation :bus/validate]
+               (names ((broker {:retry {:enabled false} :dedup {:enabled false}
+                                :poison {:enabled false}}) :chain)))
+        "a built-in the slice turns off is not in the chain, and its neighbours close up")
+
+(def inner (mw/normalize {:name :app/inner :after :void.bus/validated :wrap noop-wrap}))
+(def early (mw/normalize {:name :app/early :before :void.bus/observed :wrap noop-wrap}))
+(def mixed (names ((broker everything [inner early]) :chain)))
+(assert (deep= @[:bus/panic-guard :app/early :bus/correlation :bus/tracing :bus/poison
+                 :bus/retry :bus/dedup :bus/throttle :bus/validate :app/inner]
+               mixed)
+        "after validated sits inside validate; before observed sits inside the panic guard")
+
+(def [broke-ok broke-err]
+  (protect (broker {} [(mw/normalize {:name :app/lost :after :bus/nope :wrap noop-wrap})])))
+(assert (not broke-ok) "an edge to a name nothing has fails the broker")
+(assert (string/find ":bus/nope" (string broke-err)))
+
+# -- order: the first in order is outermost ------------------------------
 
 (def trace @[])
 (defn- marker
-  {:params [:keyword :number]
-   :ret {:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-         :named :boolean :when (or :nil (fn [:any] :boolean)) & r}}
-  "A middleware that records its own name entering and leaving,
-  in `trace` — what asserts the chain's order."
-  [name phase]
+  {:params [:keyword {:keyword :any}] :ret BusMiddleware}
+  "A middleware placed by `edges` that records its own name entering
+  and leaving, in `trace` — what asserts the chain's order."
+  [name edges]
   (mw/normalize
-    {:name name :phase phase
-     :wrap (fn [handler _]
-             (fn [m] (array/push trace [name :in]) (def r (handler m))
-               (array/push trace [name :out]) r))}))
+    (merge edges
+           {:name name
+            :wrap (fn [handler _]
+                    (fn [m] (array/push trace [name :in]) (def r (handler m))
+                      (array/push trace [name :out]) r))})))
 
-(def chain
-  (mw/chain (mw/sort-contributions [(marker :outer 100) (marker :inner 8000)])
-            (fn [_] (array/push trace [:handler :run]) :done)))
+(def ordered
+  (mw/order [(marker :inner {:after :void.bus/validated})
+             (marker :outer {:before :void.bus/guarded})]))
+(assert (deep= @[:outer :inner] (names ordered))
+        "the anchors are not in the order `order` answers")
+(def chain (mw/chain ordered (fn [_] (array/push trace [:handler :run]) :done)))
 (assert (= :done (chain (msg))))
 (assert (deep= @[[:outer :in] [:inner :in] [:handler :run] [:inner :out] [:outer :out]]
                trace)
-        "the lowest phase wraps everything below it")
+        "the first in order wraps everything after it")
+
+(fails-with "is a cycle"
+  |(mw/order [(mw/normalize {:name :a :after [:void.bus/guarded :b] :wrap noop-wrap})
+              (mw/normalize {:name :b :after :a :wrap noop-wrap})]))
+(fails-with "does not require"
+  |(mw/order [(merge (mw/normalize {:name :a :after :void.bus/guarded :wrap noop-wrap})
+                     {:plugin :app/one})
+              (merge (mw/normalize {:name :b :after :a :wrap noop-wrap})
+                     {:plugin :app/two})]
+             {:requires {:app/one {} :app/two {}}}))
 
 # -- selection -----------------------------------------------------------
 
-(def named (mw/normalize {:name :opt-in :named true :wrap (fn [h _] h)}))
-(def global (mw/normalize {:name :always :wrap (fn [h _] h)}))
+(def named (mw/normalize {:name :opt-in :named true :after :void.bus/validated
+                          :wrap noop-wrap}))
+(def global (mw/normalize {:name :always :after :void.bus/validated :wrap noop-wrap}))
 (def conditional
-  (mw/normalize {:name :only-audited
+  (mw/normalize {:name :only-audited :after :void.bus/validated
                  :when (fn [opts] (= :audit (get opts :group)))
-                 :wrap (fn [h _] h)}))
+                 :wrap noop-wrap}))
 
-(def all [named global conditional])
-(assert (deep= @[:always] (map |($ :name) (mw/select all {:topic :a/b})))
+(def all-mw (mw/order [named global conditional]))
+(assert (deep= @[:always] (names (mw/select all-mw {:topic :a/b})))
         "a :named middleware is not in a chain that did not ask for it")
 (assert (deep= @[:always :opt-in]
-               (map |($ :name) (mw/select all {:topic :a/b :middleware [:opt-in]})))
+               (names (mw/select all-mw {:topic :a/b :middleware [:opt-in]})))
         "and is when it did")
 (assert (deep= @[:always :only-audited]
-               (map |($ :name) (mw/select all {:topic :a/b :group :audit})))
+               (names (mw/select all-mw {:topic :a/b :group :audit})))
         "a :when predicate is evaluated once, when the chain is built")
 
 # -- panic-guard re-raises, because a nack is the backend's decision -----
@@ -101,12 +179,12 @@
 (assert (= :finally out))
 (assert (= 3 attempts) "the last attempt is the one that succeeded")
 
-(var forever 0)
+(var tries 0)
 (def [ok2 _]
   (protect (run (mw/retry {:attempts 2 :base 0.001 :jitter 0})
-                (fn [_] (++ forever) (error "no")))))
+                (fn [_] (++ tries) (error "no")))))
 (assert (not ok2) "out of attempts, the error goes on to the backend")
-(assert (= 2 forever) "and it was tried exactly :attempts times")
+(assert (= 2 tries) "and it was tried exactly :attempts times")
 
 # -- dedup ---------------------------------------------------------------
 
@@ -174,11 +252,17 @@
 
 # -- contributions are validated where they are made ---------------------
 
-(assert (not (first (protect (mw/normalize {:name :x}))))
+(assert (not (first (protect (mw/normalize {:name :x :after :void.bus/validated}))))
         "a middleware without a :wrap wraps nothing")
-(assert (not (first (protect (mw/normalize {:wrap (fn [h _] h)}))))
+(assert (not (first (protect (mw/normalize {:after :void.bus/validated :wrap noop-wrap}))))
         "and one without a name cannot be selected by one")
-(assert (not (first (protect (mw/normalize {:name :x :wrap (fn [h _] h) :phase :late}))))
-        "a phase is a number on a scale, not a word")
+(fails-with "is not placed" |(mw/normalize {:name :x :wrap noop-wrap}))
+(fails-with "removed in ADR-0051"
+  |(mw/normalize {:name :x :wrap noop-wrap :phase 7000}))
+(fails-with "removed in ADR-0051"
+  |(mw/placement-check [{:name :x :wrap noop-wrap :phase 7000}]))
+(assert (nil? (mw/placement-check [{:name :x :after :bus/retry :wrap noop-wrap}]))
+        "the boot checks an edge to a built-in against the whole spine")
+(fails-with "is unknown" |(mw/placement-check [{:name :x :after :bus/retyr :wrap noop-wrap}]))
 
 (print "void/bus/middleware tests OK")

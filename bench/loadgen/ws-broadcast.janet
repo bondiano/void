@@ -51,7 +51,7 @@
    :warmup 3})
 
 (defn parse-args
-  {:params [(or @[:string] [:string])]
+  {:params [[:string]]
    :ret @{:url :string :connections :number :duration :number :warmup :number
           :help :boolean? :report :string?}
    :throws [:string]}

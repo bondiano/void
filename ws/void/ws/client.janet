@@ -89,7 +89,7 @@
 
 (defn connect
   {:params [:any (or {:headers (or @{:string :any} :nil)
-                     :protocols (or @[:string] [:string] :nil)
+                     :protocols (or [:string] :nil)
                      :timeout :number? :connect-timeout :number?
                      :max-frame :number? :max-message :number? & r}
                     :nil)]
@@ -213,9 +213,7 @@
   {:params [{:socket :any :buffer :buffer :config @{:keyword :any}
              :state :keyword :received :number & r}
             :number?]
-   :ret (or {:type :keyword :data :string}
-            {:type :keyword :code :number :name :keyword? :reason :string}
-            :nil)
+   :ret (or WsMessage WsClose :nil)
    :throws [:string]}
   ``Read the next message. Returns
 

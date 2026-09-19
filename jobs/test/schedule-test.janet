@@ -11,8 +11,7 @@
 (defn- queue
   {:params []
    :ret @{:backend {:keyword :any} :config {:keyword :any} :queues {:keyword :any}
-          :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
-                    :timeout :number? :claim-ttl :number & r}
+          :defaults JobsDefaults
           :stats @{:enqueued :number :duplicates :number}}}
   "A fresh in-process queue value, for a test that needs its own."
   []

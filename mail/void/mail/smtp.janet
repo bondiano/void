@@ -298,7 +298,7 @@
         (if (and h (not (empty? h)) (address/ascii? h)) h "localhost"))))
 
 (defn- parse-caps
-  {:params [{:lines (or @[:string] [:string]) & r}] :ret @{:keyword @[:string]}}
+  {:params [{:lines [:string] & r}] :ret @{:keyword @[:string]}}
   "The EHLO reply's continuation lines as a table of capability to its
   arguments — `250-AUTH PLAIN LOGIN` becomes `{:auth [\"PLAIN\" \"LOGIN\"]}`."
   [reply]

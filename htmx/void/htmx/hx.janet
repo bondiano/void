@@ -75,7 +75,7 @@
   [k v]
   (def base (base-key k))
   (cond
-    (dictionary? v) (json/encode v)
+    (dictionary? v) (string (json/encode v))
     (boolean? v) (string v)
     (or (= base :swap) (= base :swap-oob)) (swap-style v)
     (string v)))

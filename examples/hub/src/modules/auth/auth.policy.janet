@@ -18,7 +18,7 @@
   [])
 
 (defn configure!
-  {:params [(or {:operators (or @[:string] [:string]) & r} :nil)] :ret :nil}
+  {:params [(or {:operators [:string] & r} :nil)] :ret :nil}
   "Called from the application's :before-start hook (src/app.janet)."
   [slice]
   (set operators (or (get slice :operators) []))

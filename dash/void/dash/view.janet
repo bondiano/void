@@ -142,14 +142,14 @@ document.addEventListener("input", function (e) {
   active."
   [request]
   (def here (get request :path ""))
-  (seq [[label path] :in sections
+  (seq [[title-key path] :in sections
         :let [href (ctx/at path)]]
     [:a {:href href
          :class (when (if (empty? path)
                         (= here (ctx/prefix))
                         (string/has-prefix? href here))
                   "active")}
-     (text/t label)]))
+     (text/t title-key)]))
 
 (defn layout
   {:params [:any {:request {:path :string? & r} :void.html/title :any
@@ -239,7 +239,7 @@ document.addEventListener("input", function (e) {
    ;body])
 
 (defn sparkline
-  {:params [(or @[:any] [:any]) :number? :number?] :ret :any}
+  {:params [[:any] :number? :number?] :ret :any}
   ``An inline SVG polyline over up to the last `n` numbers — no
   JavaScript, fixed size, nils skipped. Returns nil when there is
   nothing to draw yet.``

@@ -176,10 +176,10 @@
 # backend's back.
 
 (defn start!
-  {:params [@{:attempt :number? & r} :string :number]
-   :ret @{:state :keyword :token :string :attempt :number
+  {:params [@{:attempt :number? & r} (or :string :inline) :number]
+   :ret @{:state :keyword :token (or :string :inline) :attempt :number
           :started-at :number :claimed-at :number :error :nil & r}}
-  "Mark a record claimed by `token` at `now`."
+  "Mark a record claimed by `token` at `now` (`:inline` for a job run in the enqueuing fiber)."
   [r token now]
   (put r :state :running)
   (put r :token token)
@@ -190,7 +190,7 @@
   r)
 
 (defn complete!
-  {:params [@{:keyword :any} :any :number]
+  {:params [@{:state :keyword & r} :any :number]
    :ret @{:state :keyword :result :any :error :nil :token :nil :finished-at :number & r}}
   "Mark a record finished, carrying what the handler returned."
   [r result now]
@@ -219,7 +219,7 @@
   r)
 
 (defn retry!
-  {:params [@{:keyword :any} :string? :number :number]
+  {:params [@{:state :keyword & r} :string? :number :number]
    :ret @{:state :keyword :token :nil :run-at :number :started-at :nil :claimed-at :nil
           :failures @[:any] :error :string? & r}}
   "Send a failed record back to the queue, to be claimed again no
@@ -251,7 +251,7 @@
   r)
 
 (defn kill!
-  {:params [@{:keyword :any} :string? :number]
+  {:params [@{:state :keyword & r} :string? :number]
    :ret @{:state :keyword :token :nil :finished-at :number & r}}
   ``Move a record to the dead letter queue: out of attempts, or a
   failure the runtime will not retry. `err` may be nil when a human
@@ -264,7 +264,7 @@
   r)
 
 (defn revive!
-  {:params [@{:keyword :any} :number]
+  {:params [@{:state :keyword & r} :number]
    :ret @{:state :keyword :attempt :number :token :nil :error :nil :run-at :number
           :started-at :nil :claimed-at :nil :finished-at :nil & r}}
   ``Put a dead record back at the front of the queue with its attempt

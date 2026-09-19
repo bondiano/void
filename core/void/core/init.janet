@@ -21,4 +21,4 @@
 (def void-api
   "Plugin protocol version; manifests declare `:void-api` and the host
   rejects plugins with an incompatible major version."
-  1)
+  2)

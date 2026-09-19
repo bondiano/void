@@ -113,7 +113,7 @@
 
 (defn claim-order
   {:params [{:queue :keyword? :priority :number? :run-at :number? :id :string? & r}
-            (or @[:keyword] [:keyword])]
+            [:keyword]]
    :ret [:number :number :number :string]}
   ``The sort key of a claimable record: the position of its queue in
   the worker's preference list first — a worker asked to serve
@@ -318,15 +318,7 @@
 
 (defn backend-of
   {:params [(or {:keyword :any} :nil)]
-   :ret {:name :any :shared? :boolean :transactional? :boolean
-         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
-         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
-         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
-         :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
-         :release-parent! (or (fn [& :any] :any) :nil)
-         :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
-         :shared-rate? :boolean :shared-locks? :boolean
-         :stats (fn [] :any) :close (fn [] :any) & r}
+   :ret JobsBackend
    :throws [:string]}
   "A normalized backend over a fresh table — the one-liner tests and
   fixtures reach for."

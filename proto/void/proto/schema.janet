@@ -109,7 +109,7 @@
         (errorf "proto schema: no schema for %q" (entry :type)))))
 
 (defn schema-of
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer)] :ret @{:keyword :any}
+  {:params [ProtoMessageRef] :ret @{:keyword :any}
    :throws [:string]}
   ``A message descriptor as a void schema. Repeated
   becomes `[:vector ...]`, a map becomes `[:map-of ...]`, a message
@@ -182,9 +182,7 @@
 
 (defn descriptor-of
   {:params [:any (or {:name :keyword? :proto-name :string? :doc :string? & r} :nil)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :fields [:any]
-         :by-number @{:number :any} :by-name @{:keyword :any} :by-json @{:string :any}
-         :oneofs @{:keyword :any} :reserved [:string] :doc (or :string :nil)}
+   :ret ProtoMessage
    :throws [:string]}
   ``A void schema as a message descriptor — the `:proto` projection.
 

@@ -612,7 +612,7 @@
   [;(entry :deps) ;(if with-tests? (or (entry :test-deps) []) [])])
 
 (defn closure
-  {:params [(or @[:keyword] [:keyword]) :boolean?] :ret @[:keyword] :throws [:string]}
+  {:params [[:keyword] :boolean?] :ret @[:keyword] :throws [:string]}
   ``The transitive closure of `names` in topological order: every
   package comes after the packages it depends on, and `names`
   themselves come last. `test-deps` edges are followed only for the
@@ -717,7 +717,7 @@
   urls)
 
 (defn native?
-  {:params [(or @[:keyword] [:keyword])] :ret :boolean? :narrows :any :throws [:string]}
+  {:params [[:keyword]] :ret :boolean? :narrows :any :throws [:string]}
   "Does the closure of `names` include a package with a native module?"
   [names]
   (some |(get-in graph [$ :native]) (closure names true)))
@@ -733,7 +733,7 @@
   (array/insert module/paths 0 [(string path "/:all:.janet") :source]))
 
 (defn add-paths
-  {:params [(or @[:keyword] [:keyword]) :boolean?] :ret @[:keyword] :throws [:string]}
+  {:params [[:keyword] :boolean?] :ret @[:keyword] :throws [:string]}
   ``Put the closure of `names` on the module path, so every package in
   it is importable as void/... from the checkout, with nothing
   installed. Later insertions win, so the roots shadow their

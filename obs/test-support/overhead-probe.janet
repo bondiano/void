@@ -128,7 +128,7 @@
   (- (os/clock :monotonic) t))
 
 (defn- median
-  {:params [(or @[:number] [:number])] :ret :number}
+  {:params [[:number]] :ret :number}
   "The middle value of `xs`, sorted."
   [xs] (in (sorted xs) (math/floor (/ (length xs) 2))))
 

@@ -15,7 +15,9 @@
 ###
 ### Runs bootstrap phases 1-5 (load, config, conditional, extension
 ### resolution, graph) and starts nothing; any validation failure exits
-### non-zero with the batched error list. Run from anywhere:
+### non-zero with the batched error list. Then checks what the edges add
+### up to — the HTTP chain, the edge, the lifecycle hooks and the error
+### renderers — against the golden order below (ADR-0051). Run from anywhere:
 ###
 ###     janet scripts/dry-run.janet
 
@@ -27,11 +29,9 @@
 # (janet scripts/bootstrap.janet, or cd fdwait && jpm build).
 (packages/add-paths (packages/packages))
 
-# examples/demo is a single plugin file off the repository root, not a
-# package: it has no project.janet and no suite of its own.
-(array/insert module/paths 0 [(string packages/root "/:all:.janet") :source])
-
 (import void/core/plugin :as plugin)
+(import void/core/hooks :as hooks)
+(import void/http/middleware :as mw)
 (require "void/http/init")
 (require "void/html/init")
 (require "void/htmx/init")
@@ -98,10 +98,12 @@
 (require "void/dev/init")
 (require "void/bench/init")
 (require "void/bench/probe")
-(require "examples/demo/plugin")
+# examples/demo is a single plugin file, not a package: no project.janet
+# puts it on a path, so it is required by where it lies.
+(require "../examples/demo/plugin")
 
-(def report
-  (plugin/dry-run {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
+(def composition
+  {:plugins [:void/http :void/html :void/htmx :void/rest :void/openapi
                              :void/db :void/db-sqlite :void/db-postgres :void/db-mysql :void/db-http
                              :void/redis :void/redis-http
                              :void/cache :void/cache-redis :void/cache-http
@@ -144,7 +146,9 @@
                   # void/storage-s3 is in the composition
                   :void/storage-store {:impl :storage/s3}
                   :storage-s3 {:endpoint "http://minio.invalid:9000" :bucket "gate"
-                               :access-key "gate" :secret-key "gate-secret"}}}}))
+                               :access-key "gate" :secret-key "gate-secret"}}}})
+
+(def report (plugin/dry-run composition))
 
 (printf "dry-run ok (profile %q)" (report :profile))
 (printf "  plugins:    %j (active: %j)" (report :plugins) (report :active))
@@ -153,3 +157,128 @@
 (each name (sorted (keys (report :extensions)))
   (def e (get-in report [:extensions name]))
   (printf "    %q  owner=%q contributions=%d" name (e :owner) (e :contributions)))
+
+# -- the composition's order, against the golden one (ADR-0051) -----------
+#
+# Order is edges to named anchors now, and a sort answers it; what the
+# edges add up to in the full composition is the thing a reviewer
+# checks by eye, so it is written down here and a drift fails the gate.
+# The HTTP chain and the edge are the whole order, anchors included, as
+# `middleware/order` answers it. Hooks are not a total order worth
+# pinning — most handlers only say which side of an anchor they are on
+# — so they are checked as the pairs the plan names (ADR-0051, §F of
+# the wave's plan): the one before the other in the same hook.
+
+(def golden-chain
+  [:void.http/panic-guard :void.http/guarded
+   :void.http/request-id :void.pressure/shed :void.security/rate-ip
+   :void.http.stage/on-send
+   :void.obs/request
+   :void.http.stage/on-request :void.http.stage/pre-parsing
+   :void.http/parsing :void.http/session :void.auth/identity :void.auth/scopes
+   :void.http/authenticated
+   :void.i18n/locale
+   :void.http/scoped
+   :void.security/rate-subject :void.security/csrf
+   :void.http/verified
+   :void.db/load
+   :void.http/loaded
+   :void.authz/enforce
+   :void.http/authorized
+   :void.cache/response
+   :void.http.stage/pre-validation
+   :void.rest/validate
+   :void.http/validated
+   :void.db/txn
+   :void.http/responding
+   :void.datastar/morph :void.html/render :void.htmx/partial :void.rest/serialize
+   :void.http.stage/pre-serialization :void.http.stage/pre-handler])
+
+(def golden-edge
+  [:void.i18n/scope :void.http.edge/scoped
+   :void.admin/method-override :void.security/cors :void.security/headers])
+
+(def golden-hook-pairs
+  "hook -> [earlier later] pairs that must hold."
+  {:config-loaded [[:obs/capture-boot :obs/logging]]
+   :before-start [[:html/build-context :http/build-table]
+                  [:rest/build-context :http/build-table]
+                  [:openapi/build-context :http/build-table]
+                  [:i18n/install-catalog :http/build-table]
+                  [:security/configure :http/build-table]
+                  [:auth-http/capture-config :http/build-table]
+                  [:authz-http/capture-config :http/build-table]
+                  [:cache-http/capture-config :http/build-table]
+                  [:admin/build-context :admin-jobs/policies]
+                  [:admin-jobs/policies :http/build-table]
+                  [:dash/build-context :http/build-table]
+                  [:notify-webhook/configure :http/build-table]
+                  [:http/build-table :mail-jobs/install]
+                  [:http/build-table :notify-jobs/install]]
+   :after-start [[:authz-http/deny-by-default :bus/consume]
+                 [:admin/warn-when-shut :bus/consume]
+                 [:mail/queue-check :bus/consume]
+                 [:bus-db/outbox :bus/consume]
+                 [:bus/consume :bus-jobs/bridge]
+                 [:bus/consume :obs-http/ready]
+                 [:obs/instrument :obs-http/ready]
+                 [:security/limiter-store :obs-http/ready]]
+   :before-stop [[:obs-http/draining :bus-jobs/unbridge]
+                 [:obs-http/draining :obs/uninstrument]
+                 [:bus-jobs/unbridge :bus/stop-consuming]]})
+
+(def golden-renderers
+  "Error renderers that must be asked in this order."
+  [:void.grpc/error :void.rest/problem])
+
+(defn- step-names
+  {:params [[:any]] :ret [:keyword]}
+  "The names `middleware/order` answers, anchors included."
+  [steps]
+  (map |(if ($ :anchor) ($ :name) (get-in $ [:value :name])) steps))
+
+(defn- before?
+  {:params [[:keyword] :keyword :keyword] :ret :boolean}
+  "Does `a` come before `b` in `names`, both present?"
+  [names a b]
+  (def i (index-of a names))
+  (def j (index-of b names))
+  (and (not (nil? i)) (not (nil? j)) (< i j)))
+
+(defn- order-drift
+  {:params [Boot] :ret @[:string]}
+  "Every way the composition's order differs from the golden one."
+  [boot]
+  (def requires (tabseq [p :in (boot :active)]
+                  p (get-in boot [:manifests p :requires] {})))
+  (defn contribs
+    {:params [:keyword] :ret [:any]}
+    [point] (get-in boot [:extensions point :contributions] []))
+  (def chain (step-names (mw/order (contribs :void.http/middleware)
+                                   {:requires requires})))
+  (def edge (step-names (mw/order (contribs :void.http/edge)
+                                  {:anchors mw/edge-anchors :what "edge wrapper"
+                                   :requires requires})))
+  (def renderers (map |($ :name) (get-in boot [:extensions :void.http/error-renderer :resolved] [])))
+  (def diffs @[])
+  (unless (= (tuple ;chain) golden-chain)
+    (array/push diffs (string/format "HTTP chain:\n      want %j\n      got  %j" golden-chain chain)))
+  (unless (= (tuple ;edge) golden-edge)
+    (array/push diffs (string/format "edge:\n      want %j\n      got  %j" golden-edge edge)))
+  (loop [[hook pairs] :in (sorted (pairs golden-hook-pairs))
+         :let [names (map |($ :name) (hooks/handlers (boot :hooks) hook))]
+         [a b] :in pairs
+         :unless (before? names a b)]
+    (array/push diffs (string/format "hook %q: %q must run before %q (got %j)" hook a b names)))
+  (unless (before? renderers ;golden-renderers)
+    (array/push diffs (string/format "error renderers: want %j in this order, got %j"
+                                     golden-renderers renderers)))
+  diffs)
+
+(let [diffs (order-drift (plugin/bootstrap composition true))]
+  (unless (empty? diffs)
+    (errorf "composition order drifted from the golden one (ADR-0051):\n  - %s"
+            (string/join diffs "\n  - ")))
+  (printf "  order:      golden (%d chain steps, %d edge steps, %d hook pairs, %d renderers)"
+          (length golden-chain) (length golden-edge)
+          (sum (map length (values golden-hook-pairs))) (length golden-renderers)))

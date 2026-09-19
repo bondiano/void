@@ -2,13 +2,15 @@
 ###
 ### Three moves, all driven by the :void.schema/* route metadata keys
 ### this plugin declares (the reserved rows): validation, serialization,
-### problems. The validation middleware (phase 6000) coerces and checks
+### problems. The validation middleware (between the
+### :void.http.stage/pre-validation and :void.http/validated anchors)
+### coerces and checks
 ### :params/:query/:headers/:body against the route's schemas before the
 ### handler runs — the handler only ever sees typed, valid data — and
 ### answers violations with RFC 7807 problem+json. Handlers return lazy
-### `(rest/json data)` responses; the serialization middleware (phase
-### 9010, just inside void/html's render middleware, whose JSON twin it
-### is) encodes them on the way out and, with [:rest :validate-responses]
+### `(rest/json data)` responses; the serialization middleware (after
+### :void.http/responding, beside void/html's render middleware, whose
+### JSON twin it is) encodes them on the way out and, with [:rest :validate-responses]
 ### (default: dev), checks the payload against the :void.schema/response
 ### schema for the status — contract drift fails loudly in dev instead of
 ### silently in prod. The problem+json error renderer answers API clients
@@ -23,7 +25,6 @@
 (import void/core/schema :as schema)
 (import void/http/ring :as ring)
 (import void/core/errors :as errors)
-(import void/http/middleware :as middleware)
 (import spork/json)
 (import ./problem :as problem)
 (import ./pagination :as pagination)
@@ -31,7 +32,7 @@
 
 # -- boot context --------------------------------------------------------
 
-(var current-context
+(var current-context {:type (or @{:config :any :validate-responses :boolean} :nil)}
   "The running rest context (set by the :before-start hook):
   :validate-responses, :config. One per process — a hook builds it,
   not a component, so it is a var rather than a `system/ambient`."
@@ -59,7 +60,7 @@
   [:void.schema/params :void.schema/query
    :void.schema/headers :void.schema/body])
 
-(each [key doc]
+(each [key description]
   [[:void.schema/params "Path-param schemas: {:id :int}; coerced and validated before the handler, failures answer 400 problem+json"]
    [:void.schema/query "Query-param map schema; coerced and validated before the handler, failures answer 400 problem+json"]
    [:void.schema/headers "Request-header map schema (keyword header names); validated before the handler, failures answer 400 problem+json"]
@@ -67,7 +68,7 @@
   (plugin/contribute! :void.http/route-meta-key
     {:key key
      :schema [:pred schema-form? "must be a schema form"]
-     :doc doc
+     :doc description
      :merge :deep-merge}))
 
 (plugin/contribute! :void.http/route-meta-key
@@ -96,7 +97,7 @@
              v)
    :encode (fn encode-json [v] (json/encode v))})
 
-# -- validation middleware (phase 6000) ----------------------------------
+# -- validation middleware (inside :void.http/validated) -----------------
 
 (defn- keywordize
   {:params [(or {:any :any} :nil)] :ret @{:any :any}}
@@ -134,7 +135,8 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.rest/validate
-   :phase middleware/phase/validation
+   :after :void.http.stage/pre-validation
+   :before :void.http/validated
    :doc "Coerce and validate request parts against the route's :void.schema/* keys; violations answer problem+json (400 request line parts, 422 body)"
    :when (fn [rmeta] (some |(not (nil? (get rmeta $)))
                            [;request-schema-keys]))
@@ -236,23 +238,21 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.rest/serialize
-   # the response phase + 10, not the phase itself: void/html renders
-   # lazy views on 9000, and a composition with both would otherwise be
-   # two plugins on one number, ordered by plugin name and warned about
-   # at build. The order is free — a lazy view (:void.html/content) and
-   # a lazy rest value (:void.rest/data) are disjoint markers, and
-   # neither wrapper touches the other's response — so the number only
-   # says the order was chosen rather than spelled. A name (:after
+   # between the anchors, like void/html's render: the order between
+   # the two is free — a lazy view (:void.html/content) and a lazy
+   # rest value (:void.rest/data) are disjoint markers, and neither
+   # wrapper touches the other's response. A neighbour (:after
    # :void.html/render) is not available: void/rest does not require
-   # void/html, and a relative placement may only point at a middleware
-   # that is certainly there (ADR-0045 §3)
-   :phase (+ middleware/phase/response 10)
+   # void/html, and an edge may only point at a middleware of a plugin
+   # it requires
+   :after :void.http/responding
+   :before :void.http.stage/pre-serialization
    :doc "Encode lazy (rest/json data) responses; with [:rest :validate-responses] check the payload against the route's :void.schema/response schema first"
    :route-aware true
    :wrap (fn [handler rmeta]
            # whether responses are checked, and against what, is settled
            # at table build: the [:rest] slice was read at :before-start
-           # (phase 450, before the table) and the route is frozen
+           # (before the table) and the route is frozen
            (def rs (when ((context) :validate-responses)
                      (get rmeta :void.schema/response)))
            (def route-name (get rmeta :name))
@@ -285,7 +285,10 @@
 
 (plugin/contribute! :void.http/error-renderer
   {:name :void.rest/problem
-   :priority 900
+   # a general HTTP renderer: after the protocol ones (void/grpc's
+   # Connect errors win on an RPC route), before the generic floor
+   :after :void.http.error/protocol
+   :before :void.http.error/generic
    :fn (fn render-problem [err req ctx]
          (when (problem-request? req)
            (problem/from-error err ctx)))})
@@ -335,7 +338,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :rest/build-context
    :doc "Resolve the rest config before the route table builds"
    :fn (fn build! [boot] (build-context boot))})

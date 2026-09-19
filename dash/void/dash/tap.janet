@@ -177,8 +177,7 @@
 
 (defn- page
   {:params [:any :any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "A full Tap page: the frame around `content`."
   [req content]
@@ -186,8 +185,7 @@
 
 (defn index
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /tap: the held entries, newest first."
   [req]
@@ -214,8 +212,7 @@
 
 (defn- gone
   {:params [:any :any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "A 404 naming which tap id was evicted."
   [req id]
@@ -235,7 +232,7 @@
   (scan-number (string (get-in req [:params :id] ""))))
 
 (defn- table-of
-  {:params [(or @[{:any :any}] [{:any :any}])] :ret :any}
+  {:params [[{:any :any}]] :ret :any}
   "A tapped array of dictionaries, as a table: every column that
   appears in any row."
   [v]
@@ -249,8 +246,7 @@
 
 (defn show
   {:params [{:params {:keyword :string} & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /tap/:id: the value's tree, unfolded at the root."
   [req]
@@ -276,8 +272,7 @@
 (defn node
   {:params [{:params {:keyword :string} :query (or {:string :any} :nil)
              :headers {:string :any} & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /tap/:id/node?path=...: one lazily-expanded branch of the tree."
   [req]

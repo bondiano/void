@@ -44,19 +44,19 @@
 # -- the application -----------------------------------------------------
 
 (defn who
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "Text of the current subject, or \"nobody\" when the request is anonymous."
   [req]
   (ring/text 200 (or (auth/subject) "nobody")))
 (defn show-order
   {:params [@{:params {:id :any & r} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Text naming the order id from the route params."
   [req]
   (ring/text 200 (string "order " (get-in req [:params :id]))))
 (defn login
   {:params [@{:form {:any :any} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Check the submitted form against the password store and, on
   success, start a session for the identity."
   [req]
@@ -212,7 +212,7 @@
     :contributes
     {:void.http/middleware
      [{:name :test/own-identity
-       :phase 4000
+       :before :void.http/authenticated
        :wrap (fn [handler]
                (fn [req]
                  (with-dyns [context/identity-dyn

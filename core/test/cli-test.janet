@@ -101,7 +101,7 @@
 # -- call ----------------------------------------------------------------
 
 (defn- called
-  {:params [Command (fn [& :any] :any) (or @[:string] [:string])] :ret :any}
+  {:params [Command (fn [& :any] :any) [:string]] :ret :any}
   "Call `command` through `cli/call` with a fixed `[:instance]`
   instances tuple, so each test only has to name what varies."
   [command f args]

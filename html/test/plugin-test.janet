@@ -22,20 +22,14 @@
      [:main content]]))
 
 (defn home
-  {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
-   :throws [:string]}
+  {:params [:any] :ret HtmlView :throws [:string]}
   "The hiccup-engine page."
   [req]
   (html/page [:h1 "orders"]
              {:layout base-layout :context {:title "orders"}}))
 
 (defn frag
-  {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
-   :throws [:string]}
+  {:params [:any] :ret HtmlView :throws [:string]}
   "A fragment response — no layout, for an htmx swap."
   [req]
   (html/fragment [:span "just this"]))
@@ -46,10 +40,7 @@
                  "layout"))
 
 (defn tmpl
-  {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
-   :throws [:string]}
+  {:params [:any] :ret HtmlView :throws [:string]}
   "The temple-engine page, per-response :engine override."
   [req]
   (html/page tmpl-view
@@ -68,10 +59,7 @@
     "form-view"))
 
 (defn tmpl-with-helper
-  {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
-   :throws [:string]}
+  {:params [:any] :ret HtmlView :throws [:string]}
   "A temple view that renders a framework helper (form/field) as
   hiccup and splices the result — the bridge ADR-0050 §8 keeps
   instead of a second, string-building set of helpers."
@@ -85,7 +73,7 @@
                                  [{:path [:email] :code :missing}])}}))
 
 (defn asset-url
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}} :throws [:string]}
+  {:params [:any] :ret HttpResponseTable :throws [:string]}
   "The resolved asset URL, as the response body — dev passthrough
   until the composition builds a manifest."
   [req]

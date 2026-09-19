@@ -19,7 +19,7 @@
 
 (defn home
   {:params [:any]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string]}
   "GET / — the queue."
   [_req]

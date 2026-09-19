@@ -155,11 +155,11 @@
     (errorf "bus: a message :meta must be a dictionary, got %q" m)))
 
 (defn make
-  {:params [:any :any
+  {:params [:any a
             (or :nil {:id :string? :meta (or :nil :table :struct)
                       :correlation-id :string? :causation-id :string?
                       :reply-to :keyword? :at :number? & r})]
-   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :ret (BusMessage a)
    :throws [:string]}
   ``Normalize a message. Everything but the topic is optional:
 

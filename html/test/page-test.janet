@@ -71,17 +71,14 @@
     [:body (when req (html/flash-view req)) [:main content]]))
 
 (defn home
-  {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
-   :throws [:string]}
+  {:params [:any] :ret HtmlView :throws [:string]}
   "The page that shows whatever flash the last request queued."
   [req]
   (html/page [:h1 "home"] {:layout layout}))
 
 (defn save
   {:params [(or {:session (or @{:any :any} :nil) & r} :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string]}
   "Queue one flash and redirect home."
   [req]
@@ -90,7 +87,7 @@
 
 (defn warn-two
   {:params [(or {:session (or @{:any :any} :nil) & r} :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string]}
   "Queue two flashes in order, to check they show in the order
   queued."

@@ -78,7 +78,8 @@
   {:params [:number] :ret :nil}
   "Set the per-metric label-set cap (config [:obs :max-label-sets])."
   [n]
-  (set max-label-sets n))
+  (set max-label-sets n)
+  nil)
 
 (def no-labels
   "The key of the single series of a metric with no labels."
@@ -113,10 +114,8 @@
 
 (defn- declare!
   {:params [:keyword :keyword
-            {:labels (or @[:keyword] [:keyword]) :doc :string
-             :buckets (or @[:number] [:number]) :collect (fn [] :any) & r}]
-   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
-          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+            ObsMetricOptions]
+   :ret ObsMetric
    :throws [:string]}
   "The registered handle for `name`, declaring it as `kind` with
   `opts` if it is new, or checking `opts` against the existing
@@ -145,10 +144,9 @@
       m)))
 
 (defn counter
-  {:params [:keyword (or {:doc :string :labels (or @[:keyword] [:keyword]) & r}
+  {:params [:keyword (or {:doc :string :labels [:keyword] & r}
                          :nil)]
-   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
-          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :ret ObsMetric
    :throws [:string]}
   ``Declare a counter — a total that only goes up (requests, errors,
   jobs completed):
@@ -159,11 +157,10 @@
   (declare! name :counter (or opts {})))
 
 (defn gauge
-  {:params [:keyword (or {:doc :string :labels (or @[:keyword] [:keyword])
+  {:params [:keyword (or {:doc :string :labels [:keyword]
                           :collect (fn [] :any) & r}
                          :nil)]
-   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
-          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :ret ObsMetric
    :throws [:string]}
   ``Declare a gauge — a number that goes both ways (in-flight requests,
   pool size, RSS). With `:collect` it is pull-based: the thunk is
@@ -173,11 +170,10 @@
   (declare! name :gauge (or opts {})))
 
 (defn histogram
-  {:params [:keyword (or {:doc :string :labels (or @[:keyword] [:keyword])
-                          :buckets (or @[:number] [:number]) & r}
+  {:params [:keyword (or {:doc :string :labels [:keyword]
+                          :buckets [:number] & r}
                          :nil)]
-   :ret @{:name :keyword :kind :keyword :doc :string :labels :tuple
-          :values @{:tuple :any} :dropped :number :warned :boolean & r}
+   :ret ObsMetric
    :throws [:string]}
   ``Declare a histogram — a distribution in bucket counts plus a sum
   (durations, sizes). `:buckets` are upper bounds in seconds
@@ -187,9 +183,7 @@
 
 (defn find-metric
   {:params [:keyword]
-   :ret (or @{:name :keyword :kind :keyword :doc :string :labels :tuple
-              :values @{:tuple :any} :dropped :number :warned :boolean & r}
-            :nil)}
+   :ret (or ObsMetric :nil)}
   "The handle registered under `name`, or nil."
   [name]
   (get registry name))

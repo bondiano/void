@@ -44,7 +44,7 @@
   "session:")
 
 (defn store
-  {:params [(or {:prefix :any & r} @{:prefix :any & r} :nil)]
+  {:params [(or {:prefix :any & r} :nil)]
    :ret {:name :keyword :load (fn [a] :any) :save (fn [a] :any)
          :delete (fn [a] :any) :sweep (fn [] :any)}}
   ``A session store over the running redis client. Everything it needs

@@ -111,7 +111,7 @@
 # -- reads ---------------------------------------------------------------
 
 (defn recent-articles
-  {:params [] :ret @[@{:any :any}] :throws [:string]}
+  {:params [] :ret @[DbInstance] :throws [:string]}
   ``The article list, through the cache. The read underneath is one
   query plus one batched IN for the authors — `:preload` is explicit
   because the alternative is an N+1 nobody notices until production
@@ -134,8 +134,7 @@
 
 (defn home
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET / — the list, and either the publish form or the way to sign in."
   [req]
@@ -143,8 +142,7 @@
 
 (defn create-article
   {:params [{:form :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /articles — the author is whoever is signed in.
 
@@ -176,9 +174,8 @@
 
 (defn register
   {:params [{:form :any & r}]
-   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r}
-            @{:status :number :body :any :headers @{:string :any}})
+   :ret (or HtmlView
+            HttpResponseTable)
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /register — an author with a password.
 
@@ -208,9 +205,8 @@
 
 (defn sign-in
   {:params [{:form :any & r}]
-   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r}
-            @{:status :number :body :any :headers @{:string :any}})
+   :ret (or HtmlView
+            HttpResponseTable)
    :throws [:string]}
   ``POST /sign-in — the password path, and nothing else.
 
@@ -221,8 +217,7 @@
   [req]
   (defn refused
     {:params [:any]
-     :ret @{:status :number :headers @{:string :string} :void.html/content :any
-            :void.html/layout :any :void.html/context {:any :any} & r}
+     :ret HtmlView
      :throws [:string]}
     "Re-render the sign-in form with the same refusal message,
     whatever went wrong."
@@ -241,8 +236,7 @@
 
 (defn request-link
   {:params [{:form :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``POST /sign-in/magic — mail a one-time sign-in link.
 
@@ -275,9 +269,8 @@
 
 (defn magic-link
   {:params [{:query (or {:string :any} :nil) & r}]
-   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r}
-            @{:status :number :body :any :headers @{:string :any}})
+   :ret (or HtmlView
+            HttpResponseTable)
    :throws [:string]}
   ``GET /auth/magic?h=&c= — the link from the letter.
 
@@ -295,7 +288,7 @@
                         {:message "That sign-in link has expired or has already been used."})))
 
 (defn sign-out
-  {:params [{:session :any & r}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [{:session :any & r}] :ret HttpResponseTable}
   "POST /sign-out — drop the identity and rotate the session id."
   [req]
   (auth-http/logout! req)
@@ -303,8 +296,7 @@
 
 (defn show-article
   {:params [{:void.db/row :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``GET /articles/:id — the article, its author and its comments. The
   route's `:void.db/load` is the whole of read-the-row-or-404: the id
@@ -316,8 +308,7 @@
 
 (defn edit-article
   {:params [{:void.db/row :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /articles/:id/edit — the form over the columns save! may touch."
   [req]
@@ -325,9 +316,8 @@
 
 (defn update-article
   {:params [{:void.db/row :any :form :any & r}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r})
+   :ret (or HttpResponseTable
+            HtmlView)
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /articles/:id — dirty tracking: the instance is changed in
   place and `save!` writes a partial UPDATE of exactly the columns
@@ -370,8 +360,7 @@
 
 (defn create-comment
   {:params [{:void.db/row :any :form :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /articles/:id/comments — the write is synchronous, the
   bookkeeping is not: the counter on `articles` is recomputed by
@@ -465,9 +454,9 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   # after the bus started its consumers (:bus/consume is 800): the
+   # after the bus started its consumers (:bus/consume): the
    # first denial should have somewhere to go
-   :phase 900
+   :after :bus/consume
    :name :blog/audit
    :doc "Turn void/authz's refusals into bus messages (see ./audit)"
    :fn audit/install!})

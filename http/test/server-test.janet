@@ -63,9 +63,7 @@
 
 (defn- read-response
   {:params [:any :buffer?]
-   :ret [@{:status :number :message :string :http-version [:number :number]
-           :headers @{:any :any} :head-size :number}
-         :string?]}
+   :ret [HttpResponseHead :string?]}
   "Read one response off the connection: [head body-string]. Consumes
   the response from `buf` (default cbuf), leaving any pipelined rest."
   [conn &opt buf]
@@ -88,10 +86,7 @@
 
 (defn- fetch
   {:params [:string]
-   :ret [(or :nil (enum :error)
-             @{:status :number :message :string :http-version [:number :number]
-               :headers @{:any :any} :head-size :number})
-         :string?]}
+   :ret [(or :nil (enum :error) HttpResponseHead) :string?]}
   "One-shot request on its own connection; returns [head raw-rest]."
   [raw]
   (def conn (net/connect "127.0.0.1" port))
@@ -350,9 +345,7 @@
 
 (defn- drip-until-response
   {:params [:string :string]
-   :ret (or @{:status :number :message :string :http-version [:number :number]
-              :headers @{:any :any} :head-size :number}
-            :nil)}
+   :ret HttpResponseHead?}
   "Write first-bytes, then drip one filler byte every ~50 ms until the
   server answers (returns the response head) or the drip runs out (nil)."
   [first-bytes filler]

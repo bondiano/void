@@ -110,18 +110,19 @@
   (default opts {})
   (def max-age (get opts :max-age (defaults :max-age)))
   (def at (get opts :now (now)))
-  (and (bytes? token)
-       (truthy? binding)
-       (let [parts (string/split "." (string token))]
-         (and (= 3 (length parts))
-              (let [[nonce stamp mac] parts
-                    issued (scan-number stamp)]
-                (and issued
-                     (<= issued (+ at 60))          # not from the future
-                     (>= issued (- at max-age))     # and not stale
-                     (let [[ok raw] (protect (crypto/base64url-decode mac))]
-                       (and ok
-                            (secret/valid? (string nonce "." stamp "." binding) raw)))))))))
+  (truthy?
+    (and (bytes? token)
+         (truthy? binding)
+         (let [parts (string/split "." (string token))]
+           (and (= 3 (length parts))
+                (let [[nonce stamp mac] parts
+                      issued (scan-number stamp)]
+                  (and issued
+                       (<= issued (+ at 60))          # not from the future
+                       (>= issued (- at max-age))     # and not stale
+                       (let [[ok raw] (protect (crypto/base64url-decode mac))]
+                         (and ok
+                              (secret/valid? (string nonce "." stamp "." binding) raw))))))))))
 
 (defn binding-of
   {:params [@{:headers {:string (or :string @[:string])} & r} {:cookie :string? & r}] :ret :string?}

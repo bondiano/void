@@ -113,16 +113,18 @@ question — *what runs around this route, and in what order*:
 
     POST /entries -> :entries/create (handler create-entry, source :demo/routes)
       edge     none
-      chain    :void.http/panic-guard@0  :void/http
-               :void.http/request-id@50  :void/http
-               :void.http/parsing@2000  :void/http
-               :void.html/render@9000  :void/html
-               :void.htmx/partial@9500  :void/htmx
+      chain    :void.http/panic-guard  :void/http  before :void.http/guarded
+               :void.http/request-id  :void/http  after :void.http/guarded; before :void.http.stage/on-send
+               :void.http/parsing  :void/http  after :void.http.stage/pre-parsing
+               :void.html/render  :void/html  after :void.http/responding; before :void.http.stage/pre-serialization
+               :void.htmx/partial  :void/htmx  after :void.html/render; before :void.http.stage/pre-serialization
       hooks    none out of chain
-      declined :void.http/session@3000 (:void/http) — :when declined the route's metadata
+      declined :void.http/session (:void/http) — :when declined the route's metadata
 
-Every middleware with the phase it sits on and the plugin that
-contributed it, outermost first; the edge layer every response passes
+Every middleware, outermost first, with the plugin that contributed it
+and the edges it was placed by — `:after`/`:before` a named anchor of
+the chain (`:void.http/guarded`, `:void.http/responding`, a stage) or
+a neighbour; the edge layer every response passes
 through outside routing; the route's out-of-chain hooks; and the
 contributions that are *not* in this chain, with the reason. Nothing
 here is computed per request — the chain is fixed when the route table

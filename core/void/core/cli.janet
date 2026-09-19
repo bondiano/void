@@ -70,7 +70,7 @@
   {:optional? optional? :rest? (string/has-suffix? "..." bare)})
 
 (defn arity
-  {:params [(or @[:string] [:string])] :ret [:number :number?]}
+  {:params [[:string]] :ret [:number :number?]}
   ``The positional count an :args declaration allows, as [min max]; max
   is nil when the last entry is a rest (`FIELD...`). An :args of []
   means "this command takes no arguments", which is a declaration and
@@ -150,7 +150,7 @@
   (tuple ;out))
 
 (defn help-wanted?
-  {:params [Command (or @[:string] [:string])]
+  {:params [Command [:string]]
    :ret :boolean
    :narrows :any}
   "Is this invocation asking for the command's help rather than for the
@@ -191,7 +191,7 @@
               (command-line command) flag t (util/names-str (keys value-types)))))
 
 (defn parse
-  {:params [Command (or @[:string] [:string])]
+  {:params [Command [:string]]
    :ret [@{:keyword :any} [:string]]
    :throws [:string]}
   ``Split `args` into [opts positional] against a command's
@@ -241,7 +241,7 @@
   [opts (tuple ;pos)])
 
 (defn call
-  {:params [Command (fn [& :any] :any) (or @[:any] [:any]) (or @[:string] [:string])]
+  {:params [Command (fn [& :any] :any) [:any] [:string]]
    :ret :any
    :throws [:string]}
   ``Run a command's `:fn` over `args`, with the instances its `:needs`

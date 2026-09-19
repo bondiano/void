@@ -1,7 +1,7 @@
 # Request-lifecycle stages: global hooks through the :void.http/hook
 # point, route/group hooks through the :void.http/hooks metadata key
 # (per-stage concat), short-circuit semantics, response-stage ordering
-# around rendering-phase middleware, :on-error before renderers, and the
+# around the rendering middleware, :on-error before renderers, and the
 # out-of-chain :on-response / :on-timeout / :void.http/listening
 # notifications on a real socket.
 
@@ -95,9 +95,8 @@
   after the response was written to the socket."
   [req resp] (mark :route/on-response))
 
-# a fake "rendering" middleware at the response phase proves the
-# :pre-serialization slot (9800) runs inside it and :on-send (500)
-# outside it
+# a fake "rendering" middleware after :void.http/responding proves the
+# :pre-serialization anchor runs inside it and :on-send outside it
 (def app-manifest
   (plugin/manifest 'test/lifecycle-app
     :version "0.1.0"
@@ -112,7 +111,8 @@
                       {:stage :on-response :name :test/global-on-response
                        :fn (fn [req resp] (mark :global/on-response))}]
      :void.http/middleware [{:name :test/render
-                             :phase 9000
+                             :after :void.http/responding
+                             :before :void.http.stage/pre-serialization
                              :wrap (fn [h]
                                      (fn [req]
                                        (def resp (h req))
@@ -159,9 +159,9 @@
   (def ex (http/explain-route "/g/inner"))
   (assert (index-of :void.http.stage/on-request (ex :middleware)))
   (assert (index-of :void.http.stage/pre-handler (ex :middleware)))
-  # and as data, with their slot and marked as stages
+  # and as data, at their anchor and marked as stages
   (def on-request-step (first (filter |(= :void.http.stage/on-request ($ :name)) (ex :chain))))
-  (assert (deep= on-request-step {:name :void.http.stage/on-request :phase 1500
+  (assert (deep= on-request-step {:name :void.http.stage/on-request
                                   :plugin :void/http :stage true}))
   (assert (nil? (get-in ex [:hooks :on-timeout])))
   (assert (= 1 (length (get-in (http/explain-route "/slow") [:hooks :on-timeout])))
@@ -169,11 +169,13 @@
   # what `void routes --chain` prints
   (def lines (http/chain-lines ex))
   (assert (string/has-prefix? "GET /g/inner -> :inner" (first lines)))
-  (assert (some |(string/find "chain    :void.http/panic-guard@0  :void/http" $) lines)
-          "the chain, outermost first, as name@phase with the plugin")
-  (assert (some |(string/find ":void.http.stage/on-request@1500 (stage)" $) lines)
+  (assert (some |(string/find "chain    :void.http/panic-guard  :void/http  before :void.http/guarded" $) lines)
+          "the chain, outermost first, as the name, the plugin and the edges it was placed by")
+  (assert (some |(string/find ":void.http/request-id  :void/http  after :void.http/guarded; before :void.http.stage/on-send" $) lines)
+          "both edges, when it has both")
+  (assert (some |(string/find ":void.http.stage/on-request  :void/http  stage" $) lines)
           "a stage wrapper says it is one")
-  (assert (some |(string/find ":void.http/session@3000 (:void/http) — :when declined" $) lines)
+  (assert (some |(string/find ":void.http/session (:void/http) — :when declined" $) lines)
           "the declined say why: no session store is configured, so the session middleware declined")
   (assert (some |(string/find "edge     none" $) lines) "the edge layer has its own line")
 
@@ -181,7 +183,7 @@
   (assert (= 403 ((http/with-request {:uri "/gate?block=1"}) :status)))
   (assert (= 200 ((http/with-request {:uri "/gate"}) :status)))
 
-  # -- response stages sit around the rendering-phase middleware ---------
+  # -- response stages sit around the rendering middleware ----------------
   (array/clear calls)
   (def r2 (http/with-request {:uri "/stagey"}))
   (assert (= "shown+pre-ser+on-send" (string (r2 :body))))

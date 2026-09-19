@@ -121,7 +121,7 @@
             (or :nil {:id :string? :meta (or :nil :table :struct)
                       :correlation-id :string? :causation-id :string?
                       :reply-to :keyword? :at :number? & r})]
-   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :ret BusMessage
    :throws [:string]}
   ``Publish a declared event after checking its payload against the
   schema the declaration carries. The check is on the *publishing*
@@ -136,7 +136,7 @@
             (or :nil {:id :string? :meta (or :nil :table :struct)
                       :correlation-id :string? :causation-id :string?
                       :reply-to :keyword? :at :number? & r})]
-   :ret @{:id :string :topic :keyword :payload :any :meta :table}
+   :ret BusMessage
    :throws [:string]}
   ``The same as `emit!`, through the transactional outbox — the
   spelling an event about money uses: the message is written in the
@@ -267,18 +267,18 @@
   "The expansion of `defevent`, as a function."
   [name more]
   (var rest more)
-  (var doc nil)
+  (var docstring nil)
   (when (string? (first rest))
-    (set doc (first rest))
+    (set docstring (first rest))
     (set rest (tuple ;(drop 1 rest))))
   (def opts (first rest))
   (unless (dictionary? opts)
     (errorf "defevent %q: expected an options map%s, got %q"
-            name (if doc " after the docstring" "") opts))
+            name (if docstring " after the docstring" "") opts))
   ~(def ,name
-     ,;(if doc [doc] [])
+     ,;(if docstring [docstring] [])
      (,define-event! ,(keyword name)
-                     (,merge @{:doc ,doc} ,opts))))
+                     (,merge @{:doc ,docstring} ,opts))))
 
 (defn defevent-handler-form
   {:params [:symbol :tuple] :ret :tuple :throws [:string]}
@@ -288,9 +288,9 @@
   two."
   [name more]
   (var rest more)
-  (var doc nil)
+  (var docstring nil)
   (when (string? (first rest))
-    (set doc (first rest))
+    (set docstring (first rest))
     (set rest (tuple ;(drop 1 rest))))
   (def opts (first rest))
   (unless (and (dictionary? opts) (not (indexed? opts)))
@@ -301,18 +301,18 @@
             name params))
   (def body (drop 2 rest))
   ~(upscope
-     (defn ,name ,;(if doc [doc] []) ,params ,;body)
+     (defn ,name ,;(if docstring [docstring] []) ,params ,;body)
      (,router/define! ,(keyword name) (,event-handler-opts ,opts)
-                      {:env (,curenv) :binding ',name :fn ,name :doc ,doc})))
+                      {:env (,curenv) :binding ',name :fn ,name :doc ,docstring})))
 
 (defn defcommand-form
   {:params [:symbol :tuple] :ret :tuple :throws [:string]}
   "The expansion of `defcommand`, as a function."
   [name more]
   (var rest more)
-  (var doc nil)
+  (var docstring nil)
   (when (string? (first rest))
-    (set doc (first rest))
+    (set docstring (first rest))
     (set rest (tuple ;(drop 1 rest))))
   (var opts nil)
   (when (and (dictionary? (first rest)) (not (indexed? (first rest))))
@@ -321,12 +321,12 @@
   (def params (first rest))
   (unless (and (indexed? params) (= 1 (length params)) (all symbol? params))
     (errorf "defcommand %q: expected a one-parameter list after the name%s, got %q"
-            name (if doc " and docstring" "") params))
+            name (if docstring " and docstring" "") params))
   (def body (drop 1 rest))
   ~(upscope
-     (defn ,name ,;(if doc [doc] []) ,params ,;body)
+     (defn ,name ,;(if docstring [docstring] []) ,params ,;body)
      (,define-command! ,(keyword name) ,opts
-                       {:env (,curenv) :binding ',name :fn ,name :doc ,doc})))
+                       {:env (,curenv) :binding ',name :fn ,name :doc ,docstring})))
 
 (defmacro defevent
   ``Declare an event: the name this codebase calls it, the topic it

@@ -1,10 +1,10 @@
 ### void/authz-http — enforcement from route metadata.
 ###
 ### The half of void/authz that needs the HTTP kernel: two metadata
-### keys and one middleware in the reserved phase **5000** — after auth
-### (4000), so the identity the policies read is already bound, and
-### before validation (6000), so a request nobody is allowed to make is
-### refused before its body is checked.
+### keys and one middleware between the **:void.http/loaded** and
+### **:void.http/authorized** anchors — after auth, so the identity the
+### policies read is already bound, and before validation, so a request
+### nobody is allowed to make is refused before its body is checked.
 ###
 ###     (defroutes admin {:void.authz/policy :admin}
 ###       [:get "/orders" list-orders {:void.authz/policy :orders/read}]
@@ -79,7 +79,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :authz-http/capture-config
    :doc "Read the [:authz-http] and [:authz :default] slices once, before the route table is built"
    :fn (fn capture [boot]
@@ -118,7 +118,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 100
+   :before :void.core/checked
    :name :authz-http/deny-by-default
    :doc "Under [:authz :default :deny], refuse to start with routes that carry no policy"
    :fn (fn deny-by-default [_boot]
@@ -133,8 +133,8 @@
 # -- enforcement ---------------------------------------------------------
 
 (defn- policies-of
-  {:params [{:void.authz/policy (or :keyword @[:keyword] [:keyword] :nil) & r}]
-   :ret (or @[:keyword] [:keyword])}
+  {:params [{:void.authz/policy (or :keyword [:keyword] :nil) & r}]
+   :ret [:keyword]}
   "The policy names declared on a route's merged metadata, as a list."
   [rmeta]
   (def declared (get rmeta :void.authz/policy))
@@ -144,10 +144,7 @@
     declared))
 
 (defn forbidden
-  {:params [:any
-            {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-             :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-             :action :any :us :number}]
+  {:params [:any AuthzDecision]
    :ret :any}
   ``The response for a decision that said no: the configured status
   through the error renderers. The decision rides along on the error
@@ -158,10 +155,12 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.authz/enforce
-   # the reserved phase 5000: after auth (4000) binds the identity,
-   # before validation (6000) spends anything on a request that is not
-   # going to be served
-   :phase 5000
+   # after :void.http/loaded — the identity is bound and the row a
+   # route names is on the request — and inside :void.http/authorized,
+   # so validation spends nothing on a request that is not going to be
+   # served
+   :after :void.http/loaded
+   :before :void.http/authorized
    :doc "Enforce :void.authz/policy — every policy on the merged metadata must allow, or the request is answered 403 through the error renderers"
    # evaluated once, at table-build time: a route with no policy has no
    # wrapper at all and cannot cost anything on the hot path

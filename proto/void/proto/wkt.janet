@@ -58,7 +58,7 @@
    "google/protobuf/wrappers.proto" (sorted (keys wrappers))})
 
 (defn- register-message
-  {:params [:string {:keyword :any}] :ret {:kind :keyword :name :keyword & r}}
+  {:params [:string {:keyword :any}] :ret ProtoMessage}
   "Register one well-known type under its protobuf name, with the
   field table its descriptor is built from."
   [pname fields]

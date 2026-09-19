@@ -56,7 +56,7 @@
 
 (defn ensure!
   {:params [] :ret :number
-   :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
+   :throws [:string VoidError]}
   ``Create `bench_rows` if it is not there and fill it if it is empty.
   Idempotent: a second boot against the same database does nothing but
   one count.``

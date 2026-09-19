@@ -5,8 +5,8 @@
 ### resource and no lifetime. `install!` merges the :void.i18n/messages
 ### contributions by ascending :precedence (default 100; the shipped
 ### dictionaries contribute at 0, so an application overrides them
-### without naming a number — the :phase-of-middleware posture, with
-### the deterministic resolution order as the tie-break), runs the
+### without naming a number — a layering, not an ordering: the
+### deterministic resolution order is the tie-break), runs the
 ### boot gates and prebuilds one
 ### :void.schema/messages table per configured locale, so the
 ### middleware binds a table rather than building closures per request.
@@ -271,8 +271,7 @@
 # -- install -------------------------------------------------------------
 
 (defn- merge-contributions
-  {:params [@[{:name :keyword :locale :keyword :messages {:keyword :any}
-               :precedence :number? & r}]]
+  {:params [[I18nMessages]]
    :ret {:keyword @{:keyword :any}}
    :throws [:string]}
   "Merge dictionary contributions into locale -> key -> message,
@@ -295,14 +294,11 @@
   idx)
 
 (defn install!
-  {:params [{:locales (or @[:keyword] :nil) :default :keyword?
+  {:params [{:locales (or [:keyword] :nil) :default :keyword?
              :cookie (or :string :boolean :nil) & r}
-            (or @[{:name :keyword :locale :keyword :messages {:keyword :any}
-                   :precedence :number? & r}]
-                :nil)
-            (or @[{:name :keyword? :language :keyword :categories :function & r}]
-                :nil)
-            (or {:name :keyword :fn :function & r} :nil)]
+            (or [I18nMessages] :nil)
+            (or [I18nPluralRule] :nil)
+            (or I18nLocaleSource :nil)]
    :ret :nil
    :throws [:string]}
   ``Install the [:i18n] slice and the resolved contributions into the

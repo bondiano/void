@@ -117,7 +117,7 @@
   parts)
 
 (defn fields
-  {:params [(or @[HttpMultipartPart] [HttpMultipartPart])]
+  {:params [[HttpMultipartPart]]
    :ret @{:string :any}}
   "Fold the non-file parts into a name -> value table (duplicate names
   accumulate into arrays), like a urlencoded form."
@@ -134,7 +134,7 @@
   out)
 
 (defn files
-  {:params [(or @[HttpMultipartPart] [HttpMultipartPart])]
+  {:params [[HttpMultipartPart]]
    :ret @{:string :any}}
   ``Fold the file parts into a name -> part table (duplicate names
   accumulate into arrays) — the file half of what `fields` does for
@@ -197,7 +197,7 @@
   (string out))
 
 (defn encode
-  {:params [(or @[HttpMultipartPart] [HttpMultipartPart]) :string?]
+  {:params [[HttpMultipartPart] :string?]
    :ret {:body :string :boundary :string :content-type :string}
    :throws [:string]}
   ``Build a `multipart/form-data` body out of parts:

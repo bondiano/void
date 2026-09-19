@@ -101,8 +101,10 @@
    :roles {}})
 
 (defn- conf
-  {:params [(or {:default :keyword? :log :keyword? :roles (or {:any :any} :nil) & r} :nil)]
-   :ret @{:default :keyword :log :keyword :roles {:any :any} & r}}
+  {:params [(or {:default (or (enum :allow :deny) :nil) :log (or (enum :deny :all :none) :nil)
+                 :roles (or {:keyword [:keyword]} :nil) & r}
+                :nil)]
+   :ret @{:default (enum :allow :deny) :log (enum :deny :all :none) :roles {:keyword [:keyword]} & r}}
   ``The [:authz] slice with defaults filled in.``
   # `conf`, not `slice`: this module's `defpolicy` macro uses janet's
   # own `slice`, and a module-level binding of that name shadows it
@@ -170,7 +172,7 @@
 # -- the component -------------------------------------------------------
 
 (defn- resolved
-  {:params [{:extensions {:keyword :any} & r} :keyword] :ret (or @[:any] [:any])}
+  {:params [{:extensions {:keyword :any} & r} :keyword] :ret [:any]}
   ``One of this package's extension points, as the boot the component
   was started in resolved it.
 

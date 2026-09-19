@@ -62,7 +62,7 @@
   was not), `now` the current monotonic clock; the caller keeps
   `since'` for the next call. The result is what a check answers —
   `{:ok true}` or `{:ok false :reason ...}`.``
-  [s max-waiting grace since now &opt label]
+  [s max-waiting grace since now &opt pool-name]
   (def waiting (get s :waiting 0))
   (if (and (pos? max-waiting) (>= waiting max-waiting))
     (let [t0 (or since now)
@@ -71,7 +71,7 @@
          {:ok false
           :reason (string/format
                     "%s exhausted: %d waiting for %.1f s (size %d, in use %d, %d timeouts)"
-                    (or label "pool") waiting held
+                    (or pool-name "pool") waiting held
                     (get s :size 0) (get s :in-use 0) (get s :timeouts 0))}
          {:ok true})
        t0])
@@ -162,19 +162,19 @@
   off the active state's config (so a check runs against the slice its
   numbers came from), and the grace period's memory — one var per
   contribution, like the pool each watches.``
-  [name label read-stats max-key grace-key]
+  [name pool-name read-stats max-key grace-key]
   (var exhausted-since nil)
   {:name name
    :doc (string/format
           "Shed while %s is exhausted and fibers have waited longer than [:pressure %s] seconds; skipped where there is no such pool"
-          label grace-key)
+          pool-name grace-key)
    :fn (fn pool-pressure []
          (if-let [s (read-stats)]
            (let [[r t0] (evaluate s
                                   (limit max-key default-max-waiting)
                                   (limit grace-key default-wait-grace)
                                   exhausted-since (os/clock :monotonic)
-                                  label)]
+                                  pool-name)]
              (set exhausted-since t0)
              r)
            (do (set exhausted-since nil) {:ok true})))})

@@ -20,7 +20,7 @@
 (import ./util :as util)
 
 (defn- path-str
-  {:params [(or @[:any] [:any])] :ret :string}
+  {:params [[:any]] :ret :string}
   "A config path as it reads in a message: `[:db :pool :size]`."
   [path]
   (string/format "[%s]"
@@ -69,7 +69,7 @@
 (defn- resolve-secret
   {:params [{:secret :string :file :string? & r}
             {:string :string}
-            (or @[(fn [:any] :any)] [(fn [:any] :any)])]
+            [(fn [:any] :any)]]
    :ret [:any :string?]}
   "Resolve one secret spec: custom sources first, then :file, then the
   env table. Returns [value nil] or [nil error-message]."
@@ -87,9 +87,9 @@
 
 (defn- resolve-secrets!
   {:params [@{:any :any}
-            (or @[:any] [:any])
+            [:any]
             {:string :string}
-            (or @[(fn [:any] :any)] [(fn [:any] :any)])
+            [(fn [:any] :any)]
             @[:string]]
    :ret :nil}
   "Walk a layer's tree in place, replacing every secret spec with a box
@@ -111,7 +111,7 @@
 # -- layered merge with provenance ---------------------------------------
 
 (defn- collect-leaves
-  {:params [:any (or @[:any] [:any]) @[[:any :any]]] :ret @[[:any :any]]}
+  {:params [:any [:any] @[[:any :any]]] :ret @[[:any :any]]}
   "Flatten a layer into [path value] leaves. Secret specs and empty
   dictionaries are leaves, not subtrees."
   [data path out]
@@ -124,7 +124,7 @@
   out)
 
 (defn- assoc-path!
-  {:params [@{:any :any} (or @[:any] [:any]) :any] :ret :table}
+  {:params [@{:any :any} [:any] :any] :ret :table}
   "Set `value` at `path` in the nested table `root`, creating the
   tables on the way — and replacing a scalar found there, since the
   later layer wins."
@@ -137,7 +137,7 @@
   (put node (last path) value))
 
 (defn- record!
-  {:params [@{:any @[ConfigSource]} (or @[:any] [:any]) ConfigSource]
+  {:params [@{:any @[ConfigSource]} [:any] ConfigSource]
    :ret :nil}
   "Append `source` to the provenance history of `path` — the layers
   that set it, oldest first; `explain` reads the last one as the
@@ -221,7 +221,7 @@
 (defn- apply-cli!
   {:params [@{:any :any}
             @{:any @[ConfigSource]}
-            (or :nil {:any :any} @[:any] [:any])
+            (or :nil {:any :any} [:any])
             @[:string]]
    :ret :nil}
   "Apply the CLI layer: a dictionary is merged as it is, a list is
@@ -267,7 +267,7 @@
     [v nil]))
 
 (defn- config-files
-  {:params [:string :keyword (or @[:string] [:string]) @[:string]] :ret @[:string]}
+  {:params [:string :keyword [:string] @[:string]] :ret @[:string]}
   "The config files to load in order: the four conventional ones under
   `dir` (default, then the profile; .jdn before .janet) when present,
   then every explicit `files` entry — which must exist, or it is an
@@ -295,10 +295,7 @@
 (defn- apply-defaults!
   {:params [@{:any :any}
             @{:any @[ConfigSource]}
-            (or :nil
-                {:any :any}
-                @[{:plugin :any :key :keyword :defaults {:any :any} & r}]
-                [{:plugin :any :key :keyword :defaults {:any :any} & r}])
+            (or :nil {:any :any} [{:plugin :any :key :keyword :defaults {:any :any} & r}])
             @[ConfigSource]
             @[:string]]
    :ret :nil}
@@ -331,12 +328,12 @@
 (defn load
   {:params [(or {:defaults :any
                  :dir :string?
-                 :files (or @[:string] [:string] :nil)
+                 :files (or [:string] :nil)
                  :profile :keyword?
                  :env (or {:string :string} :nil)
                  :env-prefix :string?
                  :cli :any
-                 :secret-sources (or @[(fn [:any] :any)] [(fn [:any] :any)] :nil)
+                 :secret-sources (or [(fn [:any] :any)] :nil)
                  & r}
                 :nil)]
    :ret LoadedConfig
@@ -438,7 +435,7 @@
     (string/format "%q" source)))
 
 (defn- child-entries
-  {:params [@{:any @[ConfigSource]} (or @[:any] [:any])]
+  {:params [@{:any @[ConfigSource]} [:any]]
    :ret @{:any ConfigSource}}
   "For a subtree at `path`: every provenance entry strictly below it,
   leaf path -> its winning (last) source — the :children of `explain`
@@ -513,7 +510,7 @@
 # -- batch validation ----------------------------------------------------
 
 (defn- source-of
-  {:params [{:provenance @{:any @[ConfigSource]} & r} (or @[:any] [:any])]
+  {:params [{:provenance @{:any @[ConfigSource]} & r} [:any]]
    :ret ConfigSource?}
   "The layer that set `path`, for an error message: the winning source
   of the leaf itself or, when the path is a subtree (an unknown key
@@ -532,9 +529,9 @@
   the component, both or neither."
   [spec]
   (def parts
-    (seq [[k label] :in [[:plugin "plugin"] [:component "component"]]
+    (seq [[k noun] :in [[:plugin "plugin"] [:component "component"]]
           :when (get spec k)]
-      (string/format "%s %q" label (spec k))))
+      (string/format "%s %q" noun (spec k))))
   (if (empty? parts) "" (string " (" (string/join parts ", ") ")")))
 
 (defn- data-schema-errors
@@ -575,8 +572,7 @@
 
 (defn validate
   {:params [{:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
-            (or @[{:key :keyword :schema :any :plugin :any :component :any & r}]
-                [{:key :keyword :schema :any :plugin :any :component :any & r}])]
+            [{:key :keyword :schema :any :plugin :any :component :any & r}]]
    :ret @[:string]}
   ``Validate config slices against their specs — all of them, not
   first-fail. specs is indexed of {:key <config-key> :schema <schema>
@@ -604,8 +600,7 @@
 
 (defn validate!
   {:params [{:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
-            (or @[{:key :keyword :schema :any :plugin :any :component :any & r}]
-                [{:key :keyword :schema :any :plugin :any :component :any & r}])]
+            [{:key :keyword :schema :any :plugin :any :component :any & r}]]
    :ret {:values @{:any :any} :provenance @{:any @[ConfigSource]} & r}
    :throws [:string]}
   "Like `validate`, but throws a single error listing every failure.

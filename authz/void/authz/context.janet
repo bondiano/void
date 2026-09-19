@@ -56,7 +56,7 @@
 
 (defn normalize-provider
   {:params [:any]
-   :ret {:name :keyword :for (enum :subject :resource :env) :fn :function & r}
+   :ret AuthzProvider
    :throws [:string]}
   "Validate a provider: {:name :for :fn :keys? :doc?}."
   [p]
@@ -65,9 +65,9 @@
   (def name (get p :name))
   (unless (keyword? name)
     (errorf "an attribute provider needs a keyword :name, got %q" name))
-  (def for (get p :for))
-  (unless (index-of for [:subject :resource :env])
-    (errorf "provider %q: :for must be :subject, :resource or :env, got %q" name for))
+  (def side (get p :for))
+  (unless (index-of side [:subject :resource :env])
+    (errorf "provider %q: :for must be :subject, :resource or :env, got %q" name side))
   (unless (util/callable? (get p :fn))
     (errorf "provider %q: :fn must be a function, got %q" name (get p :fn)))
   (when-let [keys (get p :keys)]
@@ -112,8 +112,7 @@
 
 (defn make
   {:params [(or {:subject :any :action :any :resource :any :env :any :attrs :any & r} :nil)]
-   :ret @{:subject :any :action :any :resource :any :env {:keyword :any}
-          :attrs @{:keyword :any} :used @[:keyword]}}
+   :ret AuthzContext}
   ``Build a decision context. `opts`:
 
     :subject   the identity (defaults to the one in the dyn)
@@ -133,8 +132,7 @@
     :used @[]})
 
 (defn- subject-fallback
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
+  {:params [AuthzContext
             :keyword]
    :ret :any}
   "The built-in reading of a `:subject/*` attribute straight off the
@@ -154,8 +152,7 @@
       (get-in id [:claims bare]))))
 
 (defn- resource-fallback
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
+  {:params [AuthzContext
             :keyword]
    :ret :any}
   "The built-in reading of a `:resource/*` attribute: the bare key off
@@ -165,8 +162,7 @@
     (when (dictionary? r) (get r bare))))
 
 (defn- env-fallback
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
+  {:params [AuthzContext
             :keyword]
    :ret :any}
   "The built-in reading of an `:env/*` attribute: the bare key off the
@@ -175,8 +171,7 @@
   (get-in ctx [:env bare]))
 
 (defn- from-providers
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
+  {:params [AuthzContext
             :keyword :keyword]
    :ret :nil}
   "Ask every provider registered for `group` in turn, memoizing
@@ -206,18 +201,17 @@
   nil)
 
 (defn attr
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}
+  {:params [AuthzContext
             :keyword :any]
    :ret :any}
   ``One attribute of the context, resolved on first use and memoized
   for the rest of this decision. Namespaced keys only:
   `:subject/brand-id`, `:resource/owner-id`, `:env/ip`.``
-  [ctx key &opt default]
+  [ctx key &opt fallback]
   (def [group bare] (split-key key))
   (array/push (ctx :used) key)
   (if (in (ctx :attrs) key)
-    (get (ctx :attrs) key default)
+    (get (ctx :attrs) key fallback)
     (do
       (from-providers ctx group key)
       (unless (in (ctx :attrs) key)
@@ -228,11 +222,10 @@
                :env (env-fallback ctx bare)
                nil)))
       (def v (get (ctx :attrs) key))
-      (if (nil? v) default v))))
+      (if (nil? v) fallback v))))
 
 (defn used
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}]
+  {:params [AuthzContext]
    :ret @[:keyword]}
   "The attributes this decision looked at, in order and without
   repeats — the profile of a policy, and what `explain` prints."
@@ -241,16 +234,14 @@
   (seq [k :in (ctx :used) :when (not (in seen k)) :before (put seen k true)] k))
 
 (defn subject
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}]
+  {:params [AuthzContext]
    :ret :any}
   "The identity behind a context, or nil for an anonymous decision."
   [ctx]
   (ctx :subject))
 
 (defn subject-string
-  {:params [@{:subject :any :action :any :resource :any :env {:keyword :any}
-              :attrs @{:keyword :any} :used @[:keyword] & r}]
+  {:params [AuthzContext]
    :ret (or :string :nil)}
   "The subject string, or nil."
   [ctx]

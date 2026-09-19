@@ -196,8 +196,7 @@
 # -- the whole thing -----------------------------------------------------
 
 (defn resolve-widgets
-  {:params [(or @[{:name :keyword :render :function & r}]
-                [{:name :keyword :render :function & r}])]
+  {:params [[{:name :keyword :render :function & r}]]
    :ret {:keyword {:keyword {:widget :any :why :keyword :field :any}}}}
   "Resolve every field of every declared resource once — the table
   `void admin widgets` prints and the handlers read."

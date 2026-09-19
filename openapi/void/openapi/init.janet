@@ -28,7 +28,7 @@
 
 # -- boot context --------------------------------------------------------
 
-(var current-context
+(var current-context {:type (or @{:config :any :enabled :boolean :info :any} :nil)}
   "The running openapi context (set by the :before-start hook):
   :enabled, :info, :config. One per process — a hook builds it, not a
   component, so it is a var rather than a `system/ambient`."
@@ -44,7 +44,7 @@
 
 # -- metadata keys (:void.openapi/*, merge replace) ----------------------
 
-(each [key sch doc]
+(each [key sch description]
   [[:void.openapi/tags [:vector :keyword]
     "Tags grouping this operation in the document"]
    [:void.openapi/summary :string
@@ -56,7 +56,7 @@
    [:void.openapi/hidden :boolean
     "Leave this route out of the document"]]
   (plugin/contribute! :void.http/route-meta-key
-    {:key key :schema sch :doc doc :merge :replace}))
+    {:key key :schema sch :doc description :merge :replace}))
 
 # -- the :openapi schema projection --------------------------------------
 
@@ -217,7 +217,7 @@
       (def path (openapi-path (entry :pattern)))
       (def item (or (get paths path) (let [t @{}] (put paths path t) t)))
       (put item (string (entry :method)) (operation entry refs))))
-  (def doc
+  (def document
     @{"openapi" "3.1.0"
       "info" (merge @{"title" "void application" "version" "0.0.1"}
                     (tabseq [[k v] :pairs (get opts :info {})]
@@ -225,14 +225,14 @@
       "paths" paths})
   (def comps (jsonschema/components refs))
   (unless (empty? comps)
-    (put doc "components" @{"schemas" comps}))
-  doc)
+    (put document "components" @{"schemas" comps}))
+  document)
 
 (defn spec-json
   {:params [{:routes [{:meta {:any :any} :name :keyword :method :keyword
                        :pattern :string :params [:keyword] & r}] & r}
             (or {:info :any & r} :nil)]
-   :ret :string}
+   :ret :buffer}
   "spec, encoded — the /openapi.json body and the export payload."
   [table &opt opts]
   (json/encode (spec table opts)))
@@ -321,7 +321,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :openapi/build-context
    :doc "Resolve the openapi config before the route table builds"
    :fn (fn build! [boot] (build-context boot))})

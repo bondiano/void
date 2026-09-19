@@ -1,6 +1,6 @@
 (declare-project
   :name "void-auth"
-  :description "void/auth — authentication: identity as data, strategies as an extension point (session, password, API tokens, JWT, magic link/OTP, OAuth access tokens), the user store as a contract, :void.auth/access enforcement in phase 4000 and the OAuth 2.1 resource server."
+  :description "void/auth — authentication: identity as data, strategies as an extension point (session, password, API tokens, JWT, magic link/OTP, OAuth access tokens), the user store as a contract, :void.auth/access enforcement before :void.http/authenticated and the OAuth 2.1 resource server."
   :version "0.0.1")
 
 # Four plugins live here, and an application composes what it needs:

@@ -17,8 +17,7 @@
 
 (defn- rendered
   {:params [@{:keyword :any} (or {:tone :string? :message :string? & r} :nil)]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "The cart page for this request, with an optional message on it."
   [req &opt state]
@@ -28,8 +27,7 @@
 
 (defn show-cart
   {:params [@{:keyword :any}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /cart — the lines, with their products preloaded."
   [req]
@@ -37,7 +35,7 @@
 
 (defn add-to-cart
   {:params [@{:keyword :any}]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
                      :status :number :http/status :number}]}
   ``POST /cart/items — put something in the basket.
@@ -58,8 +56,7 @@
 
 (defn update-line
   {:params [@{:keyword :any}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   ``POST /cart/items/:id — set a line's quantity (0 removes it).
 
@@ -77,8 +74,7 @@
 
 (defn checkout-refused
   {:params [@{:keyword :any} :string]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``The cart page, with the reason a checkout did not become an order.
   The orders module renders its refusals through this function because

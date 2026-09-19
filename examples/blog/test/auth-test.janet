@@ -90,18 +90,18 @@
    :ret @[{:version :string :name :string :path :string}]}
   "Run the auth suite against one engine's composition."
   [engine]
-  (def label (engine :label))
+  (def engine-name (engine :label))
   (defn note
     {:params [:string] :ret :nil}
     "Print one progress line, tagged with the engine under test."
-    [msg] (print "  [" label "] " msg))
+    [msg] (print "  [" engine-name "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
      :profile :test
      :config {:env @{}
               :cli (merge {:db {:n1-guard :strict :migrations {:dir "db/migrations"}}
-                           :cache {:prefix (string "blog-auth-" label ":")}
+                           :cache {:prefix (string "blog-auth-" engine-name ":")}
                            # the demo's own cost, lowered: this suite
                            # registers and signs in a dozen times, and
                            # what scrypt costs is pinned in void/crypto

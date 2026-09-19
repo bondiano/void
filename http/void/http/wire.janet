@@ -183,7 +183,7 @@
    :oversized-trailers "oversized trailers"})
 
 (defn chunked-start
-  {:params [:number?] :ret {:phase (enum :size) :pos :number :received :number :out :string}}
+  {:params [:number?] :ret HttpChunkedState}
   "The decoder state for a chunked body whose first chunk-size line
   begins at `pos` in the buffer — just past the head."
   [&opt pos]
@@ -191,7 +191,7 @@
   {:phase :size :pos pos :received 0 :out ""})
 
 (defn- advance
-  {:params [:any :any] :ret :struct}
+  {:params [HttpChunkedState :any] :ret HttpChunkedState}
   "The next decoder state: `st` with the given keys replaced, frozen —
   a state is a value the caller can keep, log or compare."
   [st & kvs]
@@ -202,13 +202,13 @@
   (freeze next))
 
 (defn- need-bytes
-  {:params [:any :number] :ret :struct}
+  {:params [HttpChunkedState :number] :ret HttpChunkedState}
   "Stop until buf holds at least n bytes."
   [st n]
   (advance st :need n))
 
 (defn- fail
-  {:params [:any :keyword] :ret :struct}
+  {:params [HttpChunkedState :keyword] :ret HttpChunkedState}
   "Stop for good with one of `chunked-reasons`."
   [st reason]
   (advance st :phase :error :reason reason :message (chunked-reasons reason)))
@@ -217,7 +217,7 @@
   {:params [:number (or :number :nil)] :ret :boolean :narrows :any}
   "Is n over a limit that may be absent (nil = unbounded)?"
   [n limit]
-  (and limit (> n limit)))
+  (and (number? limit) (> n limit)))
 
 (defn- line-too-long?
   {:params [:buffer :number {:max-line (or :number :nil) & r}] :ret :boolean :narrows :any}
@@ -226,7 +226,8 @@
   (past-limit? (- (length buf) from) (limits :max-line)))
 
 (defn- step-size
-  {:params [:buffer :any {:max-body (or :number :nil) :max-line (or :number :nil) & r}] :ret :struct}
+  {:params [:buffer HttpChunkedState {:max-body (or :number :nil) :max-line (or :number :nil) & r}]
+   :ret HttpChunkedState}
   "At a chunk-size line: size 0 opens the trailer section, anything
   else the chunk's data. The body limit is checked here, before the
   data arrives — a peer announcing a 2 GB chunk is refused at the
@@ -251,7 +252,7 @@
         (advance st :phase :data :pos next-pos :remaining size)))))
 
 (defn- step-data
-  {:params [:buffer :any :buffer] :ret :struct}
+  {:params [:buffer HttpChunkedState :buffer] :ret HttpChunkedState}
   "Inside a chunk: emit whatever of it has arrived, then require the
   CRLF that closes it. Data is emitted as it comes rather than once the
   whole chunk is in, so a caller that streams bodies can — and one that
@@ -281,7 +282,7 @@
     (fail st :bad-terminator)))
 
 (defn- step-trailers
-  {:params [:buffer :any {:max-line (or :number :nil) & r}] :ret :struct}
+  {:params [:buffer HttpChunkedState {:max-line (or :number :nil) & r}] :ret HttpChunkedState}
   "After the last chunk: either an immediate CRLF or trailer lines
   ending in a blank one, bounded by :max-line. Trailers are consumed,
   not surfaced — nothing in void reads them yet."
@@ -303,15 +304,15 @@
     (need-bytes st (inc (length buf)))))
 
 (defn- settled?
-  {:params [:any] :ret :boolean :narrows :any}
+  {:params [HttpChunkedState] :ret :boolean :narrows :any}
   "Nothing more to do with the bytes at hand."
   [st]
-  (or (st :need) (= :done (st :phase)) (= :error (st :phase))))
+  (or (number? (st :need)) (= :done (st :phase)) (= :error (st :phase))))
 
 (defn decode-chunked
-  {:params [:buffer :struct
+  {:params [:buffer HttpChunkedState
             (or {:max-body (or :number :nil) :max-line (or :number :nil) & r} :nil)]
-   :ret :struct}
+   :ret HttpChunkedState}
   ``Advance a chunked-body decoder over the bytes in buf, as far as
   they go. `state` is `chunked-start`'s value or what the previous
   call returned; `limits` is `{:max-body n :max-line n}`, either nil

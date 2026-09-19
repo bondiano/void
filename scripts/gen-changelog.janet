@@ -176,8 +176,7 @@
    "v0.5" "end of wave 6 — parity and the first application: storage, the auth scaffold, the jobs dashboard, notifications, tailwind without node, htmx 4 — and examples/hub, deployed"})
 
 (defn- render-release
-  {:params [:buffer :string :string? :string? (or @[{:hash :string :subject :string}]
-                                                  [{:hash :string :subject :string}])]
+  {:params [:buffer :string :string? :string? [{:hash :string :subject :string}]]
    :ret (or :buffer :nil)}
   "Append one release section (a tagged release or Unreleased) to buf."
   [buf title date theme cs]

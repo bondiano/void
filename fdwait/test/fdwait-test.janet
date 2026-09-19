@@ -77,21 +77,21 @@
 # same time. This is the shape of "3 x pg_sleep(1) in 1.00s" from the
 # prototype, minus Postgres.
 (def pipes-n 8)
-(def delay 0.1)
+(def feed-after 0.1)
 (def ps (seq [_ :range [0 pipes-n]] (pipes/make)))
 (def results @[])
 (def t0 (os/clock :monotonic))
 (def waiters
   (seq [[pr _] :in ps]
     (ev/go (fn [] (array/push results (fdwait/wait-once pr :read))))))
-(ev/sleep delay)
+(ev/sleep feed-after)
 (each [_ pw] ps (pipes/put! pw))
 (ev/sleep 0.05)
 (def elapsed (- (os/clock :monotonic) t0))
 
 (assert (= pipes-n (length results)) "every waiter woke")
 (assert (all |(= :read $) results) "and every one of them with a readiness")
-(assert (< elapsed (* 3 delay))
+(assert (< elapsed (* 3 feed-after))
         (string/format "%d waits concurrent, not serialized (%.3fs)" pipes-n elapsed))
 
 (each [pr pw] ps (pipes/close! pr) (pipes/close! pw))

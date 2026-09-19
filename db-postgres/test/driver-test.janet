@@ -25,7 +25,7 @@
 (def drv (db/normalize-driver (postgres/from-config cfg)))
 
 (defn- exec
-  {:params [:any :string (or @[:any] [:any] :nil)] :ret :any}
+  {:params [:any :string (or [:any] :nil)] :ret :any}
   "Run one statement on a checked-out handle through the normalized
   driver, the way the pool would — every assertion below reads its
   {:rows :count}."

@@ -98,9 +98,7 @@
 # -- the channel ---------------------------------------------------------
 
 (defn project
-  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
-             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
-             :overrides @{:keyword (or {:any :any} @{:any :any})}}]
+  {:params [NotifyNotification]
    :ret :any}
   ``The row to write, or nil when the notification carries no subject
   to write it against. The `:inapp` override is merged here, so a
@@ -195,8 +193,7 @@
 
 (defn panel
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET the panel: the newest notifications, as a fragment."
   [req]
@@ -206,8 +203,7 @@
 
 (defn badge
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET the bell's own count."
   [req]
@@ -215,8 +211,7 @@
 
 (defn mark-read
   {:params [{:params {:id :any & r} & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "POST: mark one notification read and answer with the panel."
   [req]
@@ -226,8 +221,7 @@
 
 (defn mark-all-read
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "POST: mark everything read and answer with the panel."
   [req]
@@ -259,8 +253,8 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   # before the route table is built, the void/storage-http phase
-   :phase 450
+   # before the route table is built, like void/storage-http
+   :before :void.core/configured
    :name :notify-inapp/configure
    :doc "Read the [:notify-inapp] slice once, before the route table is built"
    :fn (fn configure [boot]

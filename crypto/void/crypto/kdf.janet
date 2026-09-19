@@ -225,7 +225,7 @@
 # -- running it somewhere sensible ---------------------------------------
 
 (defn thread-work
-  {:params [[:abstract :string {:kind :keyword & r}]] :ret :nil}
+  {:params [[:abstract :string {:kind :keyword & r}]] :ret :abstract}
   ``The worker thread's body: open the library by path, derive, answer
   on the channel. Takes plain data only (see the module docstring) —
   `payload` is [channel library-path spec].``

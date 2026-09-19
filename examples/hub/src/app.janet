@@ -63,13 +63,14 @@
 #
 # One slice, four readers, one hook. `[:hub]` is this application's whole
 # configuration, and each module gets the part it is about — rather than
-# four hooks racing to read the same value at the same phase. `void config
-# explain :hub :sources` prints which layer put a value there, and no
-# layer prints a secret: those are references resolved into boxes.
+# four hooks racing to read the same value before :void.core/configured.
+# `void config explain :hub :sources` prints which layer put a value
+# there, and no layer prints a secret: those are references resolved
+# into boxes.
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 410
+   :before :void.core/configured
    :name :hub/configure
    :doc "Hand each module its part of the [:hub] slice"
    :fn (fn configure [boot]
@@ -81,7 +82,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 140
+   :before :void.core/checked
    :name :hub/warn-when-nobody
    :doc "Say at start that the desk lets nobody in, rather than at the first 403"
    :fn (fn warn [_boot] (operators/warn-when-nobody!))})

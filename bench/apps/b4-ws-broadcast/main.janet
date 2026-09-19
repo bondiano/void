@@ -53,7 +53,7 @@
 
 (defn live
   {:params [:any]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
+   :ret (or HttpResponseTable
             @{:status :number :body :any :headers @{:string :any}
               :void.http/upgrade :function})
    :throws [:string]}
@@ -62,7 +62,7 @@
   (ws/accept req {:rooms [room]}))
 
 (defn stats
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "GET /stats — what the fan-out has done, for the generator's report
   and for a human watching a run."
   [req]

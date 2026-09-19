@@ -129,19 +129,19 @@
    :ret {:status (enum :ok :warn :fail) :name :string :note :string}}
   "One row per named library, degrading honestly: no module here means
   the plugin will speak for itself at :start."
-  [{:label label :module module :config-path config-path :hint hint} values]
+  [{:label title :module module :config-path config-path :hint hint} values]
   (def [ok env] (protect (require module)))
   (def candidates-fn (when ok (get-in env ['candidates :value])))
   (if (nil? candidates-fn)
-    {:status :warn :name label
+    {:status :warn :name title
      :note (string "the driver module is not importable here — the plugin"
                    " will name its candidates itself at :start")}
     (do
       (def configured (get-in values config-path))
       (def cands (candidates-fn configured))
       (if-let [found (find-library cands)]
-        {:status :ok :name label :note found}
-        {:status :warn :name label
+        {:status :ok :name title :note found}
+        {:status :warn :name title
          :note (string/format
                  "not found where doctor looked — the loader searches further; if :start fails, point %s at the file (%s)"
                  (path-str config-path) hint)}))))

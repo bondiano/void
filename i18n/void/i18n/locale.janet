@@ -66,7 +66,7 @@
       [])))
 
 (defn negotiate
-  {:params [:string? (or @[:keyword] [:keyword])] :ret :keyword?}
+  {:params [:string? [:keyword]] :ret :keyword?}
   ``The best of `available` (normalized locale keywords) for an
   Accept-Language value, or nil when nothing matches: exact tag, then
   "en-us" against :en, then "en" against :en-us, in preference order.``

@@ -153,13 +153,12 @@
   [])
 
 (defn set-exporters!
-  {:params [(or @[{:name :keyword :fn (fn [:any] :any) & r}]
-                [{:name :keyword :fn (fn [:any] :any) & r}]
-                :nil)]
+  {:params [(or [{:name :keyword :fn (fn [:any] :any) & r}] :nil)]
    :ret :nil}
   "Install the exporter list (void/obs's :start does this)."
   [contribs]
-  (set exporters (tuple ;(or contribs []))))
+  (set exporters (tuple ;(or contribs [])))
+  nil)
 
 (def spans-total
   "Finished spans by name and status — the cheapest possible answer to
@@ -207,11 +206,7 @@
 
 (defn current
   {:params []
-   :ret (or @{:name :string :trace-id :string :span-id :string
-              :parent-id :string? :remote :boolean :kind :keyword
-              :sampled :boolean :start :number :started-at :number
-              :attrs @{:any :any} :status :keyword & r}
-            :nil)}
+   :ret (or ObsSpan :nil)}
   "The span this fiber is inside, or nil."
   []
   (dyn span-dyn))
@@ -263,22 +258,8 @@
 
 (defn start
   {:params [:string
-            (or {:parent (or @{:trace-id :string :span-id :string
-                               :sampled :boolean & r}
-                             :nil)
-                 :remote (or {:trace-id :string :parent-id :string
-                              :sampled :boolean & r}
-                            :nil)
-                 :kind (enum :server :client :internal :producer :consumer)
-                 :attrs @{:any :any}
-                 :sample-rate :number
-                 :sampled :boolean
-                 & r}
-                :nil)]
-   :ret @{:name :string :trace-id :string :span-id :string
-          :parent-id :string? :remote :boolean :kind :keyword
-          :sampled :boolean :start :number :started-at :number
-          :attrs @{:any :any} :status :keyword & r}}
+            (or ObsSpanOptions :nil)]
+   :ret ObsSpan}
   ``Start a span and return it. Options:
 
     :parent      an explicit parent span (default: the fiber's current)
@@ -383,20 +364,9 @@
 
 (defn with-span*
   {:params [:string
-            (or {:parent (or @{:trace-id :string :span-id :string
-                               :sampled :boolean & r}
-                             :nil)
-                 :remote (or {:trace-id :string :parent-id :string
-                              :sampled :boolean & r}
-                            :nil)
-                 :kind (enum :server :client :internal :producer :consumer)
-                 :attrs @{:any :any}
-                 :sample-rate :number
-                 :sampled :boolean
-                 & r}
-                :nil)
-            (fn [] :any)]
-   :ret :any
+            (or ObsSpanOptions :nil)
+            (fn [] a)]
+   :ret a
    :throws [:any]}
   ``The function behind `with-span` — a span around a thunk. The span
   ends when the thunk does, including when it throws: the span is
@@ -430,7 +400,7 @@
   ~(,with-span* ,name ,opts (fn with-span-body [] ,;body)))
 
 (defn carrying
-  {:params [(fn [& :any] :any)] :ret (fn [& :any] :any)}
+  {:params [(fn [& :any] a)] :ret (fn [& :any] a)}
   "Wrap `f` so it runs inside the span bound at wrap time — for work
   handed to `ev/go`, whose fibers do not inherit dyns (the same answer
   `log/carrying` gives for the log context)."

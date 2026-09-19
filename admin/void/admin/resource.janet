@@ -118,11 +118,9 @@
 # re-deriving it per render.
 
 (defn- fk-relation
-  {:params [{:rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                              :through (or {:entity :keyword :key :keyword} :nil) & r}} & r}
+  {:params [{:rels {:keyword DbRelation} & r}
             :keyword]
-   :ret (or {:name :keyword :kind :keyword :entity :keyword :key :keyword
-             :through (or {:entity :keyword :key :keyword} :nil) & r}
+   :ret (or DbRelation
             :nil)}
   "The belongs-to relation whose key is this field, or nil — a column
   is drawn as a link picker because the *entity* says it points
@@ -139,21 +137,20 @@
 
 (defn field-descriptor
   {:params [{:name :keyword
-             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-             :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :fields {:keyword DbField}
+             :schema SchemaNode & r}
             :keyword]
    :ret {:name :keyword
          :label (or :string :keyword :nil)
          :required :boolean
-         :node {:type :keyword :props {:any :any} :children [:any]}
-         :schema {:type :keyword :props {:any :any} :children [:any]}
+         :node SchemaNode
+         :schema SchemaNode
          :type :keyword
          :column :string
          :db {:keyword :any}
          :pk :boolean
          :version :boolean
-         :rel (or {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                   :through (or {:entity :keyword :key :keyword} :nil) & r}
+         :rel (or DbRelation
                   :nil)}
    :throws [:string]}
   ``What a widget is handed as `:field`: the name, the label **as
@@ -202,15 +199,10 @@
 (defn- column-spec
   {:params [:keyword
             {:name :keyword
-             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-             :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :fields {:keyword DbField}
+             :schema SchemaNode & r}
             :string (or :keyword {:keyword :any})]
-   :ret {:name :keyword :label :any
-         :field (or {:name :keyword :label (or :string :keyword :nil) :required :boolean
-                     :node :any :schema :any :type :keyword :column :string :db {:keyword :any}
-                     :pk :boolean :version :boolean :rel :any}
-                    :nil)
-         & r}
+   :ret AdminColumn
    :throws [:string]}
   "A `:list`/`:detail` column: a bare field keyword, or a table naming
   a computed `:value` — the one shape both projections read."
@@ -246,14 +238,10 @@
 (defn- filter-spec
   {:params [:keyword
             {:name :keyword
-             :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-             :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :fields {:keyword DbField}
+             :schema SchemaNode & r}
             (or :keyword {:keyword :any})]
-   :ret {:label :any :param :string :name :keyword
-         :field {:name :keyword :label (or :string :keyword :nil) :required :boolean
-                 :node :any :schema :any :type :keyword :column :string :db {:keyword :any}
-                 :pk :boolean :version :boolean :rel :any}
-         & r}
+   :ret AdminFilter
    :throws [:string]}
   "A `:filters` entry: a bare field keyword, or a table naming the
   `:field` it narrows plus whatever the filter panel needs about it."
@@ -281,14 +269,9 @@
 
 (defn- inline-spec
   {:params [:keyword
-            {:rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                              :through (or {:entity :keyword :key :keyword} :nil) & r}} & r}
+            {:rels {:keyword DbRelation} & r}
             :keyword {:keyword :any}]
-   :ret {:name :keyword :label :any :style :keyword :per-page :number
-         :can-add :boolean :can-delete :boolean :resource :keyword
-         :rel {:name :keyword :kind :keyword :entity :keyword :key :keyword
-               :through (or {:entity :keyword :key :keyword} :nil) & r}
-         & r}
+   :ret AdminInline
    :throws [:string]}
   "One `:inlines` entry: the has-many/has-one relation edited on the
   parent's own page, with its style, its page size and whether rows
@@ -372,7 +355,7 @@
 
 (defn- action-spec
   {:params [:keyword :keyword {:keyword :any}]
-   :ret {:name :keyword :label :any :needs-selection :boolean :danger :boolean & r}
+   :ret AdminAction
    :throws [:string]}
   "One `:actions` entry: a custom confirmation-page action, named
   distinctly from the seven conventional ones."
@@ -403,8 +386,8 @@
 # -- the descriptor ------------------------------------------------------
 
 (defn- enabled-actions
-  {:params [:keyword {:only (or @[:keyword] [:keyword] :nil)
-                       :except (or @[:keyword] [:keyword] :nil) & r}]
+  {:params [:keyword {:only (or [:keyword] :nil)
+                       :except (or [:keyword] :nil) & r}]
    :ret [:keyword]
    :throws [:string]}
   "The conventional actions this resource actually gets, honoring
@@ -413,7 +396,7 @@
   (when (and (get opts :only) (get opts :except))
     (errorf "admin resource %q: :only and :except are two answers to one question" rname))
   (defn check
-    {:params [:string (or @[:keyword] [:keyword])] :ret (or @[:keyword] [:keyword])
+    {:params [:string [:keyword]] :ret [:keyword]
      :throws [:string]}
     "Every name in `names` is one of the seven conventional actions, or
     a refusal naming the option and what is actually allowed."
@@ -434,57 +417,7 @@
 
 (defn resource
   {:params [:keyword :any :any]
-   :ret {:name :keyword
-         :doc :any
-         :entity {:name :keyword :table :string
-                  :schema {:type :keyword :props {:any :any} :children [:any]}
-                  :pk :keyword :pk-column :string :version (or :keyword :nil)
-                  :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                  :columns [:string] :field-order [:keyword] :column->field {:keyword :keyword}
-                  :rels {:keyword {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                                   :through (or {:entity :keyword :key :keyword} :nil) & r}}
-                  & r}
-         :title :string :singular :string :path :string :mount :boolean
-         :group (or :string :nil)
-         :actions [:keyword]
-         :action-set {:keyword :boolean}
-         :custom-actions {:keyword {:name :keyword :label :any
-                                    :needs-selection :boolean :danger :boolean & r}}
-         :list [{:name :keyword :label :any
-                 :field (or {:name :keyword :label (or :string :keyword :nil) :required :boolean
-                             :node :any :schema :any :type :keyword :column :string
-                             :db {:keyword :any} :pk :boolean :version :boolean :rel :any}
-                            :nil)
-                 & r}]
-         :detail [{:name :keyword :label :any
-                   :field (or {:name :keyword :label (or :string :keyword :nil) :required :boolean
-                               :node :any :schema :any :type :keyword :column :string
-                               :db {:keyword :any} :pk :boolean :version :boolean :rel :any}
-                              :nil)
-                   & r}]
-         :list-derived? :boolean :detail-derived? :boolean
-         :form [:keyword]
-         :form-schema {:type :keyword :props {:any :any} :children [:any]}
-         :form-fields [{:name :keyword :label (or :string :keyword :nil) :required :boolean
-                        :node :any :schema :any :type :keyword :column :string
-                        :db {:keyword :any} :pk :boolean :version :boolean :rel :any}]
-         :readonly [:keyword]
-         :filters [{:label :any :param :string :name :keyword
-                    :field {:name :keyword :label (or :string :keyword :nil) :required :boolean
-                            :node :any :schema :any :type :keyword :column :string
-                            :db {:keyword :any} :pk :boolean :version :boolean :rel :any}
-                    & r}]
-         :search [:keyword] :sortable [:keyword] :editable [:keyword]
-         :order-by :any :per-page (or :number :nil) :preload :any
-         :scope (or :function :nil)
-         :defaults {:keyword :function}
-         :slots {:keyword {:keyword (fn [:any] :tuple)}}
-         :widgets {:keyword :any}
-         :inlines {:keyword {:name :keyword :label :any :style :keyword :per-page :number
-                             :can-add :boolean :can-delete :boolean :resource :keyword
-                             :rel {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                                   :through (or {:entity :keyword :key :keyword} :nil) & r}
-                             & r}}}
+   :ret AdminResource
    :throws [:string]}
   ``Build an admin resource descriptor — a frozen value, the single
   declaration `./mount` and `./mcp` both project:
@@ -629,13 +562,13 @@
   (sorted (keys registry)))
 
 (defn lookup
-  {:params [:keyword] :ret (or {:name :keyword & r} :nil)}
+  {:params [:keyword] :ret AdminResource?}
   "One descriptor by name, or nil."
   [rname]
   (get registry rname))
 
 (defn resource!
-  {:params [:keyword] :ret {:name :keyword & r} :throws [:string]}
+  {:params [:keyword] :ret AdminResource :throws [:string]}
   "One descriptor by name, or an error naming what is declared."
   [rname]
   (or (get registry rname)
@@ -651,7 +584,7 @@
   (filter |((lookup $) :mount) (resources)))
 
 (defn define!
-  {:params [:keyword :any (or @[:any] [:any])] :ret {:name :keyword & r}}
+  {:params [:keyword :any [:any]] :ret {:name :keyword & r}}
   "Build, register and return a descriptor — the runtime half of
   `defresource-admin`, so there is one implementation."
   [rname ent kvs]

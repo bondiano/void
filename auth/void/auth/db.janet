@@ -143,7 +143,7 @@
 # -- helpers -------------------------------------------------------------
 
 (defn- json-out
-  {:params [:any] :ret :string? :throws [:string]}
+  {:params [:any] :ret :buffer? :throws [:string]}
   "A value as the JSON text a column stores, or nil for nothing worth
   a row — an empty list or dict reads back the same as absent."
   [value]
@@ -173,8 +173,7 @@
   {:params [{:table :any :id-column :any :subject-kind :any
              :claims-columns (or @[:any] :nil) :email-column :any
              :username-column :any :password-column :any & r}]
-   :ret {:name :keyword :table :keyword :find :function :secret :function
-         :subject :function :claims :function}}
+   :ret AuthUserStore}
   ``A user store over an existing table. Reads only: this plugin never
   writes to a table it did not create, so `:update-secret` is absent
   and a rehash-on-login is the application's to perform.``
@@ -231,8 +230,7 @@
 
 (defn token-store
   {:params [{:table :any & r}]
-   :ret {:name :keyword :table :keyword :shared? :boolean :find :function
-         :put :function :delete :function :touch :function :list :function}}
+   :ret AuthTokenStore}
   "An API-token store over the table `tables` creates."
   [cfg]
   (def table (keyword (cfg :table)))
@@ -291,8 +289,7 @@
 
 (defn challenge-store
   {:params [{:table :any & r}]
-   :ret {:name :keyword :table :keyword :shared? :boolean
-         :put :function :take :function :sweep :function}}
+   :ret AuthChallengeStore}
   "A store for magic links and one-time codes, single-use by
   transaction."
   [cfg]

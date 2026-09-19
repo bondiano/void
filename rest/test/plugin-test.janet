@@ -116,6 +116,14 @@
               :cli {:http {:port 0 :strict-meta true}
                     :rest {:validate-responses true}}}}))
 
+# problem+json is a general renderer: after the protocol ones
+# (void/grpc's Connect errors), before the generic floor
+(def problem-renderer
+  (find |(= :void.rest/problem ($ :name))
+        (get-in boot [:extensions :void.http/error-renderer :resolved])))
+(assert (= :void.http.error/protocol (problem-renderer :after)))
+(assert (= :void.http.error/generic (problem-renderer :before)))
+
 (defer (plugin/shutdown! boot 3)
 
   (defn body-of [resp] (json/decode (resp :body) true))

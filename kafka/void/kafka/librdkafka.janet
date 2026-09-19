@@ -228,8 +228,8 @@
 (def- cell-size 8)
 
 (defn cstr
-  {:params [:pointer?] :ret :string?}
-  "A `char *` that may be NULL, as a janet string or nil."
+  {:params [(or :pointer :buffer :nil)] :ret :string?}
+  "A `char *` that may be NULL — or a buffer libkafka wrote one into — as a janet string or nil."
   [ptr]
   (when ptr
     (def cell (buffer/new-filled cell-size))
@@ -401,7 +401,7 @@
   (ffi/write :int flags buf (+ (vu-base i) vu-union)))
 
 (defn vu-opaque!
-  {:params [:buffer :number :number] :ret :buffer}
+  {:params [:buffer :number (or :number :abstract)] :ret :buffer}
   "The msg_opaque as a u64 written where the `void *` goes: the
   pointer is never dereferenced by anyone — it rides to the delivery
   report and comes back out of `_private` as the same number."

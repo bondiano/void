@@ -190,7 +190,7 @@
                :file (or {:path :string :format (or (enum :jdn :json) :nil)
                          :buffer :number?}
                         :nil)}
-         :instrument (or :boolean @[:keyword] [:keyword])
+         :instrument (or :boolean [:keyword])
          & r}}
   "The [:obs] slice, `cfg0` merged over `defaults` — top-level and,
   separately, each of :runtime, :trace and :log, so setting one
@@ -214,13 +214,12 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :config-loaded
-   :phase 400
    :name :obs/capture-boot
    :doc "Keep the boot value: the components read the extension points and the profile out of it"
    :fn (fn capture-boot [boot] (set boot-ref boot))})
 
 (defn- resolved
-  {:params [:keyword] :ret (or @[:any] [:any])}
+  {:params [:keyword] :ret [:any]}
   "The resolved contributions of an extension point, off the captured
   boot value — [] before one has been captured."
   [name]
@@ -236,7 +235,7 @@
                :file (or {:path :string :format (or (enum :jdn :json) :nil)
                          :buffer :number?}
                         :nil)}
-         :instrument (or :boolean @[:keyword] [:keyword])
+         :instrument (or :boolean [:keyword])
          & r}}
   "The [:obs] slice, read fresh off the captured boot value."
   []
@@ -298,7 +297,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :config-loaded
-   :phase 600
+   :after :obs/capture-boot
    :name :obs/logging
    :doc "Open the configured log file and put the sampling gate in front of every sink"
    :fn (fn configure-logging [boot]
@@ -313,7 +312,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-stop
-   :phase 900
    :name :obs/close-log-file
    :doc "Drain and close the log file sink and take the sampling gate back off"
    :fn (fn close-logging [_]
@@ -331,8 +329,8 @@
   [])
 
 (defn- wanted-instrumentations
-  {:params [{:instrument (or :boolean @[:keyword] [:keyword] :nil) & r}]
-   :ret (or @[:keyword] [:keyword] :nil)}
+  {:params [{:instrument (or :boolean [:keyword] :nil) & r}]
+   :ret (or [:keyword] :nil)}
   "The instrumentation names to apply: [] for [:instrument] false, the
   list itself when it names some, nil (meaning all) otherwise."
   [cfg]
@@ -344,7 +342,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 900
+   :after :void.core/checked
    :name :obs/instrument
    :doc "Apply the :void.obs/instrument contributions whose components are running"
    :fn (fn install-instrumentation [boot]
@@ -359,7 +357,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-stop
-   :phase 100
+   :after :void.core/drained
    :name :obs/uninstrument
    :doc "Detach the instrumentations before the components they read stop"
    :fn (fn remove-instrumentation [_]
@@ -369,9 +367,7 @@
 # -- the span exporter obs ships -----------------------------------------
 
 (defn log-exporter
-  {:params [@{:name :string :trace-id :string :span-id :string
-              :parent-id :string? :kind :keyword :status :keyword
-              :duration :number? :attrs @{:any :any} & r}]
+  {:params [ObsSpan]
    :ret :nil}
   ``The exporter of last resort: one record per finished sampled span,
   through the logger that is already configured. It is what makes

@@ -204,7 +204,7 @@
   (string (get env key) ": " (message env)))
 
 (defn kind?
-  {:params [:any (or :keyword @[:keyword] [:keyword])] :ret :boolean :narrows :any}
+  {:params [:any (or :keyword [:keyword])] :ret :boolean :narrows :any}
   "Is `e` an error of this kind (or of any of these kinds)?"
   [e kind-or-kinds]
   (def k (kind e))

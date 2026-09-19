@@ -154,8 +154,8 @@
   {:params [:string :boolean] :ret :nil}
   "Run the whole CRUD suite once, either plain or with the HX-*
   headers set on every request — `hx` picks which."
-  [label hx]
-  (def note (fn [msg] (print "  [" label "] " msg)))
+  [suite-name hx]
+  (def note (fn [msg] (print "  [" suite-name "] " msg)))
   (def boot (test/start! (merge opts {:only kernel-only})))
   (defer (test/stop! boot)
     (seed!)
@@ -396,7 +396,7 @@
     (assert (db/find Note 2) "a GET carrying ?_method=delete deletes nothing")
     (note "destroy through the verb an HTML form cannot send")
 
-    (print "  [" label "] ok")))
+    (print "  [" suite-name "] ok")))
 
 (run-suite "plain" false)
 (run-suite "htmx" true)

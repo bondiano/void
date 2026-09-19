@@ -14,7 +14,7 @@
 (def counter @{:n 0})
 
 (defn page-view
-  {:params [] :ret :tuple}
+  {:params [] :ret @[:any]}
   "The live page, re-rendered from the shared `counter` on every
   poke."
   []
@@ -23,7 +23,7 @@
     [:body [:main {:id "main"} (string "count: " (counter :n))]]))
 
 (defn live
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "The morph-stream route: keeps the page live in the :counter room."
   [req]
   (datastar/morph-stream req page-view {:rooms [:counter]}))

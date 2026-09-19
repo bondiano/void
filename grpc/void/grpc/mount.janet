@@ -8,7 +8,7 @@
 ###     POST /shop.orders.OrderService/GetOrder   :shop.orders.OrderService/GetOrder
 ###
 ### So `:void.authz/policy` on an RPC method is the same key, checked
-### by the same middleware in the same phase, as on a page.
+### by the same middleware in the same place, as on a page.
 ### `:void.db/txn` opens the same transaction. void/obs' RED metrics
 ### label it by route name. void/security's headers and limits are in
 ### front of it. void/pressure sheds it. **Nothing in this package
@@ -71,7 +71,7 @@
   {:params [{:service :keyword :method :keyword :descriptor :any :codec :keyword :req :any}
             (fn [:any :any] :any) :any :any (or :number :nil)]
    :ret :any
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``Call the handler, honouring the client's `Connect-Timeout-Ms`.
 
   With a deadline the call runs as its own task (void/core/deadline),
@@ -99,7 +99,7 @@
     "the server failed to answer this call"))
 
 (defn error-response
-  {:params [:any] :ret (or :nil @{:status :number :headers @{:string :string} :body :string})}
+  {:params [:any] :ret (or :nil @{:status :number :headers @{:string :string} :body :buffer})}
   ``The Connect error response for a raised value, or nil when the
   value is not a failure an RPC client can be told about (a dictionary
   that is neither ours nor an HTTP error — somebody else's). The one

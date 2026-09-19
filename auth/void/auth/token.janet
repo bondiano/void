@@ -62,15 +62,12 @@
         [(string/slice body 0 i) (string/slice body (inc i))]))))
 
 (defn issue
-  {:params [{:put :function & r} :string
+  {:params [{:put (fn [AuthTokenRecord] :any) & r} :string
             (or {:prefix :string? :id-bytes :number? :secret-bytes :number?
                  :name :string? :scopes (or @[:any] :nil) :claims (or {:keyword :any} :nil)
                  :ttl :number? :now :number? & r}
                 :nil)]
-   :ret {:token :string
-         :record {:id :string :digest :string :subject :string :name :string
-                  :scopes @[:any] :claims {:keyword :any} :created :number
-                  :expires (or :number :nil) :used (or :number :nil)}}}
+   :ret {:token :string :record AuthTokenRecord}}
   ``Mint a token for a subject and store its digest. Returns
   `{:token :record}` — the token is the **only** time the secret
   exists, so a caller that does not show it to the user has lost it.
@@ -97,11 +94,9 @@
   {:token (string prefix id "." secret) :record record})
 
 (defn find-record
-  {:params [{:find :function & r} :any (or {:prefix :string? :now :number? & r} :nil)]
-   :ret (or {:id :string :digest :string :subject :string :name :string
-             :scopes @[:any] :claims {:keyword :any} :created :number
-             :expires (or :number :nil) :used (or :number :nil)}
-            :nil)}
+  {:params [{:find (fn [:string] (or AuthTokenRecord :nil)) & r} :any
+            (or {:prefix :string? :now :number? & r} :nil)]
+   :ret (or AuthTokenRecord :nil)}
   ``The stored record behind a presented token, or nil. Checks the
   digest in constant time and the expiry against `now`; does not
   touch `:used`.``
@@ -115,11 +110,9 @@
       record)))
 
 (defn verify
-  {:params [{:find :function :touch :function & r} :any
-            (or {:prefix :string? :now :number? & r} :nil)]
-   :ret (or {:subject :string :via :keyword :cookie :boolean
-             :claims {:keyword :any} :at :number :expires (or :number :nil)}
-            :nil)
+  {:params [{:find (fn [:string] (or AuthTokenRecord :nil)) :touch (fn [:string :number] :any) & r}
+            :any (or {:prefix :string? :now :number? & r} :nil)]
+   :ret (or AuthIdentity :nil)
    :throws [:string]}
   ``The identity behind a presented token, or nil. Records the use
   through the store's `:touch` — which a store is free to ignore.``
@@ -141,13 +134,13 @@
                     :expires (record :expires)})))
 
 (defn revoke
-  {:params [{:delete :function & r} :string] :ret :boolean}
+  {:params [{:delete (fn [:string] :any) & r} :string] :ret :boolean}
   "Delete a token by id. Returns true when there was one."
   [store id]
   (truthy? ((store :delete) id)))
 
 (defn revoke-presented
-  {:params [{:find :function :delete :function & r} :any
+  {:params [{:find (fn [:string] (or AuthTokenRecord :nil)) :delete (fn [:string] :any) & r} :any
             (or {:prefix :string? :now :number? & r} :nil)]
    :ret :boolean}
   "Delete the token a client presented — logout, for an API client."
@@ -157,7 +150,7 @@
     false))
 
 (defn list-for
-  {:params [{:list :function & r} :string] :ret @[{:keyword :any}]}
+  {:params [{:list (fn [:string] [AuthTokenRecord]) & r} :string] :ret [AuthTokenRecord]}
   "Every token of a subject — what a settings page lists. Records carry
   digests, never secrets."
   [store subject]

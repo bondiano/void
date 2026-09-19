@@ -60,8 +60,7 @@
 
 (defn page
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "Hiccup in the frame — what a controller hands back as a response
   body."

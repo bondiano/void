@@ -58,14 +58,14 @@
     (errorf ":workers must be a positive integer or :auto, got %q" workers)))
 
 (defn- spawn-worker
-  {:params [(or [:string] @[:string]) @{:string :string} :number] :ret :abstract}
+  {:params [[:string] @{:string :string} :number] :ret :abstract}
   "Spawn one worker process, its VOID_HTTP_WORKER env var set to `i`."
   [cmd base-env i]
   (os/spawn cmd :ep (merge base-env {worker-env (string i)})))
 
 (defn start
   {:params [{:workers (or (enum :auto) :number)
-             :cmd (or [:string] @[:string] :nil)
+             :cmd (or [:string] :nil)
              :env (or @{:string :string} :nil)
              :backoff :number?
              :on-exit (or (fn [:number :number] :any) :nil)

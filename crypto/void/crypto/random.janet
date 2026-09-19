@@ -20,7 +20,7 @@
   32)
 
 (defn bytes
-  {:params [:number?] :ret :string :throws [:string]}
+  {:params [:number?] :ret :buffer :throws [:string]}
   "n cryptographically random bytes from the OS."
   [&opt n]
   (default n default-size)

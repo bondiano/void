@@ -310,7 +310,7 @@
     (string/format "%q {:control %q}" (f :name) c)))
 
 (defn indent
-  {:params [:number (or @[:string] [:string])] :ret :string}
+  {:params [:number [:string]] :ret :string}
   "Join `lines` with a newline and `n` spaces, so a block pasted into a
   template lines up under whatever indents it."
   [n lines]

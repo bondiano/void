@@ -56,7 +56,7 @@
         "a pattern is not a topic to publish on")
 (assert (not (first (protect (message/make "user/created" {}))))
         "and neither is a string")
-(assert (not (first (protect (message/make :user/created {} {:meta "no"}))))
+(assert (not (first (protect (message/make :user/created {} {:meta "no"})))) # janet-zed: ignore types
         ":meta must be a dictionary")
 
 # the framework's keys never touch the payload

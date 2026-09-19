@@ -57,7 +57,8 @@
 
 (assert (= 1 (length (token/list-for tokens "service:billing")))
         "the store lists a subject's tokens — records, never secrets")
-(assert (nil? (get (first (token/list-for tokens "service:billing")) :secret)))
+# a record has no :secret: the read is the point
+(assert (nil? (get (first (token/list-for tokens "service:billing")) :secret))) # janet-zed: ignore types
 (assert (token/revoke tokens (record :id)))
 (assert (nil? (token/verify tokens value))
         "revocation is immediate — a token is a store lookup, not a signature that has to expire")

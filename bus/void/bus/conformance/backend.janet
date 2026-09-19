@@ -80,14 +80,10 @@
   (each n (router/defined) (router/forget! n)))
 
 (defn- broker
-  {:params [{:name :keyword :encoded? :boolean :stats :function
-             :health (or :nil :function) :close :function :publish! :function
-             :consume! :function :stop! :function
-             :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
-                          :shared :boolean} & r}
+  {:params [BusBackend
             (or :nil {:group :keyword? & r})]
    :ret @{:backend :any :codec :any :config :any :group :keyword
-          :middleware :tuple :tracer :any :consumers @{:keyword :any}
+          :chain :tuple :tracer :any :consumers @{:keyword :any}
           :outbox (or :nil (fn [:any] :any))
           :stats @{:published :number :delivered :number :outboxed :number}}
    :throws [:string]}

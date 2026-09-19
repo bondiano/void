@@ -46,6 +46,8 @@
 (assert (string/find "Max-Age=0" (first (flatten [(get-in del [:headers "set-cookie"])])))
         "delete-cookie expires")
 
+# the wrong argument is the point
+# janet-zed: ignore types
 (assert (not (first (protect (ring/cookie-str :a "b" {:same-site :bogus}))))
         "bad same-site is an error")
 

@@ -37,9 +37,10 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   # after everything, including the plugins that resolve a store in an
-   # :after-start hook of their own
-   :phase 9000
+   # after :void.core/started — after every placed handler, including
+   # the plugins that resolve a store in an :after-start hook of their
+   # own
+   :after :void.core/started
    :name :dev/banner
    :doc "Print the profile, the deployment shape and the composition's stores"
    :fn (fn banner [boot]
@@ -59,7 +60,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :void.http/listening
-   :phase 1000
    :name :dev/listening
    :doc "Say where the application is listening"
    :fn (fn listening [boot srv]

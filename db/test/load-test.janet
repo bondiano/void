@@ -114,17 +114,23 @@
                  (get-in explained [:meta :void.db/load]))
           "the metadata contract carries the spec")
 
-  # and it sits exactly where the docstring says: after auth, before
-  # authz — that is what lets a :void.authz/resource be (req :void.db/row)
+  # and it sits exactly where the docstring says: after auth and CSRF
+  # (:void.http/verified), before authz (:void.http/loaded) — that is
+  # what lets a :void.authz/resource be (req :void.db/row)
   (def load-mw
     (find |(= :void.db/load (get-in $ [:value :name]))
           (get-in boot [:extensions :void.http/middleware :contributions])))
   (assert load-mw ":void.db/load contributes its middleware")
-  (def at (get-in load-mw [:value :phase]))
-  (assert (< middleware/phase/auth at middleware/phase/authz)
-          (string "phase " at " is after auth and before authz"))
-  (assert (> at 4500)
-          "and after CSRF (4500): a forged request is refused before it can query")
+  (assert (= :void.http/verified (get-in load-mw [:value :after]))
+          "after :void.http/verified: a forged request is refused before it can query")
+  (assert (= :void.http/loaded (get-in load-mw [:value :before]))
+          "and before :void.http/loaded, which authz enforcement follows")
+  (def order (map |(or ($ :name) (get-in $ [:value :name])) (middleware/order
+                               (get-in boot [:extensions :void.http/middleware :contributions]))))
+  (assert (< (index-of :void.http/authenticated order)
+             (index-of :void.db/load order)
+             (index-of :void.http/loaded order))
+          "in the one chain order, between auth and authz")
 
   # -- the row, coerced and preloaded -----------------------------------
 

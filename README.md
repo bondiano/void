@@ -56,7 +56,7 @@ Open <http://localhost:8080>. Then, while it keeps running:
 
 ```sh
 void routes         # the route table; --keys adds metadata, --chain <path>
-                    # the middleware chain with phases, plugins and refusals
+                    # the middleware chain with edges, plugins and refusals
 void repl           # repl into the running process
 void doctor         # what this machine is missing, in sentences and an exit code
 
@@ -122,7 +122,7 @@ A monorepo of scoped Janet packages. They install as **one** jpm bundle named `v
 
 | Package | What it is |
 | --- | --- |
-| [`void/http`](http) | HTTP kernel: ev server, PEG router, phased middleware, sessions, static, multipart, prefork |
+| [`void/http`](http) | HTTP kernel: ev server, PEG router, middleware ordered by edges to named anchors, sessions, static, multipart, prefork |
 | [`void/html`](html) | SSR view layer: hiccup, layouts, partials, forms projected from schemas |
 | [`void/htmx`](htmx) | htmx 4: attribute builders, `HX-*` predicates, OOB and `<hx-partial>` swaps |
 | [`void/datastar`](datastar) | the Datastar experiment: the handler keeps returning the page, the middleware morphs it |

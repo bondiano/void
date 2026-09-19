@@ -224,8 +224,7 @@
   (or (get-in (plugin/running-boot) [:config :values :db]) {}))
 
 (defn- print-status
-  {:params [(or @[{:version :string :name :string :applied :boolean :missing :boolean? & r}]
-                [{:version :string :name :string :applied :boolean :missing :boolean? & r}])]
+  {:params [[{:version :string :name :string :applied :boolean :missing :boolean? & r}]]
    :ret :nil}
   "Print `migrate/status`'s rows: applied, pending, or applied-but-the-
   file-is-gone."

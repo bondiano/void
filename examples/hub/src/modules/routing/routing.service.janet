@@ -30,14 +30,14 @@
 (var- rules [])
 
 (defn configure!
-  {:params [(or {:rules (or @[:any] [:any] :nil) & r} :nil)] :ret :nil}
+  {:params [(or {:rules (or [:any] :nil) & r} :nil)] :ret :nil}
   "Called from the application's :before-start hook (src/app.janet)."
   [slice]
   (set rules (or (get slice :rules) []))
   (log/info "routing rules ready" :ns log-ns :rules (length rules)))
 
 (defn configured-rules
-  {:params [] :ret (or @[:any] [:any])}
+  {:params [] :ret [:any]}
   "The rules this process is running with."
   []
   rules)
@@ -69,7 +69,7 @@
 
 (defn matching
   {:params [{:any :any}]
-   :ret @[{:when (or {:any :any} :nil) :to (or @[:keyword] [:keyword] :nil)
+   :ret @[{:when (or {:any :any} :nil) :to (or [:keyword] :nil)
           :chat-id :string? & r}]}
   "Every rule that covers this delivery, in the order they were written."
   [delivery]

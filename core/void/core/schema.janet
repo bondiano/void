@@ -29,7 +29,7 @@
 (import ./util :as util)
 
 (defn- path-str
-  {:params [(or @[:any] [:any])] :ret :string}
+  {:params [[:any]] :ret :string}
   "A value path as it reads in a message: `[:db :pool :size]`."
   [path]
   (string/format "[%s]"
@@ -178,7 +178,7 @@
   (and (struct? x) (= node-proto (struct/getproto x))))
 
 (defn- node
-  {:params [:keyword (or {:any :any} :nil) (or @[:any] [:any] :nil)]
+  {:params [:keyword (or {:any :any} :nil) (or [:any] :nil)]
    :ret SchemaNode}
   "Build a normalized schema node — a struct with the node prototype,
   its :type, frozen :props and :children as a tuple."
@@ -243,7 +243,7 @@
           [k (normalize* (entries-form k))])))
 
 (defn- props-form
-  {:params [(or @[:any] [:any]) :number :keyword] :ret {:any :any} :throws [:string]}
+  {:params [[:any] :number :keyword] :ret {:any :any} :throws [:string]}
   "The optional props dictionary at `idx` of a tuple form (`{}` when
   absent), or an error naming the head."
   [form idx head]
@@ -253,7 +253,7 @@
   props)
 
 (defn- normalize-tuple
-  {:params [(or @[:any] [:any])]
+  {:params [[:any]]
    :ret SchemaNode
    :throws [:string]}
   "Normalize a tuple form by its head keyword — :enum, :or/:union,
@@ -386,13 +386,13 @@
   [:ref :CreateUser] (also recursively, from inside itself) and from
   projections such as OpenAPI $ref.``
   [name & forms]
-  (def doc (when (and (>= (length forms) 2) (string? (first forms)))
-             (first forms)))
-  (def body (if doc (drop 1 forms) forms))
+  (def docstring (when (and (>= (length forms) 2) (string? (first forms)))
+                   (first forms)))
+  (def body (if docstring (drop 1 forms) forms))
   (unless (= 1 (length body))
     (errorf "defschema %s: expected exactly one schema form" name))
-  (if doc
-    ~(def ,name ,doc (,register! ,(keyword name) ,(first body)))
+  (if docstring
+    ~(def ,name ,docstring (,register! ,(keyword name) ,(first body)))
     ~(def ,name (,register! ,(keyword name) ,(first body)))))
 
 (defn- resolve-ref
@@ -438,7 +438,7 @@
    :peg (fn [e] (string/format "%q does not match peg %q" (e :value) (e :source)))})
 
 (defn- err!
-  {:params [@[:any] (or @[:any] [:any]) :keyword :any] :ret :array}
+  {:params [@[SchemaError] [:any] :keyword :any] :ret @[SchemaError]}
   "Push one validation error `{:path :code ...kvs}` onto `errors`."
   [errors path code & kvs]
   (array/push errors (struct :path (tuple ;path) :code code ;kvs)))
@@ -474,7 +474,7 @@
 (var- visit nil)
 
 (defn- check-props
-  {:params [:keyword? {:any :any} :any (or @[:any] [:any]) @[:any]] :ret :nil}
+  {:params [:keyword? {:any :any} :any [:any] @[SchemaError]] :ret :nil}
   "Check a type's props against a value that already passed its
   predicate: :min/:max on numbers; length bounds, :pattern and :format
   on bytes; length bounds on sized collections."
@@ -500,7 +500,7 @@
 
 (defn- visit-type-node
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any] {:any :any}]
+            :any [:any] @[SchemaError] {:any :any}]
    :ret :any
    :throws [:string]}
   "Validate a value against a registered type: coerce first when asked
@@ -524,7 +524,7 @@
 
 (defn- visit-enum
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any] {:any :any}]
+            :any [:any] @[SchemaError] {:any :any}]
    :ret :any}
   "Validate membership in the enum's values; with coercion a string is
   also tried as the keyword and as the number it spells."
@@ -542,7 +542,7 @@
 
 (defn- visit-union
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any] {:any :any}]
+            :any [:any] @[SchemaError] {:any :any}]
    :ret :any}
   "Validate against each branch in order and take the first that
   accepts, returning its (possibly coerced) value; when none does, one
@@ -564,7 +564,7 @@
 
 (defn- visit-vector
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any] {:any :any}]
+            :any [:any] @[SchemaError] {:any :any}]
    :ret :any}
   "Validate an indexed value: the length props, then each item at its
   index. With coercion the items' coerced values are rebuilt into the
@@ -587,7 +587,7 @@
 
 (defn- visit-map
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any] {:any :any}]
+            :any [:any] @[SchemaError] {:any :any}]
    :ret :any}
   "Validate a dictionary field by field: a missing non-optional key is
   :missing, and under :closed an undeclared key is :unknown. With
@@ -622,7 +622,7 @@
 
 (defn- visit-map-of
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any] {:any :any}]
+            :any [:any] @[SchemaError] {:any :any}]
    :ret :any}
   "Validate a homogeneous dictionary: every key against the key schema
   (a failing key is one :key error, its own errors dropped) and every
@@ -649,7 +649,7 @@
 
 (defn- visit-pred
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any]]
+            :any [:any] @[SchemaError]]
    :ret :any}
   "Validate with a predicate function: false or a throw is one :pred
   error with the schema's message."
@@ -661,7 +661,7 @@
 
 (defn- visit-peg
   {:params [SchemaNode
-            :any (or @[:any] [:any]) @[:any]]
+            :any [:any] @[SchemaError]]
    :ret :any}
   "Validate a bytes value against a compiled PEG: not bytes is a :type
   error, no match a :peg error naming the pattern's source."
@@ -832,7 +832,7 @@
   (node :map props (seq [k :in (sorted (keys entries))] [k (entries k)])))
 
 (defn select
-  {:params [:any (or @[:keyword] [:keyword])]
+  {:params [:any [:keyword]]
    :ret SchemaNode
    :throws [:string]}
   "Project a map schema onto a subset of its keys — a DTO from an

@@ -64,7 +64,7 @@
 (def dur-ns (int/to-number (- (s :end_time_unix_nano) (s :start_time_unix_nano))))
 (assert (< 12000000 dur-ns 13000000))
 (defn- attr
-  {:params [(or @[{:key :string :value :any & r}] [{:key :string :value :any & r}])
+  {:params [[{:key :string :value :any & r}]
             :string]
    :ret :any}
   "The decoded attribute value keyed by `key`, or nil."
@@ -114,6 +114,7 @@
 (assert (= "application/json" (otlp/content-types :json)))
 (assert (deep= (otlp/encode payload) (otlp/encode payload :json))
         "the default is still JSON")
+# janet-zed: ignore types
 (assert (not (first (protect (otlp/encode payload :msgpack))))
         "a third encoding is still an error naming the two")
 (assert (not (first (protect (otlp-proto/encode-payload {"spans" []}))))

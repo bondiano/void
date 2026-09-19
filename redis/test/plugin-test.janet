@@ -13,7 +13,7 @@
 (def plugins ["void/redis/init"])
 
 (defn- config
-  {:params [(or {:keyword :any} @{:keyword :any})]
+  {:params [{:keyword :any}]
    :ret {:env @{:any :any} :cli @{:any :any}}}
   "A boot config with `extra` merged into the :cli slice, log level
   pinned to :error so a dry-run stays quiet."
@@ -77,7 +77,7 @@
     (def [cok cerr]
       (protect (plugin/start! {:plugins plugins :profile :test
                                :config (config {:redis (merge slice {:codec :yaml})})})))
-    (when cok (plugin/shutdown! cok 3))
+    (when cok (plugin/shutdown! cerr 3))
     (assert (not cok) "an unknown codec fails the boot")
     (assert (string/find ":jdn" cerr) "listing the ones there are")
 

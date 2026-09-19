@@ -28,7 +28,7 @@
 ### in English either way, which is the property that matters.
 ###
 ### **A refusal renders outside every middleware.** The panic guard is
-### phase 0, so by the time a 403 becomes a page the dyns the locale
+### outermost, so by the time a 403 becomes a page the dyns the locale
 ### middleware bound are gone with the stack that threw. The request
 ### survives that unwind, so it carries its own scope (`scope-key`) and
 ### the renderer puts it back with `in-scope`.
@@ -153,7 +153,7 @@
   {:params [(or {:keyword :any} :nil) (fn [] a)] :ret a}
   ``Run `thunk` inside the locale scope `req` carries, or plainly when
   it carries none. What puts a locale back for code that runs outside
-  the middleware chain: the error renderers, which the phase-0 panic
+  the middleware chain: the error renderers, which the outermost panic
   guard calls after the stack that bound the locale has unwound.``
   [req thunk]
   (if-let [f (and (dictionary? req) (get req scope-key))]
@@ -178,8 +178,8 @@
   (the application owns those words, so only the catalog answers, and
   without one the fallback is the field's own name), a string is the
   words themselves, and nothing at all humanizes the key.``
-  [label key]
+  [annotation key]
   (cond
-    (keyword? label) (or (t? label) (humanize key))
-    (nil? label) (humanize key)
-    (string label)))
+    (keyword? annotation) (or (t? annotation) (humanize key))
+    (nil? annotation) (humanize key)
+    (string annotation)))

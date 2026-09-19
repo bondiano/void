@@ -75,6 +75,8 @@
 (assert (string/find `hx-swap-oob="outerHTML"`
                      (hiccup/render-string (hx/oob [:tr {:id "r"} "x"] :outer-html))))
 (assert (= `<hr hx-swap-oob="true"/>` (hiccup/render-string (hx/oob [:hr]))))
+# the wrong argument is the point
+# janet-zed: ignore types
 (assert (not (first (protect (hx/oob "not an element")))))
 
 # -- partial -------------------------------------------------------------

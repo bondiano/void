@@ -123,8 +123,7 @@
 
 (defn page
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``A view, rendered into the frame. Every HTML handler in this
   application ends in this call and nothing else — which is what keeps

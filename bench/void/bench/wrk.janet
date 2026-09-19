@@ -66,7 +66,7 @@
   res)
 
 (defn median
-  {:params [(or @[:number] [:number])] :ret :number?}
+  {:params [[:number]] :ret :number?}
   "The median of a list of numbers (mean of the middle two for even
   lengths); nil for an empty list."
   [xs]
@@ -78,7 +78,7 @@
     (/ (+ (in s (dec (div n 2))) (in s (div n 2))) 2)))
 
 (defn summarize
-  {:params [(or @[:any] [:any])]
+  {:params [[:any]]
    :ret @{:rps :number? :p50 :number? :p75 :number? :p90 :number? :p99 :number?
           :p999 :number? :non-2xx :number? :socket-errors :number?}}
   ``Fold parsed runs into one row: per-metric medians, error counters

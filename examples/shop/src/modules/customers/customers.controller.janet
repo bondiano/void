@@ -19,7 +19,7 @@
 
 (defn- start-session!
   {:params [{:session :any & r} {:subject :string :via :keyword & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string]}
   "Sign this browser in, and give it back the cart it was holding."
   [req who]
@@ -29,8 +29,7 @@
 
 (defn sign-in-page
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /sign-in — three ways in."
   [req]
@@ -65,8 +64,7 @@
   [req]
   (defn refused
     {:params [:any]
-     :ret @{:status :number :headers @{:string :string} :void.html/content :any
-            :void.html/layout :any :void.html/context {:any :any} & r}
+     :ret HtmlView
      :throws [:string]}
     "The same refusal, rendered back onto the sign-in page."
     [values]
@@ -103,9 +101,8 @@
 
 (defn magic-link
   {:params [{:query (or {:any :any} :nil) :session :any & r}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r})
+   :ret (or HttpResponseTable
+            HtmlView)
    :throws [:string]}
   "GET /auth/magic?h=&c= — the link from the letter."
   [req]
@@ -121,7 +118,7 @@
 
 (defn sign-out
   {:params [{:session :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "POST /sign-out — drop the identity and rotate the session id."
   [req]
   (auth-http/logout! req)

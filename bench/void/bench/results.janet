@@ -202,10 +202,10 @@
         :missing @[:keyword]}}
   "Human-readable comparison; returns the comparison value."
   [cmp]
-  (each [label entries] [["regressions" (cmp :regressions)]
-                         ["improvements" (cmp :improvements)]]
+  (each [heading entries] [["regressions" (cmp :regressions)]
+                           ["improvements" (cmp :improvements)]]
     (unless (empty? entries)
-      (printf "%s:" label)
+      (printf "%s:" heading)
       (each e entries
         (printf "  %s %s %s: %s -> %s (%+.1f%%)"
                 (e :target) (e :mode) (e :metric)
@@ -298,12 +298,12 @@
   # because a stop-the-world pause on a single-threaded loop *is* loop lag
   # of at least its own length, and janet reports no pause of its own
   # (void/bench/probe)
-  (each [bkey pkey label] [[:loop-lag-p99 :p99 "loop-lag p99"]
-                           [:loop-lag-max :max "loop-lag max (GC pause bound)"]]
+  (each [bkey pkey caption] [[:loop-lag-p99 :p99 "loop-lag p99"]
+                             [:loop-lag-max :max "loop-lag max (GC pause bound)"]]
     (when-let [limit (budget bkey)]
       (def v (get-in row [:runtime :loop-lag pkey]))
       (if (number? v)
         (note (if (< v limit) :ok :miss)
-              (string/format "%s %.3fms (budget < %.1fms)" label v limit))
-        (note :skip (string/format "%s not measured (no probe in the target, or no wrk2)" label)))))
+              (string/format "%s %.3fms (budget < %.1fms)" caption v limit))
+        (note :skip (string/format "%s not measured (no probe in the target, or no wrk2)" caption)))))
   notes)

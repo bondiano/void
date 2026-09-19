@@ -6,8 +6,8 @@
 ### hx-attribute builders (./hx). In between: the :void.htmx/partial
 ### route metadata key — a route marked with it answers a partial
 ### request with the fragment alone, no layout. The middleware sits
-### deeper in the chain (phase 9500) than void/html's render middleware
-### (9000): the chain unwinds innermost-first, so the layout is
+### deeper in the chain than void/html's render middleware (`:after
+### :void.html/render`): the chain unwinds innermost-first, so the layout is
 ### stripped from the still-unrendered view response before the engine
 ### runs — full pages and fragments from one handler, decided per
 ### request.
@@ -274,7 +274,8 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.htmx/partial
-   :phase 9500
+   :after :void.html/render
+   :before :void.http.stage/pre-serialization
    :doc "Strip the layout from view responses to partial htmx requests on routes marked :void.htmx/partial"
    :when |(get $ :void.htmx/partial)
    :wrap (fn [handler]

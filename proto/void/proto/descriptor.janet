@@ -125,8 +125,7 @@
 
 (defn field
   {:params [:keyword :tuple]
-   :ret {:name :keyword :number :number :label :keyword :type :keyword
-         :json-name :string :packed :boolean & r}
+   :ret ProtoField
    :throws [:string]}
   ``Normalize one field declaration. `spec` is `[number & form]`:
 
@@ -154,10 +153,10 @@
   (def rest (slice spec 1))
   (def opts (let [l (last rest)] (if (dictionary? l) l {})))
   (def form (if (dictionary? (last rest)) (slice rest 0 -2) rest))
-  (def label (if (labels (first form)) (first form) :singular))
+  (def cardinality (if (labels (first form)) (first form) :singular))
   (def types (if (labels (first form)) (slice form 1) form))
   (def base
-    (if (= :map label)
+    (if (= :map cardinality)
       (do
         (unless (= 2 (length types)) (error (field-doc fname)))
         (def k (type-entry fname (first types)))
@@ -171,18 +170,18 @@
         (type-entry fname (first types)))))
   (def entry
     (merge
-      {:name fname :number number :label label
+      {:name fname :number number :label cardinality
        :json-name (get opts :json-name (json-name fname))}
       base
       (tabseq [k :in [:oneof :deprecated :doc] :when (not (nil? (opts k)))] k (opts k))))
   # packed is the default for a repeated numeric scalar in proto3, and
   # a peer sending the unpacked form is understood either way — the
   # option only says what *we* write
-  (def packable (and (= :repeated label)
+  (def packable (and (= :repeated cardinality)
                      (get-in scalars [(entry :type) :packable] false)))
   (put entry :packed (and packable (get opts :packed true)))
-  (when (and (entry :oneof) (not= :singular label))
-    (errorf "proto field %q: a %q field cannot belong to a oneof" fname label))
+  (when (and (entry :oneof) (not= :singular cardinality))
+    (errorf "proto field %q: a %q field cannot belong to a oneof" fname cardinality))
   (freeze entry))
 
 (defn wire-type
@@ -227,9 +226,7 @@
 (defn message
   {:params [:keyword (or {:keyword :tuple} @{:keyword :tuple})
             (or {:proto-name :string? :doc :string? :reserved (or [:string] :nil) & r} :nil)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :fields [:any]
-         :by-number @{:number :any} :by-name @{:keyword :any} :by-json @{:string :any}
-         :oneofs @{:keyword :any} :reserved [:string] :doc (or :string :nil)}
+   :ret ProtoMessage
    :throws [:string]}
   ``Build a message descriptor from a name and a table of field
   declarations (see `field`):
@@ -268,9 +265,7 @@
 (defn enum
   {:params [:keyword (or {:keyword :number} @{:keyword :number})
             (or {:proto-name :string? :allow-alias :boolean? :doc :string? & r} :nil)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :values {:keyword :number}
-         :by-number @{:number :keyword} :zero :keyword :allow-alias :boolean
-         :doc (or :string :nil)}
+   :ret ProtoEnum
    :throws [:string]}
   ``Build an enum descriptor:
 
@@ -311,8 +306,7 @@
 
 (defn method
   {:params [{:name :keyword :input :any :output :any & r}]
-   :ret {:name :keyword :input :keyword :output :keyword :proto-name :string
-         :client-streaming :boolean :server-streaming :boolean :idempotent :boolean}
+   :ret ProtoMethod
    :throws [:string]}
   ``Normalize one RPC method: {:name :GetOrder :input
   :orders/GetOrderRequest :output :orders/Order}, plus whatever the
@@ -332,8 +326,7 @@
   {:params [:keyword (or [{:name :keyword :input :any :output :any & r}]
                          @[{:name :keyword :input :any :output :any & r}])
             (or {:proto-name :string? :doc :string? & r} :nil)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :methods [:any]
-         :by-name @{:keyword :any} :doc (or :string :nil)}
+   :ret ProtoService
    :throws [:string]}
   ``Build a service descriptor — the value void/grpc projects into
   routes:
@@ -394,7 +387,7 @@
   desc)
 
 (defn flush!
-  {:params [] :ret @[{:kind :keyword :name :keyword & r}]}
+  {:params [] :ret @[ProtoDescriptor]}
   ``Hand every descriptor registered since the last flush to the
   watchers, and return them. Called at the end of each public way in —
   a parsed file, a `defmessage`, `proto/register!` — so that by the
@@ -417,7 +410,7 @@
   nil)
 
 (defn lookup
-  {:params [(or :keyword :string :buffer)] :ret (or {:kind :keyword :name :keyword & r} :nil)}
+  {:params [(or :keyword :string :buffer)] :ret ProtoDescriptor?}
   "A descriptor by keyword name or by protobuf name, or nil."
   [name]
   (or (registry name)
@@ -434,7 +427,7 @@
             k)))
 
 (defn resolve
-  {:params [(or :keyword :string :buffer) :any] :ret {:kind :keyword :name :keyword & r}
+  {:params [(or :keyword :string :buffer) :any] :ret ProtoDescriptor
    :throws [:string]}
   ``The descriptor a field's `:ref` names, or an error saying who
   wanted it. Late by design: messages are recursive, and a `.proto`
@@ -446,46 +439,40 @@
 
 (defn message!
   {:params [(or :keyword :string :buffer)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :fields [:any]
-         :by-number @{:number :any} :by-name @{:keyword :any} :by-json @{:string :any}
-         :oneofs @{:keyword :any} :reserved [:string] :doc (or :string :nil)}
+   :ret ProtoMessage
    :throws [:string]}
   "A registered *message* descriptor, or an error."
   [name]
   (def d (resolve name))
-  (unless (= :message (d :kind))
-    (errorf "proto: %q is a %q, not a message" name (d :kind)))
-  d)
+  (if (= :message (d :kind))
+    d
+    (errorf "proto: %q is a %q, not a message" name (d :kind))))
 
 (defn enum!
   {:params [(or :keyword :string :buffer)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :values {:keyword :number}
-         :by-number @{:number :keyword} :zero :keyword :allow-alias :boolean
-         :doc (or :string :nil)}
+   :ret ProtoEnum
    :throws [:string]}
   "A registered *enum* descriptor, or an error."
   [name]
   (def d (resolve name))
-  (unless (= :enum (d :kind))
-    (errorf "proto: %q is a %q, not an enum" name (d :kind)))
-  d)
+  (if (= :enum (d :kind))
+    d
+    (errorf "proto: %q is a %q, not an enum" name (d :kind))))
 
 (defn service!
   {:params [(or :keyword :string :buffer)]
-   :ret {:kind :keyword :name :keyword :proto-name :string :methods [:any]
-         :by-name @{:keyword :any} :doc (or :string :nil)}
+   :ret ProtoService
    :throws [:string]}
   "A registered *service* descriptor, or an error."
   [name]
   (def d (resolve name))
-  (unless (= :service (d :kind))
-    (errorf "proto: %q is a %q, not a service" name (d :kind)))
-  d)
+  (if (= :service (d :kind))
+    d
+    (errorf "proto: %q is a %q, not a service" name (d :kind))))
 
 (defn field!
   {:params [{:by-name @{:keyword :any} :name :keyword & r} :keyword]
-   :ret {:name :keyword :number :number :label :keyword :type :keyword
-         :json-name :string :packed :boolean & r}
+   :ret ProtoField
    :throws [:string]}
   "One field of a message by name, or an error naming what is there."
   [desc fname]

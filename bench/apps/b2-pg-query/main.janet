@@ -43,7 +43,7 @@
                 :status 503 :detail "bench_rows is still being filled"}))
 
 (defn row
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "GET /db — one random row by primary key."
   [req]
   (if (seed/seeded?)
@@ -62,7 +62,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 900
+   :after :void.core/checked
    :name :bench.b2/seed
    :doc "Create and fill bench_rows if this database has not got it yet"
    :fn (fn seed! [_] (seed/ensure!))})

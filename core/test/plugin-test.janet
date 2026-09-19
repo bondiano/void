@@ -21,7 +21,7 @@
 (assert (= [1 2 3] (plugin/parse-version "1.2.3")))
 (assert (= [0 1 0] (plugin/parse-version "v0.1")))
 (expect-error "bad version" "version" |(plugin/parse-version "abc"))
-(expect-error "non-string version" "version" |(plugin/parse-version 12))
+(expect-error "non-string version" "version" |(plugin/parse-version 12)) # janet-zed: ignore types
 
 (assert (plugin/satisfies? "1.2.3" ">=1.0"))
 (assert (not (plugin/satisfies? "1.2.3" ">=1.3")))
@@ -212,17 +212,28 @@
 # -- :void.core/config-source: a plugin's secret source reaches config/load --
 
 (defn- vault-plugin
-  {:params [:symbol :number :string] :ret :any}
-  "A plugin contributing one `:void.core/config-source` that answers
-  `answer` for the secret named VAULT_KEY, at `priority`."
-  [name priority answer]
+  {:params [:symbol {:keyword :any} :string] :ret :any}
+  "A plugin contributing one `:void.core/config-source`, named after the
+  plugin and placed by `place` (its :after/:before), that answers
+  `answer` for the secret named VAULT_KEY."
+  [name place answer]
   (plugin/manifest name
     :contributes {:void.core/config-source
-                  [{:name (keyword name) :priority priority
-                    :fn (fn [spec] (when (= (spec :secret) "VAULT_KEY") answer))}]}))
+                  [(merge {:name (keyword name)
+                           :fn (fn [spec] (when (= (spec :secret) "VAULT_KEY") answer))}
+                          place)]}))
+
+(defn- vault-answer
+  {:params [[:any]] :ret :string}
+  "What VAULT_KEY resolves to with `plugins` composed."
+  [plugins]
+  (def boot (plugin/bootstrap {:plugins plugins
+                               :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}}}
+                              true))
+  (config/reveal (get-in boot [:config :values :app :token])))
 
 (def vault-boot
-  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault 100 "from-vault")]
+  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault {} "from-vault")]
                      :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}}}
                     true))
 (assert (= "from-vault" (config/reveal (get-in vault-boot [:config :values :app :token])))
@@ -230,17 +241,26 @@
 (assert (= 1 (length (get-in vault-boot [:extensions :void.core/config-source :resolved])))
         "and the point still resolves in phase 4, for inspect")
 
-# :priority orders the sources — the lowest answers first; ties by :name
-(def ordered-boot
-  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault-b 100 "b")
-                               (vault-plugin 'test/vault-a 10 "a")]
-                     :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}}}
-                    true))
-(assert (= "a" (config/reveal (get-in ordered-boot [:config :values :app :token]))))
+# the sources are a first-answer-wins list ordered by edges: with none,
+# by name; an edge beats the name; the unplaced follow the placed
+(assert (= "a" (vault-answer [(vault-plugin 'test/vault-b {} "b")
+                              (vault-plugin 'test/vault-a {} "a")]))
+        "sources nothing places are asked by name")
+(assert (= "b" (vault-answer [(vault-plugin 'test/vault-b {:before :test/vault-a} "b")
+                              (vault-plugin 'test/vault-a {} "a")]))
+        "an edge beats the name")
+(assert (= "z" (vault-answer [(vault-plugin 'test/vault-a {} "a")
+                              (vault-plugin 'test/vault-y {} "y")
+                              (vault-plugin 'test/vault-z {:before :test/vault-y} "z")]))
+        "a placed source is asked before an unplaced one, whatever the names")
+(expect-error "config source :priority" "removed in ADR-0051"
+  |(vault-answer [(vault-plugin 'test/vault-p {:priority 10} "p")]))
+(expect-error "config source edge to nothing" "unknown"
+  |(vault-answer [(vault-plugin 'test/vault-q {:after :test/nobody} "q")]))
 
 # the caller's own :secret-sources are tried before any plugin's
 (def explicit-boot
-  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault 10 "from-vault")]
+  (plugin/bootstrap {:plugins [(vault-plugin 'test/vault {} "from-vault")]
                      :config {:env @{} :cli {:app {:token {:secret "VAULT_KEY"}}}
                               :secret-sources [(fn [spec] "mine")]}}
                     true))
@@ -492,7 +512,7 @@
                    :start (fn [d c] (array/push hook-log :start) :i)
                    :stop (fn [i] (array/push hook-log :stop)))]
     :contributes {:void.core/hooks
-                  [{:hook :after-start :fn (fn [b] (array/push hook-log :after)) :phase 2000}
+                  [{:hook :after-start :fn (fn [b] (array/push hook-log :after)) :after :void.core/started}
                    {:hook :config-loaded :fn (fn [b] (array/push hook-log :cfg)) :name :cfg-hook}
                    {:hook :before-start :fn (fn [b] (array/push hook-log :before))}]}))
 (def hboot (plugin/start! {:plugins [hooky]}))
@@ -506,6 +526,46 @@
 (plugin/shutdown! hboot)
 (assert (= (freeze (slice hook-log 4)) [:pre-stop :stop])
         "ad-hoc :before-stop handler runs before component stops")
+
+# -- hook order is checked at bootstrap ----------------------------------
+
+(defn hook-noop
+  {:params [:any] :ret :nil}
+  "A hook handler that does nothing."
+  [_] nil)
+
+(def stale-hook
+  (plugin/manifest 'test/stale-hook
+    :contributes {:void.core/hooks
+                  [{:hook :before-start :name :stale/h :phase 500 :fn hook-noop}]}))
+(expect-error "a leftover hook :phase fails the boot" "removed in ADR-0051"
+  |(plugin/dry-run {:plugins [stale-hook]}))
+
+(def hook-a
+  (plugin/manifest 'test/hook-a
+    :contributes {:void.core/hooks
+                  [{:hook :before-start :name :a/h :before :void.core/configured
+                    :fn hook-noop}]}))
+(def hook-b
+  (plugin/manifest 'test/hook-b
+    :contributes {:void.core/hooks
+                  [{:hook :before-start :name :b/h :after :a/h :fn hook-noop}]}))
+(expect-error "an edge to an unrequired plugin's handler fails the boot" "does not require"
+  |(plugin/dry-run {:plugins [hook-a hook-b]}))
+(def hook-b-requiring
+  (plugin/manifest 'test/hook-b-requiring
+    :requires {:test/hook-a true}
+    :contributes {:void.core/hooks
+                  [{:hook :before-start :name :b/h :after :a/h :fn hook-noop}]}))
+(def placed (plugin/bootstrap {:plugins [hook-a hook-b-requiring]} false))
+(assert (= [:a/h :b/h] (tuple ;(map |($ :name) (hooks/handlers (placed :hooks) :before-start))))
+        "an edge to a required plugin's handler places it")
+(expect-error "an edge to a name the hook does not have fails the boot" "unknown"
+  |(plugin/dry-run {:plugins [(plugin/manifest 'test/hook-typo
+                                :contributes {:void.core/hooks
+                                              [{:hook :after-start :name :t/h
+                                                :after :void.core/configured
+                                                :fn hook-noop}]})]}))
 
 # -- shutdown with timeout -----------------------------------------------
 

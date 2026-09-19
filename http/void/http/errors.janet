@@ -1,14 +1,15 @@
 ### void/http/errors — exception -> response mapping.
 ###
-### wrap-panic is the phase-0 panic guard: everything a route chain
+### wrap-panic is the outermost panic guard: everything a route chain
 ### throws becomes a response instead of a dropped connection. An
 ### error envelope (void/core/errors — `abort` builds one) keeps its
 ### status; a v1 `{:http/status N}` dictionary is read the same way;
 ### anything else is a 500. The response is produced by the
-### :void.http/error-renderer contributions in priority order (first
-### non-nil wins) with the built-in renderer as the floor: a terse
-### text/plain in prod, a presentable page for a browser, a full HTML
-### page with the stacktrace and request summary in dev. Renderer
+### :void.http/error-renderer contributions in edge order around
+### `renderer-anchors` (first non-nil wins) with the built-in renderer
+### as the floor: a terse text/plain in prod, a presentable page for a
+### browser, a full HTML page with the stacktrace and request summary
+### in dev. Renderer
 ### contract: (fn [err req ctx] response|nil), ctx = {:status :dev
 ### :stacktrace :error} — `err` is the value as raised (the v1
 ### contract), `:error` its envelope (`errors/of`), so a renderer
@@ -213,6 +214,16 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                (string (ctx :status) " "
                        (get wire/status-messages (ctx :status) "Error")))))
 
+(def renderer-anchors
+  ``The two places of :void.http/error-renderer, in the order they are
+  asked (ADR-0051). A renderer that owns a wire protocol — its client
+  reads that shape and nothing else, as void/grpc's Connect errors —
+  goes `:before :void.http.error/protocol`; a general HTTP renderer,
+  as void/rest's problem+json, goes `:after :void.http.error/protocol
+  :before :void.http.error/generic`. A renderer tied to neither is
+  asked after both, by name.``
+  [:void.http.error/protocol :void.http.error/generic])
+
 (defn render
   {:params [(or @[HttpErrorRenderer] :nil) :any HttpRequest HttpErrorContext]
    :ret HttpResponse}
@@ -221,7 +232,7 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
   default-renderer is the guaranteed fallback.
 
   Inside the request's own locale scope, when it carries one. This
-  guard is phase 0 and `render-error` is called from outside any route
+  guard is outermost and `render-error` is called from outside any route
   at all, so by the time a refusal becomes a page the dyns a locale
   middleware bound are gone with the stack — or were never bound,
   because no route matched and no middleware ran. The request survives
@@ -251,8 +262,8 @@ dd{margin:0;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
                  & r}
                 :nil)]
    :ret HttpHandler}
-  ``The phase-0 panic guard. Options:
-    :renderers  :void.http/error-renderer contributions, priority order
+  ``The outermost panic guard (`:before :void.http/guarded`). Options:
+    :renderers  :void.http/error-renderer contributions, in edge order
     :dev        truthy exposes stacktraces (dev error page)
     :on-error   (fn [req err]) hooks — the :on-error lifecycle stage
 , run before the renderers; the first hook

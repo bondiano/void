@@ -185,7 +185,7 @@
 
 (defn handler
   {:params [{:query {:string :any} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string]}
   ``GET /void/bench/probe — the stats as JSON. `?reset=1` clears the
   reservoir after reading, which is how the runner brackets a set of

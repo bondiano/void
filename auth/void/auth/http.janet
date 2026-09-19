@@ -17,8 +17,8 @@
 ### that survives a change of privilege is session fixation, and the
 ### only moment it can be changed is this one.
 ###
-### **Enforcement**, in the reserved phase 4000 — after the session
-### (3000), before authz (5000). Every route gets the identity bound in
+### **Enforcement**, right after the session and inside the
+### :void.http/authenticated anchor — so before authz. Every route gets the identity bound in
 ### a dyn, because a public page still wants to say "signed in as…";
 ### routes marked `:void.auth/access :required` get a 401 or a redirect
 ### when there is nobody. That answer goes out **through the error
@@ -129,7 +129,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :auth-http/capture-config
    :doc "Read the [:auth-http] slice once, before the route table is built"
    :fn (fn capture [boot]
@@ -206,7 +206,8 @@
   {:name :session
    :doc "The identity a login stored in the session; the subject is re-read from the user store unless [:auth-http :session :load] says otherwise"
    :cookie true
-   :priority 10
+   # first: the edges of :bearer and :jwt (and void/auth-oauth's :oauth)
+   # all start here
    :authenticate session-identity})
 
 # -- login and logout ----------------------------------------------------
@@ -284,7 +285,7 @@
   {:name :bearer
    :doc "Authorization: Bearer vt_<id>.<secret> — an API token, looked up by id and compared as a digest"
    :cookie false
-   :priority 20
+   :after :session
    :authenticate bearer-identity
    :challenge (fn bearer-challenge [_]
                 (ring/header (ring/text 401 "unauthorized")
@@ -340,7 +341,7 @@
   {:name :jwt
    :doc "Authorization: Bearer <JWS> — verified with the configured algorithm and key; the token's own alg header only ever has to match"
    :cookie false
-   :priority 30
+   :after :bearer
    :authenticate jwt-identity})
 
 # -- route metadata ------------------------------------------------------
@@ -441,9 +442,11 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.auth/identity
-   # the reserved phase 4000: after the session (3000), before authz
-   # (5000) — void/authz reads the dyn this wrapper binds
-   :phase 4000
+   # after the session, inside :void.http/authenticated — everything
+   # past that anchor (void/authz among them) reads the dyn this
+   # wrapper binds
+   :after :void.http/session
+   :before :void.http/authenticated
    :doc "Resolve the identity through the strategy chain, bind it for the request, and enforce :void.auth/access :required (401 or a redirect)"
    :wrap
    (fn [handler]
@@ -467,7 +470,7 @@
   (get-in defaults [:session :key]))
 
 (plugin/defplugin void/auth-http
-  :doc "Authentication for void/http: the session, bearer-token and JWT strategies, login!/logout! with session-id rotation, and :void.auth/access enforcement in phase 4000 — answered through the error renderers as a 401 or a redirect."
+  :doc "Authentication for void/http: the session, bearer-token and JWT strategies, login!/logout! with session-id rotation, and :void.auth/access enforcement inside :void.http/authenticated — answered through the error renderers as a 401 or a redirect."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/auth ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :auth-http

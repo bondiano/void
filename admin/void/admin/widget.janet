@@ -101,7 +101,7 @@
 # -- the fallback: html/form ---------------------------------------------
 
 (defn- form-spec
-  {:params [{:name :keyword :schema {:type :keyword :props {:any :any} :children [:any]} & r}]
+  {:params [{:name :keyword :schema SchemaNode & r}]
    :ret (or {:name :keyword :label :string :help :string? :required :boolean
              :control :keyword & r}
             :nil)
@@ -277,7 +277,7 @@
 # -- resolution ----------------------------------------------------------
 
 (defn- matches?
-  {:params [{:types (or @[:any] [:any] :nil) :match (or :function :nil) & r} {:type :any & r}]
+  {:params [{:types (or [:any] :nil) :match (or :function :nil) & r} {:type :any & r}]
    :ret (or :boolean :nil)}
   "Does this contributed widget claim the field, by :types or :match?"
   [w field]
@@ -289,7 +289,7 @@
 (defn resolve
   {:params [{:name :keyword :widgets {:keyword :any} & r}
             {:name :keyword :type :any :rel :any & r}
-            (or @[{:name :keyword :render :function & r}] [{:name :keyword :render :function & r}])]
+            [{:name :keyword :render :function & r}]]
    :ret [{:name :keyword :render :function & r} (enum :declared :contributed :relation :schema)]
    :throws [:string]}
   ``The widget for one field, plus *why* it was chosen — the pair
@@ -331,7 +331,7 @@
              :list [{:field (or {:name :keyword :type :any :rel :any & r} :nil) & r}]
              :filters [{:field (or {:name :keyword :type :any :rel :any & r} :nil) & r}]
              & r}
-            (or @[{:name :keyword :render :function & r}] [{:name :keyword :render :function & r}])]
+            [{:name :keyword :render :function & r}]]
    :ret {:keyword {:widget {:name :keyword :render :function & r}
                    :why :keyword :field {:name :keyword & r}}}
    :throws [:string]}
@@ -421,8 +421,7 @@
     raw))
 
 (defn multipart?
-  {:params [(or (or @[{:widget (or {:encoding (or :keyword :nil) & r} :nil) & r}]
-                    [{:widget (or {:encoding (or :keyword :nil) & r} :nil) & r}])
+  {:params [(or [{:widget (or {:encoding (or :keyword :nil) & r} :nil) & r}]
                 :nil)]
    :ret :boolean}
   ``Does any of these resolved entries draw a control that cannot ride

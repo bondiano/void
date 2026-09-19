@@ -36,10 +36,7 @@
 (defn command
   {:params [:any]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Run one command exactly as written, and return its reply.
 
       (redis/command "XLEN" (redis/key "events"))
@@ -68,24 +65,16 @@
 (defn get-key
   {:params [:any]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "The value of `k`, decoded, or nil when the key does not exist."
   [k]
   (state/codec-decode (state/call ["GET" (state/prefixed k)])))
 
 (defn set-key
   {:params [:any :any
-            (or {:ex :any :px :any :keep-ttl :any :nx :any :xx :any :get :any & r}
-                @{:ex :any :px :any :keep-ttl :any :nx :any :xx :any :get :any & r}
-                :nil)]
+            (or {:ex :any :px :any :keep-ttl :any :nx :any :xx :any :get :any & r} :nil)]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Set `k`. Options:
 
     :ex n / :px n   expire in n seconds / milliseconds
@@ -112,10 +101,7 @@
 (defn del-keys
   {:params [:any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Delete keys; returns how many existed."
   [& ks]
   (if (empty? ks) 0 (state/call ["DEL" ;(map state/prefixed ks)])))
@@ -123,10 +109,7 @@
 (defn exists?
   {:params [:any]
    :ret :boolean
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Does the key exist?"
   [k]
   (pos? (state/call ["EXISTS" (state/prefixed k)])))
@@ -134,10 +117,7 @@
 (defn expire
   {:params [:any :number]
    :ret :boolean
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Give `k` a time to live, in seconds. False when there is no such
   key."
   [k seconds]
@@ -146,10 +126,7 @@
 (defn persist
   {:params [:any]
    :ret :boolean
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Remove the expiry from `k` — it lives until deleted."
   [k]
   (pos? (state/call ["PERSIST" (state/prefixed k)])))
@@ -157,10 +134,7 @@
 (defn key-ttl
   {:params [:any]
    :ret (or :number :keyword :nil)
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Seconds until `k` expires, `:none` when it has no expiry, nil when
   there is no such key. Redis says -1 and -2 for the last two, which
   are only distinguishable if you remember which is which.``
@@ -174,10 +148,7 @@
 (defn key-type
   {:params [:any]
    :ret (or :keyword :nil)
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "The type of `k` as a keyword (:string :list :set :zset :hash
   :stream), or nil when there is no such key."
   [k]
@@ -187,10 +158,7 @@
 (defn rename
   {:params [:any :any]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Rename a key, keeping its time to live."
   [from to]
   (state/call ["RENAME" (state/prefixed from) (state/prefixed to)])
@@ -201,10 +169,7 @@
 (defn incr
   {:params [:any :number?]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Add `by` (default 1) to the integer at `k`, and return the result.
   The counter starts at zero, so no key needs creating first."
   [k &opt by]
@@ -214,10 +179,7 @@
 (defn decr
   {:params [:any :number?]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Subtract `by` (default 1) from the integer at `k`."
   [k &opt by]
   (default by 1)
@@ -226,10 +188,7 @@
 (defn incr-float
   {:params [:any :number]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Add a floating-point `by` to the number at `k`. Redis answers with a
   string (it keeps the decimal representation exact), and this returns
   the number it spells."
@@ -241,10 +200,7 @@
 (defn mget
   {:params [:any]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "The values of several keys, decoded, in the order asked — a missing
   key is nil in its place."
   [& ks]
@@ -254,12 +210,9 @@
                       (state/call ["MGET" ;(map state/prefixed ks)]))))
 
 (defn mset
-  {:params [(or {:any :any} @{:any :any})]
+  {:params [{:any :any}]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Set several keys from a dictionary, in one command."
   [kvs]
   (def args @["MSET"])
@@ -274,10 +227,7 @@
 (defn hget
   {:params [:any :any]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "One field of a hash, decoded, or nil."
   [k field]
   (state/codec-decode (state/call ["HGET" (state/prefixed k) field])))
@@ -285,10 +235,7 @@
 (defn hset
   {:params [:any :any :any?]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Set hash fields: one field and value, or a whole dictionary.
 
       (redis/hset "user:1" :email "a@b.c")
@@ -308,10 +255,7 @@
 (defn hdel
   {:params [:any :any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Remove fields from a hash; returns how many existed."
   [k & fields]
   (if (empty? fields) 0 (state/call ["HDEL" (state/prefixed k) ;fields])))
@@ -319,10 +263,7 @@
 (defn hgetall
   {:params [:any]
    :ret @{:any :any}
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``A whole hash as a table of field -> decoded value, or an empty
   table when there is no such key (redis does not distinguish an empty
   hash from a missing one — a hash with no fields does not exist).``
@@ -340,10 +281,7 @@
 (defn hincr
   {:params [:any :any :number?]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Add `by` (default 1) to a hash field, and return the result."
   [k field &opt by]
   (default by 1)
@@ -352,10 +290,7 @@
 (defn hkeys
   {:params [:any]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "The field names of a hash."
   [k]
   (state/call ["HKEYS" (state/prefixed k)]))
@@ -363,10 +298,7 @@
 (defn hlen
   {:params [:any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "How many fields a hash has."
   [k]
   (state/call ["HLEN" (state/prefixed k)]))
@@ -376,10 +308,7 @@
 (defn lpush
   {:params [:any :any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Push values onto the head of a list; returns the new length."
   [k & vs]
   (state/call ["LPUSH" (state/prefixed k) ;(map state/codec-encode vs)]))
@@ -387,10 +316,7 @@
 (defn rpush
   {:params [:any :any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Push values onto the tail of a list; returns the new length."
   [k & vs]
   (state/call ["RPUSH" (state/prefixed k) ;(map state/codec-encode vs)]))
@@ -398,10 +324,7 @@
 (defn lpop
   {:params [:any]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Take a value off the head of a list, decoded, or nil."
   [k]
   (state/codec-decode (state/call ["LPOP" (state/prefixed k)])))
@@ -409,10 +332,7 @@
 (defn rpop
   {:params [:any]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Take a value off the tail of a list, decoded, or nil."
   [k]
   (state/codec-decode (state/call ["RPOP" (state/prefixed k)])))
@@ -420,10 +340,7 @@
 (defn llen
   {:params [:any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "How long a list is."
   [k]
   (state/call ["LLEN" (state/prefixed k)]))
@@ -431,10 +348,7 @@
 (defn lrange
   {:params [:any :number :number]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "A slice of a list, decoded. Indexes are redis': 0 and -1 are the
   whole list."
   [k start stop]
@@ -444,22 +358,16 @@
 (defn ltrim
   {:params [:any :number :number]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Keep only the given slice of a list."
   [k start stop]
   (state/call ["LTRIM" (state/prefixed k) start stop])
   nil)
 
 (defn blpop
-  {:params [(or :any @[:any] [:any]) :number?]
+  {:params [(or :any [:any]) :number?]
    :ret (or [:any :any] :nil)
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Take a value off the head of the first of `ks` that has one,
   waiting up to `timeout` seconds (0 waits forever). Returns
   [key value] with the key in the application's spelling, or nil when
@@ -477,12 +385,9 @@
   (when r [(state/unprefixed (in r 0)) (state/codec-decode (in r 1))]))
 
 (defn brpop
-  {:params [(or :any @[:any] [:any]) :number?]
+  {:params [(or :any [:any]) :number?]
    :ret (or [:any :any] :nil)
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Like `blpop`, from the tail."
   [ks &opt timeout]
   (default timeout 0)
@@ -496,10 +401,7 @@
 (defn sadd
   {:params [:any :any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Add members to a set; returns how many were new."
   [k & vs]
   (state/call ["SADD" (state/prefixed k) ;(map state/codec-encode vs)]))
@@ -507,10 +409,7 @@
 (defn srem
   {:params [:any :any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Remove members from a set; returns how many were there."
   [k & vs]
   (state/call ["SREM" (state/prefixed k) ;(map state/codec-encode vs)]))
@@ -518,10 +417,7 @@
 (defn smembers
   {:params [:any]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Every member of a set, decoded."
   [k]
   (codec/decode-all (state/active-codec)
@@ -530,10 +426,7 @@
 (defn smember?
   {:params [:any :any]
    :ret :boolean
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Is this value in the set?"
   [k v]
   (def r (state/call ["SISMEMBER" (state/prefixed k) (state/codec-encode v)]))
@@ -542,10 +435,7 @@
 (defn scard
   {:params [:any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "How many members a set has."
   [k]
   (state/call ["SCARD" (state/prefixed k)]))
@@ -562,10 +452,7 @@
 (defn zadd
   {:params [:any :any :any?]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Add scored members to a sorted set: one score and member, or a
   dictionary of member -> score.
 
@@ -588,10 +475,7 @@
 (defn zrem
   {:params [:any :any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Remove members from a sorted set."
   [k & vs]
   (state/call ["ZREM" (state/prefixed k) ;(map state/codec-encode vs)]))
@@ -599,10 +483,7 @@
 (defn zscore
   {:params [:any :any]
    :ret (or :number :nil)
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "The score of one member, or nil."
   [k member]
   (def r (state/call ["ZSCORE" (state/prefixed k) (state/codec-encode member)]))
@@ -611,22 +492,16 @@
 (defn zcard
   {:params [:any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "How many members a sorted set has."
   [k]
   (state/call ["ZCARD" (state/prefixed k)]))
 
 (defn zrange
   {:params [:any :number :number
-            (or {:withscores :any & r} @{:withscores :any & r} :nil)]
-   :ret (or @[:any] [:any] :nil)
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+            (or {:withscores :any & r} :nil)]
+   :ret (or [:any] :nil)
+   :throws [RedisConnectionError RedisReplyError]}
   ``Members between two ranks, decoded, lowest score first.
   `{:withscores true}` returns [member score] pairs instead.
 
@@ -647,12 +522,9 @@
 
 (defn zrange-by-score
   {:params [:any :any :any
-            (or {:limit :any :offset :any & r} @{:limit :any :offset :any & r} :nil)]
+            (or {:limit :any :offset :any & r} :nil)]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Members whose score falls between `min` and `max`, decoded. The
   bounds are redis': numbers, `"-inf"`/`"+inf"`, or `"(5"` for
   exclusive. `{:limit n}` caps how many come back — which is what
@@ -670,13 +542,9 @@
 
 (defn scan-each
   {:params [(fn [a] :any)
-            (or {:match :any :count :any :type :any & r}
-                @{:match :any :count :any :type :any & r} :nil)]
+            (or {:match :any :count :any :type :any & r} :nil)]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Call `f` with every key matching `opts`, walking the keyspace with
   SCAN. Options: :match (a glob, prefixed like every other key),
   :count (how much work per round trip, a hint), :type ("hash",
@@ -704,13 +572,9 @@
   nil)
 
 (defn matching-keys
-  {:params [(or {:match :any :count :any :type :any & r}
-               @{:match :any :count :any :type :any & r} :nil)]
+  {:params [(or {:match :any :count :any :type :any & r} :nil)]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Every key matching `opts` (see `scan-each`), collected into an
   array."
   [&opt opts]
@@ -723,10 +587,7 @@
 (defn script
   {:params [:string]
    :ret :function
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``A Lua script as a callable: loaded once, called by its digest, and
   reloaded transparently when the server has forgotten it (a restart,
   a SCRIPT FLUSH — the NOSCRIPT reply).
@@ -765,10 +626,7 @@
 (defn remember
   {:params [:any :number (fn [] :any)]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``The value under `k`, or — when there is none — the result of
   `thunk`, stored for `ttl` seconds and returned.
 
@@ -795,10 +653,7 @@
 (defn forget
   {:params [:any]
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "Drop a cached key. The plural of `del`, spelled the way a cache
   reads."
   [& ks]
@@ -809,10 +664,7 @@
 (defn ping
   {:params []
    :ret :boolean
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "PING the server. True, or a thrown connection error."
   []
   (def r (state/call ["PING"]))
@@ -829,10 +681,7 @@
 (defn server-info
   {:params [:string?]
    :ret @{:string :string}
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``INFO as a table of string -> string. `section` narrows it
   ("server", "memory", "clients", "stats", "replication",
   "keyspace").``
@@ -847,10 +696,7 @@
 (defn dbsize
   {:params []
    :ret :number
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "How many keys the selected database holds — the whole database,
   prefix or not."
   []
@@ -859,10 +705,7 @@
 (defn flushdb!
   {:params []
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Delete every key in the selected database. Every key: the prefix
   does not narrow this, because redis has no notion of one. For a
   prefixed subset, walk it — `(each k (redis/matching-keys {:match

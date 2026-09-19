@@ -105,18 +105,18 @@
   {:params [{:label :string :database :keyword :config :any & r}] :ret :nil}
   "Run the audit suite against one engine's composition."
   [engine]
-  (def label (engine :label))
+  (def engine-name (engine :label))
   (defn note
     {:params [:string] :ret :nil}
     "Print one progress line, tagged with the engine under test."
-    [msg] (print "  [" label "] " msg))
+    [msg] (print "  [" engine-name "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
      :profile :test
      :config {:env @{}
               :cli (merge {:db {:migrations {:dir "db/migrations"}}
-                           :cache {:prefix (string "blog-audit-" label ":")}
+                           :cache {:prefix (string "blog-audit-" engine-name ":")}
                            :auth {:scrypt {:ln 10}}
                            :crypto {:kdf {:in-thread false}}
                            :mail {:transport :memory}
@@ -225,8 +225,9 @@
     # Through the hook void/authz has fired since 3.3 and nothing else:
     # no middleware, no wrapper, and no change to any route.
 
-    # a *second author*, not an anonymous visitor: authentication is
-    # phase 4000 and authorization 5000, so a visitor who is not signed
+    # a *second author*, not an anonymous visitor: authentication runs
+    # before :void.http/authenticated and authorization before
+    # :void.http/authorized, so a visitor who is not signed
     # in is redirected before any policy is consulted and there is no
     # decision to audit. The interesting refusal is the one a signed-in
     # somebody-else gets

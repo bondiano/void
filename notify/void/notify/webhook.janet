@@ -95,14 +95,15 @@
   normalized notification and nothing else — which is why the receipt,
   the log and a test all read the same string.``
   [note]
-  (json/encode
-    {:id (note :id)
-     :key (string (note :key))
-     :at (note :at)
-     :title (note :title)
-     :body (get note :body)
-     :url (get note :url)
-     :data (get note :data {})}))
+  (string
+    (json/encode
+      {:id (note :id)
+       :key (string (note :key))
+       :at (note :at)
+       :title (note :title)
+       :body (get note :body)
+       :url (get note :url)
+       :data (get note :data {})})))
 
 (defn signature
   {:params [:any :any? :any?] :ret :string?}
@@ -216,7 +217,7 @@
     (when ok bytes)))
 
 (defn- in-prefix?
-  {:params [(or [:number] @[:number]) (or [:number] @[:number]) :number] :ret :boolean}
+  {:params [[:number] [:number] :number] :ret :boolean}
   "Do the first `bits` bits of `bytes` match `prefix`?"
   [bytes prefix bits]
   (and (>= (* 8 (length bytes)) bits)
@@ -285,7 +286,7 @@
     (= (string/ascii-lower e) (string/ascii-lower (string address)))))
 
 (defn- resolved-addresses
-  {:params [:any] :ret (or [:string] @[:string] :nil)}
+  {:params [:any] :ret (or [:string] :nil)}
   "The addresses `host` resolves to — itself, if it is already one."
   [host]
   # the literal address as itself; a name through the resolver, every
@@ -298,7 +299,7 @@
         (distinct (map |(first (net/address-unpack $)) addrs))))))
 
 (defn target-refusal
-  {:params [:any (or {:allow-hosts (or @[:string] [:string] :nil) :allow-private :any & r} :nil)]
+  {:params [:any (or {:allow-hosts (or [:string] :nil) :allow-private :any & r} :nil)]
    :ret :string?}
   ``Why a per-notification URL must not be POSTed to, or nil when it
   may. The host is allowed outright when `[:notify-webhook
@@ -332,9 +333,7 @@
 # -- the channel ---------------------------------------------------------
 
 (defn project
-  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
-             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
-             :overrides @{:keyword (or {:any :any} @{:any :any})}}]
+  {:params [NotifyNotification]
    :ret (or @{:id :string :at :number :key :keyword :url :string :body :string :headers :any} :nil)}
   "The endpoint and the body, or nil when this notification names no
   endpoint and none is configured."
@@ -446,7 +445,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 500
+   :before :void.core/configured
    :name :notify-webhook/configure
    :doc "Resolve the [:notify-webhook] slice"
    :fn (fn configure [boot]
@@ -461,7 +460,7 @@
    # after the components started, because void/crypto opens libcrypto
    # at :start — before them the probe would fail on every composition,
    # including the ones that are right
-   :phase 300
+   :before :void.core/checked
    :name :notify-webhook/signing-check
    :doc "Refuse a secret this process has no library to sign with"
    :fn (fn signing-check [_] (check-signing settings))})

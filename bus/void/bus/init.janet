@@ -100,15 +100,18 @@
   :key :name :index codec/normalize)
 
 (plugin/defextension-point :void.bus/middleware
-  :doc "Message middleware: {:name :phase :wrap (fn [handler handler-opts] handler') :named boolean? :when (fn [handler-opts] bool)?}; the same phase scale as :void.http/middleware, and the handler's own options as a second argument because a bus handler's options are fixed at declaration (see void/bus/middleware). A :named contribution applies only to handlers that list it under :middleware"
+  :doc "Message middleware: {:name :after <name or [names]>? :before <name or [names]>? :wrap (fn [handler handler-opts] handler') :named boolean? :when (fn [handler-opts] bool)?}; the handler's own options are the second argument because a bus handler's options are fixed at declaration (see void/bus/middleware). A contribution is placed by edges: :after/:before an anchor of the chain (middleware/anchors, outermost first: :void.bus/guarded after the panic guard, :void.bus/observed after correlation and tracing, :void.bus/admitted after poison, retry, dedup and throttle, :void.bus/validated after payload validation — user middleware usually goes :after :void.bus/validated) or a neighbour — a middleware of the same plugin, of void/bus or of a plugin the contributor requires. Every contribution must reach an anchor; an unknown name, an unrequired plugin's middleware and a cycle fail the boot, and a leftover :phase is an error (ADR-0051). A :named contribution applies only to handlers that list it under :middleware"
   :schema {:name :keyword
            :doc [:optional :string]
-           :phase [:optional :number]
+           :before [:optional [:or :keyword [:vector :keyword]]]
+           :after [:optional [:or :keyword [:vector :keyword]]]
            :wrap :function
            :named [:optional :boolean]
            :when [:optional :function]}
-  :key :name
-  :reduce (fn [contribs] (tuple ;(map middleware/normalize contribs))))
+  :key :name :what "bus middleware"
+  # the chain order is the broker's (middleware/order, with every
+  # contributor's :requires); the boot checks what it can without them
+  :validate middleware/placement-check)
 
 (each c codec/builtin (plugin/contribute! :void.bus/codec c))
 
@@ -207,17 +210,6 @@
 (def message-summary "See message/summary — one line for a listing." message/summary)
 (def topic-matches? "See message/matches? — does a topic match a subscription pattern?" message/matches?)
 (def message-fields "See message/fields." message/fields)
-
-(def phases "See middleware/phases — the phase constants, which are void/http's." middleware/phases)
-(def phase/panic-guard middleware/phase/panic-guard)
-(def phase/observability middleware/phase/observability)
-(def phase/poison middleware/phase/poison)
-(def phase/retry middleware/phase/retry)
-(def phase/dedup middleware/phase/dedup)
-(def phase/throttle middleware/phase/throttle)
-(def phase/validation middleware/phase/validation)
-(def phase/business middleware/phase/business)
-(def phase/response middleware/phase/response)
 
 (def define-handler! "See router/define! — the runtime half of defhandler." router/define!)
 (def handlers "See router/defined — names of every declared handler." router/defined)
@@ -349,10 +341,7 @@
 
 (defn- resolve-backend
   {:params [:any {:backend :keyword & r}]
-   :ret {:name :keyword :encoded? :boolean :stats :function :health (or :nil :function)
-         :close :function :publish! :function :consume! :function :stop! :function
-         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean
-                      :shared :boolean} & r}
+   :ret BusBackend
    :throws [:string]}
   "The backend named by [:bus :backend], resolved out of what this
   boot's :void.bus/backend point collected and normalized."
@@ -364,7 +353,7 @@
 
 (defn- resolve-codec
   {:params [:any {:codec :keyword & r}]
-   :ret {:name :keyword :bytes? :boolean :doc :any :encode :function :decode :function & r}
+   :ret BusCodec
    :throws [:string]}
   "The codec named by [:bus :codec], resolved out of what this boot's
   :void.bus/codec point collected, or the built-ins when there was no
@@ -375,6 +364,15 @@
               # built-ins are what the point would have resolved to
               (tabseq [c :in codec/builtin] (c :name) (codec/normalize c))))
   (codec/find-codec cs (cfg :codec)))
+
+(defn- active-requires
+  {:params [Boot] :ret {:keyword :any}}
+  ``Each active plugin -> its manifest's :requires: the reach of a
+  middleware's edge to a neighbour, which may only point at a plugin
+  the contributor requires.``
+  [boot]
+  (tabseq [p :in (get boot :active [])]
+    p (get-in boot [:manifests p :requires] {})))
 
 (def broker-component
   (system/component :bus/broker
@@ -393,9 +391,11 @@
       (def cfg (slice cfg0))
       (def b (resolve-backend boot cfg))
       (def c (resolve-codec boot cfg))
-      (def contribs (or (extension boot :void.bus/middleware) []))
+      (def contribs
+        (map |(middleware/normalize (merge ($ :value) {:plugin ($ :plugin)}))
+             (get-in boot [:extensions :void.bus/middleware :contributions] [])))
       (def tracer (state/resolve-tracer))
-      (def br (state/make b c cfg contribs tracer))
+      (def br (state/make b c cfg contribs tracer (active-requires boot)))
       (def caps (backend/capabilities b))
       (log/info "bus ready" :ns log-ns
                 :backend (caps :name) :codec (c :name)
@@ -431,7 +431,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 800
+   :after :void.core/checked
    :name :bus/consume
    :doc "Start a consumer per group the declared handlers ask for"
    :fn (fn start-consuming [boot]
@@ -446,7 +446,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-stop
-   :phase 200
+   :after :void.core/drained
    :name :bus/stop-consuming
    :doc "Stop the consumers before the components they reach for go away"
    :fn (fn stop-consuming [_]
@@ -572,7 +572,7 @@
 # -- manifest ------------------------------------------------------------
 
 (plugin/defplugin void/bus
-  :doc "Messaging: plain-table messages on keyword topics, defhandler with a middleware chain on void/http's phase scale (retry, poison queue, dedup, correlation and a trace that continues out of the request), backends as an extension point with the delivery guarantee declared rather than assumed, and an in-process backend to start with."
+  :doc "Messaging: plain-table messages on keyword topics, defhandler with a middleware chain placed by edges to named anchors (retry, poison queue, dedup, correlation and a trace that continues out of the request), backends as an extension point with the delivery guarantee declared rather than assumed, and an in-process backend to start with."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
   :config-key :bus

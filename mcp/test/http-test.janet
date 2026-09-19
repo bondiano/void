@@ -148,9 +148,9 @@
     :contributes
     {:void.http/middleware
      [{:name :test/identity
-       # phase 4000 is void/auth's own: the identity is in place before
-       # anything downstream asks for it
-       :phase 4000
+       # where void/auth's identity sits: the identity is in place
+       # before anything downstream asks for it
+       :before :void.http/authenticated
        :wrap (fn [handler]
                (fn [req]
                  (with-dyns [:void.auth/identity presented]

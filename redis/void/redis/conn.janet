@@ -63,9 +63,8 @@
 # -- errors --------------------------------------------------------------
 
 (defn command-error
-  {:params [{:code :string? :reply :string? & r} (or @[:any] [:any] :nil)]
-   :ret {:redis/error :boolean :code :string :message :string
-         :reply :string :command (or :string :nil)}}
+  {:params [{:code :string? :reply :string? & r} (or [:any] :nil)]
+   :ret RedisReplyError}
   ``An error reply as the value this module throws: the code a caller
   can branch on, the server's own line, and the command that earned
   it.``
@@ -78,10 +77,9 @@
      :command (when args (string (resp/argument (first args))))}))
 
 (defn connection-error
-  {:params [@{:opts (or {:describe :string? & r} @{:describe :string? & r}) & r}
+  {:params [@{:opts {:describe :string? & r} & r}
             :string :any]
-   :ret {:redis/error :boolean :code :string :fatal :boolean
-         :message :string :server :string}}
+   :ret RedisConnectionError}
   ``A failure of the connection itself rather than of a command.
   :fatal marks it: the pool discards a connection that raised one,
   because what is left of the protocol state on it is unknown.``
@@ -125,7 +123,7 @@
   nil)
 
 (defn- connect-stream
-  {:params [(or {:keyword :any} @{:keyword :any})] :ret :abstract :throws [:string]}
+  {:params [{:keyword :any}] :ret :abstract :throws [:string]}
   ``The raw stream `open` completes its handshake over: a plain
   `net/connect` for `:host`/`:port` or `:unix`, or the `tls-connect`
   seam for a `:tls` target — refused outright when nothing installed
@@ -158,7 +156,7 @@
                    timeout))))
 
 (defn describe-target
-  {:params [(or {:keyword :any} @{:keyword :any})] :ret :string}
+  {:params [{:keyword :any}] :ret :string}
   "What a set of connection options points at, for logs and errors."
   [opts]
   (if-let [sock (get opts :unix)]
@@ -196,11 +194,10 @@
 
 (defn- read-more!
   {:params [@{:stream :abstract :buf :buffer :broken :boolean
-             :opts (or {:describe :string? & r} @{:describe :string? & r}) & r}
+             :opts {:describe :string? & r} & r}
             :number :number?]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}]}
+   :throws [RedisConnectionError]}
   ``Read until the buffer is `want` bytes long. `want` comes from
   `resp/scan`, so a blob that is still arriving is asked for in one
   read rather than discovered a chunk at a time.``
@@ -228,8 +225,8 @@
   :none)
 
 (defn- read-timeout
-  {:params [@{:opts (or {:timeout :number? & r} @{:timeout :number? & r}) & r}
-            (or {:timeout :any & r} @{:timeout :any & r})]
+  {:params [@{:opts {:timeout :number? & r} & r}
+            {:timeout :any & r}]
    :ret (or :number :nil)}
   ``The read timeout `receive` should use: the call's own `:timeout`
   when it named one, the connection's configured default otherwise, or
@@ -244,13 +241,11 @@
 
 (defn receive
   {:params [@{:closed :boolean :buf :buffer :pos :number :broken :boolean
-             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
-                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             :opts {:timeout :number? :max-bulk :number? :describe :string? & r}
              & r}
-            (or {:timeout :any & r} @{:timeout :any & r} :nil)]
+            (or {:timeout :any & r} :nil)]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}]}
+   :throws [RedisConnectionError]}
   ``Read one frame, whatever it is — a reply, or a RESP3 push. Blocks
   the fiber, not the loop. `opts` takes a :timeout of its own, which is
   what a blocking command (BLPOP, XREAD BLOCK) needs: the server holds
@@ -305,13 +300,11 @@
 (defn receive-reply
   {:params [@{:closed :boolean :buf :buffer :pos :number :broken :boolean
              :pending :number :on-push (or (fn [a] :any) :nil)
-             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
-                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             :opts {:timeout :number? :max-bulk :number? :describe :string? & r}
              & r}
-            (or {:timeout :any & r} @{:timeout :any & r} :nil)]
+            (or {:timeout :any & r} :nil)]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}]}
+   :throws [RedisConnectionError]}
   ``Read the next *reply*: attribute frames are skipped (RESP3 metadata
   a client that does not use it must ignore) and push frames are
   handed to the connection's :on-push before the wait resumes. What
@@ -334,13 +327,11 @@
 
 (defn- write!
   {:params [@{:closed :boolean :lock :abstract :stream :abstract
-             :opts (or {:timeout :number? :describe :string? & r}
-                       @{:timeout :number? :describe :string? & r})
+             :opts {:timeout :number? :describe :string? & r}
              & r}
             (or :string :buffer)]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}]}
+   :throws [RedisConnectionError]}
   ``Write `bytes` under the connection's lock — the one write path
   every command goes through, and why a subscriber sending SUBSCRIBE
   and a request fiber sending GET can share one socket safely.``
@@ -358,7 +349,7 @@
 (defn- note-sent!
   {:params [@{:commands :number :pending :number :in-multi :boolean
              :watching :boolean & r}
-            (or @[:any] [:any])]
+            [:any]]
    :ret :nil}
   ``Account for one command going out: it is owed a reply (`:pending`),
   and a few commands open or close state that outlives the exchange —
@@ -382,13 +373,11 @@
 (defn send
   {:params [@{:commands :number :pending :number :in-multi :boolean
              :watching :boolean :closed :boolean :lock :abstract :stream :abstract
-             :opts (or {:timeout :number? :describe :string? & r}
-                       @{:timeout :number? :describe :string? & r})
+             :opts {:timeout :number? :describe :string? & r}
              & r}
-            (or @[:any] [:any])]
+            [:any]]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}]}
+   :throws [RedisConnectionError]}
   "Write one command. The reply is left in the stream for `receive`."
   [c args]
   (note-sent! c args)
@@ -397,13 +386,11 @@
 (defn send-all
   {:params [@{:commands :number :pending :number :in-multi :boolean
              :watching :boolean :closed :boolean :lock :abstract :stream :abstract
-             :opts (or {:timeout :number? :describe :string? & r}
-                       @{:timeout :number? :describe :string? & r})
+             :opts {:timeout :number? :describe :string? & r}
              & r}
-            (or @[:any] [:any])]
+            [:any]]
    :ret :nil
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}]}
+   :throws [RedisConnectionError]}
   "Write several commands as one buffer — the write half of a
   pipeline, and the reason a pipeline is one round trip rather than
   N."
@@ -418,16 +405,12 @@
              :watching :boolean :closed :boolean :lock :abstract :stream :abstract
              :buf :buffer :pos :number :broken :boolean
              :on-push (or (fn [a] :any) :nil)
-             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
-                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             :opts {:timeout :number? :max-bulk :number? :describe :string? & r}
              & r}
-            (or @[:any] [:any])
-            (or {:raw :any & r} @{:raw :any & r} :nil)]
+            [:any]
+            (or {:raw :any & r} :nil)]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Send one command and return its reply. An error reply is thrown
   (see `command-error`) unless `opts` asks for it `:raw`, which is what
   a caller that expects a failure — a probe, a handshake against a
@@ -448,14 +431,12 @@
              :watching :boolean :closed :boolean :lock :abstract :stream :abstract
              :buf :buffer :pos :number :broken :boolean
              :on-push (or (fn [a] :any) :nil)
-             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
-                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             :opts {:timeout :number? :max-bulk :number? :describe :string? & r}
              & r}
-            (or @[:any] [:any])
-            (or {:raw :any & r} @{:raw :any & r} :nil)]
+            [:any]
+            (or {:raw :any & r} :nil)]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
+   :throws [RedisConnectionError
             {:redis/error :boolean :code :string :message :string
              :reply :string :command (or :string :nil)
              :index :number :results @[:any]}]}
@@ -518,23 +499,17 @@
              :buf :buffer :pos :number :broken :boolean
              :protocol :number :server :any :server-id :any :database :number
              :on-push (or (fn [a] :any) :nil)
-             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
-                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             :opts {:timeout :number? :max-bulk :number? :describe :string? & r}
              & r}
-            (or {:protocol :number? :username :string? :password :string?
-                :database :number? :client-name :string? & r}
-                @{:protocol :number? :username :string? :password :string?
-                 :database :number? :client-name :string? & r})]
+            {:protocol :number? :username :string? :password :string?
+            :database :number? :client-name :string? & r}]
    :ret @{:commands :number :pending :number :in-multi :boolean
           :watching :boolean :closed :boolean :lock :abstract :stream :abstract
           :buf :buffer :pos :number :broken :boolean
           :protocol :number :server :any :server-id :any :database :number
           :on-push (or (fn [a] :any) :nil)
           :opts :any & r}
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``HELLO (falling back to RESP2 when the server or a proxy in front of
   it has none), then AUTH, SELECT and CLIENT SETNAME as the options
   ask for them. Runs once at `open` and again at `reconnect!`, which
@@ -586,20 +561,16 @@
 # -- lifecycle -----------------------------------------------------------
 
 (defn open
-  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+  {:params [(or {:keyword :any} :nil)]
    :ret @{:stream :abstract
-          :opts (or {:keyword :any} @{:keyword :any})
+          :opts {:keyword :any}
           :buf :buffer :pos :number :lock :abstract :id :number
           :generation :number :commands :number :pending :number
           :in-multi :boolean :watching :boolean :protocol :number
           :server :any :server-id :any :database :number
           :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
           & r}
-   :throws [:string
-            {:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [:string RedisConnectionError RedisReplyError]}
   ``Open one connection and complete its handshake (HELLO/AUTH/SELECT/
   CLIENT SETNAME). Options are what ./config produces:
 
@@ -672,7 +643,7 @@
 
 (defn reconnect!
   {:params [@{:stream :abstract
-             :opts (or {:keyword :any} @{:keyword :any})
+             :opts {:keyword :any}
              :buf :buffer :pos :number :lock :abstract :id :number
              :generation :number :commands :number :pending :number
              :in-multi :boolean :watching :boolean :protocol :number
@@ -680,18 +651,14 @@
              :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
              & r}]
    :ret @{:stream :abstract
-          :opts (or {:keyword :any} @{:keyword :any})
+          :opts {:keyword :any}
           :buf :buffer :pos :number :lock :abstract :id :number
           :generation :number :commands :number :pending :number
           :in-multi :boolean :watching :boolean :protocol :number
           :server :any :server-id :any :database :number
           :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
           & r}
-   :throws [:string
-            {:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [:string RedisConnectionError RedisReplyError]}
   ``Replace the socket under an existing connection value and redo the
   handshake, keeping the connection's identity (and whatever holds a
   reference to it). The generation counter is what tells a caller that
@@ -715,7 +682,7 @@
 
 (defn info
   {:params [@{:id :number
-             :opts (or {:describe :string? & r} @{:describe :string? & r})
+             :opts {:describe :string? & r}
              :server :any :server-id :any :protocol :number :database :number
              :generation :number :commands :number :closed :boolean :broken :boolean
              & r}]
@@ -742,14 +709,10 @@
              :watching :boolean :closed :boolean :lock :abstract :stream :abstract
              :buf :buffer :pos :number :broken :boolean
              :on-push (or (fn [a] :any) :nil)
-             :opts (or {:timeout :number? :max-bulk :number? :describe :string? & r}
-                       @{:timeout :number? :max-bulk :number? :describe :string? & r})
+             :opts {:timeout :number? :max-bulk :number? :describe :string? & r}
              & r}]
    :ret :boolean
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   "PING, as the pool's liveness check. Returns true, or throws."
   [c]
   (def r (call c ["PING"]))

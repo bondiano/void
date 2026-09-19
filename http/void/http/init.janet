@@ -2,7 +2,8 @@
 ###
 ### The first and heaviest consumer of the plugin API: void/http owns
 ### the extension points other plugins hang HTTP behavior on —
-### :void.http/middleware (phased wrappers), :void.http/route-meta-key
+### :void.http/middleware (wrappers placed by edges to named anchors),
+### :void.http/route-meta-key
 ### (metadata contract declarations), :void.http/route-source (app
 ### modules contribute their routes here), :void.http/session-store,
 ### :void.http/body-codec and :void.http/error-renderer. At :before-start
@@ -30,6 +31,7 @@
 (import ./wire :as wire)
 (import ./ring :as ring)
 (import ./router :as router)
+(import void/core/order :as order)
 (import ./middleware :as middleware)
 (import ./negotiate :as negotiate)
 (import ./multipart :as multipart)
@@ -43,7 +45,7 @@
 
 # -- boot context --------------------------------------------------------
 
-(var current-context
+(var current-context {:type HttpContext?}
   ``The running http context (set by the :before-start table build):
   the :boot it was built from, :cell (route table holder), :handler,
   :limits-fn, :renderers, :codecs, :session, :workers, :config, :dev.
@@ -62,22 +64,19 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.http/middleware
-  :doc "Phased HTTP middleware: {:name :phase 0-10000 | :before <middleware name> | :after <middleware name> :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request. A contribution is placed exactly one way: a number on the scale, or :before/:after naming another middleware — resolved to that middleware's phase ∓ 1 at table build, an error when no active plugin contributes the name (so name only middleware of plugins you require; an optional neighbour is a number). Two plugins on one phase are ordered by plugin name and warned about at build"
+  :doc "HTTP middleware: {:name :after <name or [names]>? :before <name or [names]>? :wrap (fn [handler] handler') :when (fn [route-meta] bool)? :named bool? :route-aware bool?}; :named applies only when a route lists it under :void.http/middleware. With :route-aware true the :wrap is (fn [handler route-meta] handler') and sees the same merged route metadata :when saw — once, at table build — so a wrapper computes what it needs from the route in its closure instead of reading (req :void/route) per request. A contribution is placed by edges: :after/:before an anchor of the chain (middleware/anchors, outermost first: :void.http/guarded, the stage anchors :void.http.stage/*, :void.http/authenticated, /scoped, /verified, /loaded, /authorized, /validated, /responding) or a neighbour — a middleware of the same plugin, of void/http or of a plugin the contributor requires. Every contribution must reach an anchor; an unknown name, an unrequired plugin's middleware and a cycle fail the boot, and a leftover :phase is an error (ADR-0051)"
   :schema {:name :keyword
-           :phase [:optional [:int {:min 0 :max 10000}]]
-           :before [:optional :keyword]
-           :after [:optional :keyword]
+           :before [:optional [:or :keyword [:vector :keyword]]]
+           :after [:optional [:or :keyword [:vector :keyword]]]
            :wrap :function
            :when [:optional :function]
            :named [:optional :boolean]
            :route-aware [:optional :boolean]
            :doc [:optional :string]}
   :key :name :what "middleware"
-  :validate middleware/check-placement
-  # a :before/:after has no number until the table build resolves it
-  # (middleware/resolve-phases); the fold keeps such a contribution
-  # after the numbered ones
-  :reduce |(sorted-by |[(get $ :phase 10001) ($ :name)] $))
+  # the chain order is the table build's (middleware/order, with every
+  # contributor's :requires); the boot checks what it can without them
+  :validate (middleware/placement-check middleware/anchors "middleware"))
 
 (plugin/defextension-point :void.http/hook
   :doc "Global request-lifecycle hooks: {:stage <see middleware/stages> :name :fn <fn or symbol> :env <(router/env-ref (curenv)) for bare symbols>?}; per-route hooks go in :void.http/hooks metadata"
@@ -121,14 +120,15 @@
   :reduce identity)
 
 (plugin/defextension-point :void.http/edge
-  :doc "Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :phase <int, default 9000> :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Lowest phase outermost; an error escaping an edge wrapper reaches the server's last-resort 500, so keep them total."
+  :doc "Wrappers around the *whole* handler, outside routing and outside the panic guard: {:name :after <name or [names]>? :before <name or [names]>? :wrap (fn [handler] handler')}. Middleware wraps one route's chain, so a 404, a 405, a static file and a response the panic guard rendered never pass through it — anything that must touch every response this process emits (security headers, a CORS preflight for a path with no route) belongs here instead. Placed like middleware, by edges to the one anchor :void.http.edge/scoped (inside it a request has its locale scope) or to a neighbour; the first in order is outermost. An error escaping an edge wrapper reaches the server's last-resort 500, so keep them total."
   :schema {:name :keyword
-           :phase [:optional :int]
+           :before [:optional [:or :keyword [:vector :keyword]]]
+           :after [:optional [:or :keyword [:vector :keyword]]]
            :wrap :function
            :doc [:optional :string]}
   :key :name :what "edge wrapper"
-  :reduce (fn [contribs]
-            (tuple ;(sorted-by (fn [c] [(get c :phase 9000) (string (c :name))]) contribs))))
+  # ordered at build-context, where the contributors' :requires are known
+  :validate (middleware/placement-check middleware/edge-anchors "edge wrapper"))
 
 (plugin/defextension-point :void.http/session-store
   :conformance "void/http/conformance/session"
@@ -150,13 +150,19 @@
   # matches, so the resolution keeps contribution order, not name order
   :reduce identity)
 
+(def- renderer-order
+  "How :void.http/error-renderer is sorted: around its anchors, owned by void/http."
+  {:anchors errors/renderer-anchors :owner :void/http})
+
 (plugin/defextension-point :void.http/error-renderer
-  :doc "Error renderers: {:name :fn (fn [err req ctx] response|nil) :priority?}; first response wins, priority order (default 1000)"
+  :doc "Error renderers: {:name :fn (fn [err req ctx] response|nil) :after <name or [names]>? :before <name or [names]>?}; first response wins. A renderer is placed by edges to the two anchors (errors/renderer-anchors, asked in this order): :before :void.http.error/protocol for one that owns a wire protocol and must win for its clients (void/grpc's Connect errors), :after it and :before :void.http.error/generic for a general HTTP renderer (void/rest's problem+json), or to a neighbour. A renderer tied to neither is asked after both, by name; an unknown name and a cycle fail the boot, and a leftover :priority is an error (ADR-0051)"
   :schema {:name :keyword
            :fn :function
-           :priority [:optional :int]}
+           :after [:optional [:or :keyword [:vector :keyword]]]
+           :before [:optional [:or :keyword [:vector :keyword]]]}
   :key :name :what "error renderer"
-  :reduce |(sorted-by (fn [c] [(get c :priority 1000) (c :name)]) $))
+  :validate |(order/first-wins $ "error renderer" renderer-order)
+  :reduce |(order/first-wins $ "error renderer" renderer-order))
 
 # -- reserved metadata keys owned by the kernel --------------------------
 
@@ -196,7 +202,7 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.http/panic-guard
-   :phase middleware/phase/panic-guard
+   :before :void.http/guarded
    :doc "Exception -> response at the route chain edge (errors/wrap-panic; runs the :on-error stage hooks before the renderers)"
    :wrap (fn [handler]
            (fn panic-guard [req]
@@ -220,11 +226,12 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.http/request-id
-   # 50, not the observability phase (1000): an id is a counter, and an
-   # early refusal — pressure's 503 at 100, the address-keyed 429 at
-   # 200 — should be findable in the log and carry its id into
-   # :on-response like any other response
-   :phase middleware/phase/request-id
+   # right inside the guard, before observability: an id is a
+   # counter, and an early refusal — pressure's 503, the address-keyed
+   # 429, both before :on-send — should be findable in the log and
+   # carry its id into :on-response like any other response
+   :after :void.http/guarded
+   :before :void.http.stage/on-send
    :doc "Mint the request id ((req :request-id)) and bind it to the log context; config [:http :request-id-header] names a trusted inbound header to take instead (off by default, fastify-style)"
    :wrap (fn [handler]
            # :wrap runs at table-build time — the context (and config)
@@ -239,7 +246,7 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.http/parsing
-   :phase middleware/phase/parsing
+   :after :void.http.stage/pre-parsing
    :doc "Decode request bodies: urlencoded/multipart -> (req :form), registered body codecs -> (req :parsed-body); a route marked :void.http/body :raw is not wrapped"
    # decided at table build, like every :when: a :raw route has no
    # parsing wrapper, so nothing is checked per request
@@ -281,7 +288,8 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.http/session
-   :phase middleware/phase/session
+   :after :void.http/parsing
+   :before :void.http/authenticated
    :doc "Cookie sessions over the configured :void.http/session-store"
    :when (fn [_] (not (nil? (get (context) :session))))
    :wrap (fn [handler]
@@ -311,7 +319,7 @@
 (defn render-error
   {:params [:any HttpRequest :number?] :ret HttpResponse}
   ``The response the error path would produce for `err` on `req` —
-  the :void.http/error-renderer contributions in priority order
+  the :void.http/error-renderer contributions in edge order
   (problem+json once void/rest is in the composition, the dev page in
   dev, terse text otherwise), the built-in renderer as the floor —
   reached by calling instead of by throwing. `status` overrides the
@@ -390,8 +398,7 @@
             :request-id (req keys/request-id)))
 
 (defn- resolve-global-hooks
-  {:params [(or @[{:fn :any :env :any :stage :keyword :name :keyword}]
-                [{:fn :any :env :any :stage :keyword :name :keyword}]
+  {:params [(or [{:fn :any :env :any :stage :keyword :name :keyword}]
                 :nil)]
    :ret :struct}
   "The :void.http/hook contributions -> stage -> tuple of resolved
@@ -446,7 +453,7 @@
   # :void.http/edge wraps everything, the panic guard included: every
   # response this process emits passes through here, which is what a
   # security header and a CORS preflight for an unrouted path need.
-  # Lowest phase outermost, the same convention middleware uses.
+  # The first in order outermost, the same convention middleware uses.
   (def edge (get ctx :edge []))
   (loop [i :down-to [(dec (length edge)) 0]]
     (set h (((in edge i) :wrap) h)))
@@ -469,6 +476,15 @@
         (errorf "route source %q: its projection returned %q, not a router/routes value" name v))
       v)
     routes))
+
+(defn- active-requires
+  {:params [Boot] :ret {:keyword :any}}
+  ``Each active plugin -> its manifest's :requires: the reach of an
+  edge to a neighbour, which may only point at a plugin the
+  contributor requires.``
+  [boot]
+  (tabseq [p :in (get boot :active [])]
+    p (get-in boot [:manifests p :requires] {})))
 
 (defn build-context
   {:params [Boot]
@@ -496,6 +512,12 @@
                                  (get-in c [:value :routes]) boot)
        :env (get-in c [:value :env])}))
   (def global-hooks (resolve-global-hooks (resolved :void.http/hook)))
+  (def requires (active-requires boot))
+  (def edge (filter |(nil? ($ :anchor))
+                    (middleware/order
+                      (get-in boot [:extensions :void.http/edge :contributions] [])
+                      {:anchors middleware/edge-anchors :what "edge wrapper"
+                       :requires requires})))
   (def ctx
     @{:boot boot
       :config cfg
@@ -504,15 +526,9 @@
       :renderers (resolved :void.http/error-renderer)
       :codecs (resolved :void.http/body-codec)
       :access-log (not= false (cfg :access-log))
-      :edge (tuple ;(or (resolved :void.http/edge) []))
-      # the edge layer as data, for explain-route: the resolved tuple
-      # above has lost which plugin contributed what
-      :edge-info (tuple ;(sorted-by
-                           (fn [s] [(s :phase) (string (s :name))])
-                           (seq [c :in (get-in boot [:extensions :void.http/edge :contributions] [])]
-                             {:name (get-in c [:value :name])
-                              :phase (get-in c [:value :phase] 9000)
-                              :plugin (c :plugin)})))
+      :edge (tuple ;(map |($ :value) edge))
+      # the edge layer as data, for explain-route
+      :edge-info (tuple ;(map middleware/describe edge))
       :on-error-global (tuple ;(get global-hooks :on-error []))
       :on-timeout-global (tuple ;(get global-hooks :on-timeout []))
       :on-response-global (tuple ;(get global-hooks :on-response []))
@@ -526,6 +542,7 @@
      :meta-keys (or (resolved :void.http/route-meta-key) @{})
      :middleware (get-in boot [:extensions :void.http/middleware :contributions] [])
      :stage-hooks global-hooks
+     :requires requires
      :strict (get cfg :strict-meta false)})
   (def table (router/build-table build-args))
   # the :void.http/route-added app hook: plugins see every entry at build
@@ -539,7 +556,7 @@
   (put ctx :handler (make-handler ctx (cfg :static)))
   (put ctx :limits-fn
        (fn limits [method path]
-         (when-let [[entry _] (router/match (router/current cell) method path)]
+         (when-let [[entry _] (router/lookup (router/current cell) method path)]
            {:max-body (get-in entry [:meta :void.http/max-body])
             :timeout (get-in entry [:meta :void.http/timeout])})))
   (put ctx :notify-response
@@ -558,7 +575,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 500
+   :after :void.core/configured
    :name :http/build-table
    :doc "Build and validate the route table before anything listens"
    :fn (fn build! [boot] (build-context boot))})
@@ -749,8 +766,8 @@
   {:params [:string :keyword?] :ret (or :nil {:edge :tuple & r})}
   "The routing verdict and per-key metadata provenance for a path (see
   router/explain-route), plus :edge — the :void.http/edge layer every
-  response passes through, [{:name :phase :plugin} ...] outermost
-  first; nil when nothing matches."
+  response passes through, [{:name :plugin :after? :before?} ...]
+  outermost first; nil when nothing matches."
   [path &opt method]
   (when-let [ex (router/explain-route (routes-table) path method)]
     (merge ex {:edge (get (context) :edge-info [])})))
@@ -813,13 +830,13 @@
 
 (defn chain-lines
   {:params [{:method :keyword :pattern :string :name :any :handler :any :source :any
-             :edge (or @[:any] [:any]) :chain (or @[:any] [:any]) :hooks @{:any :any}
-             :declined (or @[:any] [:any]) :warnings (or @[:any] [:any]) & r}]
+             :edge [:any] :chain [:any] :hooks @{:any :any}
+             :declined [:any] :warnings [:any] & r}]
    :ret @[:string]}
   ``The lines `void routes --chain <path>` prints for one explain-route
   verdict: the edge layer (every response passes it, outside routing),
-  the chain outermost first as name@phase with the plugin — stage
-  wrappers and relative placements marked — the route's out-of-chain
+  the chain outermost first as the name, the plugin and the edges it
+  was placed by — stage wrappers marked — the route's out-of-chain
   hooks, the contributions that declined this route and why, and the
   warnings.``
   [ex]
@@ -830,22 +847,33 @@
     strings) onto `out`."
     [& parts] (array/push out (string ;parts)))
   (defn block
-    {:params [:string (or @[:any] [:any])] :ret :nil}
-    "Push `label` (once, aligned) followed by each of `items`, indented
+    {:params [:string [:any]] :ret :nil}
+    "Push `heading` (once, aligned) followed by each of `items`, indented
     to line up under it."
-    [label items]
+    [heading items]
     (each [i s] (pairs items)
-      (line "  " (if (zero? i) (string/format "%-9s" label) "         ") s)))
+      (line "  " (if (zero? i) (string/format "%-9s" heading) "         ") s)))
+  (defn step-line
+    {:params [HttpChainStep] :ret :string}
+    "One edge or chain step: its name, its plugin, then how it was
+    placed — `stage` for a stage wrapper at its anchor."
+    [s]
+    (def edges (order/edges-str s))
+    (string/format "%q  %q%s" (s :name) (s :plugin)
+                   (cond
+                     (s :stage) "  stage"
+                     (empty? edges) ""
+                     (string "  " edges))))
   (line (string/format "%s %s -> %q (handler %s, source %q%s)"
                        (string/ascii-upper (string (ex :method))) (ex :pattern) (ex :name)
                        (bind/describe (ex :handler)) (ex :source)
                        (let [t (tags-of ex)] (if (empty? t) "" (string ", " t)))))
   (block "edge" (if (empty? (ex :edge))
                   ["none"]
-                  (map |(string/format "%q@%d  %q" ($ :name) ($ :phase) ($ :plugin)) (ex :edge))))
+                  (map step-line (ex :edge))))
   (block "chain" (if (empty? (ex :chain))
                    ["none"]
-                   (map |(string/format "%s  %q" (router/step-str $) ($ :plugin)) (ex :chain))))
+                   (map step-line (ex :chain))))
   (block "hooks" (if (empty? (ex :hooks))
                    ["none out of chain"]
                    (seq [s :in (sorted (keys (ex :hooks)))]
@@ -872,7 +900,7 @@
    :args []
    :flags {"--keys" {:key :keys :type :bool :doc "print the metadata keys each route carries"}
            "--chain" {:key :chain
-                      :doc "one path, with its phases, the edge layer, out-of-chain hooks and declined middleware"}
+                      :doc "one path, with its chain in order, the edge layer, out-of-chain hooks and declined middleware"}
            "--method" {:key :method :doc "which method of --chain's path (default: get)"}}
    :fn (fn cli-routes [opts]
          (when (and (opts :method) (nil? (opts :chain)))
@@ -882,7 +910,7 @@
            (print-routes (routes-table) {:keys (opts :keys)})))})
 
 (defn- live-sources
-  {:params [Boot (or @[HttpRouteSource] [HttpRouteSource])]
+  {:params [Boot [HttpRouteSource]]
    :ret @[HttpRouteSource]
    :throws [:string]}
   ``Route sources re-read from the live manifest registry: a dofile
@@ -931,7 +959,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :void.dev/reloaded
-   :phase 500
    :name :http/rebuild-table
    :doc "Rebuild + atomically swap the route table after the dev watcher reloads modules (new routes, pattern and metadata edits go live)"
    :fn (fn on-reloaded [boot report]
@@ -979,7 +1006,7 @@
                        :index [:optional :string]}]})
 
 (plugin/defplugin void/http
-  :doc "HTTP kernel: net/ev server (keep-alive, limits, chunked, SSE, graceful drain), PEG router with symbol handlers and metadata merge, phased middleware, sessions, static files, prefork workers."
+  :doc "HTTP kernel: net/ev server (keep-alive, limits, chunked, SSE, graceful drain), PEG router with symbol handlers and metadata merge, middleware ordered by edges to named anchors, sessions, static files, prefork workers."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1"}
   :hooks [:void.http/route-added :void.http/listening :void.http/draining]

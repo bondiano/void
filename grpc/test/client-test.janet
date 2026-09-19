@@ -18,7 +18,7 @@
 (defn get-order
   {:params [{:id :any & r} :any]
    :ret @{:id :string :total_cents :number :status :keyword}
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   "The RPC handler under test: the order by id, or not_found."
   [msg _req]
   (or (orders (msg :id))
@@ -38,7 +38,7 @@
 (defn explode
   {:params [:any :any]
    :ret :never
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   "The RPC handler under test: always refuses, resource_exhausted."
   [_msg _req] (grpc/fail! :resource_exhausted "too many orders"))
 (defn slow

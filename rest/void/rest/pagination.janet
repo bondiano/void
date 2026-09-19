@@ -56,7 +56,7 @@
     nil))
 
 (defn parse-sort
-  {:params [:string? (or @[:keyword] [:keyword] :nil)]
+  {:params [:string? (or [:keyword] :nil)]
    :ret @[[:keyword (enum :asc :desc)]]
    :throws [{:void/error :keyword :message :string? :data {:keyword :any}
             :status :number :http/status :number}]}
@@ -99,7 +99,7 @@
 (defn params
   {:params [{:query :any & r}
             (or {:per-page :number :max-per-page :number
-                 :allowed-sort (or @[:keyword] [:keyword]) & r}
+                 :allowed-sort [:keyword] & r}
                 :nil)]
    :ret {:page :number :per-page :number :offset :number :limit :number
          :sort @[[:keyword (enum :asc :desc)]] :filters @{:keyword :any}}

@@ -22,7 +22,7 @@
 (expect-error "bad :ambient" ":ambient"
   |(system/component :a :start (fn [d c] 1) :ambient @{:dyn :x}))
 (expect-error "non-keyword key" "keyword"
-  |(system/component "a" :start (fn [d c] 1)))
+  |(system/component "a" :start (fn [d c] 1))) # janet-zed: ignore types
 (expect-error "bad :deps" ":deps"
   |(system/component :a :start (fn [d c] 1) :deps [:x "y"]))
 (expect-error "bad :config spec" ":config"
@@ -153,7 +153,7 @@
 
 (def rlog @[])
 (defn rcomp
-  {:params [:keyword (or @[:keyword] [:keyword])] :ret :any}
+  {:params [:keyword [:keyword]] :ret :any}
   "A component that logs its own start/stop to `rlog`, for asserting
   restart's dependency order."
   [key deps]
@@ -201,7 +201,7 @@
 
 (def klog @[])
 (defn- kcomp
-  {:params [:keyword (or @[:keyword] [:keyword])] :ret :any}
+  {:params [:keyword [:keyword]] :ret :any}
   "A component that logs its own start/stop to `klog`, for asserting
   stop-key's reach."
   [key deps]
@@ -299,7 +299,7 @@
 # failure there used to take the first call's components down with it
 (def rlog2 @[])
 (defn- rc
-  {:params [:keyword (or @[:keyword] [:keyword])] :ret :any}
+  {:params [:keyword [:keyword]] :ret :any}
   "A component that logs its own start/stop to `rlog2`, and fails to
   start if its key is :late-boom."
   [key deps]

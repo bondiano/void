@@ -99,12 +99,12 @@
                      (merge opts {:topic topic :value value})))
 
 (defn consume!
-  {:params [{:group :any :topics (or [:string] @[:string] :nil) & r} (fn [:any] :any)]
+  {:params [{:group :any :topics (or [:string] :nil) & r} (fn [:any] :any)]
    :ret @{:client @{:kind :keyword :handle :pointer :queue :pointer :rfd :number
                     :wfd :number :pair :any :stopped :boolean :pump-done :any
                     :last-error :any :handlers @{:keyword :any}
                     :stats @{:events :number :errors :number}}
-          :group :any :topics (or [:string] @[:string]) :deliver (fn [:any] :any)
+          :group :any :topics [:string] :deliver (fn [:any] :any)
           :closed :boolean
           :stats @{:received :number :delivered :number :errors :number}}
    :throws [:string]}

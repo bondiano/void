@@ -1,6 +1,6 @@
 (declare-project
   :name "void-authz"
-  :description "void/authz — ABAC: policies as pure functions under names, attributes pulled through providers when a policy asks, decisions as values with an explanation, and enforcement in phase 5000 from route metadata."
+  :description "void/authz — ABAC: policies as pure functions under names, attributes pulled through providers when a policy asks, decisions as values with an explanation, and enforcement at :void.http/authorized from route metadata."
   :version "0.0.1")
 
 # Two plugins: void/authz (the registry, the context and the decision —

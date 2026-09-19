@@ -72,9 +72,8 @@
 
 (defn rows
   {:params [:any]
-   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r}
-            @{:status :number :body :any :headers @{:string :any}})}
+   :ret (or HtmlView
+            HttpResponseTable)}
   "GET /rows — a page of rows, server-rendered."
   [req]
   # the listener opens in system/start and the seeding runs at
@@ -97,7 +96,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 900
+   :after :void.core/checked
    :name :bench.b3/seed
    :doc "Create and fill bench_rows if this database has not got it yet"
    :fn (fn seed! [_] (seed/ensure!))})

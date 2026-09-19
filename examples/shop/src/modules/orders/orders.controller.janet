@@ -36,9 +36,8 @@
 
 (defn place-order
   {:params [:any]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r})
+   :ret (or HttpResponseTable
+            HtmlView)
    :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
                      :status :number :http/status :number}]}
   "POST /checkout — the transaction in ./orders.service, and the two
@@ -56,8 +55,7 @@
 
 (defn my-orders
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /orders — the caller's own, newest first."
   [req]
@@ -65,8 +63,7 @@
 
 (defn show-order
   {:params [{:params {:number :any & r} & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
                      :status :number :http/status :number}]}
   ``GET /orders/:number — one order.

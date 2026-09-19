@@ -468,7 +468,7 @@
   argv)
 
 (defn- describe-exit
-  {:params [:number (or @[:string] [:string])] :ret :string}
+  {:params [:number [:string]] :ret :string}
   "The message for a compiler that exited with `code`, naming the
   command that was run."
   [code argv]

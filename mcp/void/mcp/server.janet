@@ -55,7 +55,7 @@
 # -- tools ---------------------------------------------------------------
 
 (defn find-tool
-  {:params [{:tools (or @[{:name :string & r}] [{:name :string & r}] :nil) & r} :string]
+  {:params [{:tools (or [{:name :string & r}] :nil) & r} :string]
    :ret (or {:name :string & r} :nil)}
   "The tool exposed under `name`, or nil."
   [srv name]
@@ -111,7 +111,7 @@
 # -- resources -----------------------------------------------------------
 
 (defn find-resource
-  {:params [{:resources (or @[{:uri :string & r}] [{:uri :string & r}] :nil) & r} :string]
+  {:params [{:resources (or [{:uri :string & r}] :nil) & r} :string]
    :ret (or {:uri :string & r} :nil)}
   "The resource published under `uri`, or nil."
   [srv uri]
@@ -171,14 +171,11 @@
 
 (defn handle
   {:params [{:info :any :instructions :any
-             :tools (or @[{:name :string & r}] [{:name :string & r}] :nil)
-             :resources (or @[{:uri :string & r}] [{:uri :string & r}] :nil)
+             :tools (or [{:name :string & r}] :nil)
+             :resources (or [{:uri :string & r}] :nil)
              & r}
-            {:id :any :params :any :response? :any :notification? :any :method :string? & r}]
-   :ret (or @{:jsonrpc :string :id :any :result :any}
-            @{:jsonrpc :string :id :any
-              :error @{:code (or :keyword :number) :message :string & r}}
-            :nil)}
+            McpMessage]
+   :ret McpResponse?}
   ``Answer one decoded message (see jsonrpc/decode) against a server
   value. Returns the response message, or nil when there is nothing to
   say — a notification, or a response the client sent us.

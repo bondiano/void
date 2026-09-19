@@ -59,7 +59,7 @@
   :headers)
 
 (defn fields
-  {:params [{:type :keyword :data :string & r}] :ret (or @{:any :any} :nil)}
+  {:params [WsMessage] :ret (or @{:any :any} :nil)}
   ``The form fields out of an htmx `hx-ws:send` message: the decoded
   JSON object without htmx's own `headers` entry. Returns nil when the
   message is not one — a socket is open to whoever holds it, and a
@@ -73,7 +73,7 @@
       out)))
 
 (defn headers
-  {:params [{:type :keyword :data :string & r}] :ret :any}
+  {:params [WsMessage] :ret :any}
   ``The `headers` object htmx sends alongside the fields (HX-Request,
   HX-Request-Type, HX-Source, HX-Target and friends), or nil.``
   [message]
@@ -121,7 +121,7 @@
              "target" (get spec :target)})
   (when-let [swap (get spec :swap)] (put out "swap" (hx/swap-style swap)))
   (when-let [select (get spec :select)] (put out "select" select))
-  (json/encode out))
+  (string (json/encode out)))
 
 (defn fragment
   {:params [:any (or :string :keyword {:target :any & r} :nil)]

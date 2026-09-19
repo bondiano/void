@@ -192,10 +192,7 @@
 (def- state-set (tabseq [s :in jobs/record-states] s true))
 
 (defn- param
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+  {:params [HttpRequest
             :string]
    :ret (or :string :nil)}
   "One filter, from the query of a GET or the body of the confirmed
@@ -206,12 +203,8 @@
   (when (and (string? v) (not (empty? v))) v))
 
 (defn- listing-state
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
-   :ret {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-         :limit :number :default-limit :number}}
+  {:params [HttpRequest]
+   :ret AdminJobsListing}
   ``The listing the URL describes: {:queue :state :job :limit}, each
   nil for "any". A state that is not one of the five is dropped rather
   than passed on — the filter panel cannot produce one, and a hand-typed
@@ -250,19 +243,15 @@
 (defn- rows-of
   {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
              :limit :number & r}]
-   :ret (or @[:any] [:any])}
+   :ret [:any]}
   "The records of one listing."
   [st]
   (jobs/list-jobs {:queue (st :queue) :state (st :state)
                    :job (st :job) :limit (st :limit)}))
 
 (defn index
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+  {:params [HttpRequest]
+   :ret HtmlView
    :throws [:string]}
   "The section: the queues, their depth, and the records of one
   filter. htmx swaps the half that moves; a browser without it gets
@@ -276,27 +265,18 @@
             {:partial (fn [] (jview/body-fragment snap rows st now))}))
 
 (defn record
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
-   :throws [:string {:void/error :keyword :message :string? :data {:keyword :any}
-                     :status :number :http/status :number}]}
+  {:params [HttpRequest]
+   :ret HtmlView
+   :throws [:string VoidError]}
   "One record, with everything the queue stores for it."
   [req]
   (def r (or (jobs/fetch (get-in req [:params :id])) (errors/abort 404)))
   (act/page req (jview/record-page r (os/clock :realtime))))
 
 (defn- action-of
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
+  {:params [HttpRequest]
    :ret :keyword
-   :throws [:any {:void/error :keyword :message :string? :data {:keyword :any}
-                  :status :number :http/status :number}]}
+   :throws [:any VoidError]}
   ``Which action a URL names, with its policy enforced here rather
   than on the route: the action is part of the path, which is the same
   shape and the same reason as a resource's bulk.``
@@ -307,13 +287,9 @@
   a)
 
 (defn- refusal
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+  {:params [HttpRequest
             :any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``A refusal, as a page: 422 and a sentence. The built-in error page
   is terse outside dev, and the reason is the whole of the answer here
@@ -351,13 +327,9 @@
             ;kvs))
 
 (defn record-action
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
+  {:params [HttpRequest]
    :ret :any
-   :throws [:any {:void/error :keyword :message :string? :data {:keyword :any}
-                  :status :number :http/status :number}]}
+   :throws [:any VoidError]}
   "Retry or discard one record. Both answer with the listing: after a
   discard the record is not there to go back to, and after a retry the
   queue is what the operator was watching."
@@ -382,13 +354,9 @@
   {:queue (st :queue) :state (st :state)})
 
 (defn- bulk-refusal
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+  {:params [HttpRequest
             :any {:state (or :keyword :nil) & r}]
-   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret (or HtmlView
             :nil)
    :throws [:string]}
   ``The response a bulk that will not be run answers with, or nil. A
@@ -415,15 +383,10 @@
     (jview/total-of counts (sel :state))))
 
 (defn bulk-confirm
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
-   :ret (or @{:status :number :headers @{:string :string} :void.html/content :any
-              :void.html/layout :any :void.html/context {:any :any} & r}
+  {:params [HttpRequest]
+   :ret (or HtmlView
             :nil)
-   :throws [:any {:void/error :keyword :message :string? :data {:keyword :any}
-                  :status :number :http/status :number}]}
+   :throws [:any VoidError]}
   "The page a bulk goes through: what it will do, how many records,
   and a sample — counted on the server, as every admin bulk is."
   [req]
@@ -437,13 +400,9 @@
                                     (os/clock :realtime)))))
 
 (defn bulk-apply
-  {:params [@{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}]
+  {:params [HttpRequest]
    :ret :any
-   :throws [:any {:void/error :keyword :message :string? :data {:keyword :any}
-                  :status :number :http/status :number}]}
+   :throws [:any VoidError]}
   "The bulk itself. Discard is one `clear!`; retry is `bulk-cap`
   records at most, because there is no bulk revive in the contract and
   there is no reason to grow one for a button."
@@ -500,7 +459,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 430
+   :after :admin/build-context :before :void.core/configured
    :name :admin-jobs/policies
    :doc "Register the section's four policies where the application has not — the name is on the route from the first boot, so narrowing 'who may empty the dead letter queue' is a defpolicy and nothing else"
    :fn (fn register [_boot]
@@ -517,7 +476,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 140
+   :before :void.core/checked
    :name :admin-jobs/require-shared-backend
    :doc "Under [:deploy :shape] :fleet, a per-process queue backend cannot carry an admin progress page between replicas, and the Jobs section would show whichever replica answered — refuse at start"
    :fn (fn check [boot]

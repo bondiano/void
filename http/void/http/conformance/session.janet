@@ -39,7 +39,7 @@
   [:load :save :delete :sweep])
 
 (defn- missing-keys
-  {:params [:any] :ret (or @[:keyword] [:keyword])}
+  {:params [:any] :ret [:keyword]}
   "The contract functions `store` is missing: every key whose value is
   not callable, or the whole contract when `store` is not even a
   dictionary."

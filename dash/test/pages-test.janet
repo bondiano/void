@@ -47,7 +47,7 @@
     :contributes {:void.dash/gate [{:name :test/gate :fn pred}]}))
 
 (defn- start
-  {:params [:keyword (or {:keyword :any} :nil) (or @[:any] [:any] :nil)]
+  {:params [:keyword (or {:keyword :any} :nil) (or [:any] :nil)]
    :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
    :throws [:string]}
   "Boot the plugins under test, in `profile`, with `dash-cfg` as the

@@ -49,7 +49,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :storage-http/capture-config
    :doc "Read the [:storage] slice once, before the route table is built"
    :fn (fn capture [boot]
@@ -60,10 +60,8 @@
 (defn serve-file
   {:params [{:headers {:any :any} :params (or {:key :any? & r} :nil)
              :query (or {:any :any} :nil) & r}]
-   :ret @{:status :number :body (or :nil :string) :headers @{:any :any}}
-   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
-             :status :number :http/status :number}
-            :string]}
+   :ret HttpResponse
+   :throws [VoidError :string]}
   ``The handler: decode the splat, validate it as a key (the traversal
   rules live there), demand the signature when the prefix is private,
   and hand the path to static/file-response — 304, 206 and 416
@@ -86,7 +84,7 @@
       (errors/abort 404)))
 
 (defn- own-routes
-  {:params [:any] :ret {:routes :boolean :global {:keyword :any} :children [:any]}
+  {:params [:any] :ret HttpRoutes
    :throws [:string]}
   "A function of boot, not a value: the mount prefix is
   configuration, which is not known when this manifest freezes (the

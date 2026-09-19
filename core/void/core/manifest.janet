@@ -36,7 +36,7 @@
     (errorf "plugin name must be a symbol or keyword, got %q" name)))
 
 (defn- normalize-requires
-  {:params [:any (or {:any (or :boolean :string)} @[:any] [:any] :nil)]
+  {:params [:any (or {:any (or :boolean :string)} [:any] :nil)]
    :ret {:keyword (or :boolean :string)}
    :throws [:string]}
   "Normalize :requires to a frozen {plugin-keyword constraint-or-true}:
@@ -75,7 +75,7 @@
             name requires)))
 
 (defn- normalize-components
-  {:params [:any (or @[:any] [:any])]
+  {:params [:any [:any]]
    :ret [Component]
    :throws [:string]}
   "Check :components is a tuple of component definitions (a :key and
@@ -97,7 +97,7 @@
            (table/to-struct (merge-into @{} c {:plugin name})))))))
 
 (defn- normalize-contributes
-  {:params [:any {:keyword (or @[:any] [:any])}]
+  {:params [:any {:keyword [:any]}]
    :ret {:keyword [:any]}
    :throws [:string]}
   "Check :contributes is {point-keyword [contribution ...]} and freeze

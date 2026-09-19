@@ -86,9 +86,9 @@
     :contributes
     {:void.http/middleware
      (if extra-middleware
-       [{:name :app/one :phase 100 :fn (fn [h] h)}
-        {:name :app/two :phase 200 :fn (fn [h] h)}]
-       [{:name :app/one :phase 100 :fn (fn [h] h)}])}))
+       [{:name :app/one :after :void.http/guarded :fn (fn [h] h)}
+        {:name :app/two :after :app/one :fn (fn [h] h)}]
+       [{:name :app/one :after :void.http/guarded :fn (fn [h] h)}])}))
 
 (defn- point-manifest
   {:params [] :ret {:name :keyword :doc :string? :void-api :number :version :string

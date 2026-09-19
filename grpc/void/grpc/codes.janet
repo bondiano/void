@@ -44,10 +44,7 @@
 (defn code?
   {:params [:any]
    :ret :boolean
-   :narrows (enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
-                  :already_exists :permission_denied :resource_exhausted :failed_precondition
-                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
-                  :unauthenticated)}
+   :narrows GrpcCode}
   "Is this one of the sixteen?"
   [code]
   (truthy? (codes code)))
@@ -93,10 +90,7 @@
 
 (defn code-for-status
   {:params [:number]
-   :ret (enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
-              :already_exists :permission_denied :resource_exhausted :failed_precondition
-              :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
-              :unauthenticated)}
+   :ret GrpcCode}
   "The Connect code an HTTP status raised elsewhere in the stack
   means to an RPC client."
   [status]
@@ -113,15 +107,8 @@
   :void.grpc/code)
 
 (defn error-value
-  {:params [(enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
-                  :already_exists :permission_denied :resource_exhausted :failed_precondition
-                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
-                  :unauthenticated)
-            :string
-            (or {:http/status (or :number :nil) :details (or [:any] :nil)
-                :headers (or @{:string :string} :nil) & r}
-                :nil)]
-   :ret {:void.grpc/code :keyword :status :number :http/status :number & r}
+  {:params [GrpcCode :string GrpcFailureOptions?]
+   :ret GrpcFailure
    :throws [:string]}
   ``Build an RPC failure:
 
@@ -147,16 +134,9 @@
                   :http/status status})))
 
 (defn fail!
-  {:params [(enum :canceled :unknown :invalid_argument :deadline_exceeded :not_found
-                  :already_exists :permission_denied :resource_exhausted :failed_precondition
-                  :aborted :out_of_range :unimplemented :internal :unavailable :data_loss
-                  :unauthenticated)
-            :string
-            (or {:http/status (or :number :nil) :details (or [:any] :nil)
-                :headers (or @{:string :string} :nil) & r}
-                :nil)]
+  {:params [GrpcCode :string GrpcFailureOptions?]
    :ret :never
-   :throws [:string {:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [:string GrpcFailure]}
   ``Raise an RPC failure — what a handler calls instead of returning:
 
       (grpc/fail! :not_found "no order A-1")
@@ -168,7 +148,7 @@
   (error (error-value code message opts)))
 
 (defn failure
-  {:params [:any :string?] :ret :any}
+  {:params [:any :string?] :ret GrpcFailure?}
   ``The RPC failure inside a raised value, or nil. Reads three shapes:
   one of ours, an HTTP abort from anywhere else in void
   (`{:http/status 403}`), and a bare string from a panic — which is

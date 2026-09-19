@@ -4,7 +4,7 @@
 ### agent talking to a jobs worker over stdio has no reason to compose
 ### an HTTP kernel — the void/cache — void/cache-http split.
 ###
-### **It is a route, and that is the whole security story** (the form of): `POST /mcp` goes through routing, the phase chain,
+### **It is a route, and that is the whole security story** (the form of): `POST /mcp` goes through routing, the middleware chain,
 ### `void/security`'s headers and limits, `void/pressure`'s shedding
 ### and whatever the application put in front of it. Nothing here
 ### re-implements any of that.
@@ -107,7 +107,7 @@
   keys/identity)
 
 (defn auth-mode
-  {:params [(or {:auth :any :token :any :scopes (or @[:string] [:string] :nil) & r} :nil)]
+  {:params [(or {:auth :any :token :any :scopes (or [:string] :nil) & r} :nil)]
    :ret (enum :none :token :identity)}
   ``What this endpoint demands of a request:
 
@@ -171,7 +171,7 @@
     []))
 
 (defn- challenge
-  {:params [:string? :string? (or @[:string] [:string] :nil)] :ret :string}
+  {:params [:string? :string? (or [:string] :nil)] :ret :string}
   "The `WWW-Authenticate` challenge for a refusal: the RFC 6750 error
   code, its description, the scope this endpoint wants, and — when
   configured — the pointer to the protected-resource document."
@@ -190,8 +190,8 @@
   (string/join parts ", "))
 
 (defn- refusal
-  {:params [:number :string :string (or @[:string] [:string] :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:number :string :string (or [:string] :nil)]
+   :ret HttpResponseTable}
   ``The answer to a request this endpoint will not serve: 401 when
   there is no acceptable credential, 403 when there is one and it may
   not do this — RFC 6750 draws that line, and it matters to a client,
@@ -204,7 +204,7 @@
 
 (defn- gate
   {:params [@{:headers {:string (or :string @[:string])} & r}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}} :nil)}
+   :ret (or HttpResponseTable :nil)}
   "nil when the request may proceed, or the refusal it earned."
   [req]
   (case (auth-mode)
@@ -261,7 +261,7 @@
     "mcp-protocol-version" mcp-server/protocol-version})
 
 (defn- json-response
-  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:number :any] :ret HttpResponseTable}
   "A JSON-RPC message as a JSON response with this endpoint's headers."
   [status msg]
   (ring/response status (rpc/encode msg) (merge @{} json-headers)))
@@ -278,7 +278,7 @@
 
 (defn- streamed-call
   {:params [:any {:name :string :call (or (fn [:any :any] :any) :nil) & r} :any :any :any]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   ``A tools/call answered as SSE: `notifications/progress` carrying
   what the command has printed since the last event, then the
   response, then the end of the stream.
@@ -336,7 +336,7 @@
 
 (defn- origin-refusal
   {:params [@{:headers {:string (or :string @[:string])} & r}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}} :nil)}
+   :ret (or HttpResponseTable :nil)}
   "403 when this request's Origin is not allowed, else nil."
   [req]
   (unless (origin-ok? req)
@@ -345,7 +345,7 @@
 
 (defn- protocol-refusal
   {:params [@{:headers {:string (or :string @[:string])} & r}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}} :nil)}
+   :ret (or HttpResponseTable :nil)}
   "400 when this request's MCP-Protocol-Version is not one this
   endpoint speaks, else nil."
   [req]
@@ -357,7 +357,7 @@
 
 (defn- answer
   {:params [@{:headers {:string (or :string @[:string])} :body :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Decode the body and answer it — a notification with 202, a
   streamable tools/call as SSE, everything else as one JSON response."
   [req]
@@ -383,7 +383,7 @@
 
 (defn handler
   {:params [@{:headers {:string (or :string @[:string])} :body :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   ``POST /mcp — one JSON-RPC message in, one answer out. Public, so an
   application that wants the endpoint on another path, behind an
   authorization policy or inside a route group mounts it itself and
@@ -402,7 +402,7 @@
         (answer req))))
 
 (defn get-handler
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   ``GET /mcp — 405, because this server holds no stream to push
   messages down. Everything it says is an answer to something the
   client asked, and that answer travels on the POST that asked.``
@@ -451,7 +451,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :mcp-http/capture-config
    :doc "Read the [:mcp-http] slice before the route table is built"
    :fn (fn capture [boot] (set settings (build-settings boot)))})

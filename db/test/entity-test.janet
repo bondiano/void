@@ -312,7 +312,8 @@
         "and arrives under that name, kebab as it was written")
 (assert (empty? (entity/changes joined))
         "an extra is not a change — it is in the snapshot, so save! never writes it")
-(assert (not (first (protect (entity/query User {:extra [:brands.name]}))))
+# a wrong :extra on purpose, to see it rejected
+(assert (not (first (protect (entity/query User {:extra [:brands.name]})))) # janet-zed: ignore types
         ":extra is a map of alias to expression")
 
 # and a query can take the row lock a claim needs, the same way the

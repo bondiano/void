@@ -85,7 +85,7 @@
     (string/format "%.12g" n)))
 
 (defn- labels-str
-  {:params [:tuple :tuple (or @[[:string :any]] [[:string :any]] :nil)]
+  {:params [:tuple :tuple (or [[:string :any]] :nil)]
    :ret :string}
   "The `{k=\"v\",...}` label block for one series: `names` (a
   metric's declared label names) paired positionally with `values` (a

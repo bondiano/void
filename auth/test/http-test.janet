@@ -23,7 +23,7 @@
 # -- the application -----------------------------------------------------
 
 (defn who
-  {:params [{:keyword :any}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [{:keyword :any}] :ret HttpResponseTable}
   "The current subject, or \"nobody\" — the route every strategy in
   this suite is checked against."
   [req]
@@ -31,7 +31,7 @@
 
 (defn login
   {:params [{:form (or {:any :any} :nil) & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:string]}
   "A login form handler: password-check the submitted form, and sign
   in on success."
@@ -43,7 +43,7 @@
     (ring/text 401 (string "no: " (result :reason)))))
 
 (defn logout
-  {:params [{:session :any & r}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [{:session :any & r}] :ret HttpResponseTable}
   "Sign the current session out."
   [req]
   (auth-http/logout! req)

@@ -102,8 +102,8 @@
 (expect-error "odd overrides" "key-value" |(test/factory :test/User :email))
 (expect-error "overrides on non-map" "map schema" |(test/factory :int :a 1))
 
-(assert (schema/valid? :test/User (test/generate :test/User))
-        "generate is re-exported")
+(assert (schema/valid? :test/User (test/sample :test/User))
+        "sample is re-exported")
 
 # -- snapshots -----------------------------------------------------------
 

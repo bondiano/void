@@ -156,15 +156,7 @@
 
 (defn normalize
   {:params [{:keyword :any}]
-   :ret {:name :any :shared? :boolean :transactional? :boolean
-         :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
-         :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
-         :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
-         :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
-         :release-parent! (or (fn [& :any] :any) :nil)
-         :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
-         :shared-rate? :boolean :shared-locks? :boolean
-         :stats (fn [] :any) :close (fn [] :any) & r}
+   :ret JobsBackend
    :throws [:string]}
   ``Validate a backend dictionary and fill in the documented
   fallbacks. Returns the completed backend; throws with the offending

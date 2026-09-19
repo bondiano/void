@@ -206,7 +206,7 @@
   (sorted (keys seen)))
 
 (defn topics
-  {:params [(or @[{:topic :keyword & r}] [{:topic :keyword & r}])] :ret @[:keyword]}
+  {:params [[{:topic :keyword & r}]] :ret @[:keyword]}
   "The topic patterns a set of handler definitions covers."
   [defs]
   (def seen @{})
@@ -214,7 +214,7 @@
   (sorted (keys seen)))
 
 (defn exact-topics
-  {:params [(or @[{:topic :keyword & r}] [{:topic :keyword & r}])] :ret (or :nil @[:keyword])}
+  {:params [[{:topic :keyword & r}]] :ret (or :nil @[:keyword])}
   ``The topics of `defs` when every one of them is exact, else nil —
   what lets a backend narrow its read to `topic IN (...)`. A single
   wildcard among them makes the whole set unnarrowable, which is the
@@ -225,7 +225,7 @@
   (when (all message/exact? ts) ts))
 
 (defn matches
-  {:params [(or @[{:topic :any & r}] [{:topic :any & r}]) :any]
+  {:params [[{:topic :any & r}] :any]
    :ret @[{:topic :any & r}]}
   "The handlers of `defs` whose pattern matches `topic`, in name
   order."
@@ -235,11 +235,12 @@
 # -- compiled handlers ---------------------------------------------------
 
 (defn compile
-  ``Build one handler's chain: the middleware selected for it, wrapped
-  around a call of its (late-bound) function. Done once, when the
-  consumer starts — a chain rebuilt per message would put the
-  selection, the sort and the predicate evaluation on the hot path,
-  which is the mistake void/http does not make either.
+  ``Build one handler's chain: the middleware selected for it out of
+  `ordered` (the broker's chain, ordered once), wrapped around a call
+  of its (late-bound) function. Done once, when the consumer starts —
+  a chain rebuilt per message would put the selection and the predicate
+  evaluation on the hot path, which is the mistake void/http does not
+  make either.
 
   The *function* is still resolved per message, so a reload is live
   while the chain is not rebuilt: a handler whose middleware changed
@@ -247,17 +248,14 @@
   {:params [{:name :any :topic :any :opts :any
              :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
                        :name :symbol? :env :table? :what :string} & r}
-            (or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-                   :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
-                [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-                  :named :boolean :when (or :nil (fn [:any] :boolean)) & r}])]
+            [BusMiddleware]]
    :ret {:name :any :topic :any :fn (fn [:any] :any)}}
-  [d contribs]
+  [d ordered]
   (def call
     (fn call-handler [msg]
       ((handler-fn d) msg)))
   (def wrapped
-    (middleware/chain (middleware/select contribs (d :opts)) call (d :opts)))
+    (middleware/chain (middleware/select ordered (d :opts)) call (d :opts)))
   (def timeout (get-in d [:opts :timeout]))
   # a :timeout runs the chain as its own task (void/core/deadline) so
   # the cancel lands on that task and never on the consumer loop this
@@ -280,19 +278,16 @@
          wrapped)})
 
 (defn compile-group
-  {:params [(or @[{:name :any :topic :any :opts :any :handler :any & r}]
-                [{:name :any :topic :any :opts :any :handler :any & r}])
-            (or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-                   :named :boolean :when (or :nil (fn [:any] :boolean)) & r}]
-                [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-                  :named :boolean :when (or :nil (fn [:any] :boolean)) & r}])]
+  {:params [[{:name :any :topic :any :opts :any :handler :any & r}]
+            [BusMiddleware]]
    :ret [{:name :any :topic :any :fn (fn [:any] :any)}]}
-  "Compile every handler of a group, keeping them in name order."
-  [defs contribs]
-  (tuple ;(map |(compile $ contribs) defs)))
+  "Compile every handler of a group over the broker's `ordered` chain,
+  keeping them in name order."
+  [defs ordered]
+  (tuple ;(map |(compile $ ordered) defs)))
 
 (defn dispatch
-  {:params [(or @[{:topic :any :fn (fn [:any] :any) & r}] [{:topic :any :fn (fn [:any] :any) & r}])
+  {:params [[{:topic :any :fn (fn [:any] :any) & r}]
             {:topic :any :id :any & r}]
    :ret :number}
   ``Run a message through every compiled handler whose pattern
@@ -322,9 +317,9 @@
   import) without being written twice.``
   [name more]
   (var rest more)
-  (var doc nil)
+  (var docstring nil)
   (when (string? (first rest))
-    (set doc (first rest))
+    (set docstring (first rest))
     (set rest (tuple ;(drop 1 rest))))
   (var opts nil)
   (when (and (dictionary? (first rest)) (not (indexed? (first rest))))
@@ -333,15 +328,15 @@
   (def params (first rest))
   (unless (and (indexed? params) (all symbol? params))
     (errorf "defhandler %q: expected a parameter list after the name%s, got %q"
-            name (if doc " and docstring" "") params))
+            name (if docstring " and docstring" "") params))
   (unless (= 1 (length params))
     (errorf "defhandler %q: a handler takes exactly one parameter, the message, got %q"
             name params))
   (def body (drop 1 rest))
   ~(upscope
-     (defn ,name ,;(if doc [doc] []) ,params ,;body)
+     (defn ,name ,;(if docstring [docstring] []) ,params ,;body)
      (,define! ,(keyword name) ,opts
-               {:env (,curenv) :binding ',name :fn ,name :doc ,doc})))
+               {:env (,curenv) :binding ',name :fn ,name :doc ,docstring})))
 
 (defmacro defhandler
   ``Subscribe a function to a topic:

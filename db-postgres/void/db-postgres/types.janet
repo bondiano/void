@@ -277,7 +277,7 @@
   [_] nil)
 
 (defn array-literal
-  {:params [(or @[:any] [:any])] :ret :string}
+  {:params [[:any]] :ret :string}
   "A janet array or tuple as a Postgres array literal."
   [xs]
   (string "{"
@@ -319,7 +319,7 @@
             v)))
 
 (defn encode-params
-  {:params [(or @[:any] [:any] :nil)] :ret @[(or :string :nil)]}
+  {:params [(or [:any] :nil)] :ret @[(or :string :nil)]}
   "Every parameter of a statement, in order."
   [params]
   (map encode (or params [])))

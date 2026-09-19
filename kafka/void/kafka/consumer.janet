@@ -69,12 +69,12 @@
           (put-in co [:stats :delivered] (inc (get-in co [:stats :delivered] 0))))))))
 
 (defn make
-  {:params [@[[:string :string]] (or [:string] @[:string]) {:group :any & r} (fn [:any] :any)]
+  {:params [@[[:string :string]] [:string] {:group :any & r} (fn [:any] :any)]
    :ret @{:client @{:kind :keyword :handle :pointer :queue :pointer :rfd :number
                     :wfd :number :pair :any :stopped :boolean :pump-done :any
                     :last-error :any :handlers @{:keyword :any}
                     :stats @{:events :number :errors :number}}
-          :group :any :topics (or [:string] @[:string]) :deliver (fn [:any] :any)
+          :group :any :topics [:string] :deliver (fn [:any] :any)
           :closed :boolean
           :stats @{:received :number :delivered :number :errors :number}}
    :throws [:string]}

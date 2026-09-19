@@ -21,7 +21,7 @@
   (or (function? x) (cfunction? x)))
 
 (defn names-str
-  {:params [(or @[:any] [:any])] :ret :string}
+  {:params [[:any]] :ret :string}
   ``The names in `names`, sorted and `%q`-quoted, joined by one space —
   the tail of every "unknown X (known: ...)" message, so a typo is
   reported against a list a reader can scan:
@@ -31,7 +31,7 @@
   (string/join (map |(string/format "%q" $) (sorted names)) " "))
 
 (defn unique-by
-  {:params [:string (fn [:any] :any)] :ret (fn [(or @[:any] [:any])] :nil) :throws [:string]}
+  {:params [:string (fn [a] :any)] :ret (fn [[a]] :nil) :throws [:string]}
   ``A `:validate` for an extension point whose contributions must not
   repeat a key: `(unique-by "middleware name" |($ :name))` refuses the
   second contribution with the same `:name` and says which. `what`
@@ -76,7 +76,8 @@
   (prev lb))
 
 (defn closest
-  {:params [:any (or @[a] [a])] :ret (or a :nil)}
+  {:params [(or :string :keyword :symbol) [a]] :ret (or a :nil)
+   :where {a (or :string :keyword :symbol)}}
   ``The candidate nearest to `name`, or nil when none is near enough
   to be what the writer meant: at most three edits away, and fewer
   edits than the name has characters (so a two-letter typo is not
@@ -94,7 +95,7 @@
     best))
 
 (defn suggest
-  {:params [:any (or @[:any] [:any])] :ret :string}
+  {:params [:any [:any]] :ret :string}
   ``The did-you-mean tail of an "unknown name" message: `" — did you
   mean :foo?"` when a candidate is close (see `closest`), and the
   empty string otherwise — so a message can always append it.``

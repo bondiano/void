@@ -232,7 +232,7 @@
   buf)
 
 (defn encode
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any} :buffer?]
+  {:params [ProtoMessageRef {:keyword :any} :buffer?]
    :ret :buffer :throws [:string]}
   ``Encode `value` (a dictionary) against a message descriptor or the
   name of one. Returns a buffer:
@@ -409,7 +409,7 @@
   into)
 
 (defn decode-into
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) (or :string :buffer)
+  {:params [ProtoMessageRef (or :string :buffer)
             @{:keyword :any}]
    :ret @{:keyword :any} :throws [:string]}
   ``Decode `bytes` into an existing message table — protobuf's merge:
@@ -422,7 +422,7 @@
   (decode-fields d bytes 0 (length bytes) into [(d :name)] 0))
 
 (defn decode
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) (or :string :buffer)]
+  {:params [ProtoMessageRef (or :string :buffer)]
    :ret @{:keyword :any} :throws [:string]}
   ``Decode `bytes` against a message descriptor or the name of one:
 

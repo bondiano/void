@@ -13,16 +13,14 @@
 
 (defn socket
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "The smallest possible socket route: no spec at all."
   [req]
   (ws/accept req {}))
 
 (defn plain
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "An ordinary route, for the refusals."
   [req]
   (ring/text 200 "ok"))
@@ -158,9 +156,7 @@
 
 (defn guarded
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "A socket route behind [:ws :origins] alone."
   [req]
@@ -168,9 +164,7 @@
 
 (defn spec-guarded
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "A socket route with its own :origins, overriding [:ws :origins]."
   [req]

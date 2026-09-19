@@ -139,7 +139,7 @@
    :ret {:queue :keyword? :priority :number? :max-attempts :number? :timeout :number?
          :unique (or :keyword :string :nil) :unique-ttl :number?
          :group (or :string :keyword (fn [& :any] :any) :nil)
-         :needs (or @[:keyword] [:keyword] :nil)
+         :needs (or [:keyword] :nil)
          :backoff (or {:strategy :keyword :base :number :max :number :jitter :number} :nil) & r}
    :throws [:string]}
   ``Validate the policy of a job definition (or the per-enqueue
@@ -203,7 +203,7 @@
          :opts {:queue :keyword? :priority :number? :max-attempts :number? :timeout :number?
                 :unique (or :keyword :string :nil) :unique-ttl :number?
                 :group (or :string :keyword (fn [& :any] :any) :nil)
-                :needs (or @[:keyword] [:keyword] :nil)
+                :needs (or [:keyword] :nil)
                 :backoff (or {:strategy :keyword :base :number :max :number :jitter :number} :nil) & r}
          :fn (or :function :nil) :binding :symbol? :env (or {:keyword :any} :nil) :doc :string?
          :handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
@@ -307,7 +307,7 @@
 # channel opens is a fact about the channel.
 
 (defn needs!
-  {:params [:keyword (or @[:keyword] [:keyword])] :ret [:keyword] :throws [:string]}
+  {:params [:keyword [:keyword]] :ret [:keyword] :throws [:string]}
   ``Add component keys to a definition's `:needs`, after the fact.
   Idempotent and order-preserving. Throws when the job is not defined
   — a plugin naming a job that does not exist is a boot error, not a
@@ -323,7 +323,7 @@
   (tuple ;out))
 
 (defn needs
-  {:params [(or @[:keyword] [:keyword] :nil) :keyword?] :ret [:keyword]}
+  {:params [(or [:keyword] :nil) :keyword?] :ret [:keyword]}
   ``The components every definition on these queues declares, as one
   ordered list. `queues` is a list of queue names, or nil for every
   definition in the registry; `dflt` is the queue a definition that
@@ -359,7 +359,7 @@
 
 (defn unique-key
   {:params [{:name :keyword :opts {:unique (or :keyword :string :nil) & r} & r}
-            (or @[:any] [:any]) {:unique (or :keyword :string :nil) & r}]
+            [:any] {:unique (or :keyword :string :nil) & r}]
    :ret :string?}
   ``The uniqueness key of a call, or nil when the job does not ask for
   one. :args keys by name and arguments, :job by name alone, and a
@@ -375,7 +375,7 @@
 
 (defn group-key
   {:params [{:opts {:group (or :string :keyword (fn [& :any] :any) :nil) & r} & r}
-            (or @[:any] [:any]) {:group (or :string :keyword (fn [& :any] :any) :nil) & r}]
+            [:any] {:group (or :string :keyword (fn [& :any] :any) :nil) & r}]
    :ret :string?}
   ``The fair-scheduling group of a call: what the enqueue named, else
   what the definition declares — a literal, or a function of the
@@ -398,9 +398,9 @@
   list, then the body.``
   [name more]
   (var rest more)
-  (var doc nil)
+  (var docstring nil)
   (when (string? (first rest))
-    (set doc (first rest))
+    (set docstring (first rest))
     (set rest (tuple ;(drop 1 rest))))
   (var opts nil)
   (when (and (dictionary? (first rest)) (not (indexed? (first rest))))
@@ -409,15 +409,15 @@
   (def params (first rest))
   (unless (and (indexed? params) (all symbol? params))
     (errorf "defjob %q: expected a parameter list after the name%s, got %q"
-            name (if doc " and docstring" "") params))
+            name (if docstring " and docstring" "") params))
   (def body (drop 1 rest))
   # both halves of the handler are recorded: the binding, which is what
   # a reload updates, and the value, which is the only thing there is
   # when `defjob` is not at a module's top level
   ~(upscope
-     (defn ,name ,;(if doc [doc] []) ,params ,;body)
+     (defn ,name ,;(if docstring [docstring] []) ,params ,;body)
      (,define! ,(keyword name) ,opts
-               {:env (,curenv) :binding ',name :fn ,name :doc ,doc})))
+               {:env (,curenv) :binding ',name :fn ,name :doc ,docstring})))
 
 (defmacro defjob
   {:params [:symbol :any] :ret :tuple :throws [:string]}

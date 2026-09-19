@@ -53,8 +53,7 @@
 # -- the state of a listing ----------------------------------------------
 
 (defn params
-  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}]
+  {:params [AdminJobsListing]
    :ret @{:string :any}}
   ``The query parameters that describe the current listing, so a
   filter link, the poll and a bulk confirmation all carry one view of
@@ -69,8 +68,7 @@
     "limit" (when (not= (get st :limit) (get st :default-limit)) (get st :limit))})
 
 (defn- with-params
-  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}
+  {:params [AdminJobsListing
             :any]
    :ret @{:string :any}}
   "The same parameters with some replaced — a nil drops the key, which
@@ -116,8 +114,7 @@
 (defn- cards
   {:params [{:counts {:keyword {:keyword :number}} :backend {:keyword :any}
              :enqueued :number :duplicates :number & r}
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}]
+            AdminJobsListing]
    :ret :tuple}
   "The four at-a-glance cards: the backend, the backlog, the dead
   letter queue and this process's own enqueue counter."
@@ -161,8 +158,7 @@
      (text/t :void.admin/jobs-enqueued-note {:duplicates (get snap :duplicates 0)})]]])
 
 (defn- depth-cell
-  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}
+  {:params [AdminJobsListing
             :any :keyword :number]
    :ret :tuple :throws [:string]}
   "One [queue x state] depth cell — a plain 0, or a link that swaps
@@ -175,8 +171,7 @@
 
 (defn- depth-table
   {:params [{:counts {:keyword {:keyword :number}} & r}
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}]
+            AdminJobsListing]
    :ret :tuple :throws [:string]}
   "Every queue's depth, one row per queue and one column per state."
   [snap st]
@@ -205,26 +200,25 @@
 (defn- option
   {:params [:any :any :any] :ret :tuple}
   "One <option>, selected when it reads the same as the current value."
-  [value selected label]
+  [value selected caption]
   [:option {:value (string value)
             :selected (when (= (string value) (string (or selected ""))) true)}
-   label])
+   caption])
 
 (defn- select-field
-  {:params [:string :any (or @[:any] [:any]) :any] :ret :tuple}
+  {:params [:string :any [:any] :any] :ret :tuple}
   "A <select> filter field: 'any', plus one option per value."
-  [name label options value]
+  [name caption options value]
   (def id (string "f-jobs-" name))
   [:div {:class "field"}
-   [:label {:for id} label]
+   [:label {:for id} caption]
    [:select {:name name :id id}
     (option "" value (text/t :void.admin/any))
     ;(seq [o :in options] (option o value (string o)))]])
 
 (defn- filter-panel
   {:params [{:queues @[:keyword] :jobs @[:keyword] & r}
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}]
+            AdminJobsListing]
    :ret :tuple :throws [:string]}
   "Queue, state, job and row-limit — the four filters, submitting on
   every change and swapping the wrapper rather than reloading."
@@ -250,9 +244,9 @@
   {:params [:any :string :any :any] :ret :tuple :throws [:string]}
   "One record action as its own tiny form — retry or discard, POSTing
   to the section's own route."
-  [id action label danger?]
+  [id action caption danger?]
   (view/post-form :post (url (string "/" id "/-/" action)) {:class "vd-inline"}
-    [:button {:type "submit" :class (when danger? "danger")} label]))
+    [:button {:type "submit" :class (when danger? "danger")} caption]))
 
 (defn- row-actions
   {:params [{:id :any :state (or :keyword :nil) & r}] :ret :tuple :throws [:string]}
@@ -293,7 +287,7 @@
          (widget/text-of nil))])
 
 (defn- rows-table
-  {:params [(or @[{:keyword :any}] [{:keyword :any}]) :number :boolean?]
+  {:params [[{:keyword :any}] :number :boolean?]
    :ret :tuple :throws [:string]}
   ``The listing. `actions?` is false on the sample a confirmation
   shows: a page asking "shall I do this to these records" must not
@@ -321,8 +315,7 @@
          (when actions? (row-actions r))]))]])
 
 (defn- bulk-bar
-  {:params [{:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}
+  {:params [AdminJobsListing
             :number]
    :ret (or :tuple :nil)}
   ``The two bulk actions, and the one line of arithmetic behind when
@@ -345,8 +338,7 @@
 
 (defn- dead-banner
   {:params [{:counts {:keyword {:keyword :number}} & r}
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}]
+            AdminJobsListing]
    :ret (or :tuple :nil) :throws [:string]}
   "A warning banner when there are dead records and the listing is
   not already showing them."
@@ -361,9 +353,8 @@
 (defn body-fragment
   {:params [{:counts {:keyword {:keyword :number}} :backend {:keyword :any}
              :enqueued :number :duplicates :number & r}
-            (or @[{:keyword :any}] [{:keyword :any}])
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}
+            [{:keyword :any}]
+            AdminJobsListing
             :number]
    :ret :tuple :throws [:string]}
   ``Everything a change moves: the cards, the depth table and the
@@ -394,9 +385,8 @@
   {:params [{:queues @[:keyword] :jobs @[:keyword]
              :counts {:keyword {:keyword :number}} :backend {:keyword :any}
              :enqueued :number :duplicates :number & r}
-            (or @[{:keyword :any}] [{:keyword :any}])
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}
+            [{:keyword :any}]
+            AdminJobsListing
             :number]
    :ret :tuple :throws [:string]}
   "The section: the filter panel, and everything it filters."
@@ -481,23 +471,22 @@
 
 (defn confirm-page
   {:params [:keyword
-            {:queue (or :keyword :nil) :state (or :keyword :nil) :job (or :keyword :nil)
-             :limit :number :default-limit :number}
-            :number (or @[{:keyword :any}] [{:keyword :any}]) :number]
+            AdminJobsListing
+            :number [{:keyword :any}] :number]
    :ret :tuple :throws [:string]}
   ``What a bulk goes through, for the reason the resource bulk goes
   through one: the number is counted on the server, and it is the same
   road whether it is one record or forty thousand.``
   [action st total sample now]
-  (def label (text/t (if (= :retry action)
-                       :void.admin/jobs-retry
-                       :void.admin/jobs-discard)))
+  (def verb (text/t (if (= :retry action)
+                      :void.admin/jobs-retry
+                      :void.admin/jobs-discard)))
   (def where
     (if (st :queue)
       (text/t :void.admin/jobs-queue-suffix {:queue (string (st :queue))})
       (text/t :void.admin/jobs-every-queue-suffix)))
   [:div
-   [:h1 (text/t :void.admin/jobs-confirm-title {:action label})]
+   [:h1 (text/t :void.admin/jobs-confirm-title {:action verb})]
    # one sentence, count inside: a number pinned to the front of a
    # translated clause is a number some language has to read around
    [:p {:class "vd-count"}
@@ -516,5 +505,5 @@
         [:button {:type "submit"
                   :class (if (= :retry action) "primary" "danger")}
          (text/t :void.admin/jobs-confirm-yes
-                 {:action (string/ascii-lower label) :count total})]
+                 {:action (string/ascii-lower verb) :count total})]
         [:a {:href (url "" (params st))} (text/t :void.admin/cancel)]]))])

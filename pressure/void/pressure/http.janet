@@ -2,9 +2,9 @@
 ###
 ### The piece of void/pressure that needs void/http, kept a separate
 ### plugin so a jobs worker or a CLI never drags the HTTP kernel in —
-### what void/cache-http is to void/cache. One wrapper, in **phase
-### 100**: immediately after the panic guard and before everything
-### else, because a request that is going to be refused should be
+### what void/cache-http is to void/cache. One wrapper, **right after
+### the request id**: inside the panic guard, before the :on-send
+### stage and everything else, because a request that is going to be refused should be
 ### refused before the process has spent anything on it — no body
 ### parsed, no session opened, no database connection taken out of the
 ### pool. Refusing late is most of the cost of serving.
@@ -101,7 +101,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :pressure-http/capture-config
    :doc "Read the [:pressure-http] slice once, before the route table is built"
    :fn (fn capture [boot]
@@ -129,7 +129,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 440
+   :before :void.core/configured
    :name :pressure-http/prefork-mode
    :doc "In a prefork master mark the process a supervisor: it serves no requests, so its loop is not the one worth sampling"
    :fn (fn prefork-mode [boot]
@@ -205,9 +205,10 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.pressure/shed
-   # phase 100: after the panic guard (0), before the :on-send stage
-   # (500) and everything that costs anything
-   :phase 100
+   # right after the request id, before the :on-send stage and
+   # everything that costs anything
+   :after :void.http/request-id
+   :before :void.http.stage/on-send
    :doc "Answer 503 + Retry-After while the process is over its pressure thresholds; routes marked :void.pressure/exempt are never wrapped"
    # `:void.obs/endpoint` counts as exempt too, and reading a key
    # void/obs-http declares costs nothing when it is not in the
@@ -229,7 +230,7 @@
                (handler req))))})
 
 (plugin/defplugin void/pressure-http
-  :doc "Load shedding for void/http: while void/pressure says the process is over its limits, requests are answered 503 + Retry-After in phase 100 — before parsing, sessions or a pooled connection — and routes marked :void.pressure/exempt are never shed."
+  :doc "Load shedding for void/http: while void/pressure says the process is over its limits, requests are answered 503 + Retry-After right after the request id — before parsing, sessions or a pooled connection — and routes marked :void.pressure/exempt are never shed."
   :version "0.0.1"
   :requires {:void/core ">=0.0.1" :void/pressure ">=0.0.1" :void/http ">=0.0.1"}
   :config-key :pressure-http

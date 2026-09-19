@@ -33,7 +33,7 @@
              :plugins-for (or (fn [:keyword] :any) :nil)
              :profile :keyword?
              :config :any
-             :signals (or @[:keyword] [:keyword] :nil)
+             :signals (or [:keyword] :nil)
              :shutdown-timeout :number?
              & r}]
    :ret Boot

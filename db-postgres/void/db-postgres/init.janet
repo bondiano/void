@@ -128,11 +128,11 @@
   (db-state/with-conn* (fn [entry] (f (entry :conn)))))
 
 (defn pipeline
-  {:params [@[[:string (or @[:any] [:any] :nil)]]]
-   :ret @[{:rows @[@{:keyword :any}] :count :number :insert-oid :number?}]
+  {:params [@[[:string (or [:any] :nil)]]]
+   :ret @[DbResult]
    :throws [:string
             {:index :number
-             :results [{:rows @[@{:keyword :any}] :count :number :insert-oid :number?}]
+             :results [DbResult]
              & r}]}
   ``Send several statements without waiting for each answer — one
   round trip instead of N (libpq 14+). `statements` are [sql params]
@@ -165,9 +165,7 @@
 
 (defn connection-info
   {:params [:any]
-   :ret (or {:server-version [:number :number] :backend-pid :number
-             :transaction :keyword :generation :number :prepared :number}
-            {:generation :number :transaction :keyword})
+   :ret PgConnectionInfo
    :throws [:string]}
   "What a checked-out connection is: server version, backend pid,
   transaction state, how many times it has been replaced."
@@ -243,7 +241,7 @@
       (error "void/db-postgres's listener is not started — no :db.postgres/listener component")))
 
 (defn subscribe!
-  {:params [:any g] :ret g :throws [:string]}
+  {:params [:any g] :ret g :where {g (fn [PgNotification] :any)} :throws [:string]}
   ``Call `f` with every notification on `channel`
   ({:channel :payload :pid}). Returns `f`, which `unsubscribe!` takes
   back.

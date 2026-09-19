@@ -24,14 +24,15 @@
   (store-ambient :dyn))
 
 (defn active-store
-  {:params [] :ret :any}
+  {:params [] :ret StorageStore}
   "The store this fiber runs against: the `storage-dyn` override, else
   the started component."
   []
   (system/active store-ambient))
 
 (defn put!
-  {:params [:string :any (or {:content-type :any? & r} :nil)] :ret :any :throws [:string]}
+  {:params [:string :any (or {:content-type :any? & r} :nil)] :ret StorageMeta
+   :throws [:string]}
   ``Store `value` (bytes) under `key`. opts: :content-type. Returns the
   store's metadata — {:key :size :content-type ...}.``
   [k value &opt opts]
@@ -56,7 +57,7 @@
   (((active-store) :delete!) (key/check! k)))
 
 (defn stat
-  {:params [:string] :ret :any :throws [:string]}
+  {:params [:string] :ret StorageMeta? :throws [:string]}
   "The object's metadata without its bytes, or nil."
   [k]
   (((active-store) :stat) (key/check! k)))

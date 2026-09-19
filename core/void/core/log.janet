@@ -252,7 +252,7 @@
 
 (defn pretty-sink
   {:params [(or {:color :boolean? & r} :nil)]
-   :ret (fn [LogRecord] :nil)}
+   :ret LogSink}
   "Synchronous human sink: one colored line per record to stderr
   (colors only on a tty)."
   [&opt opts]
@@ -270,7 +270,7 @@
 
 (defn jdn-sink
   {:params [(or {:buffer :number? :stream :abstract? & r} :nil)]
-   :ret (fn [LogRecord] :nil)}
+   :ret LogSink}
   ``Production sink: JDN lines (janet %j — machine-parseable, JSON-ish
   for plain data) written by a dedicated fiber behind a buffered
   channel. A full buffer drops the record and counts it —
@@ -332,7 +332,7 @@
   nil)
 
 (defn set-sinks!
-  {:params [(or [(fn [LogRecord] :nil)] :nil)]
+  {:params [(or [LogSink] :nil)]
    :ret :table}
   "Replace the active sinks (tuple/array of (fn [record])). nil
   restores the default pretty stderr sink. Close previous async
@@ -342,7 +342,7 @@
   (put state :sinks sinks))
 
 (defn sinks
-  {:params [] :ret [(fn [LogRecord] :nil)]}
+  {:params [] :ret [LogSink]}
   "The active sink list (the default pretty sink when none set)."
   []
   (or (state :sinks) default-sinks))

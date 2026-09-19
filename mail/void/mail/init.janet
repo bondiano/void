@@ -416,7 +416,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :mail/configure
    :doc "Resolve the [:mail] slice, the transports and the base URL letters link against"
    :fn (fn configure [boot]
@@ -434,7 +434,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 300
+   :before :void.core/checked
    :name :mail/queue-check
    :doc "Refuse a composition that asked for queued mail and has no queue"
    :fn (fn queue-check [_]

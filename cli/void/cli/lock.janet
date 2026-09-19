@@ -24,7 +24,7 @@
 ### name, an anonymous one by the module it was compiled in — a module
 ### *name*, inverted through module/paths, so it reads the same on
 ### every machine that loaded the same code. A middleware inserted,
-### removed, renamed, re-phased or moved to another module changes
+### removed, renamed, re-placed or moved to another module changes
 ### the hash, and an edit to a middleware's body does not. That is the
 ### honest boundary, and the file says so in its own header — the tool
 ### that catches a changed function body is the one that already
@@ -202,7 +202,7 @@
 # The hashes cover the composition *as data*, with every function
 # reduced to its name — or, for an anonymous one, to the module it
 # lives in (void/cli/lock): a middleware inserted, removed, renamed,
-# re-phased or moved to another module changes them; an edit inside a
+# re-placed or moved to another module changes them; an edit inside a
 # middleware's body does not.
 #
 # Generated file — take a new one with `void plugins lock` rather than

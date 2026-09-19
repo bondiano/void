@@ -74,7 +74,7 @@
              :prefix "the string every key is prefixed with"}})
 
 (defn- duplicate-codecs
-  {:params [(or @[{:name :keyword & r}] [{:name :keyword & r}])] :ret @[:keyword]}
+  {:params [[{:name :keyword & r}]] :ret @[:keyword]}
   "The codec names contributed more than once, sorted."
   [contribs]
   (sorted (seq [[name n] :pairs (frequencies (map |($ :name) contribs))
@@ -177,7 +177,7 @@
 
 (defn contributed-codecs
   {:params [:any]
-   :ret @{:keyword {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}}}
+   :ret @{:keyword RedisCodec}}
   ``The resolved :void.redis/codec point of `boot`: name -> codec.
 
   The boot is handed in rather than read off a global — this package
@@ -264,7 +264,7 @@
           :backoff @{:min :number :max :number :factor :number}
           :stats @{:messages :number :reconnects :number :errors :number
                    :delivered :number}
-          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :codec RedisCodec
           :enabled :boolean & r}
    :throws [:string]}
   ``The running subscriber, or an error saying which of the two things
@@ -313,10 +313,7 @@
 (defn publish!
   {:params [:any :any]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Publish a message, through the pool. Returns how many subscribers
   the server handed it to — which is the only delivery signal redis
   pub/sub has, and it counts connections, not handlers, and not

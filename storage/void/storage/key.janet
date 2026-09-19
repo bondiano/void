@@ -7,7 +7,7 @@
 ### key that passes `check!` cannot climb out of a local root and needs
 ### no second opinion from the s3 store.
 ###
-### `generate` is the shape uploads land under —
+### `fresh` is the shape uploads land under —
 ### `<prefix>/<yyyy>/<mm>/<token><.ext>` — a date for the operator who
 ### looks at the bucket, a random token so two "logo.png" never fight,
 ### and the original extension because it is what carries the
@@ -104,7 +104,7 @@
   []
   (string/join (seq [x :in (os/cryptorand 8)] (string/format "%02x" x))))
 
-(defn generate
+(defn fresh
   {:params [(or {:prefix :any? :ext :any? :filename :any? :now :number? & r} :nil)]
    :ret :string :throws [:string]}
   ``A fresh key for an upload: `<prefix>/<yyyy>/<mm>/<token><.ext>`.

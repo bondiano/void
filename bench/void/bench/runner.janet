@@ -49,13 +49,17 @@
     (string/join (tuple ;(take (- lines) (string/split "\n" (string text)))) "\n")
     "<no log>"))
 
+# A running target: the table `start-target` builds, its process and log file.
+(def BenchServer :typedef
+  '@{:proc :abstract :name (or :string :keyword) :port :number :log :string
+    :logf :abstract :ready :string?})
+
 (defn start-target
-  {:params [:string
+  {:params [(or :string :keyword)
             {:doc :string? :bench :keyword? :port :number :budget :keyword?
              :needs-pg :boolean? :ready :string? :cmd :string
              :baseline :boolean? :env (or {:string :any} :nil) & r}]
-   :ret @{:proc :any :name :string :port :number :log :string
-          :logf :any :ready :string?}
+   :ret BenchServer
    :throws [:string]}
   ``Spawn a target's server: sh -c from the bench root, PORT and
   GOMAXPROCS=1 in the environment, stdout+stderr to
@@ -83,10 +87,8 @@
     :ready (spec :ready)})
 
 (defn stop-target
-  {:params [@{:proc :any :name :string :port :number :log :string
-              :logf :any :ready :string?}]
-   :ret @{:proc :any :name :string :port :number :log :string
-          :logf :any :ready :string?}}
+  {:params [BenchServer]
+   :ret BenchServer}
   "SIGTERM (graceful drain), SIGKILL after 10s of no exit."
   [server]
   (protect (os/proc-kill (server :proc) false :term))
@@ -112,11 +114,9 @@
   (and ok answered))
 
 (defn wait-ready
-  {:params [@{:proc :any :name :string :port :number :log :string
-              :logf :any :ready :string?}
+  {:params [BenchServer
             :number?]
-   :ret @{:proc :any :name :string :port :number :log :string
-          :logf :any :ready :string?}
+   :ret BenchServer
    :throws [:string]}
   ``Poll until the target is serving, `timeout` seconds (default 60 —
   `go build` and uvicorn cold starts count): TCP accept, and then, for
@@ -378,7 +378,7 @@
 # -- CLI -----------------------------------------------------------------
 
 (defn- resolve-targets
-  {:params [(or @[:string] [:string])] :ret @[:keyword] :throws [:string]}
+  {:params [[:string]] :ret @[:keyword] :throws [:string]}
   "Target words -> the keys to run: \"all\"/\"baselines\" expand,
   everything else is checked against the target table, and no words
   at all means the default set."
@@ -475,7 +475,7 @@
             (if (spec :baseline) " [baseline]" ""))))
 
 (defn run
-  {:params [(or @[:string] [:string])
+  {:params [[:string]
             @{:threshold :number? :out :string? :record :boolean? :check :boolean?
               :against :string? :budgets :boolean? :quick :boolean?
               :runs :number? :duration :number? :warmup :number? & r}]

@@ -37,8 +37,7 @@
                  :context (or {:any :any} :nil) :engine :keyword?
                  :title :any :head :any :partial :any & r}
                 :nil)]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``A full dash page: the frame, the content — and, when the page has
   a half that moves, `:partial` names it, so an htmx swap into an
@@ -56,9 +55,7 @@
 # -- reading the boot ----------------------------------------------------
 
 (defn- component-health
-  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
-                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                          :instances @{:keyword :any} & r}
+  {:params [{:system (or System
                          :nil)
              & r}
             :keyword]
@@ -74,9 +71,7 @@
       (when (and ok (dictionary? v)) v))))
 
 (defn sample-sources
-  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
-                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                          :instances @{:keyword :any} & r}
+  {:params [{:system (or System
                          :nil)
              & r}]
    :ret {:rss :any :connections :any}}
@@ -114,9 +109,7 @@
                    :shape (string (get-in boot [:deploy :shape] :single))})]))
 
 (defn- runtime-vital
-  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
-                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                          :instances @{:keyword :any} & r}
+  {:params [{:system (or System
                          :nil)
              & r}]
    :ret :any}
@@ -139,9 +132,7 @@
            [:p {:class "vd-note"} (text/t :void.dash/lag-caption)])))
 
 (defn- http-vital
-  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
-                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                          :instances @{:keyword :any} & r}
+  {:params [{:system (or System
                          :nil)
              & r}]
    :ret :any}
@@ -159,9 +150,7 @@
            [:p {:class "vd-absent"} (text/t :void.dash/http-absent)])))
 
 (defn- pressure-vital
-  {:params [{:system (or {:states @{:keyword (enum :running :stopped)}
-                          :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                          :instances @{:keyword :any} & r}
+  {:params [{:system (or System
                          :nil)
              & r}]
    :ret :any}
@@ -264,9 +253,7 @@
 
 (defn overview-fragment
   {:params [{:profile :keyword :deploy (or {:shape :keyword? & r} :nil)
-             :system (or {:states @{:keyword (enum :running :stopped)}
-                         :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                         :instances @{:keyword :any} & r}
+             :system (or System
                         :nil)
              & r}]
    :ret :any :throws [:string]}
@@ -283,9 +270,7 @@
 
 (defn overview-body
   {:params [{:profile :keyword :deploy (or {:shape :keyword? & r} :nil)
-             :system (or {:states @{:keyword (enum :running :stopped)}
-                         :components {:keyword {:health (or (fn [:any] :any) :nil) & r}}
-                         :instances @{:keyword :any} & r}
+             :system (or System
                         :nil)
              & r}
             {:query (or {:string :any} :nil) & r}]
@@ -298,8 +283,7 @@
 
 (defn overview
   {:params [{:query (or {:string :any} :nil) & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /dash: the overview, or its htmx poll fragment."
   [req]
@@ -380,8 +364,7 @@
 
 (defn components
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /dash/components."
   [req]
@@ -389,8 +372,7 @@
 
 (defn why
   {:params [{:query (or {:string :any} :nil) & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "The plugin/why answer for one component or interface, as a fragment."
   [req]
@@ -476,8 +458,7 @@
 
 (defn plugins
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /dash/plugins."
   [req]
@@ -485,8 +466,7 @@
 
 (defn point
   {:params [{:query (or {:string :any} :nil) & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "One extension point: doc, contributions with attribution, the
   resolved value — plugin/inspect on the point, as a fragment."
@@ -500,8 +480,8 @@
        (text/t :void.dash/unknown-point {:name (string name)})]
       [:div
        [:h2 [:code (string/format "%j" name)]]
-       (when-let [doc (get-in e [:point :doc])]
-         [:p {:class "vd-note"} doc])
+       (when-let [summary (get-in e [:point :doc])]
+         [:p {:class "vd-note"} summary])
        (if (empty? (get e :contributions []))
          [:p {:class "vd-empty"} (text/t :void.dash/no-contributions)]
          [:table {:class "vd-table"}
@@ -551,8 +531,7 @@
 
 (defn config-page
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /dash/config."
   [req]
@@ -589,8 +568,7 @@
 
 (defn routes
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /dash/routes."
   [req]
@@ -598,8 +576,7 @@
 
 (defn route
   {:params [{:query (or {:string :any} :nil) & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}}
+   :ret HtmlView}
   "One route's metadata provenance — the explain-route half that does
   not need a concrete path, read off the entry by :name."
   [req]
@@ -652,13 +629,10 @@
 
 (defn deploy-body
   {:params [{:deploy (or {:shape :keyword? :reason :string?} :nil)
-             :stores (or @[{:name :keyword :what :string
+             :stores (or [{:name :keyword :what :string
                            :shared? (or :boolean (enum :by-design :unknown))
                            :store :keyword? :why :string? :replacement :string? :error :string?}]
-                          [{:name :keyword :what :string
-                           :shared? (or :boolean (enum :by-design :unknown))
-                           :store :keyword? :why :string? :replacement :string? :error :string?}]
-                          :nil)
+                         :nil)
              :extensions :any & r}]
    :ret :any}
   "The deploy shape and every store this composition keeps —
@@ -688,8 +662,7 @@
 
 (defn deploy-page
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /dash/deploy."
   [req]

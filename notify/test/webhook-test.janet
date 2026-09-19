@@ -22,7 +22,7 @@
 
 (defn- receiver
   {:params [@{:path :any :headers :any :body :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "The void/http server the webhook channel POSTs to in this suite."
   [req]
   (array/push received {:path (req :path)

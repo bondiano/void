@@ -47,15 +47,15 @@
 # -- resolve-point: schema, cardinality, cross-check, fold, in that order --
 
 (def many (extension/extension-point :test/many
-            :schema {:name :keyword :phase [:optional :int]}
+            :schema {:name :keyword :rank [:optional :int]}
             :validate (fn [cs] (when (some |(= :bad ($ :name)) cs) (error "no :bad names")))
-            :reduce (fn [cs] (sorted-by |(get $ :phase 0) cs))))
+            :reduce (fn [cs] (sorted-by |(get $ :rank 0) cs))))
 
 (def [resolved errs]
-  (extension/resolve-point :test/many many [(contrib :test/b {:name :b :phase 2})
-                                            (contrib :test/a {:name :a :phase 1})]))
+  (extension/resolve-point :test/many many [(contrib :test/b {:name :b :rank 2})
+                                            (contrib :test/a {:name :a :rank 1})]))
 (assert (empty? errs))
-(assert (deep= @[{:name :a :phase 1} {:name :b :phase 2}] resolved) "the fold sees the values, not the {:plugin :value} wrappers")
+(assert (deep= @[{:name :a :rank 1} {:name :b :rank 2}] resolved) "the fold sees the values, not the {:plugin :value} wrappers")
 
 (def [r0 e0] (extension/resolve-point :test/many many []))
 (assert (empty? e0))

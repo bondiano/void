@@ -23,7 +23,7 @@
   ["jpm_tree" "build" ".git" ".void"])
 
 (defn scan
-  {:params [(or @[:string] [:string]) (or @[:string] [:string] :nil)]
+  {:params [[:string] (or [:string] :nil)]
    :ret @{:string :number}}
   "Walk files/directories and snapshot every .janet file:
   @{realpath modified-time}. Hidden directories and directories named
@@ -80,9 +80,9 @@
     :skipped))
 
 (defn affected-components
-  {:params [{:manifests {:any {:source :string? :components (or @[:any] [:any])}}
+  {:params [{:manifests {:any {:source :string? :components [:any]}}
              :system {:restart-pending {:any :boolean} :states {:any :keyword}
-                      :order (or @[:any] [:any])}
+                      :order [:any]}
              & r}
             :string]
    :ret @[:keyword]}
@@ -108,12 +108,12 @@
           (get-in boot [:system :order] [])))
 
 (defn apply-changes!
-  {:params [(or {:manifests {:any {:source :string? :components (or @[:any] [:any])}}
+  {:params [(or {:manifests {:any {:source :string? :components [:any]}}
                 :system {:restart-pending {:any :boolean} :states {:any :keyword}
-                         :order (or @[:any] [:any])}
+                         :order [:any]}
                 & r}
                :nil)
-            (or @[:string] [:string])]
+            [:string]]
    :ret @{:reloaded @[:string] :restarted @[:keyword] :skipped @[:string] :errors @[:string]}}
   "Reload every changed file, then restart the affected stateful
   components of `boot` (nil boot skips restarts). Returns a report
@@ -163,7 +163,7 @@
       (array/push (report :errors) e))))
 
 (defn tick!
-  {:params [@{:paths (or @[:string] [:string]) :excludes (or @[:string] [:string]) :snapshot @{:string :number} & r}]
+  {:params [@{:paths [:string] :excludes [:string] :snapshot @{:string :number} & r}]
    :ret (or @{:reloaded @[:string] :restarted @[:keyword] :skipped @[:string] :errors @[:string]} :nil)}
   "One watcher pass: rescan, reload what changed against the current
   boot (plugin/running-boot). Returns the report, or nil when nothing
@@ -179,12 +179,12 @@
     report))
 
 (defn start
-  {:params [{:watch (or {:enabled :boolean? :paths (or @[:string] [:string] :nil)
-                        :interval :number? :exclude (or @[:string] [:string] :nil)}
+  {:params [{:watch (or {:enabled :boolean? :paths (or [:string] :nil)
+                        :interval :number? :exclude (or [:string] :nil)}
                        :nil)
              & r}]
    :ret (or {:disabled :boolean}
-           @{:paths (or @[:string] [:string]) :interval :number
+           @{:paths [:string] :interval :number
              :excludes :tuple :running :boolean :snapshot @{:string :number}
              :fiber :fiber})}
   "Start the watch loop from the :watch slice of the :dev config

@@ -56,8 +56,7 @@
 (def- ambient-marker :void.system/ambient)
 
 (defn ambient
-  # janet-zed: untyped on purpose — `&named` is not read as variadic, so no
-  # :params both fits this parameter list and accepts a call with options
+  {:params [:keyword :string? :keyword? :keyword?] :ret Ambient}
   ``Declare an ambient value: what a running component holds, a dyn
   that overrides it for a scope, and a reader that explains the
   absence.

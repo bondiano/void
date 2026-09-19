@@ -24,14 +24,14 @@
 (var served 0)
 
 (defn work
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "Handler for the route that may be shed."
   [req]
   (++ served)
   (ring/text 200 "worked"))
 
 (defn health
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "Handler for the exempt route."
   [req]
   (ring/text 200 "ok"))

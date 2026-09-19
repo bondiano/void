@@ -20,7 +20,7 @@
 (import void/core/meta :as meta)
 (import void/core/bind :as bind)
 (import void/core/errors :as errors)
-(import void/core/log :as log)
+(import void/core/order :as order)
 (import ./middleware :as mw)
 (import ./wire :as wire)
 (import void/core/util :as util)
@@ -193,8 +193,7 @@
     form))
 
 (defmacro defroutes
-  {:params [:keyword :any]
-   :ret HttpRouteSource}
+  {:params [:keyword :any] :ret :tuple}
   ``This module's route source: the :void.http/route-source
   contribution folded into the `defplugin` manifest later in the file —
   sugar for `contribute!` + `routes` + `env-ref`:
@@ -337,11 +336,11 @@
 
 (def- allowed-build-opts
   {:sources true :meta-keys true :middleware true :strict true
-   :stage-hooks true})
+   :stage-hooks true :requires true})
 
 (defn- stage-hooks-for
   {:params [{:keyword [(or :function :cfunction)]} {:keyword :any} (or :function :table :nil)]
-   :ret {:wrappers @[HttpMiddleware]
+   :ret {:wrappers @{:keyword HttpMiddleware}
          :out {:keyword [(or :function :cfunction)]}}
    :throws [:string]}
   ``Per-route lifecycle hooks: combine the global stage
@@ -349,7 +348,7 @@
   :void.http/hook point) with the route's :void.http/hooks metadata
   (symbols resolved against the route's env; group hooks precede route
   hooks via the :concat merge). In-chain stages become synthetic
-  middleware entries; out-of-chain stages (:on-response :on-error
+  middleware entries keyed by the anchor they run at; out-of-chain stages (:on-response :on-error
   :on-timeout) keep only the ROUTE-level hooks here — the transport
   runs the global ones for every request, matched or not.``
   [global rmeta env]
@@ -360,7 +359,7 @@
               s (string/join (map |(string/format "%q" $)
                                   (sorted (keys mw/stages)))
                              " "))))
-  (def wrappers @[])
+  (def wrappers @{})
   (def out @{})
   (each s (sorted (keys mw/stages))
     (def route-resolved
@@ -371,15 +370,16 @@
         (put out s (tuple ;route-resolved)))
       (let [hooks (tuple ;(get global s []) ;route-resolved)]
         (when-let [w (mw/stage-wrapper s hooks)]
-          (array/push wrappers w)))))
+          (put wrappers (w :name) w)))))
   {:wrappers wrappers :out (freeze out)})
 
 (defn build-table
-  {:params [{:sources (or [HttpRouteSource] @[HttpRouteSource] :nil)
+  {:params [{:sources (or [HttpRouteSource] :nil)
              :meta-keys :any
              :middleware (or [HttpMiddlewareContribution] :nil)
              :strict :boolean?
-             :stage-hooks (or {:keyword [(or :function :cfunction)]} :nil)}]
+             :stage-hooks (or {:keyword [(or :function :cfunction)]} :nil)
+             :requires (or {:keyword :any} :nil)}]
    :ret HttpRouteTable
    :throws [:string]}
   ``Build an immutable route table from route sources
@@ -390,14 +390,20 @@
         {:sources    [{:name :app :routes <routes value> :env (curenv)}]
          :meta-keys  <meta/declarations input — the resolved
                       :void.http/route-meta-key point>
-         :middleware [{:plugin :void/http :value {:name ... :phase ...
-                       :wrap ... :when ... :named ...}} ...]
+         :middleware [{:plugin :void/http :value {:name ... :after ...
+                       :before ... :wrap ... :when ... :named ...}} ...]
+         :requires   {<plugin> <its manifest :requires> ...}
          :strict     false})
 
   Per route this: compiles the pattern PEG, merges the metadata layers
   global -> group -> route (provenance kept for explain), requires
   :name (unique across the table), resolves the handler symbol fail-fast
   and composes the selected middleware into the route's chain. The
+  middleware are ordered once, for every route, by their edges to the
+  anchors and to each other (middleware/order; :requires confines a
+  contribution's neighbours to the plugins it requires — without it,
+  as outside a boot, that check is skipped); a route's stage wrappers
+  go in at their stage's anchor. The
   result is a frozen value: {:routes :by-name :static :dynamic} —
   dispatch is a table lookup or an ordered PEG scan, nothing more.``
   [opts]
@@ -408,11 +414,13 @@
   (def decls
     (let [[ok d] (protect (meta/declarations (get opts :meta-keys {})))]
       (if ok d (do (array/push errors (string d)) {}))))
-  # :before/:after become numbers here, once — a bad placement fails
-  # the build like any other table error
-  (def contribs (mw/resolve-phases (get opts :middleware [])))
+  # the order is one for every route, sorted here once — a bad
+  # placement fails the build like any other table error
+  (def [order-ok sorted-or-err]
+    (protect (mw/order (get opts :middleware []) {:requires (opts :requires)})))
+  (unless order-ok (array/push errors (string sorted-or-err)))
+  (def ordered (if order-ok sorted-or-err []))
   (def strict (get opts :strict false))
-  (def phase-warnings @{})
 
   # flatten every source
   (def flat @[])
@@ -427,50 +435,44 @@
   (def entries @[])
   (def by-name @{})
   (each d flat
-    (def label (string/format "%q %s (source %q)" (d :method) (d :pattern) (d :source)))
+    (def route-label (string/format "%q %s (source %q)" (d :method) (d :pattern) (d :source)))
     (def merged (meta/merge-layers decls (d :layers) {:strict strict}))
     (each e (merged :errors)
-      (array/push errors (string/format "%s: %s" label e)))
+      (array/push errors (string/format "%s: %s" route-label e)))
     # frozen once: the entry keeps it, :when reads it, and a
     # :route-aware :wrap closes over the very same value
     (def rmeta (freeze (merged :value)))
     (def name (rmeta :name))
     (cond
       (nil? name)
-      (array/push errors (string/format "%s: route :name is required" label))
+      (array/push errors (string/format "%s: route :name is required" route-label))
       (not (keyword? name))
-      (array/push errors (string/format "%s: route :name must be a keyword, got %q" label name))
+      (array/push errors (string/format "%s: route :name must be a keyword, got %q" route-label name))
       (in by-name name)
       (array/push errors (string/format "%s: route name %q is already taken by %s %s"
-                                        label name
+                                        route-label name
                                         (get-in by-name [name :method])
                                         (get-in by-name [name :pattern]))))
     (def [pat-ok compiled] (protect (compile-pattern (d :pattern))))
     (unless pat-ok
-      (array/push errors (string/format "%s: %s" label (string compiled))))
+      (array/push errors (string/format "%s: %s" route-label (string compiled))))
     (def [h-ok resolved] (protect (bind/resolve (d :handler) (d :env) "handler")))
     (unless h-ok
-      (array/push errors (string/format "%s: %s" label (errors/message resolved))))
+      (array/push errors (string/format "%s: %s" route-label (errors/message resolved))))
     (def [c-ok chain-or-err]
       (protect
-        (let [{:selected selected :declined declined} (mw/select contribs rmeta)
+        (let [{:selected selected :declined declined} (mw/select ordered rmeta)
               staged (stage-hooks-for (get opts :stage-hooks {}) rmeta (d :env))
-              # the stage wrappers are merged in through the one sort
-              # the chain has, so the plugin tie-break holds throughout
-              steps (mw/sort-contributions
-                      [;selected
-                       ;(map |{:plugin :void/http :value $ :stage true} (staged :wrappers))])]
+              steps (mw/splice ordered selected (staged :wrappers))]
           {:chain (mw/chain (map |($ :value) steps) (if h-ok (resolved :call) identity) rmeta)
            :middleware (tuple ;(map |(get-in $ [:value :name]) steps))
            :steps (tuple ;(map mw/describe steps))
            :declined declined
-           :hooks (staged :out)
-           :warnings (mw/shared-phase-warnings selected)})))
+           :hooks (staged :out)})))
     (unless c-ok
-      (array/push errors (string/format "%s: %s" label (string chain-or-err))))
+      (array/push errors (string/format "%s: %s" route-label (string chain-or-err))))
     (when (and (keyword? name) (not (in by-name name))
                pat-ok h-ok c-ok (empty? (merged :errors)))
-      (each w (chain-or-err :warnings) (put phase-warnings w true))
       (def entry
         @{:name name
           :method (d :method)
@@ -482,7 +484,7 @@
           :no-reload (resolved :no-reload)
           :meta rmeta
           :provenance (freeze (merged :provenance))
-          :warnings (tuple ;(merged :warnings) ;(chain-or-err :warnings))
+          :warnings (tuple ;(merged :warnings))
           :chain (chain-or-err :chain)
           :middleware (chain-or-err :middleware)
           :steps (chain-or-err :steps)
@@ -494,11 +496,6 @@
 
   (unless (empty? errors)
     (errorf "route table errors:\n  - %s" (string/join errors "\n  - ")))
-
-  # a phase two plugins share is an order nobody decided: said once per
-  # build in the log, and on every entry it concerns for explain-route
-  (each w (sorted (keys phase-warnings))
-    (log/warn w :ns "void.http.router"))
 
   # indexes: static lookup per method, ordered dynamic scan per method
   (def static @{})
@@ -543,7 +540,7 @@
                                  (get (e :params) i) (get caps i)))])))
         nil)))
 
-(defn match
+(defn lookup
   {:params [HttpRouteTable :keyword :string]
    :ret (or [HttpRoute {:keyword :string}] :nil)}
   ``Match method + path against the table. Returns [entry params] or
@@ -563,7 +560,7 @@
   (def out @[])
   (each m (sorted (keys methods))
     (unless (= :any m)
-      (when (match table m path)
+      (when (lookup table m path)
         (array/push out m))))
   (freeze out))
 
@@ -574,7 +571,7 @@
   The entry lands in (req :void/route), captures in (req :params).
   Returns the response, or nil when no route matches.``
   [table req]
-  (when-let [[entry params] (match table (req :method) (req :path))]
+  (when-let [[entry params] (lookup table (req :method) (req :path))]
     (put req keys/route entry)
     (put req :params params)
     ((entry :chain) req)))
@@ -629,23 +626,27 @@
 (defn step-str
   {:params [HttpChainStep]
    :ret :string}
-  "One chain step as `name@phase` (plus `stage` or the placement it
-  resolved from) — the spelling explain-route and `void routes --chain`
-  share."
+  ``One chain step as its name and where it was placed — `(stage)` for a
+  stage wrapper at its anchor, the edges otherwise — the spelling
+  explain-route and `void routes --chain` share:
+
+      (step-str {:name :void.http/session :after :void.http/parsing
+                 :before :void.http/authenticated})
+      # => ":void.http/session (after :void.http/parsing; before :void.http/authenticated)"``
   [s]
-  (string/format "%q@%d%s" (s :name) (s :phase)
+  (def edges (order/edges-str s))
+  (string/format "%q%s" (s :name)
                  (cond
                    (s :stage) " (stage)"
-                   (s :after) (string/format " (after %q)" (s :after))
-                   (s :before) (string/format " (before %q)" (s :before))
-                   "")))
+                   (empty? edges) ""
+                   (string " (" edges ")"))))
 
 (defn declined-str
   {:params [HttpChainStep]
    :ret :string}
-  "One declined contribution as `name@phase (plugin) — reason`."
+  "One declined contribution as `name (plugin) — reason`."
   [d]
-  (string/format "%s (%q) — %s" (step-str d) (d :plugin)
+  (string/format "%q (%q) — %s" (d :name) (d :plugin)
                  (get mw/reasons (d :reason) (string (d :reason)))))
 
 (defn explain-route
@@ -666,16 +667,15 @@
   :layers {key [{:source :value} ...]} :source :middleware :chain
   :declined :hooks :warnings :text <human summary>} or nil when nothing
   matches. :middleware is the resolved chain's names (outermost
-  first); :chain the same steps as data, [{:name :phase :plugin
-  :stage? :after?/:before?} ...]; :declined the contributions that
-  are *not* in the chain and why ([{:name :phase :plugin :reason}
-  ...], see middleware/reasons); :hooks the route's out-of-chain
-  hooks by stage; :source the route-source contribution it came from;
-  :warnings the bare-key warnings from the metadata merge plus the
-  phases two plugins share in this chain.``
+  first); :chain the same steps as data, [{:name :plugin :stage?
+  :after? :before?} ...]; :declined the contributions that are *not*
+  in the chain and why ([{:name :plugin :reason ...} ...], see
+  middleware/reasons); :hooks the route's out-of-chain hooks by stage;
+  :source the route-source contribution it came from; :warnings the
+  bare-key warnings from the metadata merge.``
   [table path &opt method]
   (default method :get)
-  (when-let [[e params] (match table method path)]
+  (when-let [[e params] (lookup table method path)]
     (def merge-result {:value (e :meta) :provenance (e :provenance)})
     (def lines @[])
     (each k (sorted (keys (e :meta)))

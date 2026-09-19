@@ -107,7 +107,7 @@
    :call))
 
 (defn- instances
-  {:params [{:system (or {:components :any & r} :nil) & r} (or @[:keyword] [:keyword] :nil) :any]
+  {:params [{:system (or {:components :any & r} :nil) & r} (or [:keyword] :nil) :any]
    :ret @[:any]
    :throws [:string]}
   ``The `:needs` instances of a command, in declaration order.
@@ -177,7 +177,7 @@
   {:params [{:system (or {:components :any & r} :nil) & r}
             {:name :keyword
              :doc :string?
-             :needs (or @[:keyword] [:keyword] :nil)
+             :needs (or [:keyword] :nil)
              :read-only? :any
              :plugin :keyword?
              :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
@@ -218,7 +218,7 @@
              :title :string?
              :read-only? :any
              :schema :any
-             :needs (or @[:keyword] [:keyword] :nil)
+             :needs (or [:keyword] :nil)
              :plugin :keyword?
              & r}
             :any
@@ -304,20 +304,20 @@
 # -- what is exposed -----------------------------------------------------
 
 (defn- hidden?
-  {:params [{:hide (or @[:keyword] [:keyword] :nil) & r} :keyword] :ret :boolean}
+  {:params [{:hide (or [:keyword] :nil) & r} :keyword] :ret :boolean}
   "Is `name` named in `[:mcp :hide]`?"
   [settings name]
   (truthy? (index-of name (get settings :hide []))))
 
 (defn- allowlisted?
-  {:params [{:tools (or @[:keyword] [:keyword] :nil) & r} :keyword] :ret :boolean}
+  {:params [{:tools (or [:keyword] :nil) & r} :keyword] :ret :boolean}
   "Is `name` named in `[:mcp :tools]`?"
   [settings name]
   (truthy? (index-of name (get settings :tools []))))
 
 (defn exposed?
-  {:params [{:hide (or @[:keyword] [:keyword] :nil)
-             :tools (or @[:keyword] [:keyword] :nil)
+  {:params [{:hide (or [:keyword] :nil)
+             :tools (or [:keyword] :nil)
              :read-only :boolean? & r}
             {:name :keyword :read-only? :any & r}]
    :ret :boolean}
@@ -384,7 +384,7 @@
   {:params [{:system (or {:components :any & r} :nil) & r}
             {:name :keyword
              :doc :string?
-             :needs (or @[:keyword] [:keyword] :nil)
+             :needs (or [:keyword] :nil)
              :read-only? :any
              :plugin :keyword?
              :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
@@ -419,7 +419,7 @@
              :title :string?
              :read-only? :any
              :schema :any
-             :needs (or @[:keyword] [:keyword] :nil)
+             :needs (or [:keyword] :nil)
              :plugin :keyword?
              & r}
             {:keyword :any}]
@@ -442,8 +442,8 @@
 
 (defn tools
   {:params [{:extensions {:keyword :any} :system (or {:components :any & r} :nil) & r}
-            {:hide (or @[:keyword] [:keyword] :nil)
-             :tools (or @[:keyword] [:keyword] :nil)
+            {:hide (or [:keyword] :nil)
+             :tools (or [:keyword] :nil)
              :read-only :boolean? & r}
             (or {:keyword :any} :nil)]
    :ret @[@{:name :string :title :string :description :string :input-schema :any
@@ -476,15 +476,15 @@
   [name]
   (def sch (or (schema/lookup name) (errorf "schema %q is not registered" name)))
   (def refs @{})
-  (def doc (jsonschema/convert sch refs))
-  (put doc "title" (string name))
+  (def document (jsonschema/convert sch refs))
+  (put document "title" (string name))
   (unless (empty? refs)
-    (put doc "components" @{"schemas" (jsonschema/components refs)}))
-  doc)
+    (put document "components" @{"schemas" (jsonschema/components refs)}))
+  document)
 
 (defn schema-names
   {:params [{:schemas (or :boolean @[:keyword] [:keyword] :nil) & r}]
-   :ret (or @[:keyword] [:keyword])}
+   :ret [:keyword]}
   ``The schemas exposed as resources: every registered one
   (`[:mcp :schemas]` true, the default), a named subset, or none.``
   [settings]
@@ -531,7 +531,7 @@
              :title :string?
              :doc :string?
              :mime-type :string?
-             :needs (or @[:keyword] [:keyword] :nil)
+             :needs (or [:keyword] :nil)
              & r}
             {:keyword :any}]
    :ret @{:uri :string :name :string :title :string :description :string
@@ -554,7 +554,7 @@
              :system (or {:components :any & r} :nil) & r}
             {:health :boolean?
              :schemas (or :boolean @[:keyword] [:keyword] :nil)
-             :hide (or @[:keyword] [:keyword] :nil) & r}
+             :hide (or [:keyword] :nil) & r}
             (or {:keyword :any} :nil)]
    :ret @[@{:uri :string :name :string :title :string :description :string
             :mime-type :string :read (fn [] :any)}]}
@@ -575,8 +575,8 @@
 (defn build
   {:params [{:phase :keyword :profile :keyword :extensions {:keyword :any}
              :system (or {:components :any & r} :nil) & r}
-            {:hide (or @[:keyword] [:keyword] :nil)
-             :tools (or @[:keyword] [:keyword] :nil)
+            {:hide (or [:keyword] :nil)
+             :tools (or [:keyword] :nil)
              :read-only :boolean?
              :health :boolean?
              :schemas (or :boolean @[:keyword] [:keyword] :nil)
@@ -607,8 +607,8 @@
 
 (defn check-settings!
   {:params [{:extensions {:keyword :any} & r}
-            {:tools (or @[:keyword] [:keyword] :nil) :hide (or @[:keyword] [:keyword] :nil) & r}]
-   :ret {:tools (or @[:keyword] [:keyword] :nil) :hide (or @[:keyword] [:keyword] :nil) & r}
+            {:tools (or [:keyword] :nil) :hide (or [:keyword] :nil) & r}]
+   :ret {:tools (or [:keyword] :nil) :hide (or [:keyword] :nil) & r}
    :throws [:string]}
   ``Refuse a `[:mcp :tools]` or `[:mcp :hide]` entry that names
   nothing: a typo in an allowlist is a tool silently missing from an

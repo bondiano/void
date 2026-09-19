@@ -97,7 +97,7 @@
   [index (- now (* index window))])
 
 (defn check!
-  {:params [{:get (fn [:any] :any) :incr (fn [:any :any :any] :any) & r}
+  {:params [SecurityRateStore
             :string
             {:limit :number? :window :number? :now :number? :prefix :string? :on-error :keyword? & r}]
    :ret {:allowed :boolean :limit :number :remaining :number :reset :number

@@ -17,7 +17,8 @@
 ###
 ### **The numbers are taken at two different moments, on purpose.**
 ###
-###   the middleware   phase 1010, right after the request id: it
+###   the middleware   right after the request id, between the :on-send
+###                    and :on-request stage anchors: it
 ###                    starts the root span (continuing an inbound
 ###                    `traceparent` when there is one), binds the
 ###                    trace ids into the log context so every record
@@ -221,8 +222,8 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :void.dev/reloaded
-   # after void/http rebuilds the table (500)
-   :phase 600
+   # after void/http rebuilds the table
+   :after :http/rebuild-table
    :name :obs-http/forget-routes
    :doc "Forget the memoized route labels when the route table is rebuilt"
    :fn (fn on-reloaded [_ _] (forget-routes!))})
@@ -299,7 +300,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :config-loaded
-   :phase 400
    :name :obs-http/capture
    :doc "Keep the boot value and read the [:obs-http] slice once"
    :fn (fn capture [boot]
@@ -309,7 +309,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 950
+   :after :void.core/started
    :name :obs-http/ready
    :doc "Flip the readiness flag and point the connections gauge at the running server"
    :fn (fn become-ready [boot]
@@ -321,7 +321,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-stop
-   :phase 50
+   :before :void.core/drained
    :name :obs-http/draining
    :doc "Answer /ready with 503 before the server starts draining"
    :fn (fn start-draining [_]
@@ -369,11 +369,11 @@
 (defn- traced
   {:params [(fn [@{:headers {:string (or :string @[:string])} :method :keyword
                    :path :string :request-id :string? & r}]
-              @{:status :number :body :any :headers @{:string :any}})
+              HttpResponseTable)
             @{:headers {:string (or :string @[:string])} :method :keyword
               :path :string :request-id :string? & r}
             {:label :string :sample-rate :number? & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Run `handler` inside the request's root span: attributes for
   method, path and route, the response status recorded once the
   handler answers, and a 5xx marking the span itself failed."
@@ -402,9 +402,11 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.obs/request
-   # after the request id (1000): the id is in the log context before
-   # the span joins it, so one record carries both
-   :phase 1010
+   # after the request id: the id is in the log context before the
+   # span joins it, so one record carries both. Inside :on-send and
+   # outside :on-request, so the span covers every hook of the route
+   :after :void.http.stage/on-send
+   :before :void.http.stage/on-request
    :doc "Start the request's root span (continuing an inbound W3C traceparent), bind the trace ids into the log context, count requests in flight and observe the queue time"
    :wrap
    (fn [handler]
@@ -449,7 +451,7 @@
 (def ready-path "Where the readiness answer is served." "/ready")
 
 (defn- off
-  {:params [] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [] :ret HttpResponseTable}
   "The 404 an obs endpoint answers with when it is turned off in
   config."
   []
@@ -486,7 +488,7 @@
     true))
 
 (defn- unauthorized
-  {:params [] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [] :ret HttpResponseTable}
   "The 401 an obs endpoint answers with when the bearer token is
   missing or wrong."
   []
@@ -496,7 +498,7 @@
 
 (defn metrics-handler
   {:params [@{:headers {:string (or :string @[:string])} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   ``GET /metrics — the Prometheus text exposition of every metric this
   process holds. Public so an application can mount it on a path (or a
   port) of its own.``
@@ -521,7 +523,7 @@
   (merge (plugin/health boot-ref) {:ready ready}))
 
 (defn- json-response
-  {:params [:number :any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:number :any] :ret HttpResponseTable}
   "A JSON response of `value`, run through `obslog/jsonable` first so
   a health contribution that returns a raw janet value never throws
   in the encoder."
@@ -535,7 +537,7 @@
 
 (defn health-handler
   {:params [@{:headers {:string (or :string @[:string])} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   ``GET /health — the health report, 200 when nothing is down and 503
   when something is. Behind the same bearer token as /metrics when
   `[:obs-http :token]` is set: the report folds every component's
@@ -552,7 +554,7 @@
 
 (defn ready-handler
   {:params [@{:headers {:string (or :string @[:string])} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   ``GET /ready — is this process taking traffic? The flag and the
   component states, and deliberately nothing else: a readiness probe
   runs every second or two, and one that reaches a database turns a

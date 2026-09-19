@@ -10,8 +10,8 @@
 ### `[:deploy :shape] :fleet` refuses it at start, with prefork as one of
 ### the ways to be a fleet.
 ###
-### The middleware (phase 3000) puts a mutable table at (req :session);
-### a handler mutates it, or replaces it via (resp :session), or
+### The middleware (after parsing, before :void.http/authenticated) puts
+### a mutable table at (req :session); a handler mutates it, or replaces it via (resp :session), or
 ### destroys it with {:session :delete}, or asks for a new id under the
 ### same data with (session/rotate! req) — equivalently {:session
 ### :rotate}. Session ids are 128-bit random values from the OS; an id

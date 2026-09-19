@@ -62,15 +62,7 @@
 
 (defn driver
   {:params [(or :nil {:keyword :any})]
-   :ret {:name :string :dialect :keyword :connect (fn [] :any) :close (fn [:any] :any)
-         :execute (fn [:any :string [:any] {:kind :keyword & r}] {:rows [:any] :count :number})
-         :returning :boolean :prepare (or :function :nil)
-         :execute-prepared (or :function :nil) :ping (or :function :nil)
-         :insert-id (or :function :nil)
-         :stream (fn [:any :string [:any] (fn [:any] :any)] :number)
-         :reusable? (fn [:any] :boolean) :begin :function :commit :function
-         :rollback :function :savepoint :function :release-savepoint :function
-         :rollback-to-savepoint :function :streams? :boolean & r}
+   :ret DbNormalizedDriver
    :throws [:string]}
   ``The normalized void/db driver for the configured server. Resolved
   through `require`, so that nothing of void/db-mysql is touched

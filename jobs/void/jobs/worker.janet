@@ -101,34 +101,10 @@
 # -- construction --------------------------------------------------------
 
 (defn make
-  {:params [{:backend {:name :any :shared? :boolean :transactional? :boolean
-                       :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
-                       :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
-                       :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
-                       :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
-                       :release-parent! (or (fn [& :any] :any) :nil)
-                       :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
-                       :shared-rate? :boolean :shared-locks? :boolean
-                       :stats (fn [] :any) :close (fn [] :any) & r}
-             :queues {:keyword :any}
-             :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
-                       :timeout :number? :claim-ttl :number & r}
-             :config {:keyword :any} :stats @{:enqueued :number :duplicates :number}}
+  {:params [JobsQueue
             (or {:keyword :any} :nil)]
    :ret @{:id :string
-          :queue {:backend {:name :any :shared? :boolean :transactional? :boolean
-                            :push! (fn [& :any] :any) :claim! (fn [& :any] :any) :settle! (fn [& :any] :any)
-                            :fetch (fn [& :any] :any) :list (fn [& :any] :any) :counts (fn [& :any] :any)
-                            :remove! (fn [& :any] :any) :clear! (fn [& :any] :any)
-                            :reap! (or (fn [& :any] :any) :nil) :touch! (or (fn [& :any] :any) :nil)
-                            :release-parent! (or (fn [& :any] :any) :nil)
-                            :rate-take! (fn [& :any] :any) :lock! (fn [& :any] :any) :unlock! (fn [& :any] :any)
-                            :shared-rate? :boolean :shared-locks? :boolean
-                            :stats (fn [] :any) :close (fn [] :any) & r}
-                  :queues {:keyword :any}
-                  :defaults {:queue :keyword :priority :number :max-attempts :number :backoff :any
-                            :timeout :number? :claim-ttl :number & r}
-                  :config {:keyword :any} :stats @{:enqueued :number :duplicates :number}}
+          :queue JobsQueue
           :queues [:keyword] :concurrency :number
           :poll-interval :any :shutdown-timeout :any :claim-ttl :number
           :running @{:string :any} :per-queue @{:any :number} :per-group @{:any :number}
@@ -361,7 +337,7 @@
 (defn- call-handler
   {:params [{:handler {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
                        :name :symbol? :env :table? :what :string} & r}
-            {:args (or @[:any] [:any]) :timeout :number? & r}]
+            {:args [:any] :timeout :number? & r}]
    :ret :any}
   ``Run the handler, under its own deadline when the job has a
   :timeout. The deadline is put on a child task rather than on this

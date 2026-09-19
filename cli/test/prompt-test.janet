@@ -8,7 +8,7 @@
 # have an answer.
 
 (defn- answers
-  {:params [(or @[:string] [:string]) (fn [] :any)] :ret :any :throws [:string]}
+  {:params [[:string] (fn [] :any)] :ret :any :throws [:string]}
   "Run `f` with a scripted stdin: each call to a prompt consumes one
   line, and `nil` afterwards is EOF."
   [lines f]

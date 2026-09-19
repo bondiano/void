@@ -51,14 +51,8 @@
 
 (defn listen!
   {:params [:keyword
-            (fn [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-                  :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-                  :action :any :us :number}]
-               :any)]
-   :ret (fn [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-              :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-              :action :any :us :number}]
-            :any)}
+            (fn [AuthzDecision] :any)]
+   :ret (fn [AuthzDecision] :any)}
   "Hear about every decision without contributing a hook — the REPL's
   way, and a test's."
   [name f]
@@ -72,12 +66,8 @@
   (put listeners name nil))
 
 (defn- emit!
-  {:params [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-             :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-             :action :any :us :number}]
-   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-         :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-         :action :any :us :number}}
+  {:params [AuthzDecision]
+   :ret AuthzDecision}
   "Publish a decision to every hook handler and listener, log it under
   the configured mode, and return it unchanged."
   [decision]
@@ -106,8 +96,8 @@
   decision)
 
 (defn- names-of
-  {:params [(or :keyword @[:keyword] [:keyword] :nil)]
-   :ret (or @[:keyword] [:keyword])
+  {:params [(or :keyword [:keyword] :nil)]
+   :ret [:keyword]
    :throws [:string]}
   "Normalize a policy reference — nil, one keyword, or a list — into a
   list of policy names to evaluate."
@@ -119,12 +109,10 @@
     (errorf "a policy reference must be a keyword or a list of them, got %q" names)))
 
 (defn decide
-  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+  {:params [(or :keyword [:keyword] :nil)
             (or {:subject :any :action :any :resource :any :env :any
                  :attrs :any :context :any & r} :nil)]
-   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-         :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-         :action :any :us :number}
+   :ret AuthzDecision
    :throws [:string]}
   ``Evaluate one policy, or every policy in a list (all must allow).
   Returns the decision value described in the module docstring.
@@ -161,7 +149,7 @@
   (emit! decision))
 
 (defn can?
-  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+  {:params [(or :keyword [:keyword] :nil)
             (or {:subject :any :action :any :resource :any :env :any
                  :attrs :any :context :any & r} :nil)]
    :ret :boolean
@@ -176,15 +164,8 @@
   {:status 403 :doc "a policy denied the actor; :data {:decision <the decision value>}"})
 
 (defn forbidden
-  {:params [{:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-             :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-             :action :any :us :number}
-            (or :string :nil) (or :number :nil)]
-   :ret {:void/error :keyword :message :string? :data {:any :any}
-         :void.authz/decision {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-                                :reason (or :string :nil) :attrs [:keyword]
-                                :subject (or :string :nil) :action :any :us :number}
-         & r}
+  {:params [AuthzDecision :string? :number?]
+   :ret AuthzForbidden
    :throws [:string]}
   ``The error value for a denied decision: an envelope of kind
   :void.authz/forbidden carrying the decision in :data — and under
@@ -197,18 +178,12 @@
                  {:void.authz/decision decision})))
 
 (defn ensure!
-  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+  {:params [(or :keyword [:keyword] :nil)
             (or {:subject :any :action :any :resource :any :env :any
                  :attrs :any :context :any & r} :nil)]
-   :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-         :reason (or :string :nil) :attrs [:keyword] :subject (or :string :nil)
-         :action :any :us :number}
+   :ret AuthzDecision
    :throws [:string
-            {:void/error :keyword :message :string? :data {:any :any}
-             :void.authz/decision {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]
-                                    :reason (or :string :nil) :attrs [:keyword]
-                                    :subject (or :string :nil) :action :any :us :number}
-             & r}]}
+            AuthzForbidden]}
   ``Allow, or raise a 403 carrying the decision. The raised value has
   `:http/status 403` so the error renderers answer it the way they
   answer any other status (problem+json under void/rest, the dev page
@@ -221,7 +196,7 @@
   decision)
 
 (defn explain
-  {:params [(or :keyword @[:keyword] [:keyword] :nil)
+  {:params [(or :keyword [:keyword] :nil)
             (or {:subject :any :action :any :resource :any :env :any
                  :attrs :any :context :any & r} :nil)]
    :ret {:allow :boolean :policy (or :keyword :nil) :policies [:keyword]

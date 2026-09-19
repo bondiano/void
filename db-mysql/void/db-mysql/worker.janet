@@ -57,7 +57,7 @@
 
 (defn- error-of
   {:params [:pointer :any]
-   :ret {:message :string :code :number :sqlstate :string :context :any :lost :boolean}}
+   :ret MysqlError}
   ``The connection's current error as the dictionary that crosses the
   channel. `context` says what was being attempted, since a bare
   "Lost connection to MySQL server" does not.``
@@ -72,7 +72,7 @@
 (defn- fail
   {:params [:pointer :any]
    :ret :never
-   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+   :throws [MysqlError]}
   "Raise the connection's current error as the dictionary that crosses
   the channel."
   [conn context]
@@ -147,7 +147,7 @@
 
 (defn- drain!
   {:params [:pointer] :ret :nil
-   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+   :throws [MysqlError]}
   ``Consume and discard any further result sets. Nothing this driver
   sends can produce one — CLIENT_MULTI_STATEMENTS is deliberately
   never set (see libmysql/client-flags) — but `CALL some_procedure()`
@@ -169,7 +169,7 @@
   {:params [:pointer :string :any (or {:any :any} :nil)]
    :ret (or {:rows @[@{:keyword :any}] :count :number}
             {:rows @[@{:keyword :any}] :count :number :insert-id :number})
-   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+   :throws [MysqlError]}
   ``Run one statement on this connection and collect its answer.
 
   `sql` is what the server is sent — parameters already rendered into
@@ -217,7 +217,7 @@
 
 (defn- probe-layout!
   {:params [:pointer] :ret :nil
-   :throws [:string {:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+   :throws [:string MysqlError]}
   ``Prove that this library lays a MYSQL_FIELD out where ./libmysql
   says it does, before any caller depends on it.
 
@@ -253,7 +253,7 @@
 
 (defn- scalar
   {:params [:pointer :string] :ret (or :string :nil)
-   :throws [{:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+   :throws [MysqlError]}
   "The one value of a one-row, one-column statement, as text."
   [conn sql]
   (unless (zero? (my/mysql_real_query conn sql (length sql)))
@@ -268,7 +268,7 @@
 
 (defn- check-escaping!
   {:params [:pointer] :ret :nil
-   :throws [:string {:message :string :code :number :sqlstate :string :context :any :lost :boolean}]}
+   :throws [:string MysqlError]}
   ``Refuse NO_BACKSLASH_ESCAPES rather than work around it.
 
   Under that sql_mode a backslash is an ordinary character, and the
@@ -296,7 +296,7 @@
              :socket (or :string :nil) & r}]
    :ret :pointer
    :throws [:string
-            {:message :string :code :number :sqlstate :string :context :any :lost :boolean}
+            MysqlError
             {:message :string :code :number :sqlstate :string :lost :boolean}]}
   ``Open one connection from a plain-data `spec` (see ./config, which
   builds one) and return the MYSQL*. Everything that can be wrong

@@ -112,7 +112,7 @@
   (string name ": " (fold (header-text clean)) crlf))
 
 (defn address-header
-  {:params [:string (or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+  {:params [:string (or :nil :string :buffer {:email :any & r} [:any])]
    :ret (or :nil :string)
    :throws [:string]}
   "A header holding one or more addresses, with display names encoded."
@@ -331,7 +331,7 @@
   (if (empty? attachments)
     alternative
     (multipart "mixed" (bounds 1)
-               [alternative ;(map attachment-part attachments)])))
+               (tuple alternative ;(map attachment-part attachments)))))
 
 (defn render
   {:params [{:from :any :to :any :cc :any :reply-to :any :subject :any :message-id :any

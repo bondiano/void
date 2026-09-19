@@ -64,7 +64,7 @@
 
 (defn active-client
   {:params [] :ret @{:pool :any
-                     :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+                     :codec RedisCodec
                      :prefix :string :retry :boolean :conn-opts :any
                      :describe :any? :keeper :any? :session-prefix :string? & r}}
   "The client this fiber runs against: the `client-dyn` override, else
@@ -79,7 +79,7 @@
   ((active-client) :pool))
 
 (defn active-codec
-  {:params [] :ret {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}}
+  {:params [] :ret RedisCodec}
   "The codec of the active client — what [:redis :codec] named."
   []
   ((active-client) :codec))
@@ -181,21 +181,21 @@
   pool's metrics and logging it — the innermost step `execute` wraps
   with the checkout/retry loop, once for the fiber's own scoped
   connection and once per attempt otherwise.``
-  [client c f label]
+  [client c f command]
   (def p (client :pool))
   (def t0 (os/clock :monotonic))
   # the closure is built only when something is wrapping
   (def [ok res] (protect (if around-command
-                           (around-command label (fn run-wrapped [] (f c)))
+                           (around-command command (fn run-wrapped [] (f c)))
                            (f c))))
   (def us (elapsed-us t0))
   (pool/note-command! p us)
   (unless ok
     (log/error "redis command failed" :ns log-ns
-               :command label :us us
+               :command command :us us
                :err (if (dictionary? res) (get res :message (describe res)) (describe res)))
     (error res))
-  (log/debug "redis command" :ns log-ns :command label :us us)
+  (log/debug "redis command" :ns log-ns :command command :us us)
   res)
 
 (defn- label-of
@@ -223,8 +223,8 @@
   "Is this command word one the server holds its reply on purpose for
   — the funnel's signal to skip the retry rather than risk replaying
   it."
-  [label]
-  (truthy? (get blocking-commands label)))
+  [command]
+  (truthy? (get blocking-commands command)))
 
 (defn execute
   {:params [(fn [a] :any) (or :string :nil) :boolean?]
@@ -238,10 +238,10 @@
   while idle (see the module docstring for what that trades).
   `no-retry` turns the retry off for this call — what a blocking
   command needs, where a replay is not idempotent even in principle.``
-  [f &opt label no-retry]
+  [f &opt command no-retry]
   (def client (active-client))
   (if (scoped?)
-    (run-on client (dyn conn-dyn) f label)
+    (run-on client (dyn conn-dyn) f command)
     (do
       (def p (client :pool))
       (var out nil)
@@ -253,7 +253,7 @@
         (def [ok res]
           (protect (defer (pool/checkin p c)
                      (with-dyns [conn-dyn c]
-                       (run-on client c f label)))))
+                       (run-on client c f command)))))
         (cond
           ok (do (set out res) (set done true))
 
@@ -263,19 +263,15 @@
                (conn/fatal? res)
                (not (c :fresh)))
           (log/debug "the pooled connection had been closed — retrying once"
-                     :ns log-ns :command label :id (c :id))
+                     :ns log-ns :command command :id (c :id))
 
           (error res)))
       out)))
 
 (defn call
-  {:params [(or @[:any] [:any]) (or {:raw :any :timeout :any & r}
-                                    @{:raw :any :timeout :any & r} :nil)]
+  {:params [[:any] (or {:raw :any :timeout :any & r} :nil)]
    :ret :any
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [RedisConnectionError RedisReplyError]}
   ``Run one command. Arguments are what ./resp accepts — strings,
   numbers, keywords — and the reply is what ./resp decoded.
 
@@ -287,16 +283,14 @@
   carry an element the server already removed, and a replay would take
   a second one.``
   [args &opt opts]
-  (def label (label-of args))
-  (execute (fn one [c] (conn/call c args opts)) label
-           (blocking-label? label)))
+  (def command (label-of args))
+  (execute (fn one [c] (conn/call c args opts)) command
+           (blocking-label? command)))
 
 (defn pipeline
-  {:params [(or @[:any] [:any]) (or {:raw :any :timeout :any & r}
-                                    @{:raw :any :timeout :any & r} :nil)]
+  {:params [[:any] (or {:raw :any :timeout :any & r} :nil)]
    :ret @[:any]
-   :throws [{:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
+   :throws [RedisConnectionError
             {:redis/error :boolean :code :string :message :string
              :reply :string :command (or :string :nil)
              :index :number :results @[:any]}]}

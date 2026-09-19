@@ -155,7 +155,7 @@
    :ret @[(or :function :cfunction)]}
   ``Phase 2 (config): the :void.core/config-source contributions of
   every loaded manifest, resolved through the point's own contract
-  (schema, unique :name, :priority order) into the functions
+  (schema, unique :name, edge order — order/first-wins) into the functions
   config/load tries first for a {:secret NAME} reference. Every loaded
   plugin, not the active ones: :when reads the config these sources
   help build, so activation cannot gate them — a source from a plugin
@@ -307,34 +307,46 @@
   (system/current system/running-boot))
 
 (defn- build-hooks
-  {:params [@[Manifest] @{:keyword Extension}]
+  {:params [@[Manifest] @{:keyword Extension} @[:string]]
    :ret @{:keyword :any}}
   ``Fold the :void.core/hooks contributions into a hooks/registry, each
   handler attributed to its source plugin. The registry is declared
   with every hook the active plugins say they fire (plus the lifecycle
-  hooks) and owned by the active plugins' namespaces; a handler for a
-  suspect name — undeclared, in a namespace an active plugin owns — is
-  reported here with a did-you-mean, since it would otherwise wait
-  forever. A handler for an absent plugin's hook is not suspect.``
-  [active extensions]
+  hooks), owned by the active plugins' namespaces and bounded by their
+  `:requires`; a handler for a suspect name — undeclared, in a
+  namespace an active plugin owns — is reported here with a
+  did-you-mean, since it would otherwise wait forever. A handler for an
+  absent plugin's hook is not suspect.
+
+  Every hook's order is asked for once, here: an edge to a name the
+  hook does not have, to a handler of a plugin the contributor does not
+  require, or a cycle lands in `errors` — a boot error, dry-run
+  included, rather than a surprise at :before-start.``
+  [active extensions errors]
   (def declared (tabseq [h :in hooks/lifecycle-hooks] h true))
   (each m active
     (each h (get m :hooks []) (put declared h true)))
-  (def reg (hooks/registry (keys declared) (map |($ :name) active)))
+  (def reg (hooks/registry (keys declared)
+                           (map |($ :name) active)
+                           (tabseq [m :in active] (m :name) (get m :requires {}))))
   (each c (get-in extensions [:void.core/hooks :contributions] [])
     (def v (c :value))
     (when (hooks/suspect? reg (v :hook))
       (eprintf "warning: plugin %q registers a handler for hook %q, which no active plugin declares — it will never run%s"
                (c :plugin) (v :hook) (util/suggest (v :hook) (keys declared))))
     (hooks/add! reg (v :hook) (v :fn)
-                :phase (get v :phase 1000)
+                :after (get v :after)
+                :before (get v :before)
                 :name (get v :name)
                 :doc (get v :doc)
                 :plugin (c :plugin)))
+  (each h (sorted (keys reg))
+    (def [ok e] (protect (hooks/handlers reg h)))
+    (unless ok (array/push errors (util/err-str e))))
   reg)
 
 (defn- bootstrap*
-  {:params [{:plugins (or @[:any] [:any] :nil) :profile :keyword? :config :any? & r}
+  {:params [{:plugins (or [:any] :nil) :profile :keyword? :config :any? & r}
             :boolean]
    :ret Boot
    :throws [:string]}
@@ -378,6 +390,8 @@
   (checked :extension-resolution errors sources)
 
   (def sys (build-system active extensions cfg errors))
+  # the hooks' order is part of the wiring the graph phase checks
+  (def hook-reg (build-hooks active extensions errors))
   (checked :graph errors sources)
 
   (def boot
@@ -390,14 +404,14 @@
       :inactive (tuple ;(map |($ :name) inactive))
       :config cfg
       :extensions extensions
-      :hooks (build-hooks active extensions)
+      :hooks hook-reg
       :system sys})
   (when track?
     (set last-boot boot))
   boot)
 
 (defn bootstrap
-  {:params [{:plugins (or @[:any] [:any] :nil) :profile :keyword? :config :any? & r} :any?]
+  {:params [{:plugins (or [:any] :nil) :profile :keyword? :config :any? & r} :any?]
    :ret Boot
    :throws [:string]}
   ``Run bootstrap phases 1-5 (load -> config -> conditional ->
@@ -528,7 +542,7 @@
   (tuple ;(mapcat |(get-in $ [:contributes point] []) ms)))
 
 (defn dry-run
-  {:params [{:plugins (or @[:any] [:any] :nil) :profile :keyword? :config :any? & r}]
+  {:params [{:plugins (or [:any] :nil) :profile :keyword? :config :any? & r}]
    :ret {:ok :boolean
          :profile :keyword
          :deploy Deployment

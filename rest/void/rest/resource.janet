@@ -119,8 +119,7 @@
                                  (opts :id-schema)))))
 
 (defmacro defresource
-  {:params [:symbol :any :any]
-   :ret {:group :boolean :prefix :string :meta {:keyword :any} :children [:any]}}
+  {:params [:symbol :any :any] :ret :tuple}
   ``Define `name` as a resource group (sugar over `resource`):
 
       (defresource orders "/orders"

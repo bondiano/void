@@ -87,9 +87,7 @@
       "\n\n")))
 
 (defn letter
-  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
-             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
-             :overrides @{:keyword (or {:any :any} @{:any :any})}}
+  {:params [NotifyNotification
             :string]
    :ret @{:to :string :subject :string :view :any :text :string :headers @{:string :string} & r}}
   ``The message a notification becomes — public, because a preview in
@@ -106,9 +104,7 @@
          (notification/override-for note :mail)))
 
 (defn project
-  {:params [@{:id :string :at :number :key :keyword :title :string :body :string?
-             :url :string? :data (or {:any :any} @{:any :any}) :to :any :channels [:keyword]
-             :overrides @{:keyword (or {:any :any} @{:any :any})}}]
+  {:params [NotifyNotification]
    :ret (or {:id :string :at :number :key :keyword :delivery :any} :nil)}
   ``Render the letter and hand back the delivery — data, and the same
   octets on every retry. nil when the notification carries no address
@@ -141,7 +137,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :notify-mail/configure
    :doc "Resolve the [:notify-mail] slice"
    :fn (fn configure [boot]

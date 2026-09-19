@@ -275,15 +275,15 @@
   "One `field` or `oneof-field` statement as a `[key value]` fields
   entry, in the shape `descriptor/field` expects."
   [st scope known where]
-  (def [_ label type name number opts] st)
-  (when (= "required" label)
+  (def [_ cardinality type name number opts] st)
+  (when (= "required" cardinality)
     (errorf (string "proto: %s: field %q is `required`, which proto3 removed — a reader "
                     "cannot enforce it and a writer cannot rely on it")
             where name))
   (def o (field-options opts))
   [(keyword name)
    [number
-    ;(case label "repeated" [:repeated] "optional" [:optional] [])
+    ;(case cardinality "repeated" [:repeated] "optional" [:optional] [])
     (type-form type scope known where)
     o]])
 
@@ -302,9 +302,7 @@
 
 (defn- build-enum
   {:params [[:keyword :string [:any]] :string :string]
-   :ret {:kind :keyword :name :keyword :proto-name :string :values {:keyword :number}
-         :by-number @{:number :keyword} :zero :keyword :allow-alias :boolean
-         :doc (or :string :nil)}
+   :ret ProtoEnum
    :throws [:string]}
   "One `enum` statement as an enum descriptor."
   [st prefix where]
@@ -354,8 +352,7 @@
 
 (defn- build-service
   {:params [[:keyword :string [:any]] :string (or {:string :keyword} @{:string :keyword}) :string]
-   :ret {:kind :keyword :name :keyword :proto-name :string :methods [:any]
-         :by-name @{:keyword :any} :doc (or :string :nil)}
+   :ret ProtoService
    :throws [:string]}
   "One `service` statement as a service descriptor."
   [st prefix known where]

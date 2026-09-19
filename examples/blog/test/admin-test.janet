@@ -97,18 +97,18 @@
   {:params [{:label :string :database :keyword :config :any & r}] :ret :nil}
   "Run the admin suite against one engine's composition."
   [engine]
-  (def label (engine :label))
+  (def engine-name (engine :label))
   (defn note
     {:params [:string] :ret :nil}
     "Print one progress line, tagged with the engine under test."
-    [msg] (print "  [" label "] " msg))
+    [msg] (print "  [" engine-name "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
      :profile :test
      :config {:env @{}
               :cli (merge {:db {:n1-guard :strict :migrations {:dir "db/migrations"}}
-                           :cache {:prefix (string "blog-admin-" label ":")}
+                           :cache {:prefix (string "blog-admin-" engine-name ":")}
                            :auth {:scrypt {:ln 10}}
                            :crypto {:kdf {:in-thread false}}
                            :mail {:transport :memory}
@@ -309,7 +309,7 @@
             "the other author's row is as invisible to the agent as it is to the page")
     (note "the same declarations, the same policies, for an agent")
 
-    (print "  [" label "] ok")))
+    (print "  [" engine-name "] ok")))
 
 (each engine engines (run-suite engine))
 (unless (pg/available?)

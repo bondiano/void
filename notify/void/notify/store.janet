@@ -76,7 +76,7 @@
   unset."
   [value]
   (when (and (dictionary? value) (not (empty? value)))
-    (json/encode value)))
+    (string (json/encode value))))
 
 (defn- json-in
   {:params [:any] :ret :any}
@@ -89,9 +89,7 @@
 (defn row->record
   {:params [(or {:id :any :recipient :any :key :any :title :any :body :any
                 :url :any :data :any :created :any :seen :any & r} :nil)]
-   :ret (or @{:id :any :recipient :any :key :keyword :title :any :body :any :url :any
-             :data (or {:any :any} @{:any :any}) :created :any :seen :any :read? :boolean}
-            :nil)}
+   :ret NotifyRecord?}
   "A row as the views read it: `:key` back to a keyword, `:data` back
   to a table, `:read?` the question the template asks."
   [row]
@@ -144,9 +142,7 @@
 
 (defn list-for
   {:params [:any (or {:limit :any :unread :any & r} :nil) (or {:table :any & r} :nil)]
-   :ret @[(or @{:id :any :recipient :any :key :keyword :title :any :body :any :url :any
-                :data (or {:any :any} @{:any :any}) :created :any :seen :any :read? :boolean}
-              :nil)]}
+   :ret @[NotifyRecord?]}
   ``A recipient's notifications, newest first. `opts`: `:limit` (25),
   `:unread` (only the unread ones).``
   [recipient &opt opts cfg]
@@ -164,9 +160,7 @@
 
 (defn find-for
   {:params [:any :any (or {:table :any & r} :nil)]
-   :ret (or @{:id :any :recipient :any :key :keyword :title :any :body :any :url :any
-             :data (or {:any :any} @{:any :any}) :created :any :seen :any :read? :boolean}
-            :nil)}
+   :ret NotifyRecord?}
   "One of `recipient`'s notifications by id, or nil — nil for a row
   that exists and belongs to somebody else, which is the same answer
   for the same reason."

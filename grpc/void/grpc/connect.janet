@@ -145,7 +145,7 @@
 (defn timeout-of
   {:params [:any]
    :ret (or :nil :number)
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``The client's deadline in seconds, from `Connect-Timeout-Ms`, or
   nil. A header that is not a number is refused rather than ignored:
   a client that asked for a deadline and silently did not get one is
@@ -174,7 +174,7 @@
 (defn check-protocol-version!
   {:params [:any :boolean]
    :ret :nil
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``Refuse a call whose `Connect-Protocol-Version` is not this one.
   Present-and-wrong is always refused; absent is refused only when
   `required?` — see [:grpc :require-protocol-version] for why that is
@@ -195,7 +195,7 @@
 (defn check-encoding!
   {:params [:any]
    :ret :nil
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``Refuse a compressed request. The status is 415 rather than the 501
   the code would otherwise carry: the Connect protocol says a
   Content-Type or Content-Encoding the server does not recognise is an
@@ -222,7 +222,7 @@
          :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
          :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}
         :string]
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``The [codec bytes] of a POST call, or an RPC failure. An
   unrecognised — or missing — content type is a 415 carrying the code
   `unimplemented`: the protocol calls it an unsupported media type,
@@ -253,7 +253,7 @@
          :encode (fn [:any :any] :any) :decode (fn [:any :any] :any)
          :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & cr}
         :string]
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``The [codec bytes] of a GET call. Connect puts the message in the
   query string: `encoding` names the codec, `message` carries the
   value and `base64=1` says it is URL-safe base64 — which a binary
@@ -298,7 +298,7 @@
             :aliases (or [:string] :nil) :encoding-aliases (or [:string] :nil) & r}
            :any :string]
    :ret :any
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   "Decode a call's bytes into a message, turning a codec's complaint
   into `invalid_argument` — which is what a body the server cannot
   read is."
@@ -330,7 +330,7 @@
            :any :any
            (or {:headers (or @{:string :any} :nil) :trailers (or @{:string :any} :nil) & mr} :nil)]
    :ret @{:status :number :headers @{:string :string} :body :string}
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   "The 200 an answered call goes out as."
   [codec message value &opt meta]
   (default meta {})
@@ -354,7 +354,7 @@
   {:params [{:void.grpc/code :keyword :message (or :string :nil)
             :details (or [:any] :nil) & r}
            (fn [:any] :any)]
-   :ret :string}
+   :ret :buffer}
   ``A Connect error as JSON. The shape is the protocol's:
 
       {"code":"not_found","message":"no order A-1","details":[...]}
@@ -376,7 +376,7 @@
             :headers (or @{:string :any} :nil) :message (or :string :nil)
             :details (or [:any] :nil) & r}
            (fn [:any] :any)]
-   :ret @{:status :number :headers @{:string :string} :body :string}}
+   :ret @{:status :number :headers @{:string :string} :body :buffer}}
   "The response an RPC failure goes out as: the status its code maps
   to, and the JSON body naming it — whatever codec the call used,
   because an error a client cannot read is not an error message."

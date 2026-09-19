@@ -113,10 +113,7 @@
 
 (defn normalize
   {:params [:any]
-   :ret {:name :keyword :encoded? :boolean :stats :function :health (or :nil :function)
-         :close :function :publish! :function :consume! :function :stop! :function
-         :guarantees {:delivery :keyword :ordering :keyword :durable :boolean :shared :boolean}
-         & r}
+   :ret BusBackend
    :throws [:string]}
   ``Validate a backend dictionary and fill in the documented
   fallbacks, so the router can call every key unconditionally — the

@@ -42,20 +42,20 @@
 
 (loop [sch :in cases
        seed :range [1 6]]
-  (def v (gen/generate sch {:seed seed}))
+  (def v (gen/sample sch {:seed seed}))
   (assert (schema/valid? sch v)
           (string/format "generated %q does not satisfy %q (seed %d)"
                          v sch seed)))
 
 # bounds are honored, not just validated
 (loop [seed :range [1 20]]
-  (def v (gen/generate [:int {:min 18 :max 21}] {:seed seed}))
+  (def v (gen/sample [:int {:min 18 :max 21}] {:seed seed}))
   (assert (and (>= v 18) (<= v 21))))
 
 # -- determinism with :seed ----------------------------------------------
 
 (def sch {:a :int :b [:string {:min 4}]})
-(assert (deep= (gen/generate sch {:seed 7}) (gen/generate sch {:seed 7}))
+(assert (deep= (gen/sample sch {:seed 7}) (gen/sample sch {:seed 7}))
         "same seed, same value")
 
 # -- refs and recursion cap ----------------------------------------------
@@ -63,22 +63,22 @@
 (schema/register! :gen/Tree
   {:value :int
    :kids [:vector [:ref :gen/Tree] {:min 0 :max 1}]})
-(def tree (gen/generate [:ref :gen/Tree] {:seed 3 :max-depth 6}))
+(def tree (gen/sample [:ref :gen/Tree] {:seed 3 :max-depth 6}))
 (assert (schema/valid? :gen/Tree tree) "recursive schema generates a valid tree")
 
 (expect-error "unregistered ref" "not registered"
-  |(gen/generate [:ref :gen/Nope]))
+  |(gen/sample [:ref :gen/Nope]))
 
 # -- ungeneratable schemas say so ----------------------------------------
 
-(expect-error "bare pred" ":pred" |(gen/generate [:pred pos?]))
-(expect-error "peg schema" ":peg" |(gen/generate [:peg "abc"]))
-(expect-error "pattern prop" ":pattern" |(gen/generate [:string {:pattern "x+"}]))
-(expect-error "unknown format" "format" |(gen/generate [:string {:format :phone}]))
+(expect-error "bare pred" ":pred" |(gen/sample [:pred pos?]))
+(expect-error "peg schema" ":peg" |(gen/sample [:peg "abc"]))
+(expect-error "pattern prop" ":pattern" |(gen/sample [:string {:pattern "x+"}]))
+(expect-error "unknown format" "format" |(gen/sample [:string {:format :phone}]))
 
 # an optional ungeneratable field degrades to nil instead of failing
 (def with-pred {:id :int :odd [:optional [:pred odd?]]})
-(def wp (gen/generate with-pred {:seed 1}))
+(def wp (gen/sample with-pred {:seed 1}))
 (assert (schema/valid? with-pred wp))
 (assert (nil? (wp :odd)) "optional :pred field degrades to nil")
 

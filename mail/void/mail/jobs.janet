@@ -63,9 +63,10 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   # after :mail/configure (400), so that a queue is installed on a
-   # mailer that already knows its transport
-   :phase 500
+   # after :void.core/configured, which :mail/configure runs before,
+   # so that a queue is installed on a mailer that already knows its
+   # transport
+   :after :void.core/configured
    :name :mail-jobs/install
    :doc "Route mail/send through void/jobs"
    :fn (fn install [_]

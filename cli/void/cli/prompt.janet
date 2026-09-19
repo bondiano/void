@@ -121,13 +121,13 @@
 
 # -- ask -----------------------------------------------------------------
 
-(defn- label
+(defn- question-line
   {:params [:string :any] :ret :string}
   "The line a question is drawn on: the question, and the default in
   brackets when there is a non-empty one."
-  [question default]
-  (if (and default (not (empty? (string default))))
-    (string/format "%s [%s]: " question default)
+  [question dflt]
+  (if (and dflt (not (empty? (string dflt))))
+    (string/format "%s [%s]: " question dflt)
     (string/format "%s: " question)))
 
 (defn- validated
@@ -160,7 +160,7 @@
   (default opts {})
   (def dflt (get opts :default))
   (unless (interactive?)
-    (say (label question dflt))
+    (say (question-line question dflt))
     (def raw (read-line-plain))
     (def answer (if (or (nil? raw) (empty? raw)) (string (or dflt "")) raw))
     (say answer "\n")
@@ -169,7 +169,7 @@
   (var out nil)
   (while (nil? out)
     (def buf @"")
-    (say (label question dflt))
+    (say (question-line question dflt))
     (with-raw*
       (fn []
         (var reading true)
@@ -212,18 +212,17 @@
   [o] (if (dictionary? o) (get o :doc "") ""))
 
 (defn- draw-options
-  {:params [(or @[(or :string {:label :any :value :any :doc :string? & r})]
-                [(or :string {:label :any :value :any :doc :string? & r})])
+  {:params [[(or :string {:label :any :value :any :doc :string? & r})]
             :number]
    :ret :nil}
   "Print the option list once, `>` marking the option at `cursor`."
   [options cursor]
   (each [i o] (pairs options)
-    (def doc (option-doc o))
+    (def explanation (option-doc o))
     (eprintf " %s %-12s %s"
              (if (= i cursor) ">" " ")
              (option-label o)
-             doc))
+             explanation))
   (eflush))
 
 (defn- erase-options
@@ -235,8 +234,7 @@
 
 (defn choose
   {:params [:string
-            (or @[(or :string {:label :any :value :any :doc :string? & r})]
-                [(or :string {:label :any :value :any :doc :string? & r})])
+            [(or :string {:label :any :value :any :doc :string? & r})]
             (or {:default :any & r} :nil)]
    :ret :any
    :throws [:string]}

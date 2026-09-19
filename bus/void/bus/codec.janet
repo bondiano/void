@@ -83,7 +83,7 @@
 
 (defn normalize
   {:params [:any]
-   :ret {:name :keyword :bytes? :boolean :doc :any :encode :function :decode :function & r}
+   :ret BusCodec
    :throws [:string]}
   "Validate a codec contribution and fill in its defaults. Throws with
   the offending key named."
@@ -101,7 +101,7 @@
 (defn find-codec
   {:params [{:keyword {:name :keyword :bytes? :boolean :doc :any
                        :encode :function :decode :function & r}} :keyword]
-   :ret {:name :keyword :bytes? :boolean :doc :any :encode :function :decode :function & r}
+   :ret BusCodec
    :throws [:string]}
   ``The codec named by `name` among `codecs` (the resolved extension
   point), or an error listing what there is — a typo in [:bus :codec]

@@ -106,11 +106,11 @@
   "Run the storefront-to-checkout suite against one engine (sqlite or
   postgres)."
   [engine]
-  (def label (engine :label))
+  (def engine-name (engine :label))
   (defn note
     {:params [:string] :ret :nil}
     "Print a labelled progress line for this engine's pass."
-    [msg] (print "  [" label "] " msg))
+    [msg] (print "  [" engine-name "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
@@ -121,7 +121,7 @@
                            # a single one
                            :db {:n1-guard :strict
                                 :migrations {:dir "db/migrations"}}
-                           :cache {:prefix (string "shop-test-" label ":")}
+                           :cache {:prefix (string "shop-test-" engine-name ":")}
                            # the suite hashes a handful of passwords and
                            # is not measuring scrypt
                            :auth {:scrypt {:ln 10}}

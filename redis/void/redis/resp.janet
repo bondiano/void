@@ -403,7 +403,7 @@
     (errorf "%q cannot be a redis argument (bytes, number, keyword or symbol)" v)))
 
 (defn encode
-  {:params [(or @[:any] [:any]) :buffer?] :ret :buffer :throws [:string]}
+  {:params [[:any] :buffer?] :ret :buffer :throws [:string]}
   ``A command as RESP bytes, appended to `into` when given.
 
       (resp/encode ["SET" "user:1" "alice" "EX" 60])
@@ -424,7 +424,7 @@
   out)
 
 (defn encode-all
-  {:params [(or @[:any] [:any]) :buffer?] :ret :buffer :throws [:string]}
+  {:params [[:any] :buffer?] :ret :buffer :throws [:string]}
   "Several commands into one buffer — the write half of pipelining."
   [commands &opt into]
   (def out (or into @""))

@@ -268,7 +268,7 @@
 # -- writing a request ---------------------------------------------------
 
 (defn- lower-keys
-  {:params [(or @{:any :any} {:any :any} :nil)] :ret @{:string :any}}
+  {:params [(or {:any :any} :nil)] :ret @{:string :any}}
   "Header names as the wire wants to compare them: lowercase strings."
   [headers]
   (def out @{})

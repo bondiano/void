@@ -31,7 +31,7 @@
     ;(seq [_ :range [0 n]] (source (math/rng-int rng (length source))))))
 
 (defn- pick
-  {:params [:abstract (or @[:any] [:any])] :ret :any}
+  {:params [:abstract [:any]] :ret :any}
   "A uniformly random element of `xs`."
   [rng xs]
   (xs (math/rng-int rng (length xs))))
@@ -99,7 +99,7 @@
   out)
 
 (defn- shuffle
-  {:params [:abstract (or @[:any] [:any])] :ret @[:any]}
+  {:params [:abstract [:any]] :ret @[:any]}
   "A Fisher-Yates shuffle of `xs` into a fresh array."
   [rng xs]
   (def out (array ;xs))
@@ -212,13 +212,13 @@
       (errorf "cannot generate a value for schema type %q — pass it explicitly"
               (sch :type))))))
 
-(defn generate
+(defn sample
   {:params [:any (or {:seed :number? :rng :abstract? :max-depth :number? & r} :nil)]
    :ret :any
    :throws [:string]}
   ``Generate a sample value that validates against the schema:
 
-      (generate {:email [:string {:format :email}] :age [:int {:min 18}]})
+      (sample {:email [:string {:format :email}] :age [:int {:min 18}]})
 
   Options:
     :seed       integer — reproducible output (fresh rng per call)
@@ -240,7 +240,7 @@
    :throws [:string]}
   "The :generator projection body: (schema/project :generator User {:seed 7})."
   [sch &opt opts]
-  (generate sch opts))
+  (sample sch opts))
 
 # registered on module load so void/test works without a full plugin
 # bootstrap; the void/dev manifest also contributes it to

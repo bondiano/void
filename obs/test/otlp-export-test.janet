@@ -35,7 +35,7 @@
 
 (defn- collector
   {:params [@{:path :string :headers @{:any :any} :body (or :string :nil) & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "The test collector: records every export it receives and refuses
   on demand (`fail-times`), so the exporter's retry and rejection
   paths have something real to hit."
@@ -86,7 +86,7 @@
   (filter |(= :traces ($ :signal)) received))
 
 (defn- spans-in
-  {:params [{:body {:string :any} & r}] :ret (or @[{:string :any}] [{:string :any}])}
+  {:params [{:body {:string :any} & r}] :ret [{:string :any}]}
   "The OTLP span objects inside one received traces entry."
   [entry]
   (get-in entry [:body "resourceSpans" 0 "scopeSpans" 0 "spans"] []))

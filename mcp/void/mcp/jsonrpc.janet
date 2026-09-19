@@ -57,14 +57,14 @@
   m)
 
 (defn result
-  {:params [:any :any] :ret @{:jsonrpc :string :id :any :result :any}}
+  {:params [:any :any] :ret McpResult}
   "A successful response to the request `id`."
   [id value]
   @{:jsonrpc version :id id :result value})
 
 (defn fail
   {:params [:any (or :keyword :number) :string :any]
-   :ret @{:jsonrpc :string :id :any :error @{:code (or :keyword :number) :message :string & r}}}
+   :ret McpFailure}
   ``An error response. `code` is a keyword from `codes` or a number;
   `data` is optional and rides in the error object, which is where a
   client looks for the machine-readable half of a refusal.``
@@ -83,7 +83,7 @@
   (and (dictionary? msg) (not (nil? (get msg :error)))))
 
 (defn encode
-  {:params [:any] :ret :string}
+  {:params [:any] :ret :buffer}
   "One message as one line of JSON — the frame both transports write."
   [msg]
   (json/encode msg))
@@ -103,11 +103,10 @@
     :bad-id))
 
 (defn decode
-  {:params [:string]
+  {:params [(or :string :buffer)]
    :ret (or @{:ok @{:id :any :response? :boolean :params :any}}
             @{:ok @{:id :any :method :string :params :any :notification? :boolean}}
-            @{:error @{:jsonrpc :string :id :any
-                       :error @{:code (or :keyword :number) :message :string & r}}})}
+            @{:error McpFailure})}
   ``Decode one frame. Returns
 
       {:ok {:id :method :params :notification? true|false}}

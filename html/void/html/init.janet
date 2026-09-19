@@ -2,7 +2,7 @@
 ###
 ### The view layer over void/http: handlers return lazy view responses
 ### (html/page, html/fragment) carrying content + layout as data, and
-### the :void.html/render middleware at the response phase renders them
+### the :void.html/render middleware, after :void.http/responding, renders them
 ### through the engine selected by config [:html :engine]. Keeping the
 ### response unrendered until the chain unwinds is what lets middleware
 ### deeper in the chain — void/htmx's partial stripping — swap the
@@ -20,7 +20,6 @@
 
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
-(import void/http/middleware :as middleware)
 (import ./hiccup :as hiccup)
 (import ./form :as form)
 (import ./assets :as assets)
@@ -41,7 +40,13 @@
 
 # -- boot context --------------------------------------------------------
 
-(var current-context
+# What the :before-start hook builds and `context` answers.
+(def HtmlContext :typedef
+  '{:engine-name :keyword :engines {:keyword :any}
+    :assets {:prefix :string :manifest (or {:string :string} :nil)}
+    :config {:any :any} & r})
+
+(var current-context {:type HtmlContext?}
   "The running html context (set by the :before-start hook):
   :engine-name, :engines (name -> engine contribution), :assets
   ({:prefix :manifest}), :config. One per process — a hook builds it,
@@ -49,10 +54,7 @@
   nil)
 
 (defn- context
-  {:params [] :ret {:engine-name :keyword :engines {:keyword :any}
-                    :assets {:prefix :string :manifest (or {:string :string} :nil)}
-                    :config {:any :any} & r}
-   :throws [:string]}
+  {:params [] :ret HtmlContext :throws [:string]}
   "The running html context, or an error naming the hook that builds
   it — read by every function below that needs the selected engine or
   the asset manifest."
@@ -92,8 +94,7 @@
                  :context (or {:any :any} :nil) :engine :keyword?
                  :title :any :head :any :partial :any & r}
                 :nil)]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   ``A lazy view response — content and layout as data, rendered by the
   :void.html/render middleware on the way out:
@@ -138,8 +139,7 @@
                  :context (or {:any :any} :nil) :engine :keyword?
                  :title :any :head :any :partial :any & r}
                 :nil)]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "A lazy view response with no layout — html/page with :layout nil
   forced (partials, htmx fragments)."
@@ -227,7 +227,8 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.html/render
-   :phase middleware/phase/response
+   :after :void.http/responding
+   :before :void.http.stage/pre-serialization
    :doc "Render lazy view responses (:void.html/content) through the selected engine"
    :wrap (fn [handler]
            (fn render-view [req]
@@ -412,7 +413,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :html/build-context
    :doc "Resolve the view engine and asset manifest before the route table builds"
    :fn (fn build! [boot] (build-context boot))})

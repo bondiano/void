@@ -88,11 +88,11 @@
   {:params [{:label :string :database :keyword :config :any & r}] :ret :nil}
   "Run the whole CRUD suite against one engine's composition."
   [engine]
-  (def label (engine :label))
+  (def engine-name (engine :label))
   (defn note
     {:params [:string] :ret :nil}
     "Print one progress line, tagged with the engine under test."
-    [msg] (print "  [" label "] " msg))
+    [msg] (print "  [" engine-name "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
@@ -103,12 +103,12 @@
                            # a single one
                            :db {:n1-guard :strict
                                 :migrations {:dir "db/migrations"}}
-                           :cache {:prefix (string "blog-test-" label ":")}}
+                           :cache {:prefix (string "blog-test-" engine-name ":")}}
                           (engine :config))}})
 
   # the composition is valid before anything starts
   (def report (plugin/dry-run opts))
-  (assert (report :ok) (string label ": dry-run passes"))
+  (assert (report :ok) (string engine-name ": dry-run passes"))
 
   # wave 3 put three more components in the subset: the library every
   # token is signed with, the auth registry the login path reads its

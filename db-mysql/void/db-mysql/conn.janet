@@ -271,7 +271,7 @@
 
 (defn execute
   {:params [@{:open :boolean :busy :boolean :pending :boolean :req :any :resp :any & r}
-            :any (or @[:any] [:any] :nil) (or {:any :any} :nil)]
+            :any (or [:any] :nil) (or {:any :any} :nil)]
    :ret :any
    :throws [:string]}
   ``Run one statement and return {:rows [...] :count n}, plus

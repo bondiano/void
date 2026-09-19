@@ -1,7 +1,7 @@
 ### Ask janet-zed what it makes of a file, the way the editor asks.
 ###
 ### The types void writes down are only worth what a reader makes of
-### them, so they are checked by the reader itself: `janet-zed-server`
+### them, so they are checked by the reader itself: `janet-lsp-plus`
 ### over LSP, with `types.diagnostics` turned up to `warning` so that
 ### everything inference rules out is reported rather than hinted.
 ###
@@ -60,7 +60,7 @@
   "One message off the stream: headers, then exactly the bytes they announce."
   [stream buf]
   (defn fill []
-    (unless (ev/read stream 4096 buf) (error "janet-zed-server closed the connection")))
+    (unless (ev/read stream 4096 buf) (error "janet-lsp-plus closed the connection")))
   (var head (string/find "\r\n\r\n" buf))
   (while (not head) (fill) (set head (string/find "\r\n\r\n" buf)))
   (def size (scan-number (string/trim (last (string/split ":" (string/slice buf 0 head))))))
@@ -70,6 +70,8 @@
   (def rest (string/slice buf (+ start size)))
   (buffer/clear buf)
   (buffer/push-string buf rest)
+  # spork's declaration says {:string :any}; `keywords` true makes the keys keywords
+  # janet-zed: ignore types
   (json/decode body true true))
 
 (defn- request
@@ -185,7 +187,7 @@
     (eprint "usage: janet scripts/lsp-check.janet <file-or-directory>...")
     (os/exit 2))
   (def devnull (os/open "/dev/null" :w))
-  (def server (os/spawn ["janet-zed-server"] :px {:in :pipe :out :pipe :err devnull}))
+  (def server (os/spawn ["janet-lsp-plus"] :px {:in :pipe :out :pipe :err devnull}))
   (def [in out] [(server :in) (server :out)])
   (def buf @"")
   (var id 1)

@@ -40,7 +40,7 @@
 # -- value coercion ------------------------------------------------------
 
 (defn coerce
-  {:params [{:type :keyword :node {:type :keyword :props {:any :any} :children [:any]} & r} :any]
+  {:params [{:type :keyword :node SchemaNode & r} :any]
    :ret (or :number :boolean :string :keyword :nil)}
   ``One query-string value -> a domain value, using the schema node the
   entity already carries. Unparseable input is not an error and not a
@@ -70,13 +70,10 @@
 (defn state
   {:params [{:per-page (or :number :nil) :sortable [:keyword]
              :filters [{:field {:type :keyword
-                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                                :node SchemaNode & r}
                         :param :string :name :keyword & r}]
              & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             (or {:per-page (or :number :nil) & r} :nil)]
    :ret {:page :number :per-page :number :offset :number :sort (or :keyword :nil)
          :dir :keyword :q (or :string :nil) :filters {:keyword {:keyword :any}}}}
@@ -154,10 +151,7 @@
 (defn where
   {:params [{:scope (or :function :nil) :search [:keyword]
              :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             {:filters {:keyword {:keyword :any}} :q (or :string :nil) & r}
             :any?]
    :ret (or :tuple :nil)}
@@ -192,10 +186,7 @@
 (defn scoped
   {:params [{:scope (or :function :nil) :search [:keyword]
              :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             :any?]
    :ret (or :tuple :nil)}
   ``The scope alone (plus `extra`) — what every single-row action reads
@@ -224,10 +215,7 @@
 (defn total
   {:params [{:scope (or :function :nil) :search [:keyword]
              :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             {:filters {:keyword {:keyword :any}} :q (or :string :nil) & r}
             :any?]
    :ret :number}
@@ -239,10 +227,7 @@
 (defn rows
   {:params [{:scope (or :function :nil) :search [:keyword] :order-by :any :preload :any
              :entity {:pk-column :string :fields {:keyword {:column :string & r}} & r} & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             {:filters {:keyword {:keyword :any}} :q (or :string :nil)
              :sort (or :keyword :nil) :dir :keyword :per-page :number :offset :number & r}
             :any?]
@@ -258,16 +243,15 @@
 
 (defn pk-field
   {:params [{:entity {:name :keyword :pk :keyword
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+                      :fields {:keyword DbField}
+                      :schema SchemaNode & r}
              & r}]
    :ret {:name :keyword :label (or :string :keyword :nil) :required :boolean
-         :node {:type :keyword :props {:any :any} :children [:any]}
-         :schema {:type :keyword :props {:any :any} :children [:any]}
+         :node SchemaNode
+         :schema SchemaNode
          :type :keyword :column :string :db {:keyword :any}
          :pk :boolean :version :boolean
-         :rel (or {:name :keyword :kind :keyword :entity :keyword :key :keyword
-                   :through (or {:entity :keyword :key :keyword} :nil) & r}
+         :rel (or DbRelation
                   :nil)}
    :throws [:string]}
   "The primary key's field descriptor — what a path parameter has to be
@@ -277,8 +261,8 @@
 
 (defn pk-value
   {:params [{:entity {:name :keyword :pk :keyword
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+                      :fields {:keyword DbField}
+                      :schema SchemaNode & r}
              & r}
             :string]
    :ret (or :number :boolean :string :keyword :nil)
@@ -289,14 +273,9 @@
 
 (defn find-scoped
   {:params [{:scope (or :function :nil) :search [:keyword] :preload :any
-             :entity {:name :keyword :pk :keyword :pk-column :string
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :entity DbEntity
              & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             :string]
    :ret (or @{:any :any} :nil)
    :throws [:string]}
@@ -315,14 +294,9 @@
 
 (defn selection
   {:params [{:scope (or :function :nil) :search [:keyword]
-             :entity {:name :keyword :pk :keyword :pk-column :string
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :entity DbEntity
              & r}
-            @{:method :keyword :path :string :raw-path :string :query-string :string?
-              :query {:string :any} :headers {:string (or :string @[:string])}
-              :http-version [:number :number] :body :any :received :number
-              :arrived :number? :remote-addr :string? & r}
+            HttpRequest
             {:filters {:keyword {:keyword :any}} :q (or :string :nil) & r}]
    :ret {:all :boolean :where (or :tuple :nil) & r}
    :throws [:string]}

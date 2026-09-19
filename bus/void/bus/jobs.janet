@@ -111,11 +111,11 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   # after :bus/consume (800): a process that both runs jobs and
+   # after :bus/consume: a process that both runs jobs and
    # consumes their events should have the consumer up before the
    # first event is published, or the first few would be published
    # into a bus nobody is reading yet
-   :phase 900
+   :after :bus/consume
    :name :bus-jobs/bridge
    :doc "Forward void/jobs lifecycle events onto the bus"
    :fn (fn install [_]
@@ -125,7 +125,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-stop
-   :phase 100
+   :after :void.core/drained :before :bus/stop-consuming
    :name :bus-jobs/unbridge
    :doc "Stop forwarding before the bus goes away"
    :fn (fn uninstall [_] (jobs/unlisten! listener-name))})

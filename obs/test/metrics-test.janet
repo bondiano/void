@@ -38,6 +38,7 @@
         "the same name with different labels is a conflict, not a silent replacement")
 (assert (not (first (protect (metrics/gauge :test/hits-total))))
         "and neither is the same name with a different kind")
+# janet-zed: ignore types
 (assert (not (first (protect (metrics/counter "not-a-keyword")))))
 
 # -- gauges --------------------------------------------------------------

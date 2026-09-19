@@ -20,6 +20,7 @@
 (import void/http/wire :as wire)
 (import void/auth/jwt :as jwt)
 (import void/auth/oauth :as oauth)
+(import void/auth/strategy :as strategy)
 (import void/crypto :as crypto)
 (import void/crypto/sign :as sign)
 (require "void/http/init")
@@ -39,7 +40,7 @@
 
 (defn- as-handler
   {:params [{:path :any :body :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "The fake authorization server: metadata, JWKS and introspection, on
   a real socket so the suite exercises actual HTTP calls."
   [req]
@@ -299,11 +300,11 @@
 # -- scopes, challenges and the metadata document ------------------------
 
 (defn tools
-  {:params [{:keyword :any}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [{:keyword :any}] :ret HttpResponseTable}
   "A protected route this suite checks the scope enforcement against."
   [req] (ring/text 200 "tools"))
 (defn open-page
-  {:params [{:keyword :any}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [{:keyword :any}] :ret HttpResponseTable}
   "A public route beside the protected one."
   [req] (ring/text 200 "open"))
 
@@ -336,6 +337,12 @@
           "carrying the protected-resource metadata URL (RFC 9728 §5.1)")
   (assert (string/find "/.well-known/oauth-protected-resource" challenge)
           "which is the well-known document of this resource")
+
+  # the edges put :oauth between void/auth-http's :session and :bearer
+  (assert (deep= @[:session :oauth :bearer :jwt]
+                 (filter |(index-of $ [:session :oauth :bearer :jwt])
+                         (map |($ :name) (strategy/request-strategies))))
+          "request strategies: session, oauth, bearer, jwt — the order they had before ADR-0051")
 
   # a valid token, and the route opens
   (def in (test/inject c {:uri "/mcp"

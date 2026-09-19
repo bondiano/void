@@ -41,8 +41,8 @@
   nil)
 
 (defn stream
-  {:params [:any (fn [] :any) (or @[:keyword] [:keyword])]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+  {:params [:any (fn [] :any) [:keyword]]
+   :ret HttpResponseTable
    :throws [:string]}
   ``A morph-stream over `view` (a function of no arguments returning
   the full page as hiccup), or the refusal that names the plugin when

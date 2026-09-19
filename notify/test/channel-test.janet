@@ -10,9 +10,7 @@
 
 (defn- note
   {:params [:any]
-   :ret @{:id :string :at :number :key :keyword :title :string
-          :body :string? :url :string? :data (or {:any :any} @{:any :any}) :to :any
-          :channels [:keyword] :overrides @{:keyword (or {:any :any} @{:any :any})}}
+   :ret NotifyNotification
    :throws [:string]}
   "A normalized notification addressed to `to` (default an email)."
   [&opt to]

@@ -117,8 +117,7 @@
     :requires {:void/auth ">=0.0.1"}
     :contributes
     {:void.auth/strategy [{:name :api-key
-                           :authenticate (fn [req] nil)
-                           :priority 5}]
+                           :authenticate (fn [req] nil)}]
      :void.auth/deliver [{:name :test/deliver :fn (fn [challenge] nil)}]}))
 
 (def boot2 (plugin/start! {:plugins [;plugins app] :profile :test :config (config {})}))
@@ -145,5 +144,23 @@
     :contributes {:void.auth/strategy [{:name :useless}]}))
 (def [ok3] (protect (plugin/dry-run {:plugins [;plugins broken] :profile :test :config (config {})})))
 (assert (not ok3) "a strategy that can neither read a request nor verify credentials fails validation")
+
+(def stale
+  (plugin/manifest 'test/stale
+    :version "0.1.0"
+    :requires {:void/auth ">=0.0.1"}
+    :contributes {:void.auth/strategy [{:name :old :authenticate (fn [_]) :priority 5}]}))
+(def [ok4 err4] (protect (plugin/dry-run {:plugins [;plugins stale] :profile :test :config (config {})})))
+(assert (not ok4) "a strategy still carrying :priority fails the boot")
+(assert (string/find "removed in ADR-0051" (string/format "%s" err4)) (string/format "%q" err4))
+
+(def dangling
+  (plugin/manifest 'test/dangling
+    :version "0.1.0"
+    :requires {:void/auth ">=0.0.1"}
+    :contributes {:void.auth/strategy [{:name :lost :authenticate (fn [_]) :after :nobody}]}))
+(def [ok5 err5] (protect (plugin/dry-run {:plugins [;plugins dangling] :profile :test :config (config {})})))
+(assert (not ok5) "an edge to no strategy fails the boot, not the first request")
+(assert (string/find ":nobody is unknown" (string/format "%s" err5)) (string/format "%q" err5))
 
 (print "plugin-test ok")

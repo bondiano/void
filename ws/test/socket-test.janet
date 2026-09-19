@@ -25,9 +25,7 @@
 
 (defn echo
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "Every message straight back — the smallest possible socket."
   [req]
@@ -43,9 +41,7 @@
 
 (defn lobby
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "A room: everything one peer says, every other peer hears."
   [req]
@@ -56,9 +52,7 @@
 
 (defn params
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "The handshake is a routed request like any other: it has params, a
   query and headers, and the socket can see all of them."
@@ -69,9 +63,7 @@
 
 (defn boom
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "A handler that throws: the connection must die with 1011 and the
   process must not."
@@ -79,7 +71,7 @@
   (ws/accept req {:on-message (fn [c msg] (error "handler exploded"))}))
 
 (defn plain
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "An ordinary route, for the refusals."
   [req]
   (ring/text 200 "not a socket"))

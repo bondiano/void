@@ -151,6 +151,7 @@
 
 (assert (pos? (length (otlp/encode payload :protobuf)))
         "protobuf is a second projection of this same payload — the seam the exporter left now has its second value (otlp-proto-test.janet reads the bytes back)")
+# janet-zed: ignore types
 (assert (not (first (protect (otlp/encode payload :msgpack))))
         "and a third encoding is still refused by name")
 

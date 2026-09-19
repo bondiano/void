@@ -55,15 +55,15 @@
   [email]
   (def s (string email))
   (def at (string/find "@" s))
-  (and (ascii? s)
-       at
-       (pos? at)
-       # exactly one @ — the last one is the separator only in the
-       # quoted-local-part grammar we just refused
-       (nil? (string/find "@" s (inc at)))
-       (peg/match local-peg (string/slice s 0 at))
-       (peg/match domain-peg (string/slice s (inc at)))
-       true))
+  (truthy?
+    (and (ascii? s)
+         at
+         (pos? at)
+         # exactly one @ — the last one is the separator only in the
+         # quoted-local-part grammar we just refused
+         (nil? (string/find "@" s (inc at)))
+         (peg/match local-peg (string/slice s 0 at))
+         (peg/match domain-peg (string/slice s (inc at))))))
 
 (defn parse
   {:params [(or :string :buffer {:email :any & r})]
@@ -104,7 +104,7 @@
     (errorf "an address is a string or a {:name :email} table, got %q" addr)))
 
 (defn list-of
-  {:params [(or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+  {:params [(or :nil :string :buffer {:email :any & r} [:any])]
    :ret @[{:name :string? :email :string}]
    :throws [:string]}
   ``Normalize whatever a message put in :to / :cc / :bcc into a list of
@@ -140,14 +140,14 @@
     (a :email)))
 
 (defn format-list
-  {:params [(or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+  {:params [(or :nil :string :buffer {:email :any & r} [:any])]
    :ret :string :throws [:string]}
   "Render a list of addresses as one header value."
   [addrs]
   (string/join (map format-address (list-of addrs)) ", "))
 
 (defn emails
-  {:params [(or :nil :string :buffer {:email :any & r} @[:any] [:any])]
+  {:params [(or :nil :string :buffer {:email :any & r} [:any])]
    :ret @[:string] :throws [:string]}
   "Just the addresses — what SMTP puts in RCPT TO."
   [addrs]

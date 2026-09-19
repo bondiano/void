@@ -102,7 +102,7 @@
 
 (defn- failure-of
   {:params [{:body (or :string :nil) :status :number & r}]
-   :ret {:void.grpc/code :keyword :status :number :http/status :number & r}}
+   :ret GrpcFailure}
   ``The failure a non-200 answer carries. A Connect error body names
   its own code; anything else (a proxy's 502 page, an HTML error from
   something in between) is read from the status, because a client that
@@ -143,7 +143,7 @@
                 :get (or :boolean :nil) :full (or :boolean :nil) & r}
                 :nil)]
    :ret (or :any @{:message :any :headers @{:string :any} :trailers @{:string :any}})
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   ``One unary call. Returns the response message; raises the RPC
   failure when the server answered with one.
 

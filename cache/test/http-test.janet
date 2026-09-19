@@ -111,9 +111,10 @@
     {:void.http/route-source [{:name :test/app
                                :routes app-routes
                                :env (router/env-ref (curenv))}]
-     # a stand-in for authz enforcement, at authz's own phase (5000):
+     # a stand-in for authz enforcement, in authz's own place (:after
+     # :void.http/loaded :before :void.http/authorized):
      # what the CRITICAL finding needs pinned is the ordering — the
-     # cache (5500) answers *inside* the guard, so a cached page on a
+     # cache answers *inside* the guard, so a cached page on a
      # guarded route is never served to a request the guard refuses
      :void.http/route-meta-key
      [{:key :test/guarded
@@ -121,7 +122,8 @@
        :doc "test: this route demands the x-token header"}]
      :void.http/middleware
      [{:name :test/enforce
-       :phase 5000
+       :after :void.http/loaded
+       :before :void.http/authorized
        :doc "test: refuse requests without x-token, the way authz enforcement would"
        :when (fn [rmeta] (get rmeta :test/guarded))
        :wrap (fn [handler]

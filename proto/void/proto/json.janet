@@ -416,7 +416,7 @@
          (or opts {})))
 
 (defn to-json
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+  {:params [ProtoMessageRef {:keyword :any}
             (or {:keyword :any} :nil)]
    :ret :any :throws [:string]}
   ``A message value as plain data ready for `json/encode`: string
@@ -430,7 +430,7 @@
   (message-out d value (options opts) []))
 
 (defn from-json
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :any
+  {:params [ProtoMessageRef :any
             (or {:keyword :any} :nil)]
    :ret (or @{:keyword :any} :nil) :throws [:string]}
   ``Plain data (as `json/decode` produces it, string keys) as a
@@ -443,15 +443,15 @@
   (message-in d value (options opts) []))
 
 (defn encode
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+  {:params [ProtoMessageRef {:keyword :any}
             (or {:keyword :any} :nil)]
-   :ret :string :throws [:string]}
-  "A message value as a JSON string."
+   :ret :buffer :throws [:string]}
+  "A message value as JSON bytes."
   [message value &opt opts]
   (json/encode (to-json message value opts)))
 
 (defn decode
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :string
+  {:params [ProtoMessageRef (or :string :buffer)
             (or {:keyword :any} :nil)]
    :ret (or @{:keyword :any} :nil) :throws [:string]}
   "A JSON string as a message value."

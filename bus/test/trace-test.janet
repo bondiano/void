@@ -35,7 +35,7 @@
 # it is the one the broker reads at :start.
 
 (defn- start
-  {:params [(or @[:any] [:any]) (or :nil {:keyword :any})]
+  {:params [[:any] (or :nil {:keyword :any})]
    :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
    :throws [:string]}
   "Start a test system on `plugins`, with `extra` merged into the CLI

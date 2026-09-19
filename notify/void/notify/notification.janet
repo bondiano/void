@@ -56,10 +56,8 @@
   (string "ntf_" (token 12)))
 
 (defn normalize
-  {:params [:any (or @[:keyword] [:keyword]) (or {:id :any :at :any & r} :nil)]
-   :ret @{:id :string :at :number :key :keyword :title :string
-          :body :string? :url :string? :data (or {:any :any} @{:any :any}) :to :any
-          :channels [:keyword] :overrides @{:keyword (or {:any :any} @{:any :any})}}
+  {:params [:any [:keyword] (or {:id :any :at :any & r} :nil)]
+   :ret NotifyNotification
    :throws [:string]}
   ``A notification plus the channels it is going to, resolved into the
   value every channel below reads. `channels` is the ordered list of
@@ -148,7 +146,7 @@
     (when-let [v (get to want)] (string v))))
 
 (defn override-for
-  {:params [{:overrides (or @{:keyword :any} :nil) & r} :keyword] :ret (or {:any :any} @{:any :any})}
+  {:params [{:overrides (or @{:keyword :any} :nil) & r} :keyword] :ret {:any :any}}
   "What this notification says about `channel-name`, or an empty table."
   [note channel-name]
   (get-in note [:overrides channel-name] {}))

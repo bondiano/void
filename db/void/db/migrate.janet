@@ -203,7 +203,7 @@
             :transaction? (let [v (binding 'transaction?)] (if (nil? v) true v))}))
 
 (defn- run-sql
-  {:params [(or :string :buffer DbStatement @[:any] [:any] :nil)]
+  {:params [(or :string :buffer DbStatement [:any] :nil)]
    :ret DbResult?
    :throws [:string VoidError]}
   "Execute what a migration step evaluated to: a raw SQL string, a

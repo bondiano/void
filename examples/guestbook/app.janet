@@ -27,17 +27,17 @@
   "Wrap `content` in the page shell: head, stylesheet, htmx script."
   [content context]
   (html/html5 {:lang "en"}
-    [:head
-     [:meta {:charset "utf-8"}]
-     [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-     [:title "guestbook"]
-     # the compiled stylesheet: the logical name in development, the
-     # fingerprinted one after `void assets build` — the markup does
-     # not know which (config/default.janet)
-     [:link {:rel "stylesheet" :href (html/asset "app.css")}]
-     [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
-    [:body {:class "min-h-dvh bg-paper text-ink antialiased"}
-     [:main {:class "mx-auto max-w-2xl px-6 py-16"} content]]))
+              [:head
+               [:meta {:charset "utf-8"}]
+               [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+               [:title "guestbook"]
+               # the compiled stylesheet: the logical name in development, the
+               # fingerprinted one after `void assets build` — the markup does
+               # not know which (config/default.janet)
+               [:link {:rel "stylesheet" :href (html/asset "app.css")}]
+               [:script {:src "https://unpkg.com/htmx.org@4.0.0"}]]
+              [:body {:class "min-h-dvh bg-paper text-ink antialiased"}
+               [:main {:class "mx-auto max-w-2xl px-6 py-16"} content]]))
 
 (defn guestbook-view
   {:params [(or {:any :any} :nil) (or [{:path :any & r}] :nil)] :ret :tuple}
@@ -54,15 +54,15 @@
      "Leave a line. The form below is a projection of the schema above it."]]
    [:div {:class "rounded-2xl border border-ink/10 bg-white p-6 shadow-sm shadow-ink/5"}
     (form/form Entry
-      {:action "/entries"
-       :values values
-       :errors errors
-       :fields {:message {:control :textarea}}
-       :submit "Sign"
-       # `form/form` writes the fields; this says how they stack, and
-       # styles/app.css says what one looks like
-       :attrs (merge {:class "flex flex-col gap-5"}
-                     (hx/post "/entries" :target "#guestbook" :swap :outer-html))})]
+               {:action "/entries"
+                :values values
+                :errors errors
+                :fields {:message {:control :textarea}}
+                :submit "Sign"
+                # `form/form` writes the fields; this says how they stack, and
+                # styles/app.css says what one looks like
+                :attrs (merge {:class "flex flex-col gap-5"}
+                              (hx/post "/entries" :target "#guestbook" :swap :outer-html))})]
    [:ul {:class "mt-10 flex list-none flex-col gap-3 p-0"}
     (if (empty? entries)
       [:li {:class "rounded-2xl border border-dashed border-ink/15 px-5 py-10 text-center text-ink/45"}
@@ -91,25 +91,25 @@
   errors — as a 422, which htmx swaps like any other status.``
   [req]
   (form/submit Entry (req :form)
-    {:ok (fn [v]
-           (array/push entries v)
-           (html/page (guestbook-view) {:layout layout}))
-     :invalid (fn [values errors]
-                (html/page (guestbook-view values errors) {:layout layout}))}))
+               {:ok (fn [v]
+                      (array/push entries v)
+                      (html/page (guestbook-view) {:layout layout}))
+                :invalid (fn [values errors]
+                           (html/page (guestbook-view values errors) {:layout layout}))}))
 
 # -- routes --------------------------------------------------------------
 
 # defroutes writes the :void.http/route-source contribution: handler
 # symbols are quoted for you (late binding) and name their route.
 (router/defroutes :guestbook/routes
-  (GET "/" home)
-  # :void.htmx/partial — a swap into an element (HX-Request-Type:
-  # partial) gets the bare fragment; a plain form POST still gets the
-  # full page
-  (POST "/entries" create-entry
-        {:name :entries/create :void.htmx/partial true}))
+                  (GET "/" home)
+                  # :void.htmx/partial — a swap into an element (HX-Request-Type:
+                  # partial) gets the bare fragment; a plain form POST still gets the
+                  # full page
+                  (POST "/entries" create-entry
+                        {:name :entries/create :void.htmx/partial true}))
 
 (plugin/defplugin guestbook/app
-  :doc "guestbook application plugin."
-  :version "0.1.0"
-  :requires {:void/http ">=0.0.1" :void/html ">=0.0.1" :void/htmx ">=0.0.1"})
+                  :doc "guestbook application plugin."
+                  :version "0.1.0"
+                  :requires {:void/http ">=0.0.1" :void/html ">=0.0.1" :void/htmx ">=0.0.1"})

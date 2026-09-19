@@ -130,6 +130,7 @@
 # -- the key ring --------------------------------------------------------
 
 (var current-ring
+  {:type (or @{:keyword :any} :nil)}
   "The running :auth.oauth/keys component — one per process."
   nil)
 
@@ -185,10 +186,10 @@
         (var last-err nil)
         (each url urls
           (unless found
-            (def [ok doc] (protect (fetch-json url (cfg :timeout))))
+            (def [ok document] (protect (fetch-json url (cfg :timeout))))
             (if ok
-              (set found doc)
-              (set last-err doc))))
+              (set found document)
+              (set last-err document))))
         (unless found
           (errorf "cannot read the authorization server metadata of %s: %s"
                   issuer (if (string? last-err) last-err (describe last-err))))
@@ -221,11 +222,11 @@
   (default cfg settings)
   (def now (os/clock :monotonic))
   (put ring :last-attempt now)
-  (def doc (fetch-json (jwks-uri ring cfg) (cfg :timeout)))
+  (def document (fetch-json (jwks-uri ring cfg) (cfg :timeout)))
   (def accepted (get cfg :algs default-algs))
   (def opened @{})
   (var index 0)
-  (each k (jwk/signing-keys doc)
+  (each k (jwk/signing-keys document)
     (when (index-of (k :alg) accepted)
       (def [ok key] (protect (sign/public-key (k :pem))))
       (if ok
@@ -477,7 +478,7 @@
   (if id (claim-scopes (get id :claims {})) []))
 
 (defn has-scopes?
-  {:params [(or [:string] @[:string] :nil) (or {:claims {:keyword :any} & r} :nil)]
+  {:params [(or [:string] :nil) (or {:claims {:keyword :any} & r} :nil)]
    :ret :boolean :narrows :any}
   "Does this identity carry every one of `wanted`?"
   [wanted &opt id]
@@ -545,7 +546,7 @@
     (string scheme host metadata-path (if (= "/" path) "" path))))
 
 (defn challenge-header
-  {:params [:string? :string? (or [:string] @[:string] :nil) (or {:keyword :any} :nil)]
+  {:params [:string? :string? (or [:string] :nil) (or {:keyword :any} :nil)]
    :ret :string}
   ``A `WWW-Authenticate` value (RFC 6750 §3, RFC 9728 §5.1). `error`
   is nil for "no credentials at all", `\"invalid_token\"` for one that
@@ -569,13 +570,15 @@
   {:name :oauth
    :doc "Authorization: Bearer <access token> — an OAuth 2.1 access token verified against the issuer's JWKS or its introspection endpoint, and required to carry this server's audience"
    :cookie false
-   # ahead of :bearer (20), and the reason is the *challenge* rather
+   # ahead of :bearer, and the reason is the *challenge* rather
    # than the credential: both read `Authorization: Bearer`, this one
    # skips a void API token on sight, and when a request has no
    # credential at all the refusal worth sending is the one that says
    # which authorization server to go to. A route that wants the other
-   # order says so with :void.auth/strategies
-   :priority 15
+   # order says so with :void.auth/strategies. Both neighbours are
+   # void/auth-http's, which this plugin requires
+   :after :session
+   :before :bearer
    :authenticate oauth-identity
    :challenge (fn oauth-challenge [_]
                 (ring/header (ring/text 401 "unauthorized")
@@ -601,7 +604,7 @@
                    ;(get rmeta :void.auth/scopes []))))
 
 (defn forbidden
-  {:params [{:keyword :any} (or [:string] @[:string])] :ret :any :throws [:string]}
+  {:params [{:keyword :any} [:string]] :ret :any :throws [:string]}
   "The 403 for a valid token that may not do this."
   [req wanted]
   (ring/header (http/render-error
@@ -615,12 +618,14 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.auth/scopes
-   # right after the identity middleware that bound the token, before
-   # authorization (5000): a scope is what the token was issued for,
-   # which is a fact about the credential rather than a decision about
-   # the actor. Named, not numbered: void/auth-http is a hard
-   # requirement of this plugin, so the middleware is always there
+   # right after the identity middleware that bound the token, inside
+   # :void.http/authenticated and so before authorization: a scope is
+   # what the token was issued for, which is a fact about the
+   # credential rather than a decision about the actor. A neighbour,
+   # not only an anchor: void/auth-http is a hard requirement of this
+   # plugin, so the middleware is always there
    :after :void.auth/identity
+   :before :void.http/authenticated
    :doc "Enforce :void.auth/scopes — a 403 with insufficient_scope for a token that is valid and insufficient"
    # in the chain for a route that names scopes, and for every route
    # when [:auth-oauth :required-scopes] says every route needs one —
@@ -662,18 +667,18 @@
   # keyword keys: json/encode writes them as the RFC's names, and a
   # janet caller (the suite, `void auth oauth-check`) reads the
   # document back without quoting every field
-  (def doc @{:resource (cfg :audience)
-             :bearer_methods_supported ["header"]})
+  (def document @{:resource (cfg :audience)
+                  :bearer_methods_supported ["header"]})
   (def servers (or (when-let [s (cfg :authorization-servers)]
                      (unless (empty? s) s))
                    (when-let [i (cfg :issuer)] [i])))
-  (when servers (put doc :authorization_servers servers))
+  (when servers (put document :authorization_servers servers))
   (def scopes-supported
     (or (when-let [s (cfg :scopes-supported)] (unless (empty? s) s))
         (when-let [s (cfg :required-scopes)] (unless (empty? s) s))))
-  (when scopes-supported (put doc :scopes_supported scopes-supported))
-  (when-let [d (cfg :resource-documentation)] (put doc :resource_documentation d))
-  doc)
+  (when scopes-supported (put document :scopes_supported scopes-supported))
+  (when-let [d (cfg :resource-documentation)] (put document :resource_documentation d))
+  document)
 
 (defn metadata-handler
   {:params [{:keyword :any}] :ret :any}
@@ -738,7 +743,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :auth-oauth/capture-config
    :doc "Read the [:auth-oauth] slice and refuse a resource server with no audience"
    :fn (fn capture [boot] (set settings (build-settings boot)))})
@@ -782,14 +787,14 @@
          (printf "algorithms: %s"
                  (string/join (map string (get settings :algs default-algs)) " "))
          (when (settings :issuer)
-           (def [ok doc] (protect (discover ring)))
+           (def [ok document] (protect (discover ring)))
            (if ok
-             (do (printf "metadata:  %s" (get doc :issuer "(no issuer field)"))
-                 (printf "jwks_uri:  %s" (get doc :jwks_uri "(none)"))
+             (do (printf "metadata:  %s" (get document :issuer "(no issuer field)"))
+                 (printf "jwks_uri:  %s" (get document :jwks_uri "(none)"))
                  (printf "introspection_endpoint: %s"
-                         (get doc :introspection_endpoint "(none)")))
+                         (get document :introspection_endpoint "(none)")))
              (printf "metadata:  UNREACHABLE — %s"
-                     (if (string? doc) doc (describe doc)))))
+                     (if (string? document) document (describe document)))))
          (def [ok n] (protect (refresh-keys! ring)))
          (if ok
            (do (printf "keys:      %d" n)
@@ -803,7 +808,7 @@
   :doc "The application as an OAuth 2.1 resource server: access tokens verified against the issuer's JWKS (or its introspection endpoint), required to carry this server's audience, with scopes as route metadata and RFC 9728 protected-resource metadata for the client that has to go get a token."
   :version "0.0.1"
   # void/auth-http and not just void/http: the strategy this plugin
-  # contributes is called from *its* phase-4000 middleware, and the
+  # contributes is called from *its* identity middleware, and the
   # route metadata a scope sits next to (:void.auth/access) is its key
   :requires {:void/core ">=0.0.1" :void/auth ">=0.0.1" :void/auth-http ">=0.0.1"
              :void/crypto ">=0.0.1" :void/http ">=0.0.1"}

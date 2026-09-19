@@ -308,16 +308,14 @@
   colons; IPv4 is digits and dots and nothing else."
   [host]
   (def s (string host))
-  (or (string/find ":" s)
+  (or (truthy? (string/find ":" s))
       (all |(or (and (>= $ (chr "0")) (<= $ (chr "9"))) (= $ (chr "."))) s)))
 
 (defn wrap
   {:params [:any
             (or @{:ctx :pointer? :host :string? :accept? :boolean? :timeout :number? & r}
                 :nil)]
-   :ret @{:ssl :pointer :rbio :pointer :wbio :pointer :raw :any :peer-name :string
-          :closed :boolean :enc-buf :buffer :raw-buf :buffer :plain-buf :buffer
-          :len-buf :buffer :read :function :write :function :close :function}
+   :ret TlsStream
    :throws [:string]}
   ``A TLS session over an open stream — `raw` is a janet stream or
   anything with the same `:read`/`:write`/`:close` methods. Options:
@@ -392,7 +390,7 @@
   ts)
 
 (defn tls-version
-  {:params [@{:ssl (or :pointer :nil) & r}] :ret (or :string :nil)}
+  {:params [TlsStream] :ret (or :string :nil)}
   "The negotiated protocol of a wrapped stream (\"TLSv1.3\"), or nil."
   [ts]
   (when (ts :ssl) (lib/SSL_get_version (ts :ssl))))
@@ -401,9 +399,7 @@
   {:params [:string (or :string :number)
             (or @{:ctx :pointer? :host :string? :accept? :boolean? :timeout :number? & r}
                 :nil)]
-   :ret @{:ssl :pointer :rbio :pointer :wbio :pointer :raw :any :peer-name :string
-          :closed :boolean :enc-buf :buffer :raw-buf :buffer :plain-buf :buffer
-          :len-buf :buffer :read :function :write :function :close :function}
+   :ret TlsStream
    :throws [:string]}
   ``Open a socket and run the TLS handshake over it:
 

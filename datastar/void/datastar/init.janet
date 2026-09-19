@@ -5,12 +5,13 @@
 ### plugin turns that page into the two SSE events Datastar morphs the
 ### live DOM with — the <title> by selector, the <body> by selector —
 ### so an action re-renders everything and the browser keeps focus,
-### scroll and input state. The middleware that does it sits at phase
-### 8500, *shallower* than void/html's render (9000): the chain
+### scroll and input state. The middleware that does it sits
+### *shallower* than void/html's render (`:before :void.html/render`): the chain
 ### unwinds innermost-first, so by the time the response reaches this
 ### plugin the page is bytes, and slicing <title> and <body> out of
 ### them is two string searches — no second render, no HTML parser.
-### It is the mirror of void/htmx's partial middleware (9500), which
+### It is the mirror of void/htmx's partial middleware (`:after
+### :void.html/render`), which
 ### needs the response *before* the engine runs to strip the layout;
 ### this one needs it after, to reuse the render.
 ###
@@ -129,7 +130,7 @@
 
 (defn events
   {:params [(or @[{:event :string :data :string}] :fiber) (or {:string :string} :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   ``An SSE response of Datastar events — the builders here already
   return what ring/sse-event frames, so this is ring/sse with the
   vocabulary attached:
@@ -180,18 +181,19 @@
    :merge :replace})
 
 (defn- html-response?
-  {:params [:any] :ret :boolean}
+  {:params [:any] :ret :boolean :narrows :any}
   "True when `resp` is a ready HTML response: a dictionary with a
   bytes body and a text/html content-type header."
   [resp]
   (and (dictionary? resp)
        (bytes? (get resp :body))
        (let [ct (get-in resp [:headers "content-type"])]
-         (and ct (string/has-prefix? "text/html" ct)))))
+         (and (bytes? ct) (string/has-prefix? "text/html" ct)))))
 
 (plugin/contribute! :void.http/middleware
   {:name :void.datastar/morph
-   :phase 8500
+   :after :void.http/responding
+   :before :void.html/render
    :doc "Turn the rendered page into Datastar morph events on routes marked :void.datastar/morph — shallower than the render middleware, so the page is already bytes"
    :when |(get $ :void.datastar/morph)
    :wrap (fn [handler]
@@ -221,13 +223,13 @@
   (system/active current-registry))
 
 (defn- join!
-  {:params [@{:rooms @{:any @{:any :boolean}}} (or @[:any] [:any]) @{:chan :abstract}] :ret :nil}
+  {:params [@{:rooms @{:any @{:any :boolean}}} [:any] @{:chan :abstract}] :ret :nil}
   "Add `conn` as a member of every room in `rooms`."
   [reg rooms conn]
   (each r rooms (put-in reg [:rooms r conn] true)))
 
 (defn- leave!
-  {:params [@{:rooms @{:any @{:any :boolean}}} (or @[:any] [:any]) @{:chan :abstract}] :ret :nil}
+  {:params [@{:rooms @{:any @{:any :boolean}}} [:any] @{:chan :abstract}] :ret :nil}
   "Remove `conn` from every room in `rooms`, dropping a room entirely
   once its last member leaves."
   [reg rooms conn]
@@ -280,8 +282,8 @@
     (string path "?" (wire/encode-query kept))))
 
 (defn morph-stream
-  {:params [:any (fn [] :any) (or {:rooms (or @[:any] [:any] :nil) :initial :boolean?} :nil)]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any (fn [] :any) (or {:rooms (or [:any] :nil) :initial :boolean?} :nil)]
+   :ret HttpResponseTable}
   ``The long-lived side of the idiom — a route the page opens with
   (ds/load (ds/action :get (datastar/stream-url req "/live"))):
 

@@ -167,7 +167,7 @@
   (peg/compile ~(* "VmRSS:" :s+ (number :d+) :s* "kB")))
 
 (defn vmrss-bytes
-  {:params [:string] :ret (or :number :nil)}
+  {:params [(or :string :buffer)] :ret (or :number :nil)}
   ``The resident set size on one line of `/proc/self/status`, in bytes,
   or nil when the line is not the VmRSS one. Public because it is the
   half of the Linux meter that can be tested anywhere.``

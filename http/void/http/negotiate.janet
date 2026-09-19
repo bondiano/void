@@ -33,8 +33,7 @@
 
 (defn parse-accept
   {:params [(or :string :nil)]
-   :ret (or [{:type :string :sub :string :q :number :specificity :number}]
-            @[{:type :string :sub :string :q :number :specificity :number}])}
+   :ret [{:type :string :sub :string :q :number :specificity :number}]}
   ``Parse an Accept header into entries sorted by preference:
   [{:type "text" :sub "html" :q 1 :specificity 2} ...]. nil or an
   unparseable header means "anything" ([{:type "*" :sub "*" :q 1}]).``
@@ -67,8 +66,7 @@
        (or (= "*" (entry :sub)) (= sub (entry :sub)))))
 
 (defn- match-q
-  {:params [(or [{:type :string :sub :string :q :number :specificity :number}]
-                @[{:type :string :sub :string :q :number :specificity :number}])
+  {:params [[{:type :string :sub :string :q :number :specificity :number}]
             [:string :string]]
    :ret :number?}
   "The q of the most specific Accept entry matching a media type
@@ -87,7 +85,7 @@
   "Would this Accept header take the given media type?"
   [accept-header mime]
   (def q (match-q (parse-accept accept-header) (split-media mime)))
-  (and q (> q 0) true))
+  (and (number? q) (> q 0)))
 
 (defn best
   {:params [(or :string :nil) [:string]] :ret :string?}

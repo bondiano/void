@@ -16,6 +16,12 @@
 ### to spend 25 ms on a KDF because it happens once per login. A strategy
 ### with no `:authenticate` is never in the per-request chain at all.
 ###
+### Strategies are tried in the order their `:after`/`:before` edges
+### give (`order/first-wins`: no anchors, a strategy no edge ties goes
+### after the placed ones, by name) — `:session`, then `:oauth`, then
+### `:bearer`, then `:jwt` — unless `[:auth :strategies]` names the
+### order outright. `:priority` was removed in ADR-0051.
+###
 ### `:cookie` says whether `:authenticate` reads a cookie. It exists for
 ### `void/security`, which demands a CSRF token exactly when the
 ### credential was cookie-borne — the strategy is the only thing that
@@ -30,21 +36,15 @@
 ### somebody.
 
 (import void/core/log :as log)
+(import void/core/order :as order)
 (import ./identity :as identity)
 (import void/core/util :as util)
 
 (def log-ns "void.auth.strategy")
 
-(def default-priority
-  "Where a strategy sits in the chain when it does not say. Lower runs
-  first."
-  100)
-
 (defn normalize
   {:params [:any]
-   :ret {:name :keyword :cookie :boolean :priority :number
-         :authenticate (or :function :nil) :verify (or :function :nil)
-         :challenge (or :function :nil) & r}
+   :ret AuthStrategy
    :throws [:string]}
   "Validate a strategy and fill in its defaults."
   [s]
@@ -59,7 +59,8 @@
         (errorf "strategy %q: %q must be a function, got %q" name k f))))
   (unless (or (s :authenticate) (s :verify))
     (errorf "strategy %q has neither :authenticate nor :verify — it can never establish an identity" name))
-  (freeze (merge @{:cookie false :priority default-priority} s)))
+  (order/reject-priority [s] "authentication strategy")
+  (freeze (merge @{:cookie false} s)))
 
 (def registry
   "Registered strategies, by name. The plugin fills it from
@@ -67,12 +68,19 @@
   register into it directly."
   @{})
 
+(var- by-edges
+  ``Every registered strategy in edge order, or nil until
+  `request-strategies` next needs it — `register!` and `deregister!`
+  drop it, so the sort runs once per change and not per request.``
+  nil)
+
 (defn register!
   {:params [:any] :ret :keyword :throws [:string]}
   "Add (or replace) a strategy. Returns its name."
   [s]
   (def n (normalize s))
   (put registry (n :name) n)
+  (set by-edges nil)
   (n :name))
 
 (defn deregister!
@@ -80,14 +88,12 @@
   "Remove a strategy — the REPL's undo, and how a test cleans up."
   [name]
   (put registry name nil)
+  (set by-edges nil)
   nil)
 
 (defn lookup
   {:params [:keyword]
-   :ret (or {:name :keyword :cookie :boolean :priority :number
-             :authenticate (or :function :nil) :verify (or :function :nil)
-             :challenge (or :function :nil) & r}
-            :nil)}
+   :ret (or AuthStrategy :nil)}
   "One strategy by name, or nil."
   [name]
   (get registry name))
@@ -100,21 +106,20 @@
 
 (var order
   ``The configured [:auth :strategies] order, or nil for "every
-  registered request strategy, by priority then name". Set by the
+  registered request strategy, in edge order". Set by the
   plugin at :before-start.``
   nil)
 
 (defn request-strategies
   {:params [(or [:keyword] :nil)]
-   :ret @[{:name :keyword :cookie :boolean :priority :number
-           :authenticate (or :function :nil) :verify (or :function :nil)
-           :challenge (or :function :nil) & r}]
+   :ret @[AuthStrategy]
    :throws [:string]}
   ``The strategies that read a request, in the order they are tried.
   `names` (a route's :void.auth/strategies) narrows the list;
-  `order` decides it otherwise. A name that is not registered is an
-  error — a typo in a route's metadata must not silently disable
-  authentication.``
+  `order` decides it otherwise, and the strategies' edges when that
+  is nil. A name that is not registered is an error — a typo in a
+  route's metadata must not silently disable authentication — and so
+  is an edge to one, or a cycle.``
   [&opt names]
   (def wanted (or names order))
   (if wanted
@@ -124,8 +129,10 @@
                               n (string/join (map string (known)) " ")))]
           :when (s :authenticate)]
       s)
-    (sorted-by |[($ :priority) (string ($ :name))]
-               (filter |($ :authenticate) (values registry)))))
+    (filter |($ :authenticate)
+            (or by-edges
+                (set by-edges (order/first-wins (values registry)
+                                                "authentication strategy"))))))
 
 (defn authenticate
   {:params [:any (or [:keyword] :nil)]

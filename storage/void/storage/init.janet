@@ -144,7 +144,7 @@
 
 (def valid-key? "See key/valid? — is this a well-formed storage key?" key/valid?)
 (def check-key! "See key/check!." key/check!)
-(def generate-key "See key/generate — a fresh key for an upload." key/generate)
+(def generate-key "See key/fresh — a fresh key for an upload." key/fresh)
 (def sanitize-filename "See key/sanitize-filename." key/sanitize-filename)
 
 (def local-store "See local/store — the disk store." local/store)
@@ -255,7 +255,7 @@
    :fn (fn cli-put [st src &opt k0]
          (unless (= :file (os/stat src :mode))
            (errorf "no such file: %s" src))
-         (def k (or k0 (key/generate {:filename src})))
+         (def k (or k0 (key/fresh {:filename src})))
          (def meta (with-store st (fn [] (state/put! k (slurp src)))))
          (printf "%s (%d bytes)" (meta :key) (meta :size))
          (when-let [u (with-store st (fn [] (state/url k)))]

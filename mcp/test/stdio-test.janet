@@ -17,7 +17,7 @@
 (log/set-level! "void" :fatal)
 
 (defn- run
-  {:params [(or @[:string] [:string]) (fn [:any] :any)] :ret [:number @[:any]]}
+  {:params [[:string] (fn [:any] :any)] :ret [:number @[:any]]}
   ``Feed `frames` (already-encoded strings, joined by the caller into
   chunks) to a stdio server and collect what it writes. Returns
   [handled written].``
@@ -35,7 +35,7 @@
 
 (defn- echo-handler
   {:params [{:id :any :method :any & r}]
-   :ret (or @{:jsonrpc :string :id :any :result :any} :nil)
+   :ret McpResult?
    :throws [:string]}
   "A handler that answers ping and throws on boom, for the transport
   suite to drive."

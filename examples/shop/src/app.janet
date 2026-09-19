@@ -127,7 +127,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 500
    :name :shop/configure
    :doc "Read the [:shop] config slice (the payment gateway's failure rate)"
    :fn (fn configure [boot]
@@ -135,9 +134,9 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   # after the bus started its consumers (:bus/consume is 800): the
+   # after the bus started its consumers (:bus/consume): the
    # first denial should have somewhere to go
-   :phase 900
+   :after :bus/consume
    :name :shop/audit
    :doc "Turn void/authz's refusals into bus messages (see modules/audit)"
    :fn audit/install!})

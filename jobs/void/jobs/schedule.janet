@@ -124,7 +124,7 @@
   slot), and the enqueue keys :queue :priority :max-attempts :backoff
   :timeout :group.``
   {:params [:keyword :any :keyword (or {:keyword :any} :nil)]
-   :ret @{:name :keyword :job :keyword :args (or @[:any] [:any]) :enabled :boolean
+   :ret @{:name :keyword :job :keyword :args [:any] :enabled :boolean
           :on-start :boolean
           :enqueue {:queue :keyword? :priority :number? :max-attempts :number? :backoff :any
                     :timeout :number? :group :any & r}
@@ -246,7 +246,7 @@
   (string "jobs:schedule:" (s :name) ":" (math/floor slot)))
 
 (defn fire!
-  {:params [{:name :keyword :job :keyword :args (or @[:any] [:any])
+  {:params [{:name :keyword :job :keyword :args [:any]
              :enqueue {:keyword :any} & r}
             :number (or {:keyword :any} :nil)]
    :ret (or @{:keyword :any} :nil)}

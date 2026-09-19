@@ -20,7 +20,7 @@
 (require "void/bench/probe")
 
 (defn hello
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "GET / — the B0 handler."
   [req]
   (ring/response 200 "Hello, World!"

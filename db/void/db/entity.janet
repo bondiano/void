@@ -214,7 +214,7 @@
     (errorf "expected an entity (descriptor, :Name or a defentity schema), got %q" x)))
 
 (defn define!
-  {:params [:keyword :any (or [:any] @[:any] :nil)]
+  {:params [:keyword :any (or [:any] :nil)]
    :ret SchemaNode
    :throws [:string]}
   ``Register an entity and return its normalized schema — the runtime
@@ -300,7 +300,7 @@
   (get (table/getproto inst) :void.db/snapshot))
 
 (defn from-row
-  {:params [DbEntity DbRow (or {:keyword :keyword} :nil)]
+  {:params [DbEntity (or DbRow {:string :any}) (or {:keyword :keyword} :nil)]
    :ret DbInstance}
   ``Map a driver row onto an entity instance: known columns become
   field keys, unknown ones (join extras) are kept as they came, and
@@ -623,7 +623,7 @@
   (not (nil? (get-in (table/getproto inst) [:void.db/preloaded rname]))))
 
 (defn- group-by-key
-  {:params [(or @[DbInstance] [DbInstance]) :keyword] :ret @{:any @[DbInstance]}}
+  {:params [[DbInstance] :keyword] :ret @{:any @[DbInstance]}}
   "Bucket instances by the value of `key` — the shape a batched load's
   results are joined back onto their parents through."
   [insts key]
@@ -644,14 +644,14 @@
       (errorf "entity %q has no field %q" (desc :name) field)))
 
 (defn- values-of
-  {:params [(or @[DbInstance] [DbInstance]) :keyword] :ret @[:any]}
+  {:params [[DbInstance] :keyword] :ret @[:any]}
   "The distinct non-nil values of `field` across instances — the right
   side of the one IN a batched load is."
   [insts field]
   (distinct (filter |(not (nil? $)) (map |(get $ field) insts))))
 
 (defn- load-batch
-  {:params [DbEntity :keyword (or @[:any] [:any])
+  {:params [DbEntity :keyword [:any]
             {:where :any :order-by :any :preload :any :sql-opts :any & r}]
    :ret @[DbInstance]
    :throws [:string]}
@@ -670,7 +670,7 @@
                        :preload (get opts :preload)}))))
 
 (defn- attach-hits!
-  {:params [DbRelation DbInstance :keyword (or @[:any] [:any])] :ret :any}
+  {:params [DbRelation DbInstance :keyword [:any]] :ret :any}
   "Attach a relation's batch of matches to one instance: the whole
   tuple for has-many, the first (and only) row otherwise."
   [relation inst rname hits]
@@ -678,7 +678,7 @@
            (if (= :has-many (relation :kind)) (tuple ;hits) (first hits))))
 
 (defn- load-direct
-  {:params [DbEntity (or @[DbInstance] [DbInstance]) DbRelation DbEntity
+  {:params [DbEntity [DbInstance] DbRelation DbEntity
             {:where :any :order-by :any :preload :any :sql-opts :any & r}]
    :ret :nil
    :throws [:string]}
@@ -696,7 +696,7 @@
                   (get by-key (get inst local) @[]))))
 
 (defn- load-through
-  {:params [DbEntity (or @[DbInstance] [DbInstance]) DbRelation DbEntity
+  {:params [DbEntity [DbInstance] DbRelation DbEntity
             {:where :any :order-by :any :preload :any :sql-opts :any & r}]
    :ret :nil
    :throws [:string]}
@@ -837,8 +837,7 @@
   (preloaded-value inst rname))
 
 (defn preload!
-  {:params [:any (or DbInstance @[DbInstance] [DbInstance]) :any]
-   :ret (or DbInstance @[DbInstance] [DbInstance])
+  {:params [:any a :any] :ret a :where {a (or DbInstance [DbInstance])}
    :throws [:string]}
   ``Preload relations onto already-loaded instances — the batched
   escape hatch when the rows came from somewhere else:
@@ -972,7 +971,7 @@
               (from-row desc row)))))))
 
 (defn insert-all!
-  {:params [:any (or @[{:keyword :any}] [{:keyword :any}])]
+  {:params [:any [{:keyword :any}]]
    :ret :number
    :throws [:string VoidError]}
   "Insert several rows in one statement; returns the affected count."

@@ -25,7 +25,7 @@
 
 (defn- api
   {:params [{:body :any? :path :string & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}
+   :ret HttpResponseTable
    :throws [:any]}
   "The fake bot API: the chat id decides the status, so one server
   covers every branch of the retry decision."

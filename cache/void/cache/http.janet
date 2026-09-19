@@ -11,7 +11,7 @@
 ### answers from the cache when it can. The wrapper sits between
 ### authorization and validation, which is the slot that makes the two
 ### promises worth having: a hit is served only to a request that
-### session, auth and authz enforcement (5000) already let through — a
+### session, auth and authz enforcement (:void.http/authorized) already let through — a
 ### cached page on a policy-guarded route is refused to an anonymous
 ### request exactly as an uncached one is — and it is served after the
 ### request has been parsed (so the key is built from a path and a
@@ -60,7 +60,6 @@
 (import void/core/plugin :as plugin)
 (import void/core/keys :as keys)
 (import void/core/log :as log)
-(import void/http/middleware :as middleware)
 (import void/http/ring :as ring)
 (import ./key :as key)
 (import ./state :as state)
@@ -91,7 +90,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :cache-http/capture-config
    :doc "Read the [:cache-http] slice once, before the route table is built"
    :fn (fn capture [boot]
@@ -114,7 +113,7 @@
 # -- keys ----------------------------------------------------------------
 
 (defn- vary-values
-  {:params [@{:headers {:string (or :string @[:string])} & r} (or @[:any] [:any])]
+  {:params [@{:headers {:string (or :string @[:string])} & r} [:any]]
    :ret @[:string?]}
   "The values of the request headers named in `names`, lowercased and
   in order — the part of the cache key a route's :vary adds."
@@ -276,13 +275,14 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.cache/response
-   # inside authz enforcement (5000), outside validation (6000): a hit
+   # inside authz enforcement, outside validation: a hit
    # on a policy-guarded route is only served to a request the policy
    # already admitted — a cache in front of the guard would hand the
    # guarded page to anybody who asked. What is stored is the handler's
    # response before the outer layers (session, security headers)
    # decorate it on the way out, so no Set-Cookie is ever replayed
-   :phase 5500
+   :after :void.http/authorized
+   :before :void.http.stage/pre-validation
    :doc "Serve routes marked :void.cache/response from the shared cache, and store their 200 responses"
    :when (fn [rmeta] (dictionary? (get rmeta :void.cache/response)))
    :route-aware true

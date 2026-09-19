@@ -92,7 +92,7 @@
 
 (defn register-dialect!
   {:params [:keyword
-            {:placeholder :function
+            {:placeholder (fn [:number] :string)
              :quote (or (fn [:string] :string) :nil)
              :types (or {:keyword :string} :nil)
              :offset-needs-limit (or :string :boolean :nil)
@@ -103,7 +103,7 @@
              :skip-locked :boolean?
              :share-lock :string?
              :upsert :keyword?
-             :advisory-lock (or {:acquire :function :release :function :acquired? :function? & r} :nil)}]
+             :advisory-lock DbAdvisoryLock?}]
    :ret :keyword
    :throws [:string]}
   ``Register a dialect: {:placeholder (fn [n] str) :quote (fn [name] str)?
@@ -582,7 +582,7 @@
   (string (if negated "NOT EXISTS " "EXISTS ") (subquery-str ctx sub)))
 
 (defn- logical-str
-  {:params [DbCompileContext :string (or @[:any] [:any])]
+  {:params [DbCompileContext :string [:any]]
    :ret :string
    :throws [:string]}
   "AND/OR a tuple of clauses: unwrapped when there is exactly one,
@@ -774,7 +774,7 @@
                 "")))))
 
 (defn- join-strs
-  {:params [DbCompileContext :string (or @[:any] [:any])]
+  {:params [DbCompileContext :string [:any]]
    :ret @[:string]
    :throws [:string]}
   "One `word` (JOIN / LEFT JOIN) line per `[table on-clause]` pair."

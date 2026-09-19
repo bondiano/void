@@ -66,7 +66,7 @@
          :plugins-for (or (fn [:keyword] :any) :nil)
          :profile :keyword?
          :config :any
-         :signals (or @[:keyword] [:keyword] :nil)
+         :signals (or [:keyword] :nil)
          :shutdown-timeout :number?
          & r}
    :throws [:string]}
@@ -91,7 +91,7 @@
              :plugins-for (or (fn [:keyword] :any) :nil)
              :profile :keyword?
              :config :any
-             :signals (or @[:keyword] [:keyword] :nil)
+             :signals (or [:keyword] :nil)
              :shutdown-timeout :number?
              & r}
             :keyword]
@@ -122,7 +122,7 @@
               :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
               :args (or @[:string] :nil)
               & r}]
-            (or @[:string] [:string])]
+            [:string]]
    :ret (or [{:name :keyword
               :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
               :args (or @[:string] :nil)
@@ -148,7 +148,7 @@
              :plugins-for (or (fn [:keyword] :any) :nil)
              :profile :keyword?
              :config :any
-             :signals (or @[:keyword] [:keyword] :nil)
+             :signals (or [:keyword] :nil)
              :shutdown-timeout :number?
              & r}
             :keyword?]
@@ -172,7 +172,7 @@
              :plugins-for (or (fn [:keyword] :any) :nil)
              :profile :keyword?
              :config :any
-             :signals (or @[:keyword] [:keyword] :nil)
+             :signals (or [:keyword] :nil)
              :shutdown-timeout :number?
              & r}
             :keyword?]
@@ -224,7 +224,7 @@
              :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
              :args (or @[:string] :nil)
              & r}
-            (or @[:string] [:string])]
+            [:string]]
    :ret :any
    :throws [:string]}
   ``Run one contributed command against a bootstrapped app: start the
@@ -373,7 +373,7 @@
              :args (or @[:string] :nil)
              :run (fn [:any :any :any] :any)
              & r}
-            (or @[:string] [:string])]
+            [:string]]
    :ret :any
    :throws [:string]}
   "Parse a built-in command's args against its own declaration, then
@@ -480,7 +480,7 @@
 # -- entrypoint ----------------------------------------------------------
 
 (defn- split-global
-  {:params [(or @[:string] [:string])]
+  {:params [[:string]]
    :ret [@{:keyword :any} [:string]]
    :throws [:string]}
   ``Split argv into the global flags — which are only recognized before
@@ -505,12 +505,12 @@
           (util/suggest (first words) (map |(first (cmd/command-words $)) names))))
 
 (defn dispatch
-  {:params [(or @[:string] [:string])
+  {:params [[:string]
             (or {:plugins :any
                  :plugins-for (or (fn [:keyword] :any) :nil)
                  :profile :keyword?
                  :config :any
-                 :signals (or @[:keyword] [:keyword] :nil)
+                 :signals (or [:keyword] :nil)
                  :shutdown-timeout :number?
                  & r}
                 :nil)]

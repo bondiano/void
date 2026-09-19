@@ -51,7 +51,7 @@
   :void.db/row)
 
 (def request-id
-  ``The id minted for this request by void/http (phase 50) and bound
+  ``The id minted for this request by void/http (right inside :void.http/guarded) and bound
   into the log context. void/obs puts it on a span; a handler that
   answers "which request was that?" prints it.``
   :request-id)

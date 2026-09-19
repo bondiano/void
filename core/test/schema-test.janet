@@ -307,7 +307,7 @@
 (assert (schema/valid? deep {:db {:pool {:size 1}} :tags [{:name "a"}] :opt {:x 1}
                              :any {:k 1 :extra 2}}))
 (defn- unknown-of
-  {:params [(or @[SchemaError] [SchemaError])] :ret SchemaError?}
+  {:params [[SchemaError]] :ret SchemaError?}
   "The first :unknown error in a check's error list."
   [errs]
   (first (filter |(= :unknown ($ :code)) errs)))

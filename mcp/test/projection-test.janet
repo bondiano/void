@@ -156,10 +156,7 @@
 
 (defn- call
   {:params [:string :any]
-   :ret (or @{:jsonrpc :string :id :any :result :any}
-            @{:jsonrpc :string :id :any
-              :error @{:code (or :keyword :number) :message :string & r}}
-            :nil)}
+   :ret McpResponse?}
   "Call tool `name` with `args` against this process's projection."
   [name args]
   (mcp/handle @{:id 1 :method "tools/call"

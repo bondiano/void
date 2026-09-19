@@ -65,9 +65,9 @@
 
 (def envelope
   {:type :text
-   :data (json/encode {"message" "hello" "room" "lobby"
-                       "headers" {"HX-Request-Type" "partial"
-                                  "HX-Source" "input#say"}})})
+   :data (string (json/encode {"message" "hello" "room" "lobby"
+                               "headers" {"HX-Request-Type" "partial"
+                                          "HX-Source" "input#say"}}))})
 
 (assert (= "hello" ((wshtmx/fields envelope) :message)))
 (assert (nil? ((wshtmx/fields envelope) :headers))
@@ -86,9 +86,7 @@
 
 (defn chat
   {:params [{:keyword :any}]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   "A room over a socket: every message everybody in :room hears, one
   out-of-band swap of #messages at a time."

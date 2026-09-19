@@ -91,7 +91,7 @@
     " · " (get article :comment-count 0) " comments"]])
 
 (defn article-list
-  {:params [@[@{:any :any}]] :ret :tuple}
+  {:params [@[DbInstance]] :ret :tuple}
   "The #articles fragment — the cached read of this application."
   [articles]
   [:ul {:id "articles" :class "m-0 list-none p-0"}
@@ -147,7 +147,7 @@
      :submit "Create an account"}))
 
 (defn index-view
-  {:params [@[@{:any :any}] (or {:any :any} :nil)] :ret :tuple}
+  {:params [@[DbInstance] (or {:any :any} :nil)] :ret :tuple}
   ``GET / — the list, and then either the publish form or the way to
   get one. `state` carries whatever the handler wants re-rendered:
   :values/:errors for the article form, :register/:sign-in for the
@@ -179,9 +179,8 @@
        (register-form (get state :register) (get state :register-errors))]])])
 
 (defn render-index
-  {:params [@[@{:any :any}] (or {:any :any} :nil)]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+  {:params [@[DbInstance] (or {:any :any} :nil)]
+   :ret HtmlView
    :throws [:string]}
   "The index as a page — what three handlers answer with."
   [articles &opt state]

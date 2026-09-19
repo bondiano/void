@@ -50,21 +50,21 @@
 
 (def at (os/mktime {:year 2026 :month 8 :month-day 0 :hours 12} :utc))  # 2026-09-01
 
-(def k (key/generate {:prefix "products" :filename "photo.JPG" :now at}))
+(def k (key/fresh {:prefix "products" :filename "photo.JPG" :now at}))
 (assert (string/has-prefix? "products/2026/09/" k)
         (string/format "a generated key carries its prefix and date: %q" k))
 (assert (string/has-suffix? ".jpg" k) "and the original extension, lowercased")
 (assert (key/valid? k) "and it is a key")
 
-(assert (not= (key/generate {:now at}) (key/generate {:now at}))
+(assert (not= (key/fresh {:now at}) (key/fresh {:now at}))
         "two uploads of the same name in the same month do not collide")
 
-(assert (string/has-prefix? "uploads/" (key/generate {}))
+(assert (string/has-prefix? "uploads/" (key/fresh {}))
         "the default namespace is uploads/")
 
-(assert (string/has-prefix? "a-b/" (key/generate {:prefix "a b" :now at}))
+(assert (string/has-prefix? "a-b/" (key/fresh {:prefix "a b" :now at}))
         "a prefix is data too — it is sanitized, not trusted")
-(assert (string/has-prefix? "etc/passwd/" (key/generate {:prefix "../etc/passwd" :now at}))
+(assert (string/has-prefix? "etc/passwd/" (key/fresh {:prefix "../etc/passwd" :now at}))
         "including a prefix that tried to climb")
 
 (printf "key-test: ok")

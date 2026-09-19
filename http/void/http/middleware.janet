@@ -1,56 +1,63 @@
-### void/http/middleware — middleware phases and chain building.
+### void/http/middleware — middleware placement and chain building.
 ###
 ### Middleware is a wrapper (fn [handler] handler') registered through
-### the :void.http/middleware extension point with a numeric phase —
-### Spring Ordered, as data. Phase constants leave room to slot in
-### between (3500); the tie-break at an equal phase is the contributing
-### plugin's name, then the middleware name, so the chain order is
-### deterministic across boots. A contribution marked :named is not
-### applied globally — a route opts in by listing it in the
-### :void.http/middleware metadata key. A :when predicate is evaluated
-### against the route's merged metadata once, at table-build time: a
-### middleware that declines a route is not in that route's chain at
-### all — nothing is decided on the hot path. A contribution marked
-### :route-aware has its :wrap called as (fn [handler route-meta]) with
-### that same merged metadata, so what a wrapper needs from the route
-### (a rate spec, a schema, a cache policy) is computed once, in the
-### closure, and never read off the request. The default stays the
-### one-argument :wrap of contract v1; the flag is additive.
+### the :void.http/middleware extension point. It says where it runs
+### with edges — `:after` and `:before` a named anchor of the chain
+### (`anchors`) or a named neighbour — and one sort (void/core/order)
+### turns the edges into the chain order, once per table build, the
+### same for every route and every boot. A neighbour may be a
+### middleware of the contributing plugin, of void/http, or of a plugin
+### the contributor requires; an anchor is always there, which is what
+### lets two plugins that do not know each other agree on a place. A
+### contribution marked :named is not applied globally — a route opts
+### in by listing it in the :void.http/middleware metadata key. A :when
+### predicate is evaluated against the route's merged metadata once, at
+### table-build time: a middleware that declines a route is not in
+### that route's chain at all — nothing is decided on the hot path. A
+### contribution marked :route-aware has its :wrap called as (fn
+### [handler route-meta]) with that same merged metadata, so what a
+### wrapper needs from the route (a rate spec, a schema, a cache
+### policy) is computed once, in the closure, and never read off the
+### request.
 
-(import void/core/util :as util)
+(import void/core/order :as order)
 
-(def phases
-  "The standard phase constants."
-  {:panic-guard 0
-   # the request id is a counter and a log-context binding — it costs
-   # nothing, so it sits under every refusal a chain can make: a shed
-   # 503 (100) and an address-keyed 429 (200) carry an id in the log
-   # and in :on-response like any other response
-   :request-id 50
-   :observability 1000
-   :parsing 2000
-   :session 3000
-   :auth 4000
-   :authz 5000
-   :validation 6000
-   :business 7000
-   :response 9000})
+# -- anchors ---------------------------------------------------------------
+#
+# The chain's named places, outermost first. Each one runs before the
+# next; a middleware sits between two of them, and the anchors between
+# groups of plugins that do not require each other (authenticated,
+# scoped, verified, loaded, authorized, validated, responding) are
+# what those plugins agree on instead of a number. A stage anchor is
+# where that stage's hooks run on a route that has any; every anchor
+# a route has nothing at is simply not in its chain.
 
-(def phase/panic-guard (phases :panic-guard))
-(def phase/request-id (phases :request-id))
-(def phase/observability (phases :observability))
-(def phase/parsing (phases :parsing))
-(def phase/session (phases :session))
-(def phase/auth (phases :auth))
-(def phase/authz (phases :authz))
-(def phase/validation (phases :validation))
-(def phase/business (phases :business))
-(def phase/response (phases :response))
+(def anchors
+  "The :void.http/middleware anchors, outermost first."
+  [:void.http/guarded
+   :void.http.stage/on-send
+   :void.http.stage/on-request
+   :void.http.stage/pre-parsing
+   :void.http/authenticated
+   :void.http/scoped
+   :void.http/verified
+   :void.http/loaded
+   :void.http/authorized
+   :void.http.stage/pre-validation
+   :void.http/validated
+   :void.http/responding
+   :void.http.stage/pre-serialization
+   :void.http.stage/pre-handler])
+
+(def edge-anchors
+  "The :void.http/edge anchors: inside `scoped`, a request has its
+  locale scope."
+  [:void.http.edge/scoped])
 
 # -- request-lifecycle stages --------------------------------------------
 #
-# A stage is a reserved slot on this same phase scale — hooks compile
-# into the one route chain as thin wrappers; a route with no hooks on a
+# A stage is an anchor of the chain — hooks compile into the one route
+# chain as a thin wrapper at that anchor; a route with no hooks on a
 # stage pays nothing (no wrapper). Request-side hooks are
 # (fn [request]) — nil/request continues, a response table (:status)
 # short-circuits: the remaining chain and handler are skipped and the
@@ -59,24 +66,24 @@
 # :on-response / :on-error / :on-timeout live outside the chain — the
 # server, the panic guard and the inject path call them.
 #
-# The slots are a frozen contract (ADR-0016, refined by ADR-0045), and
-# :on-send at 500 has a consequence worth stating: it sees only the
-# responses that reached slot 500. A middleware that refuses *outside*
-# it — void/pressure's 503 at 100, void/security's address-keyed 429 at
-# 200 — does so precisely so that a refusal costs nothing, and its
+# The stages are a contract (ADR-0016, refined by ADR-0045 and
+# ADR-0051), and :on-send has a consequence worth stating: it sees only
+# the responses that reached its anchor. A middleware that refuses
+# *outside* it — void/pressure's 503, void/security's address-keyed
+# 429 — does so precisely so that a refusal costs nothing, and its
 # response never passes an :on-send hook. What must see every response
 # a route produced is :on-response (out of chain, called by the
 # transport); what must see every response this process emits, a 404
 # and a rendered 500 included, is a :void.http/edge wrapper.
 
-(def stage-slots
-  "In-chain stage -> phase slot."
-  {:on-send 500
-   :on-request 1500
-   :pre-parsing 1900
-   :pre-validation 5900
-   :pre-serialization 9800
-   :pre-handler 9900})
+(def stage-anchors
+  "In-chain stage -> the anchor its hooks run at."
+  {:on-send :void.http.stage/on-send
+   :on-request :void.http.stage/on-request
+   :pre-parsing :void.http.stage/pre-parsing
+   :pre-validation :void.http.stage/pre-validation
+   :pre-serialization :void.http.stage/pre-serialization
+   :pre-handler :void.http.stage/pre-handler})
 
 (def request-stages
   "In-chain stages whose hooks see (fn [request])."
@@ -88,7 +95,7 @@
 
 (def stages
   "Every valid stage name."
-  (freeze (merge (tabseq [k :keys stage-slots] k true) out-of-chain-stages)))
+  (freeze (merge (tabseq [k :keys stage-anchors] k true) out-of-chain-stages)))
 
 (defn- response-map?
   {:params [:any] :ret :boolean :narrows {:status :any & r}}
@@ -103,14 +110,12 @@
    :ret HttpMiddleware?
    :throws [:string]}
   ``The synthetic middleware entry for one in-chain stage of one route
-  ({:name :phase :wrap}), or nil when `hooks` (tuple of callables) is
-  empty — an empty stage costs nothing.``
+  ({:name <the stage's anchor> :wrap}), or nil when `hooks` (tuple of
+  callables) is empty — an empty stage costs nothing.``
   [stage hooks]
   (when (and hooks (not (empty? hooks)))
-    (def slot (or (get stage-slots stage)
-                  (errorf "%q is not an in-chain stage" stage)))
-    {:name (keyword "void.http.stage/" stage)
-     :phase slot
+    {:name (or (get stage-anchors stage)
+               (errorf "%q is not an in-chain stage" stage))
      :wrap
      (if (get request-stages stage)
        (fn [handler]
@@ -129,135 +134,88 @@
              (when (dictionary? r) (set resp r)))
            resp)))}))
 
-# -- placement: a number, or a name ---------------------------------------
-#
-# The phase scale is the substrate; a contribution may place itself on
-# it by number (:phase) or by naming another middleware (:before /
-# :after). A name resolves to a number once, at table build — the
-# target's phase minus or plus one — and everything downstream
-# (selection, ordering, explain) works on the one scale. A name is a
-# claim about a middleware that is *there*: naming one no active
-# plugin contributes is an error, so a plugin may only name middleware
-# of plugins it requires. An optional neighbour is a number, by
-# definition (void/i18n's locale runs after auth when auth is in the
-# composition — and without it).
+# -- placement: edges to anchors and neighbours ---------------------------
 
-(def- phase-min 0)
-(def- phase-max 10000)
+(def- phase-removed
+  "What a leftover :phase is told."
+  "has :phase, which was removed in ADR-0051: place it with :after/:before an anchor or a neighbour")
 
-(defn- placement-of
-  {:params [HttpMiddleware]
-   :ret (or [:keyword :keyword] :nil)}
-  "[:after target] / [:before target] of a contribution value, or nil."
-  [v]
-  (cond
-    (v :after) [:after (v :after)]
-    (v :before) [:before (v :before)]))
+(defn placement-check
+  {:params [[:keyword] :string]
+   :ret (fn [[{:name :keyword & r}]] :any)}
+  ``The :validate of a point ordered by edges, over its `point-anchors`:
+  a contribution with a leftover :phase, an edge to a name nothing
+  has, a contribution tied to no anchor or a cycle fails the boot —
+  dry-run included — rather than a table build. Whether a neighbour
+  belongs to a required plugin is the table build's to check: a
+  contribution value does not know its plugin.``
+  [point-anchors what]
+  (fn check-placement [values]
+    (def stale (filter |(not (nil? ($ :phase))) values))
+    (unless (empty? stale)
+      (errorf "%s %s"
+              (string/join (map |(string/format "%s %q" what ($ :name)) stale) ", ")
+              phase-removed))
+    (order/sort values {:anchors point-anchors :what what})
+    nil))
 
-(defn check-placement
-  {:params [[HttpMiddleware]]
-   :ret :nil
+(defn order
+  {:params [[HttpMiddlewareContribution]
+            (or {:anchors (or [:keyword] :nil) :what :string?
+                 :requires (or {:keyword :any} :nil)}
+                :nil)]
+   :ret @[(or HttpMiddlewareContribution HttpAnchor)]
    :throws [:string]}
-  ``The point's cross-check: every contribution places itself exactly
-  one way — a numeric :phase, or one of :before/:after. Runs at boot
-  over every value (dry-run included), so a contribution that says
-  nothing, or two things, fails the composition rather than a table
-  build.``
-  [values]
-  (each v values
-    (def ways (filter |(not (nil? (get v $))) [:phase :before :after]))
-    (unless (= 1 (length ways))
-      (errorf "middleware %q must be placed exactly one way (:phase, :before or :after), got %s"
-              (v :name)
-              (if (empty? ways)
-                "none of them"
-                (string/join (map |(string/format "%q" $) ways) " and "))))))
-
-(defn resolve-phases
-  {:params [[HttpMiddlewareContribution]]
-   :ret @[HttpMiddlewareContribution]
-   :throws [:string]}
-  ``Contributions ({:plugin :value}) with every :before/:after turned
-  into a numeric :phase — the named middleware's phase ∓ 1, clamped to
-  the scale. Once per table build. Errors: a target no active plugin
-  contributes (with a did-you-mean), or a ring of relatives.``
-  [contribs]
+  ``Contributions ({:plugin :value}) in the order their edges give,
+  with each anchor in its place as {:name <anchor> :anchor true} —
+  once per table build. Options: :anchors (default `anchors`), :what
+  (default "middleware") and :requires, plugin -> its manifest's
+  :requires, which confines a contribution's neighbours to its own
+  plugin, void/http and the plugins it requires (nil skips that check
+  — a bare table build). Every error — an unknown name, an unrequired
+  plugin's middleware, a contribution placed nowhere — at once; a
+  cycle prints its path.``
+  [contribs &opt opts]
+  (def opts (or opts {}))
   (def by-name (tabseq [c :in contribs] (get-in c [:value :name]) c))
-  (def phases @{})
-  (var pending @[])
-  (each c contribs
-    (def v (c :value))
-    (cond
-      (v :phase) (put phases (v :name) (v :phase))
-      (placement-of v) (array/push pending c)
-      # a contribution outside a booted composition (a bare table
-      # build) may say nothing: it lands in the business phase
-      (put phases (v :name) phase/business)))
-  (while (not (empty? pending))
-    (def still @[])
-    (each c pending
-      (def v (c :value))
-      (def [side target] (placement-of v))
-      (unless (in by-name target)
-        (errorf "middleware %q is placed %q %q, which no active plugin contributes%s"
-                (v :name) side target (util/suggest target (keys by-name))))
-      (if-let [tp (get phases target)]
-        (put phases (v :name)
-             (max phase-min (min phase-max (if (= :after side) (inc tp) (dec tp)))))
-        (array/push still c)))
-    (when (= (length still) (length pending))
-      (errorf "middleware placed relative to each other in a ring: %s"
-              (string/join (map |(string/format "%q" (get-in $ [:value :name])) still)
-                           " ")))
-    (set pending still))
-  (seq [c :in contribs]
-    (if (nil? (get-in c [:value :phase]))
-      (freeze (merge c {:value (merge (c :value)
-                                      {:phase (get phases (get-in c [:value :name]))})}))
-      c)))
-
-(defn sort-contributions
-  {:params [[HttpMiddlewareContribution]]
-   :ret @[HttpMiddlewareContribution]}
-  ``Deterministic chain order for middleware contributions of the shape
-  {:plugin <keyword> :value {:name :phase :wrap ...}}: ascending phase,
-  ties broken by plugin name, then middleware name. The one sort the
-  chain has — a route's stage wrappers are merged in through it too.``
-  [contribs]
-  (sorted-by
-    (fn [c] [(get-in c [:value :phase] phase/business)
-             (string (get c :plugin ""))
-             (string (get-in c [:value :name] ""))])
-    contribs))
+  (map |(if ($ :anchor) $ (in by-name ($ :name)))
+       (order/sort (map |(merge ($ :value) {:plugin ($ :plugin)}) contribs)
+                   {:anchors (get opts :anchors anchors)
+                    :what (get opts :what "middleware")
+                    :owner :void/http
+                    :requires (opts :requires)})))
 
 (defn describe
   {:params [HttpMiddlewareContribution]
    :ret HttpChainStep}
   ``One chain step as data, for explain-route and `void routes --chain`:
-  {:name :phase :plugin :stage? :after?/:before?} — :stage true marks a
-  synthetic stage wrapper, :after/:before carry the name a relative
-  placement resolved from.``
+  {:name :plugin :stage? :after? :before?} — :stage true marks a stage
+  wrapper at its anchor, :after/:before are the edges the contribution
+  was placed by.``
   [c]
   (def v (c :value))
   (freeze
-    (merge {:name (v :name) :phase (v :phase) :plugin (c :plugin)}
+    (merge {:name (v :name) :plugin (c :plugin)}
            (if (c :stage) {:stage true} {})
-           (if-let [[side target] (placement-of v)] {side target} {}))))
+           (if (nil? (v :after)) {} {:after (v :after)})
+           (if (nil? (v :before)) {} {:before (v :before)}))))
 
 (defn select
-  {:params [[HttpMiddlewareContribution] {:keyword :any}]
+  {:params [[(or HttpMiddlewareContribution HttpAnchor)] {:keyword :any}]
    :ret {:selected [HttpMiddlewareContribution] :declined [HttpChainStep]}
    :throws [:string]}
-  ``The middleware that apply to one route: global (un-:named)
+  ``The middleware that apply to one route, out of `ordered` (what
+  `order` answers; anchors are passed over): global (un-:named)
   contributions whose :when predicate (if any) accepts the route's
   merged metadata, plus the :named ones the route lists under
   :void.http/middleware. An unknown name in that list is an error —
-  table build fails fast. Returns {:selected <sorted contributions>
-  :declined [{:name :phase :plugin :reason} ...]} — the declined are
-  kept so that a route can say why a middleware is not in its chain:
+  table build fails fast. Returns {:selected <contributions, in order>
+  :declined [{:name :plugin :reason ...} ...]} — the declined are kept
+  so that a route can say why a middleware is not in its chain:
   :reason :named (the route did not list it) or :when (the predicate
   refused the route's metadata).``
-  [contribs route-meta]
+  [ordered route-meta]
+  (def contribs (filter |(nil? ($ :anchor)) ordered))
   (def by-name (tabseq [c :in contribs] (get-in c [:value :name]) c))
   (def wanted
     (tabseq [n :in (get route-meta :void.http/middleware [])] n true))
@@ -268,49 +226,48 @@
               n (string/join (map |(string/format "%q" $)
                                   (sorted (keys by-name)))
                              " "))))
-  (def selected @[])
-  (def declined @[])
-  (each c (sort-contributions contribs)
+  (defn verdict
+    {:params [HttpMiddlewareContribution] :ret (or :keyword :nil)}
+    "Why the route declines `c`, or nil when `c` is in its chain."
+    [c]
     (def v (c :value))
     (cond
-      (and (v :named) (not (in wanted (v :name))))
-      (array/push declined (merge (describe c) {:reason :named}))
-      (and (v :when) (not ((v :when) route-meta)))
-      (array/push declined (merge (describe c) {:reason :when}))
-      (array/push selected c)))
-  {:selected (tuple ;selected) :declined (tuple ;declined)})
+      (and (v :named) (not (in wanted (v :name)))) :named
+      (and (v :when) (not ((v :when) route-meta))) :when))
+  (def verdicts (map verdict contribs))
+  {:selected (tuple ;(seq [[c r] :in (map tuple contribs verdicts) :unless r] c))
+   :declined (tuple ;(seq [[c r] :in (map tuple contribs verdicts) :when r]
+                       (merge (describe c) {:reason r})))})
+
+(defn splice
+  {:params [[(or HttpMiddlewareContribution HttpAnchor)]
+            [HttpMiddlewareContribution]
+            {:keyword HttpMiddleware}]
+   :ret @[HttpMiddlewareContribution]}
+  ``One route's chain steps, outermost first: `ordered` (what `order`
+  answers) with each anchor replaced by the route's stage wrapper at
+  it (`wrappers`, anchor -> wrapper) or dropped when it has none, and
+  each contribution kept when it is `selected`.``
+  [ordered selected wrappers]
+  (def keep (tabseq [c :in selected] (get-in c [:value :name]) true))
+  (seq [x :in ordered
+        :let [step (if (x :anchor)
+                     (when-let [w (in wrappers (x :name))]
+                       {:plugin :void/http :value w :stage true})
+                     (when (in keep (get-in x [:value :name])) x))]
+        :when step]
+    step))
 
 (def reasons
   "Why a middleware is not in a route's chain, as text."
   {:named ":named — the route does not list it under :void.http/middleware"
    :when ":when declined the route's metadata"})
 
-(defn shared-phase-warnings
-  {:params [[HttpMiddlewareContribution]]
-   :ret @[:string]}
-  ``One warning per phase that two or more *different* plugins occupy
-  among `selected` contributions: their order is by plugin name, which
-  nobody decided. A stage wrapper is not a contribution and does not
-  count.``
-  [selected]
-  (def by-phase @{})
-  (each c selected
-    (unless (c :stage)
-      (def p (get-in c [:value :phase]))
-      (array/push (or (get by-phase p) (let [a @[]] (put by-phase p a) a)) c)))
-  (seq [p :in (sorted (keys by-phase))
-        :let [cs (by-phase p)]
-        :when (< 1 (length (distinct (map |($ :plugin) cs))))]
-    (string/format "phase %d is shared by %s — their order is by plugin name, which nobody decided; place one :before/:after the other"
-                   p
-                   (string/join (map |(string/format "%q (%q)" (get-in $ [:value :name]) ($ :plugin)) cs)
-                                ", "))))
-
 (defn chain
   {:params [[HttpMiddleware] HttpHandler (or {:keyword :any} :nil)]
    :ret HttpHandler}
-  ``Compose selected middleware values around a handler: the lowest
-  phase ends up outermost. A value marked :route-aware gets the route's
+  ``Compose selected middleware values around a handler, the first
+  one outermost. A value marked :route-aware gets the route's
   merged metadata as the second argument of its :wrap — at build time,
   once; every other :wrap is called with the handler alone. Returns
   the composed (fn [request] response).``

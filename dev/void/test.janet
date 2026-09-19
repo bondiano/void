@@ -20,7 +20,7 @@
   {:plugins true :profile true :config true :only true :components true})
 
 (defn- deps-closure
-  {:params [{:components {:any :any} :resolution {:any {:any :any}} & r} (or @[:any] [:any])]
+  {:params [{:components {:any :any} :resolution {:any {:any :any}} & r} [:any]]
    :ret @{:any :boolean}
    :throws [:string]}
   "The transitive closure of `ks` over `sys`'s dependency resolution:
@@ -43,11 +43,11 @@
   needed)
 
 (defn start!
-  {:params [{:plugins (or @[:any] [:any] :nil)
+  {:params [{:plugins (or [:any] :nil)
             :profile :keyword?
             :config (or {:any :any} :nil)
-            :only (or @[:any] [:any] :nil)
-            :components (or @[:any] [:any] :nil)}]
+            :only (or [:any] :nil)
+            :components (or [:any] :nil)}]
    :ret @{:system :any :hooks :any :profile :keyword :phase :keyword & r}
    :throws [:string]}
   ``Bootstrap and start a test system.
@@ -169,11 +169,11 @@
            (printf "%s: SKIPPED (set %s to %s)" suite env-var hint)
            nil)})
 
-(defn generate
+(defn sample
   {:params [:any (or {:any :any} :nil)] :ret :any :throws [:string]}
   "Generate a sample value for a schema — see void/dev/generate."
   [sch &opt opts]
-  (gen/generate sch opts))
+  (gen/sample sch opts))
 
 (defn snapshot
   {:params [:string :any :string?] :ret (enum :created :matched :updated) :throws [:string]}
@@ -225,7 +225,7 @@
   [sch & kvs]
   (when (odd? (length kvs))
     (error "factory: expected key-value override pairs"))
-  (def base (generate sch))
+  (def base (sample sch))
   (if (empty? kvs)
     base
     (do

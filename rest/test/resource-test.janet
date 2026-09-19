@@ -64,7 +64,7 @@
                  :void.schema/body {} :void.schema/headers {}
                  :void.schema/response {}}}))
 (assert (= 5 (length (table :routes))))
-(def [entry params] (router/match table :get "/orders/42"))
+(def [entry params] (router/lookup table :get "/orders/42"))
 (assert (= :orders/show (entry :name)))
 (assert (= "42" (params :id)))
 (assert (= "/orders/7/cancel" (router/url-for table :orders/cancel {:id 7})))

@@ -29,8 +29,8 @@
 (assert (deep= @[[:test/dup {:status 409 :doc "a duplicate"}]]
            (filter |(= :test/dup (first $)) (errors/defined))))
 
-(expect-error "kind must be a keyword" "keyword" |(errors/make "x"))
-(expect-error "data must be a dictionary" "dictionary" |(errors/make :test/x nil 3))
+(expect-error "kind must be a keyword" "keyword" |(errors/make "x")) # janet-zed: ignore types
+(expect-error "data must be a dictionary" "dictionary" |(errors/make :test/x nil 3)) # janet-zed: ignore types
 (expect-error "status must be an HTTP status" "HTTP status" |(errors/define! :test/y {:status 7}))
 
 (def [ok raised] (protect (errors/raise :test/dup "again" {:k 1})))

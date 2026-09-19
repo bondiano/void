@@ -1,6 +1,6 @@
 (import ../void/core/init :as core)
 
-(assert (= core/void-api 1) "plugin API protocol version is 1")
+(assert (= core/void-api 2) "plugin API protocol version is 2")
 (assert (string? core/version) "version is a string")
 (assert (peg/match ~(* "v" :d+ "." :d+ (? (* "." :d+)) -1) core/release-tag)
         "release-tag is vMAJOR.MINOR[.PATCH]")

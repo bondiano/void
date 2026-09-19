@@ -114,7 +114,8 @@
   require it from — the same seam, for the same reason, as
   db-sqlite's `use-module!`.``
   [m]
-  (set proto-module m))
+  (set proto-module m)
+  nil)
 
 (defn- proto-encoder
   {:params [] :ret (fn [{:string :any}] :buffer) :throws [:string]}
@@ -180,7 +181,7 @@
     {"stringValue" (string/format "%q" v)}))
 
 (defn attributes
-  {:params [(or @{:any :any} {:any :any} :nil)] :ret @[{:string :any}]}
+  {:params [(or {:any :any} :nil)] :ret @[{:string :any}]}
   ``A dictionary as OTLP's `[{key, value}]`. Keys go out as their
   string form, so `:db.system` is `db.system` and the semantic
   conventions can be written the way they are spelled.``
@@ -213,10 +214,7 @@
     {"code" 0}))
 
 (defn span->otlp
-  {:params [@{:name :string :trace-id :string :span-id :string
-              :parent-id :string? :kind :keyword :started-at :number
-              :duration :number? :attrs @{:any :any} :status :keyword
-              :tracestate :string? & r}]
+  {:params [ObsSpan]
    :ret {:string :any}}
   "One finished span as an OTLP span object."
   [span]
@@ -235,15 +233,7 @@
   out)
 
 (defn traces-request
-  {:params [(or @[@{:name :string :trace-id :string :span-id :string
-                    :parent-id :string? :kind :keyword :started-at :number
-                    :duration :number? :attrs @{:any :any} :status :keyword
-                    :tracestate :string? & r}]
-                [@{:name :string :trace-id :string :span-id :string
-                   :parent-id :string? :kind :keyword :started-at :number
-                   :duration :number? :attrs @{:any :any} :status :keyword
-                   :tracestate :string? & r}]
-                :nil)
+  {:params [(or [ObsSpan] :nil)
             @[{:string :any}]]
    :ret {:string :any}}
   ``A batch of finished spans as an `ExportTraceServiceRequest`.
@@ -588,7 +578,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :config-loaded
-   :phase 400
    :name :obs-otlp/capture-boot
    :doc "Keep the boot value: the default service.name is the application's own [:app :name]"
    :fn (fn capture-boot [boot] (set boot-ref boot))})
@@ -679,15 +668,7 @@
   out)
 
 (defn export-spans!
-  {:params [(or @[@{:name :string :trace-id :string :span-id :string
-                    :parent-id :string? :kind :keyword :started-at :number
-                    :duration :number? :attrs @{:any :any} :status :keyword
-                    :tracestate :string? & r}]
-                [@{:name :string :trace-id :string :span-id :string
-                   :parent-id :string? :kind :keyword :started-at :number
-                   :duration :number? :attrs @{:any :any} :status :keyword
-                   :tracestate :string? & r}]
-                :nil)]
+  {:params [(or [ObsSpan] :nil)]
    :ret (or (enum :ok :rejected :failed) :nil)}
   ``Send one batch of finished spans. Public so a test — and a REPL
   during an incident — can push a span without waiting for the flush

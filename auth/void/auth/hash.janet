@@ -163,8 +163,7 @@
 
 (defn- hasher-for
   {:params [:keyword]
-   :ret {:name :keyword :derive :function :encode-params :function
-         :version (or :number :nil) :cost-keys [:keyword]}
+   :ret AuthHasher
    :throws [:string]}
   "The hasher entry for a PHC algorithm id, or an error naming what
   is registered instead."

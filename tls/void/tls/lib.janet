@@ -64,7 +64,7 @@
   @[])
 
 (defmacro- defssl
-  {:params [:symbol :any :keyword] :ret :array}
+  {:params [:symbol :any :keyword] :ret :tuple}
   "Declare one libssl function: a module-level `var`, nil until `load!`
   installs the call."
   [sym ret & args]
@@ -152,9 +152,8 @@
   "The search order for a given configured path (nil = the defaults),
   environment override included."
   [&opt path]
-  (cond
-    path [path]
-    (os/getenv path-env) [(os/getenv path-env)]
+  (if-let [p (or path (os/getenv path-env))]
+    [p]
     default-candidates))
 
 (defn- try-open

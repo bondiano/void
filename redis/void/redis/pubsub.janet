@@ -52,10 +52,10 @@
   {:min 0.2 :max 30 :factor 2})
 
 (defn open
-  {:params [(or {:keyword :any} @{:keyword :any})
-            (or {:codec :any :backoff :any & r} @{:codec :any :backoff :any & r} :nil)]
+  {:params [{:keyword :any}
+            (or {:codec :any :backoff :any & r} :nil)]
    :ret @{:conn-opts :any
-          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :codec RedisCodec
           :backoff @{:min :number :max :number :factor :number}
           :channels @{:any @[:any]} :patterns @{:any @[:any]}
           :conn :any :running :boolean :epoch :number :fiber :any
@@ -80,7 +80,7 @@
 # -- what the server says ------------------------------------------------
 
 (defn- message-of
-  {:params [@{:codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)} & r}
+  {:params [@{:codec RedisCodec & r}
             :any]
    :ret (or {:channel :string :payload :any}
             {:pattern :string :channel :string :payload :any}
@@ -119,7 +119,7 @@
 (defn- deliver
   {:params [@{:stats @{:messages :number :reconnects :number :errors :number
                        :delivered :number}
-             :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+             :codec RedisCodec
              :patterns @{:any @[:any]} :channels @{:any @[:any]}
              & r}
             :any]
@@ -171,11 +171,7 @@
   {:params [@{:conn :any :conn-opts :any
              :channels @{:any @[:any]} :patterns @{:any @[:any]} & r}]
    :ret :any
-   :throws [:string
-            {:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [:string RedisConnectionError RedisReplyError]}
   ``The connection, opened and brought up to date with what is
   subscribed. Reconnecting means resubscribing: a redis connection
   carries no subscription across a socket, and neither does a
@@ -197,15 +193,11 @@
              :channels @{:any @[:any]} :patterns @{:any @[:any]}
              :stats @{:messages :number :reconnects :number :errors :number
                       :delivered :number}
-             :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+             :codec RedisCodec
              & r}
             :number]
    :ret :nil
-   :throws [:string
-            {:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [:string RedisConnectionError RedisReplyError]}
   "Read frames until the connection fails, the subscriber stops, or a
   newer reader takes over."
   [l epoch]
@@ -227,10 +219,10 @@
   climb after every real incident.``
   [l]
   (def b (l :backoff))
-  (var delay (b :min))
+  (var wait (b :min))
   (fn next-delay []
-    (def d delay)
-    (set delay (min (b :max) (* delay (b :factor))))
+    (def d wait)
+    (set wait (min (b :max) (* wait (b :factor))))
     d))
 
 (defn- reader
@@ -240,7 +232,7 @@
              :backoff @{:min :number :max :number :factor :number}
              :stats @{:messages :number :reconnects :number :errors :number
                       :delivered :number}
-             :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+             :codec RedisCodec
              & r}
             :number]
    :ret :nil}
@@ -260,12 +252,12 @@
     (when (and (not ok) (l :running) (= epoch (l :epoch)))
       (put-in l [:stats :reconnects] (inc (get-in l [:stats :reconnects])))
       (when-let [c (l :conn)] (protect (conn/close c)) (put l :conn nil))
-      (def delay (next-delay))
+      (def wait (next-delay))
       (log/warn "the subscriber connection dropped — reconnecting" :ns log-ns
-                :in delay
+                :in wait
                 :err (if (dictionary? err) (get err :message (describe err))
                        (describe err)))
-      (ev/sleep delay)))
+      (ev/sleep wait)))
   (when (= epoch (l :epoch))
     (when-let [c (l :conn)]
       (protect (conn/close c))
@@ -284,7 +276,7 @@
              :backoff @{:min :number :max :number :factor :number}
              :stats @{:messages :number :reconnects :number :errors :number
                       :delivered :number}
-             :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+             :codec RedisCodec
              & r}]
    :ret @{:running :boolean :epoch :number :conn-established :boolean
           :conn :any :conn-opts :any :fiber :any
@@ -292,7 +284,7 @@
           :backoff @{:min :number :max :number :factor :number}
           :stats @{:messages :number :reconnects :number :errors :number
                    :delivered :number}
-          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :codec RedisCodec
           & r}}
   "Start the reading fiber. Idempotent; the connection still waits for
   the first subscription."
@@ -337,7 +329,7 @@
   (= 1 (length arr)))
 
 (defn- send-now
-  {:params [@{:conn :any & r} (or @[:any] [:any])] :ret :nil}
+  {:params [@{:conn :any & r} [:any]] :ret :nil}
   ``Send a subscription command on the live connection, if there is
   one — and do nothing when there is not.
 
@@ -365,7 +357,7 @@
              :backoff @{:min :number :max :number :factor :number}
              :stats @{:messages :number :reconnects :number :errors :number
                       :delivered :number}
-             :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+             :codec RedisCodec
              & r}
             :any (fn [a] :any)]
    :ret (fn [a] :any)}
@@ -390,7 +382,7 @@
              :backoff @{:min :number :max :number :factor :number}
              :stats @{:messages :number :reconnects :number :errors :number
                       :delivered :number}
-             :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+             :codec RedisCodec
              & r}
             :any (fn [a] :any)]
    :ret (fn [a] :any)}

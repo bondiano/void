@@ -56,13 +56,13 @@
   (if (empty? parts) nil (string/join parts " · ")))
 
 (defn note-for
-  {:params [{:chat-id :string? :to (or @[:keyword] [:keyword] :nil) & r}
+  {:params [{:chat-id :string? :to (or [:keyword] :nil) & r}
             {:repo :string? :source :string? :event :string? :sender :string?
              :delivery-id :string? :body-key :string? & r}
             :any]
    :ret {:key :keyword :title :string :body :string?
          :to {:keyword :string}
-         :channels (or @[:keyword] [:keyword])
+         :channels [:keyword]
          :data {:delivery :string? :source :string? :event :string?
                 :repo :string? :sender :string? :key :string?}}}
   ``The notification one rule makes out of one delivery. Addresses are

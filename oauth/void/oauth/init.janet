@@ -63,7 +63,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :oauth/capture-config
    :doc "Read the [:oauth] slice, run the boot gates and capture the sign-in hook"
    :fn (fn capture [boot]
@@ -270,12 +270,12 @@
              (printf "  scopes:        %s" (string/join (get p :scopes []) " "))
              (printf "  algorithms:    %s" (string/join (map string (p :algs)) " "))
              (def ring (get rings name (provider/make-ring)))
-             (each [label f]
+             (each [endpoint f]
                [["authorization" provider/authorization-endpoint]
                 ["token" provider/token-endpoint]
                 ["userinfo" provider/userinfo-endpoint]]
                (def [ok out] (protect (f ring p cfg)))
-               (printf "  %-14s %s" (string label ":")
+               (printf "  %-14s %s" (string endpoint ":")
                        (cond (and ok out) (string out)
                              ok "(none)"
                              (string "UNREACHABLE — " (if (string? out) out (describe out))))))

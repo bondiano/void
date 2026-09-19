@@ -64,7 +64,7 @@
           :project (or (fn [:any] :any) :nil)
           :permanent? (or (fn [:any] :any) :nil)
           :health (or (fn [] :any) :nil)
-          :needs (or @[:keyword] [:keyword])
+          :needs [:keyword]
           & r}
    :throws [:string]}
   ``Check a `:void.notify/channel` contribution and fill in what it did

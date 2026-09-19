@@ -222,7 +222,7 @@
     (truthy? (attempt cache :has? (fn [] (((cache :store) :has?) (full-key k))) false))))
 
 (defn get-many
-  {:params [(or @[:any] [:any])] :ret @[:any] :throws [:any]}
+  {:params [[:any]] :ret @[:any] :throws [:any]}
   ``The values under `ks`, in order, nil where a key is not cached. One
   round trip on a store that can do it (redis: MGET).``
   [ks]
@@ -278,7 +278,7 @@
   v)
 
 (defn put-many!
-  {:params [(or @{:any :any} {:any :any} @[[:any :any]] [[:any :any]]) :any?]
+  {:params [(or {:any :any} [[:any :any]]) :any?]
    :ret :nil :throws [:any]}
   "Store several entries — `{k v}` or `[[k v] ...]` — under one ttl.
   One round trip on a store that can do it."

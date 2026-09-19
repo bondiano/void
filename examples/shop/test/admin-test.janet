@@ -109,18 +109,18 @@
   {:params [{:label :string :database :keyword :config {:any :any} & r}] :ret :nil}
   "Run the desk suite against one engine (sqlite or postgres)."
   [engine]
-  (def label (engine :label))
+  (def engine-name (engine :label))
   (defn note
     {:params [:string] :ret :nil}
     "Print a labelled progress line for this engine's pass."
-    [msg] (print "  [" label "] " msg))
+    [msg] (print "  [" engine-name "] " msg))
 
   (def opts
     {:plugins (main/plugins (engine :database))
      :profile :test
      :config {:env @{}
               :cli (merge {:db {:n1-guard :strict :migrations {:dir "db/migrations"}}
-                           :cache {:prefix (string "shop-admin-" label ":")}
+                           :cache {:prefix (string "shop-admin-" engine-name ":")}
                            :auth {:scrypt {:ln 10}}
                            :crypto {:kdf {:in-thread false}}
                            :mail {:transport :memory}
@@ -458,7 +458,7 @@
             "and the agent is handed the very policy names the routes carry")
     (note "the same declarations, the same policies, for an agent")
 
-    (print "  [" label "] ok")))
+    (print "  [" engine-name "] ok")))
 
 # the suite provokes refusals on purpose
 (log/set-sinks! [(fn [_])])

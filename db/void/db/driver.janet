@@ -283,7 +283,7 @@
   ((drv :reusable?) conn))
 
 (defn result
-  {:params [(or @[DbRow] [DbRow] :nil) (or {:count :number? & r} :nil)]
+  {:params [(or [DbRow] :nil) (or {:count :number? & r} :nil)]
    :ret DbResult}
   "Build a driver result — sugar for driver authors:
   (driver/result rows) / (driver/result rows {:count 3})."

@@ -107,6 +107,7 @@
   @{})
 
 (var limiter-store
+  {:type (or SecurityRateStore :nil)}
   "The store the rate limiter counts in."
   nil)
 
@@ -205,7 +206,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :security/configure
    :doc "Resolve the [:security] slice, install the signing keys and build the static header table"
    :fn (fn configure [boot]
@@ -272,7 +273,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 200
+   :after :void.core/checked
    :name :security/limiter-store
    :doc "Resolve the rate limiter's store once the components are up"
    # nothing here looks at [:http :workers] any more: "the effective limit
@@ -326,7 +327,7 @@
 
 (plugin/contribute! :void.http/edge
   {:name :void.security/cors
-   :phase 100
+   :after :void.http.edge/scoped
    :doc "Answer CORS preflights before routing (a path usually has no OPTIONS route) and add the response headers to everything else"
    :wrap
    (fn [handler]
@@ -338,7 +339,7 @@
 
 (plugin/contribute! :void.http/edge
   {:name :void.security/headers
-   :phase 200
+   :after :void.security/cors
    :doc "Stamp the security headers and the CSP on every response — including the 404s, static files and rendered 500s that no route produced"
    :wrap
    (fn [handler]
@@ -390,13 +391,14 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.security/csrf
-   # after auth (4000): whether the credential rode on a cookie is
-   # something only the identity knows — and auth is optional here,
-   # which is why this is a number and not `:after :void.auth/identity`.
-   # 4500 is this plugin's alone since ADR-0045: locale sits at 4100
-   # (a CSRF refusal is rendered translated), scopes right after
-   # identity
-   :phase 4500
+   # after :void.http/authenticated: whether the credential rode on a
+   # cookie is something only the identity knows — and auth is
+   # optional here, which is why this hangs off the anchor and not
+   # `:after :void.auth/identity`. Inside :void.http/scoped, so a CSRF
+   # refusal is rendered translated, and after the subject rate
+   # limit, which refuses cheaper
+   :after :void.security/rate-subject
+   :before :void.http/verified
    :doc "Verify the CSRF token on unsafe requests whose credential rode on a cookie; bind the token for the form slot and the meta tag"
    # [:security :csrf :enabled false] takes the wrapper out of every
    # chain at table build; GET routes stay in, because a page is where
@@ -480,17 +482,20 @@
   resp)
 
 (defn- rate-wrapper
-  {:params [:number :keyword :boolean]
-   :ret {:name :keyword :phase :number :doc :string :when (fn [:any] :any)
-         :route-aware :boolean :wrap (fn [:any :any] (fn [:any] :any))}}
+  {:params [{:after :keyword :before :keyword} :keyword :boolean]
+   :ret {:name :keyword :after :keyword :before :keyword :doc :string
+         :when (fn [:any] :any) :route-aware :boolean
+         :wrap (fn [:any :any] (fn [:any] :any))}}
   "One :void.http/middleware contribution for the rate limiter, keyed
-  by address (`subject?` false) or by authenticated subject."
-  [phase name subject?]
+  by address (`subject?` false) or by authenticated subject, placed
+  by the edges in `placement`."
+  [placement name subject?]
   {:name name
-   :phase phase
+   :after (placement :after)
+   :before (placement :before)
    :doc (if subject?
           "Rate limit keyed by the authenticated subject — after auth, because there is no subject before it"
-          "Rate limit keyed by the client address, in phase 200: before parsing, sessions or a pooled connection, because a refusal should not be paid for")
+          "Rate limit keyed by the client address, before :on-send: before parsing, sessions or a pooled connection, because a refusal should not be paid for")
    :when (fn [rmeta]
            (def spec (rate-config rmeta))
            (and spec
@@ -524,10 +529,12 @@
                (limited req spec result)))))))})
 
 (plugin/contribute! :void.http/middleware
-  (rate-wrapper 200 :void.security/rate-ip false))
+  (rate-wrapper {:after :void.http/request-id :before :void.http.stage/on-send}
+                :void.security/rate-ip false))
 
 (plugin/contribute! :void.http/middleware
-  (rate-wrapper 4400 :void.security/rate-subject true))
+  (rate-wrapper {:after :void.http/scoped :before :void.http/verified}
+                :void.security/rate-subject true))
 
 # -- CLI -----------------------------------------------------------------
 

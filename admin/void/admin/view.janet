@@ -99,11 +99,7 @@
   :void.admin/ungrouped)
 
 (defn- nav-links
-  {:params [(or @{:method :keyword :path :string :raw-path :string :query-string :string?
-                  :query {:string :any} :headers {:string (or :string @[:string])}
-                  :http-version [:number :number] :body :any :received :number
-                  :arrived :number? :remote-addr :string? & r}
-                :nil)]
+  {:params [HttpRequest?]
    :ret @[:tuple]
    :throws [:string]}
   ``The navigation: the mounted resources and the contributed menu
@@ -153,7 +149,7 @@
 # `asset-route`).
 
 (defn- join-assets
-  {:params [(or @[[:keyword {:keyword :any}]] [[:keyword {:keyword :any}]]) :keyword]
+  {:params [[[:keyword {:keyword :any}]] :keyword]
    :ret :string}
   "One kind of asset (:style or :script), concatenated across every
   distinct widget that has one."
@@ -187,12 +183,7 @@
   (chrome/asset-href (ctx/prefix) (get (ctx/setting :assets {}) half)))
 
 (defn layout
-  {:params [:any {:request (or @{:method :keyword :path :string :raw-path :string
-                                 :query-string :string? :query {:string :any}
-                                 :headers {:string (or :string @[:string])}
-                                 :http-version [:number :number] :body :any :received :number
-                                 :arrived :number? :remote-addr :string? & r}
-                                :nil)
+  {:params [:any {:request HttpRequest?
                   & r}]
    :ret @[:any]
    :throws [:string]}
@@ -278,7 +269,7 @@
   (when-let [f (dyn keys/csrf-field)] (f)))
 
 (defn post-form
-  {:params [:keyword :string (or {:keyword :any} :nil) :any] :ret :tuple}
+  {:params [:keyword :string (or {:any :any} :nil) :any] :ret :tuple}
   ``A form that posts. `verb` is the verb the route actually declares:
   anything but :post rides `?_method=`, which the edge rewrites for
   admin paths and only out of a POST.``
@@ -438,7 +429,7 @@
                      :field (or {:name :keyword & r} :nil) :value (or :function :nil) & r}]
              :editable [:keyword] :action-set {:keyword :boolean} :sortable [:keyword]
              :filters [{:name :keyword :param :string & r}] & r}
-            (or @[@{:any :any}] [@{:any :any}])
+            [@{:any :any}]
             {:page :number :per-page :number :sort (or :keyword :nil) :dir :keyword
              :q (or :string :nil) :filters {:keyword {:keyword :any}} & r}
             :number]
@@ -466,7 +457,7 @@
   {:params [{:name :keyword :path :string :search [:keyword]
              :filters [{:name :keyword :param :string
                         :field {:type :keyword
-                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                                :node SchemaNode & r}
                         & r}]
              & r}
             {:q (or :string :nil) :filters {:keyword {:keyword :any}} & r}]
@@ -550,21 +541,17 @@
              :search [:keyword]
              :filters [{:name :keyword :param :string
                         :field {:type :keyword
-                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                                :node SchemaNode & r}
                         & r}]
              :custom-actions {:keyword {:name :keyword :label (or :string :nil)
                                         :danger (or :boolean :nil) & r}}
              :slots {:keyword {:keyword (fn [:any] :tuple)}}
              & r}
-            (or @[@{:any :any}] [@{:any :any}])
+            [@{:any :any}]
             {:page :number :per-page :number :sort (or :keyword :nil) :dir :keyword
              :q (or :string :nil) :filters {:keyword {:keyword :any}} & r}
             :number
-            (or @{:method :keyword :path :string :raw-path :string :query-string :string?
-                  :query {:string :any} :headers {:string (or :string @[:string])}
-                  :http-version [:number :number] :body :any :received :number
-                  :arrived :number? :remote-addr :string? & r}
-                :nil)]
+            HttpRequest?]
    :ret :tuple
    :throws [:string]}
   "The list: toolbar, selection form, rows, pager."
@@ -619,9 +606,9 @@
     errs))
 
 (defn- form-attrs
-  {:params [{:name :keyword & r} (or @[{:name :keyword & r}] [{:name :keyword & r}])
-            (or {:keyword :any} :nil)]
-   :ret @{:keyword :any}}
+  {:params [{:name :keyword & r} [{:name :keyword & r}]
+            (or {:any :any} :nil)]
+   :ret @{:any :any}}
   ``The <form> attributes of a form drawing `fields` of `desc`: the
   class, plus the enctype when a widget on it says its control needs
   one.``
@@ -640,12 +627,7 @@
              & r}
             {:row (or @{:any :any} :nil) :values (or {:keyword :any} :nil)
              :errors (or [{:path :any & r}] :nil) :conflict :any
-             :request (or @{:method :keyword :path :string :raw-path :string
-                            :query-string :string? :query {:string :any}
-                            :headers {:string (or :string @[:string])}
-                            :http-version [:number :number] :body :any :received :number
-                            :arrived :number? :remote-addr :string? & r}
-                           :nil)
+             :request HttpRequest?
              & r}]
    :ret :tuple
    :throws [:string]}
@@ -693,11 +675,7 @@
             @{:any :any}
             (or [:any] :nil)
             (or [{:keyword :any}] :nil)
-            (or @{:method :keyword :path :string :raw-path :string :query-string :string?
-                 :query {:string :any} :headers {:string (or :string @[:string])}
-                 :http-version [:number :number] :body :any :received :number
-                 :arrived :number? :remote-addr :string? & r}
-                :nil)]
+            HttpRequest?]
    :ret :tuple
    :throws [:string]}
   "One row, its fields, its inlines and its history."
@@ -764,11 +742,11 @@
      (unless (empty? cascade)
        [:div {:class "vd-warn"}
         [:p (text/t :void.admin/cascade-intro)]
-        [:ul (seq [[label n capped] :in cascade]
+        [:ul (seq [[caption n capped] :in cascade]
                [:li (text/t (if capped
                               :void.admin/cascade-at-least
                               :void.admin/cascade-exactly)
-                            {:count n :label label})])]]))
+                            {:count n :label caption})])]]))
    (when-let [note (get action :confirm)]
      [:p note])
    (when (not (empty? sample))
@@ -838,7 +816,7 @@
             {:name :keyword :label (or :string :keyword :nil) :fields (or [:keyword] :nil)
              :can-add (or :boolean :nil) :can-delete (or :boolean :nil) & r}
             {:name :keyword :form-fields [{:name :keyword & r}] :entity {:pk :keyword & r} & r}
-            (or @[@{:any :any}] [@{:any :any}])
+            [@{:any :any}]
             (or [{:path :any & r}] :nil)]
    :ret :tuple
    :throws [:string]}
@@ -895,9 +873,7 @@
 # -- dashboard -----------------------------------------------------------
 
 (defn dashboard
-  {:params [(or @[{:label :any :name :any :render (fn [] :any) & r}]
-                [{:label :any :name :any :render (fn [] :any) & r}]
-                :nil)]
+  {:params [(or [{:label :any :name :any :render (fn [] :any) & r}] :nil)]
    :ret :tuple
    :throws [:string]}
   "The index of the admin: one card per resource, plus whatever was

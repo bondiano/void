@@ -88,8 +88,7 @@
 
 (defn- page
   {:params []
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "Render the current count through the shared layout."
   []
@@ -115,8 +114,7 @@
 
 (defn home
   {:params [:any]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET / — the full page; a Datastar request on the same route gets it
   as morph events (:void.datastar/morph on the route)."
@@ -125,8 +123,7 @@
 
 (defn inc-count
   {:params [{:method :keyword :query {:string :any} :body :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "POST /inc — mutate, poke the room, return the same page."
   [req]
@@ -135,8 +132,7 @@
 
 (defn dec-count
   {:params [{:method :keyword :query {:string :any} :body :any & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
   "POST /dec — the mirror of /inc."
   [req]
@@ -144,7 +140,7 @@
   (page))
 
 (defn live
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "GET /live — the long-lived side: the stream re-renders the full
   page on every poke! and pushes the same two morph events."
   [req]

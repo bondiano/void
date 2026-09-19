@@ -15,7 +15,7 @@
 # -- an app whose routes answer both full-page and Datastar requests -----
 
 (defn base-layout
-  {:params [:any :any] :ret :tuple}
+  {:params [:any :any] :ret @[:any]}
   "The test app's layout: title and a #main wrapping content."
   [content context]
   (hiccup/html5
@@ -49,14 +49,14 @@
 
 (defn read-signals
   {:params [{:method :keyword :query {:string :any} :body :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Echo the signals the request carried, as JSON."
   [req]
   (ring/response 200 (json/encode (or (datastar/signals req) {}))
                  @{"content-type" "application/json"}))
 
 (defn push
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "A hand-built event push, to prove events frame straight through
   ring/sse untouched."
   [req]

@@ -107,7 +107,7 @@
           "process and name its plaintext side."))
 
 (defn openid?
-  {:params [(or {:scopes (or @[:string] [:string] :nil) & r} :nil)] :ret :boolean}
+  {:params [(or {:scopes (or [:string] :nil) & r} :nil)] :ret :boolean}
   "Does this provider ask for an id_token?"
   [p]
   (truthy? (index-of "openid" (get p :scopes []))))
@@ -210,7 +210,7 @@
 
 (defn make-ring
   {:params []
-   :ret @{:metadata :any :keys @{:any :any} :fetched :number :last-attempt :number :error :any}}
+   :ret OauthRing}
   "A fresh ring — what the component builds per provider, and what a
   test hands in directly."
   []
@@ -218,7 +218,7 @@
 
 (defn ring-for
   {:params [(or :string :keyword)]
-   :ret @{:metadata :any :keys @{:any :any} :fetched :number :last-attempt :number :error :any}
+   :ret OauthRing
    :throws [:string]}
   "The running ring of a provider, or a readable error."
   [name]
@@ -228,7 +228,7 @@
       (errorf "no ring for provider %q — is it in [:oauth :providers]?" name)))
 
 (defn free-keys!
-  {:params [@{:keys @{:any :any} & r}] :ret :table}
+  {:params [@{:keys @{:string OauthKey} & r}] :ret :table}
   "Free every opened key of a ring — replacement and :stop, the two
   ends of a key's lifetime."
   [ring]
@@ -271,8 +271,8 @@
         (var last-err nil)
         (each url urls
           (unless found
-            (def [ok doc] (protect (fetch-json url (cfg :timeout))))
-            (if ok (set found doc) (set last-err doc))))
+            (def [ok document] (protect (fetch-json url (cfg :timeout))))
+            (if ok (set found document) (set last-err document))))
         (unless found
           (errorf "cannot read the metadata of %q: %s"
                   issuer (if (string? last-err) last-err (describe last-err))))
@@ -340,7 +340,7 @@
 # -- keys ----------------------------------------------------------------
 
 (defn refresh-keys!
-  {:params [@{:last-attempt :number :fetched :number :keys @{:any :any} :error :any & r}
+  {:params [@{:last-attempt :number :fetched :number :keys @{:string OauthKey} :error :any & r}
             {:algs (or :any :nil) :name :any & r}
             (or {:timeout :number & r} :nil)]
    :ret :number
@@ -351,11 +351,11 @@
   (default cfg settings)
   (def now (os/clock :monotonic))
   (put ring :last-attempt now)
-  (def doc (fetch-json (jwks-uri ring p cfg) (cfg :timeout)))
+  (def document (fetch-json (jwks-uri ring p cfg) (cfg :timeout)))
   (def accepted (get p :algs default-algs))
   (def opened @{})
   (var index 0)
-  (each k (jwk/signing-keys doc)
+  (each k (jwk/signing-keys document)
     (when (index-of (k :alg) accepted)
       (def [ok key] (protect (sign/public-key (k :pem))))
       (if ok
@@ -372,10 +372,10 @@
   (length opened))
 
 (defn- ensure-keys!
-  {:params [@{:keys @{:any :any} :fetched :number :last-attempt :number :error :any & r}
+  {:params [@{:keys @{:string OauthKey} :fetched :number :last-attempt :number :error :any & r}
             {:algs (or :any :nil) :name :any & r}
             {:cache-ttl :number :refresh-cooldown :number & r}]
-   :ret @{:any :any}}
+   :ret @{:string OauthKey}}
   "The ring's opened keys, refreshed first if they are stale or empty
   and the cooldown has passed since the last attempt."
   [ring p cfg]
@@ -391,11 +391,11 @@
   (ring :keys))
 
 (defn- key-for
-  {:params [@{:keys @{:any :any} :last-attempt :number & r}
+  {:params [@{:keys @{:string OauthKey} :last-attempt :number & r}
             {:algs (or :any :nil) :name :any & r}
             {:cache-ttl :number :refresh-cooldown :number & r}
             (or :string :nil)]
-   :ret (or {:alg :any :key :any :kid :any} :nil)}
+   :ret (or OauthKey :nil)}
   "The opened key for `kid`, refetching once behind the cooldown when
   it is not among the ones already held."
   # an unknown kid is the rotation signal and worth exactly one
@@ -423,7 +423,7 @@
             {:name :any :algs (or :any :nil) :issuer (or :string :nil) :client-id :any & r}
             (or :string :nil)
             (or {:leeway :number & r} :nil)
-            (or @{:any :any} :nil)]
+            (or OauthRing :nil)]
    :ret (or {:ok :boolean :claims :any} {:ok :boolean :reason :any})}
   ``Verify an id_token against the provider's keys and this flow's
   facts. `nonce` is what the authorization request sent; a token that

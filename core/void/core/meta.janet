@@ -81,7 +81,7 @@
   (freeze (merge-into @{} opts {:key key :merge strat})))
 
 (defn declarations
-  {:params [(or @[:any] [:any] {:keyword :any})]
+  {:params [(or [:any] {:keyword :any})]
    :ret @{:keyword MetaDeclaration}
    :throws [:string]}
   "Build a key -> declaration table from an indexed of declarations
@@ -212,8 +212,8 @@
     (put provenance k @[entry])))
 
 (defn merge-layers
-  {:params [(or @[:any] [:any] {:keyword :any})
-            (or @[:any] [:any])
+  {:params [(or [:any] {:keyword :any})
+            [:any]
             (or {:strict :boolean? & r} :nil)]
    :ret MergedMeta}
   ``Merge metadata layers, least specific first (global -> group -> route). Each layer is a metadata dictionary or a
@@ -299,8 +299,8 @@
     :warnings (tuple ;warnings)})
 
 (defn merge-layers!
-  {:params [(or @[:any] [:any] {:keyword :any})
-            (or @[:any] [:any])
+  {:params [(or [:any] {:keyword :any})
+            [:any]
             (or {:strict :boolean? & r} :nil)]
    :ret @{:keyword :any}
    :throws [:string]}

@@ -19,13 +19,13 @@
 (log/set-level! nil :error)
 
 (defn hello
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "A plain handler with nothing obs-shaped about it."
   [req] (ring/text 200 "hello"))
 
 (defn traced
   {:params [@{:trace-id :any & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Reports the current span's ids (or that there is none) and the
   request's own :trace-id, for a test to compare them."
   [req]

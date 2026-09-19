@@ -42,7 +42,7 @@
   "Is this Origin in the allowlist? `:origins` may hold exact strings,
   \"*\", or a predicate function."
   [origin cfg]
-  (and origin
+  (and (not (nil? origin))
        (truthy?
          (some (fn [entry]
                  (cond

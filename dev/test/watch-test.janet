@@ -166,7 +166,7 @@
             :name :test/spy)
 (hooks/add! hreg :void.dev/reloaded
             (fn [b report] (error "rebuild blew up"))
-            :name :test/boom :phase 2000)
+            :name :test/boom :after :test/spy)
 (def hook-boot @{:hooks hreg})
 
 (def ok-report @{:reloaded @["a.janet"] :errors @[]})

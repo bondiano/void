@@ -135,8 +135,7 @@
   nil)
 
 (defn gate
-  {:params [(or @[(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)]
-                [(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)])
+  {:params [[(fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)]
             :number :number]
    :ret (fn [@{:ts :number :level :keyword :ns :string :msg :any & r}] :nil)}
   "One sink that runs `sinks` only for the records sampling keeps."
@@ -196,8 +195,8 @@
     (string/format "%q" v)))
 
 (defn format-record
-  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r} :keyword]
-   :ret :string}
+  {:params [@{:ts :number :level :keyword :ns :string :msg :any & r} (enum :jdn :json)]
+   :ret (or :string :buffer)}
   "One record as a line, without the newline: JDN (`%j`, what the core
   jdn-sink writes) or JSON."
   [rec format]

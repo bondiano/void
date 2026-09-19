@@ -162,14 +162,14 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 420
+   :before :void.core/configured
    :name :dash/build-context
    :doc "Resolve the dash config, gate posture and ring sizes before the route table is built"
    :fn (fn build! [boot] (build-context boot))})
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 150
+   :before :void.core/checked
    :name :dash/warn-when-shut
    :doc "Say once, at start, that the dashboard is mounted and refusing everybody"
    :fn (fn warn [_boot]

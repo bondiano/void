@@ -45,7 +45,7 @@
        (not (empty? (part :value)))))
 
 (defn find-part
-  {:params [(or @[:any] [:any] :nil) :any] :ret :any}
+  {:params [(or [:any] :nil) :any] :ret :any}
   "The file part named `name` among a request's parts, or nil."
   [parts name]
   (def wanted (string name))
@@ -105,7 +105,7 @@
       (string/trim (first (string/split ";" mt))))))
 
 (defn- accepted?
-  {:params [:string? (or @[:any] [:any] :nil)] :ret (or :boolean :nil)}
+  {:params [:string? (or [:any] :nil)] :ret (or :boolean :nil)}
   "Does `ct` match one of `accept`'s media types, `image/*`-style
   wildcards included?"
   [ct accept]
@@ -120,7 +120,7 @@
 
 (defn check-part!
   {:params [{:value (or :string :buffer) :filename :any? & r}
-            (or {:max-bytes :number? :accept (or @[:any] [:any] :nil) & r} :nil)]
+            (or {:max-bytes :number? :accept (or [:any] :nil) & r} :nil)]
    :ret :any :throws [:string]}
   ``Enforce :accept (media types, `image/*` allowed) and :max-bytes on
   one file part, and — always — that the filename's extension does not
@@ -148,10 +148,10 @@
 
 (defn save-part!
   {:params [{:filename :any? :value (or :string :buffer) & r}
-            (or {:prefix :any? :key :any? :accept (or @[:any] [:any] :nil)
+            (or {:prefix :any? :key :any? :accept (or [:any] :nil)
                  :max-bytes :number? & r}
                 :nil)]
-   :ret {:filename :string & r} :throws [:string]}
+   :ret StorageUpload :throws [:string]}
   ``One file part into the active store: check, generate a key, put!.
   opts: :prefix (key namespace, default "uploads"), :key (skip
   generation), :accept, :max-bytes. Returns the store's metadata plus
@@ -166,17 +166,17 @@
   (def k (or (opts :key)
              # the extension — the type the object will be *served*
              # as — comes from the declared type, never the filename
-             (key/generate {:prefix (opts :prefix)
+             (key/fresh {:prefix (opts :prefix)
                             :ext (get extension-for-type ct "")})))
   (def meta (state/put! k (part :value) {:content-type ct}))
   (merge meta {:filename (string (part :filename))}))
 
 (defn save-upload!
-  {:params [{:multipart (or @[:any] [:any] :nil) & r} :any
-            (or {:prefix :any? :key :any? :accept (or @[:any] [:any] :nil)
+  {:params [{:multipart (or [:any] :nil) & r} :any
+            (or {:prefix :any? :key :any? :accept (or [:any] :nil)
                  :max-bytes :number? & r}
                 :nil)]
-   :ret :any :throws [:string]}
+   :ret StorageUpload? :throws [:string]}
   ``The controller-side one-liner: the file part named `name` out of
   `(req :multipart)`, saved. Returns the metadata, or nil when the
   request carries no such file — an optional upload left empty is not
@@ -187,8 +187,7 @@
 
 (defn abort-invalid!
   {:params [:any] :ret :never
-   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
-             :status :number :http/status :number}]}
+   :throws [VoidError]}
   ``Re-raise a `check-part!` refusal as a 422 with the message in the
   body — for a controller that saves an upload outside a form it
   re-renders. Inside an admin widget the refusal belongs on the field

@@ -147,7 +147,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :mcp/capture-config
    :doc "Read the [:mcp] slice and check the allowlist against the composition's commands"
    :fn (fn capture [b]
@@ -182,12 +182,8 @@
    :resources (map |($ :uri) (srv :resources))})
 
 (defn handle
-  {:params [{:id :any :params :any :response? :any :notification? :any :method :string? & r}
-            (or {:keyword :any} :nil)]
-   :ret (or @{:jsonrpc :string :id :any :result :any}
-            @{:jsonrpc :string :id :any
-              :error @{:code (or :keyword :number) :message :string & r}}
-            :nil)}
+  {:params [McpMessage (or {:keyword :any} :nil)]
+   :ret McpResponse?}
   "Answer one decoded JSON-RPC message against this process's
   projection — the entry point both transports share."
   [msg &opt opts]

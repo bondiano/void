@@ -46,7 +46,7 @@
 ###                        :size 10 :checkout-timeout 5
 ###                        :timeout-kind :void.db/pool-timeout
 ###                        :counters {:queries 0 :query-us 0}}))
-###     (pool/with p (fn [c] ...))            ; acquire, run, release
+###     (pool/with-resource p (fn [c] ...))   ; acquire, run, release
 ###     (pool/note! p :queries 1 :query-us 120)
 ###     (pool/stats p)                        ; -> {:size :created :in-use :idle :waiting
 ###                                           ;     :checkouts :waits :wait-us :timeouts
@@ -67,13 +67,13 @@
   true)
 
 (defn make
-  {:params [{:connect :function :close :function
-             :reusable? (or (fn [:any] :boolean) :nil)
-             :validate (or (fn [:any] :any) :nil)
+  {:params [{:connect (fn [] a) :close (fn [a] :any)
+             :reusable? (or (fn [a] :boolean) :nil)
+             :validate (or (fn [a] :any) :nil)
              :size :number? :checkout-timeout :number?
              :name :string? :timeout-kind :keyword?
              :counters (or {:keyword :number} :nil)}]
-   :ret Pool
+   :ret (Pool a)
    :throws [:string]}
   ``Build a pool. `opts`:
 
@@ -270,7 +270,7 @@
   (and ok v true))
 
 (defn release
-  {:params [Pool :any]
+  {:params [(Pool a) a]
    :ret :nil}
   ``Return a resource: to the oldest waiter if any, else the idle
   stack — or closed, when `:reusable?` says no or the pool is shutting
@@ -364,8 +364,8 @@
       (timeout! pool))))
 
 (defn acquire
-  {:params [Pool]
-   :ret :any :throws [:any]}
+  {:params [(Pool a)]
+   :ret a :throws [:any]}
   ``Take a resource: an idle one (validated), a fresh one while under
   `:size`, else park until a release hands one over (or
   `:checkout-timeout` elapses, raising `:timeout-kind`). A waiter
@@ -400,9 +400,9 @@
     (closed!))
   res)
 
-(defn with
-  {:params [Pool (fn [:any] :any)]
-   :ret :any :throws [:any]}
+(defn with-resource
+  {:params [(Pool a) (fn [a] b)]
+   :ret b :throws [:any]}
   "Run `(f resource)` with a resource acquired for the call and released
   on every exit — a normal return, an error, a cancelled fiber."
   [pool f]

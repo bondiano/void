@@ -72,7 +72,7 @@
   (keyword "admin-" rname "-" verb))
 
 (defn- all-optional
-  {:params [:any] :ret {:type :keyword :props {:any :any} :children [:any]} :throws [:string]}
+  {:params [:any] :ret SchemaNode :throws [:string]}
   "The same map schema with every entry optional — a patch names the
   fields it changes and nothing else."
   [sch]
@@ -98,7 +98,7 @@
   decision)
 
 (defn- row->data
-  {:params [(or @[{:name :keyword :field :any & r}] [{:name :keyword :field :any & r}])
+  {:params [[{:name :keyword :field :any & r}]
             {:any :any}]
    :ret @{:keyword :any}}
   ``One row as `cols` projects it — the columns that name a real
@@ -129,7 +129,7 @@
   {:params [{:name :keyword :title :string :search [:keyword] :per-page (or :number :nil)
              :sortable [:keyword]
              :filters [{:field {:type :keyword
-                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                                :node SchemaNode & r}
                         :param :string :name :keyword & r}]
              :scope (or :function :nil) :order-by :any :preload :any
              :list [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
@@ -171,9 +171,7 @@
   {:params [{:name :keyword :singular :string :title :string
              :scope (or :function :nil) :search [:keyword] :preload :any
              :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
-             :entity {:name :keyword :pk :keyword :pk-column :string
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :entity DbEntity
              & r}]
    :ret {:name :keyword :title :string :doc :string :read-only? :boolean
          :needs [:keyword] :schema {:id :any} :fn :function}
@@ -197,13 +195,13 @@
 (defn- create-tool
   {:params [{:name :keyword :singular :string :title :string
              :readonly [:keyword] :form-fields [{:name :keyword & r}]
-             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :form-schema SchemaNode
              :defaults {:keyword :function}
              :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
              :entity {:pk :keyword & r}
              & r}]
    :ret {:name :keyword :title :string :doc :string :read-only? :boolean
-         :needs [:keyword] :schema {:type :keyword :props {:any :any} :children [:any]}
+         :needs [:keyword] :schema SchemaNode
          :fn :function}
    :throws [:string]}
   "The write tool projecting `create`: its input schema is the
@@ -229,9 +227,9 @@
 
 (defn- update-schema
   {:params [{:entity {:version (or :keyword :nil)
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
-             :form-schema {:type :keyword :props {:any :any} :children [:any]} & r}]
-   :ret {:type :keyword :props {:any :any} :children [:any]}
+                      :schema SchemaNode & r}
+             :form-schema SchemaNode & r}]
+   :ret SchemaNode
    :throws [:string]}
   ``The patch an agent sends: the form schema with every field
   optional, the primary key, and — when the entity declares one — the
@@ -251,15 +249,15 @@
 (defn- update-tool
   {:params [{:name :keyword :singular :string :title :string
              :readonly [:keyword] :form-fields [{:name :keyword & r}]
-             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :form-schema SchemaNode
              :scope (or :function :nil) :search [:keyword] :preload :any
              :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
              :entity {:name :keyword :pk :keyword :pk-column :string :version (or :keyword :nil)
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+                      :fields {:keyword DbField}
+                      :schema SchemaNode & r}
              & r}]
    :ret {:name :keyword :title :string :doc :string :read-only? :boolean
-         :needs [:keyword] :schema {:type :keyword :props {:any :any} :children [:any]}
+         :needs [:keyword] :schema SchemaNode
          :fn :function}
    :throws [:string]}
   "The write tool projecting `update`: the same read-only filter, the
@@ -297,9 +295,7 @@
 (defn- delete-tool
   {:params [{:name :keyword :singular :string :title :string
              :scope (or :function :nil) :search [:keyword] :preload :any
-             :entity {:name :keyword :pk :keyword :pk-column :string
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :entity DbEntity
              & r}]
    :ret {:name :keyword :title :string :doc :string :read-only? :boolean
          :needs [:keyword] :schema {:id :any} :fn :function}
@@ -325,9 +321,7 @@
 (defn- action-tool
   {:params [{:name :keyword :title :string
              :scope (or :function :nil) :search [:keyword] :preload :any
-             :entity {:name :keyword :pk :keyword :pk-column :string
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+             :entity DbEntity
              & r}
             {:name :keyword :label (or :string :nil) :doc (or :string :nil)
              :apply (or :function :nil) & r}]
@@ -363,12 +357,12 @@
 (defn tools-for
   {:params [{:name :keyword :title :string :singular :string
              :readonly [:keyword] :form-fields [{:name :keyword & r}]
-             :form-schema {:type :keyword :props {:any :any} :children [:any]}
+             :form-schema SchemaNode
              :defaults {:keyword :function}
              :scope (or :function :nil) :search [:keyword] :order-by :any :preload :any
              :per-page (or :number :nil) :sortable [:keyword]
              :filters [{:field {:type :keyword
-                                :node {:type :keyword :props {:any :any} :children [:any]} & r}
+                                :node SchemaNode & r}
                         :param :string :name :keyword & r}]
              :list [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
              :detail [{:name :keyword :field (or {:name :keyword & r} :nil) & r}]
@@ -376,8 +370,8 @@
              :custom-actions {:keyword {:name :keyword :label (or :string :nil)
                                         :doc (or :string :nil) :apply (or :function :nil) & r}}
              :entity {:name :keyword :pk :keyword :pk-column :string :version (or :keyword :nil)
-                      :fields {:keyword {:name :keyword :column :string :optional :boolean & r}}
-                      :schema {:type :keyword :props {:any :any} :children [:any]} & r}
+                      :fields {:keyword DbField}
+                      :schema SchemaNode & r}
              & r}]
    :ret @[{:name :keyword :title :string :doc :string :read-only? :boolean
            :needs [:keyword] :schema :any :fn :function}]
@@ -413,12 +407,13 @@
   it reads is the same value the pages render from, so the two cannot
   disagree.``
   [desc]
+  (def actions [;(desc :actions) ;(sorted (keys (desc :custom-actions)))])
   {:name (desc :name)
    :title (desc :title)
    :entity (get-in desc [:entity :name])
    :mounted (desc :mount)
    :url (when (desc :mount) (ctx/base desc))
-   :actions [;(desc :actions) ;(sorted (keys (desc :custom-actions)))]
+   :actions actions
    :list (map |($ :name) (desc :list))
    :detail (map |($ :name) (desc :detail))
    :form (desc :form)
@@ -427,8 +422,7 @@
    :sortable (desc :sortable)
    :filters (map |($ :name) (desc :filters))
    :inlines (sorted (keys (desc :inlines)))
-   :policies (tabseq [a :in [;(desc :actions) ;(sorted (keys (desc :custom-actions)))]]
-               a (res/policy-name (desc :name) a))})
+   :policies (tabseq [a :in actions] a (res/policy-name (desc :name) a))})
 
 (defn resources-for
   {:params [{:name :keyword :title :string & r}]

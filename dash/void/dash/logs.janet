@@ -224,8 +224,7 @@
 
 (defn index
   {:params [{:query {:string :any} & r}]
-   :ret @{:status :number :headers @{:string :string} :void.html/content :any
-          :void.html/layout :any :void.html/context {:any :any} & r}
+   :ret HtmlView
    :throws [:string]}
   "GET /logs: the level/namespace-filtered listing, htmx poll or full page."
   [req]
@@ -236,7 +235,7 @@
 # -- the live tail -------------------------------------------------------
 
 (defn tail
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   ``The SSE tail: every record from now on, one `data:` line each. The
   subscription is registered on connect and released by the `defer`
   when the consumer goes away — the server cancels the body fiber,

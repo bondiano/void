@@ -422,7 +422,7 @@
                ref (get entry :ref)]
       (def previous (in ref 0))
       (put ref 0 value)
-      (fn restore [] (put ref 0 previous)))))
+      (fn restore [] (put ref 0 previous) nil))))
 
 (defn- teardowns
   {:params [(or (fn [] :any) :nil)] :ret (or (fn [] :nil) :nil)}
@@ -499,8 +499,8 @@
   label is the command word, which is bounded in practice by the
   command set; the registry's own label cap is what holds if a caller
   proves otherwise.``
-  [label run]
-  (def op (or label "?"))
+  [command run]
+  (def op (or command "?"))
   (def t0 (os/clock :monotonic))
   (defer (metrics/observe! redis-command-duration [op] (- (os/clock :monotonic) t0))
     (if (trace/consuming?)
@@ -589,7 +589,7 @@
 # -- applying an instrumentation -----------------------------------------
 
 (defn- kafka-consumer-totals
-  {:params [(fn [:any] :any) (or @[:any] [:any] :nil)]
+  {:params [(fn [:any] :any) (or [:any] :nil)]
    :ret @{:received :number :delivered :number :errors :number}}
   ``The consumers of one client added up. A process runs as many as it
   subscribed to groups, and a series per group would split three
@@ -604,7 +604,7 @@
   out)
 
 (defn- attach!
-  {:params [(or @[[:any]] [[:any]]) (fn [] (or {:keyword :any} :nil))]
+  {:params [[[:any]] (fn [] (or {:keyword :any} :nil))]
    :ret (fn [] :nil)}
   "Point a list of [metric stats-key scale?] triples at one reader.
   Returns the thunk that detaches them again."
@@ -755,12 +755,9 @@
                       :providers {:keyword @[:keyword]}
                       :config {:keyword :any} :instances @{:keyword :any} & r}
              & r}
-            (or @[{:name :keyword :needs (or @[:keyword] [:keyword] :nil)
-                   :install (fn [:any & :any] :any) & r}]
-                [{:name :keyword :needs (or @[:keyword] [:keyword] :nil)
-                  :install (fn [:any & :any] :any) & r}]
-                :nil)
-            (or @[:keyword] [:keyword] :nil)]
+            (or [{:name :keyword :needs (or [:keyword] :nil)
+                  :install (fn [:any & :any] :any) & r}] :nil)
+            (or [:keyword] :nil)]
    :ret [{:name :keyword :teardown (or (fn [] :any) :nil)}]}
   ``Apply the instrumentations that can be applied. `contribs` are the
   resolved `:void.obs/instrument` contributions; `wanted`, when it is
@@ -788,9 +785,7 @@
   (tuple ;installed))
 
 (defn remove!
-  {:params [(or @[{:name :keyword :teardown (or (fn [] :any) :nil) & r}]
-                [{:name :keyword :teardown (or (fn [] :any) :nil) & r}]
-                :nil)]
+  {:params [(or [{:name :keyword :teardown (or (fn [] :any) :nil) & r}] :nil)]
    :ret :nil}
   "Run the teardowns of `install!`'s entries — a stopped pool stops
   reporting series rather than reporting the numbers it had when it

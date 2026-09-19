@@ -121,7 +121,7 @@
      (get (db/rel line :product) :price-cents 0)))
 
 (defn summary
-  {:params [(or @[@{:quantity :number & r}] [@{:quantity :number & r}])]
+  {:params [[@{:quantity :number & r}]]
    :ret {:count :number :subtotal-cents :number}
    :throws [:string]}
   ``What the header shows and what the checkout re-computes: the number

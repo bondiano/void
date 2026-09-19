@@ -21,17 +21,20 @@
   (assert (not ok) (string/format "%q is not a strategy" bad)))
 
 (def normalized (strategy/normalize {:name :s :verify (fn [_])}))
-(assert (= 100 (normalized :priority)) "a strategy that does not say where it goes lands in the middle")
+(assert (nil? (normalized :priority)) "nothing fills in a place: an unplaced strategy goes last, by name")
+(def [ok-p err-p] (protect (strategy/normalize {:name :s :verify (fn [_]) :priority 10})))
+(assert (not ok-p) "and a leftover :priority is refused")
+(assert (string/find "authentication strategy :s has :priority, which was removed in ADR-0051" err-p))
 (assert (not (normalized :cookie)) "and is assumed not to read cookies until it says it does")
 
 # -- the chain -----------------------------------------------------------
 
 (def calls @[])
 
-(strategy/register! {:name :first :priority 10
+(strategy/register! {:name :first :before :second
                      :authenticate (fn [req] (array/push calls :first)
                                      (when (req :first) (id-for "user:1")))})
-(strategy/register! {:name :second :priority 20
+(strategy/register! {:name :second
                      :authenticate (fn [req] (array/push calls :second)
                                      (when (req :second) (id-for "user:2")))})
 (strategy/register! {:name :login-only :verify (fn [creds] (id-for "user:3"))})
@@ -42,7 +45,7 @@
 
 (array/clear calls)
 (assert (nil? (strategy/authenticate @{})) "nobody claims an anonymous request")
-(assert (deep= @[:first :second] calls) "and both were asked, in priority order")
+(assert (deep= @[:first :second] calls) "and both were asked, in edge order")
 
 (array/clear calls)
 (assert (= "user:2" ((strategy/authenticate @{:second true}) :subject)))
@@ -63,8 +66,23 @@
 
 (set strategy/order [:second :first])
 (assert (deep= [:second :first] (tuple ;(map |($ :name) (strategy/request-strategies))))
-        "the configured order wins over priority")
+        "the configured order wins over the edges")
 (set strategy/order nil)
+
+# -- placement: edges first, then the unplaced by name ---------------------
+
+(strategy/register! {:name :a-unplaced :authenticate (fn [_] nil)})
+(strategy/register! {:name :zeta :before :first :authenticate (fn [_] nil)})
+(assert (deep= [:zeta :first :second :a-unplaced]
+               (tuple ;(map |($ :name) (strategy/request-strategies))))
+        "placed strategies go by the graph, whatever their names; the unplaced follow, by name")
+(strategy/register! {:name :loop :after :second :before :first :authenticate (fn [_] nil)})
+(def [ok-c err-c] (protect (strategy/request-strategies)))
+(assert (not ok-c) "a cycle is an error, not an arbitrary order")
+(assert (string/find "cycle" err-c))
+(each n [:a-unplaced :zeta :loop] (strategy/deregister! n))
+(assert (deep= [:first :second] (tuple ;(map |($ :name) (strategy/request-strategies))))
+        "deregistering re-sorts")
 
 # -- verify --------------------------------------------------------------
 
@@ -84,14 +102,14 @@
 
 # -- an expired identity is not an identity ------------------------------
 
-(strategy/register! {:name :stale :priority 5
+(strategy/register! {:name :stale :before :first
                      :authenticate (fn [_] (identity/make "user:old" {:expires 1}))})
 (assert (nil? (strategy/authenticate @{})) "an identity that has already expired does not authenticate anybody")
 (strategy/deregister! :stale)
 
 # -- challenges ----------------------------------------------------------
 
-(strategy/register! {:name :challenger :priority 1
+(strategy/register! {:name :challenger :before :first
                      :authenticate (fn [_] nil)
                      :challenge (fn [_] {:status 401 :headers @{"www-authenticate" "Bearer"}})})
 (assert (= 401 ((strategy/challenge @{}) :status)))

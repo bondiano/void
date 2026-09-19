@@ -35,7 +35,7 @@
 
 (defn normalize
   {:params [:any]
-   :ret {:name :keyword :fn :function :doc :string? & r}
+   :ret AuthzPolicy
    :throws [:string]}
   "Validate a policy declaration: {:name :fn :doc?}."
   [p]
@@ -65,14 +65,14 @@
   nil)
 
 (defn lookup
-  {:params [:keyword] :ret (or {:name :keyword :fn :function :doc :string? & r} :nil)}
+  {:params [:keyword] :ret (or AuthzPolicy :nil)}
   "One policy by name, or nil."
   [name]
   (get registry name))
 
 (defn policy!
   {:params [:keyword]
-   :ret {:name :keyword :fn :function :doc :string? & r}
+   :ret AuthzPolicy
    :throws [:string]}
   "One policy by name, or an error naming what is registered — the
   message a typo in route metadata deserves."
@@ -108,11 +108,11 @@
   express, and the function it registers is an ordinary one — testable by
   calling it with a context.``
   [name & body]
-  (def doc (when (string? (first body)) (first body)))
-  (def rest (if doc (tuple ;(slice body 1)) body))
+  (def docstring (when (string? (first body)) (first body)))
+  (def rest (if docstring (tuple ;(slice body 1)) body))
   (def params (first rest))
   (unless (and (indexed? params) (= 1 (length params)))
     (errorf "defpolicy %q takes exactly one parameter, the context" name))
   ~(,register! {:name ,name
-                :doc ,doc
+                :doc ,docstring
                 :fn (fn ,(symbol "policy" (string name)) ,params ,;(tuple ;(slice rest 1)))}))

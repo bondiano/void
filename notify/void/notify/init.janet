@@ -182,7 +182,7 @@
   (sorted (filter |(not (index-of $ keeps-only)) (keys table))))
 
 (defn active
-  {:params [] :ret (or @[:keyword] [:keyword])}
+  {:params [] :ret [:keyword]}
   ``The channel names this process delivers on: `[:notify :channels]`,
   or every contributed channel that delivers something.``
   []
@@ -197,7 +197,7 @@
           :project (or (fn [:any] :any) :nil)
           :permanent? (or (fn [:any] :any) :nil)
           :health (or (fn [] :any) :nil)
-          :needs (or @[:keyword] [:keyword])
+          :needs [:keyword]
           & r}
    :throws [:string]}
   "A contributed channel by name, or an error naming the ones there
@@ -209,8 +209,8 @@
               (util/names-str (keys channels)))))
 
 (defn- channels-for
-  {:params [{:channels (or @[:keyword] [:keyword] :nil) & r}]
-   :ret (or @[:keyword] [:keyword])
+  {:params [{:channels (or [:keyword] :nil) & r}]
+   :ret [:keyword]
    :throws [:string]}
   "The channel names `note` goes to: its own `:channels`, or every
   active one."
@@ -315,7 +315,7 @@
    :results (tuple ;results)})
 
 (defn delivered?
-  {:params [{:results (or @[{:status :any & r}] [{:status :any & r}] :nil) & r}] :ret :boolean}
+  {:params [{:results (or [{:status :any & r}] :nil) & r}] :ret :boolean}
   "Did at least one channel take this notification — sent it, or handed
   it to a queue? What a caller asks when it wants to know that
   something happened."
@@ -354,7 +354,7 @@
   c)
 
 (defn- check-channels
-  {:params [{:channels (or @[:keyword] [:keyword] :nil) & r} :keyword @{:keyword :any}]
+  {:params [{:channels (or [:keyword] :nil) & r} :keyword @{:keyword :any}]
    :ret :nil
    :throws [:string]}
   "Refuse a `[:notify :channels]` entry nobody contributed, and — in
@@ -380,7 +380,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :notify/configure
    :doc "Resolve the [:notify] slice and the channels this process delivers on"
    :fn (fn configure [boot]
@@ -396,7 +396,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 300
+   :before :void.core/checked
    :name :notify/queue-check
    :doc "Refuse a composition that asked for queued notifications and has no queue"
    :fn (fn queue-check [_]

@@ -19,7 +19,7 @@
 (def drv (db/normalize-driver (mysql/from-config cfg)))
 
 (defn- exec
-  {:params [:any :string (or @[:any] [:any] :nil)] :ret :any :throws [:string]}
+  {:params [:any :string (or [:any] :nil)] :ret :any :throws [:string]}
   "Run one statement through the normalized driver's :execute."
   [h sql &opt params]
   ((drv :execute) h sql (or params []) {:kind :write}))

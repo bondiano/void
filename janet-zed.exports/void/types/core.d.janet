@@ -5,18 +5,18 @@
 # foreign dictionary's own keys, hence open); `:status` and `:http/status` only when
 # the kind has one.
 (def VoidError :typedef
-  {:void/error :keyword :message :string? :data {:any :any} :status :number? & r})
+  '{:void/error :keyword :message :string? :data {:any :any} :status :number? & r})
 
 # An ambient declaration: the struct `system/ambient` returns, its cell a closure.
 (def Ambient :typedef
-  {:void.system/ambient :boolean :dyn :keyword :of :string
+  '{:void.system/ambient :boolean :dyn :keyword :of :string
    :from :keyword? :component :keyword?
    :held (fn [] :any) :hold (fn [:any] :any)})
 
 # A component definition: built by `system/component` from its allowed options only;
 # a manifest stamps `:plugin` onto it.
 (def Component :typedef
-  {:key :keyword :deps [:keyword] :provides [:keyword] :doc :string? :plugin :keyword?
+  '{:key :keyword :deps [:keyword] :provides [:keyword] :doc :string? :plugin :keyword?
    :ambient Ambient?
    :config (or {:key :keyword & r} :nil)
    :start (fn [:any :any] :any)
@@ -26,7 +26,7 @@
 # The system value: built by `system/init`; `attach-boot!` adds `:boot`, a failed
 # `restart` `:restart-pending` — hence open.
 (def System :typedef
-  @{:components @{:keyword Component}
+  '@{:components @{:keyword Component}
     :providers @{:keyword @[:keyword]}
     :resolution @{:keyword @{:keyword :keyword}}
     :order @[:keyword]
@@ -40,17 +40,17 @@
 # A schema node: the struct `schema/normalize` builds (`:children` are nodes, or
 # `[key node]` pairs under `:map`).
 (def SchemaNode :typedef
-  {:type :keyword :props {:any :any} :children [:any]})
+  '{:type :keyword :props {:any :any} :children [:any]})
 
 # One validation error, pushed by `schema/check`: the path and code, plus the
 # code's own keys (`:value`, `:expected`, `:min`, …).
 (def SchemaError :typedef
-  {:path [:any] :code :keyword & r})
+  '{:path [:any] :code :keyword & r})
 
 # An extension point contract: what `extension/extension-point` freezes, from its
 # allowed options only.
 (def ExtensionPoint :typedef
-  {:name :keyword
+  '{:name :keyword
    :cardinality (enum :many :single :single-required)
    :schema SchemaNode?
    :schema-source :any
@@ -66,17 +66,17 @@
 # One contribution to a point, attributed: built by `extension/resolve` (and boot's
 # config sources) from a manifest's `:contributes`.
 (def Contribution :typedef
-  {:plugin :keyword :value :any})
+  '{:plugin :keyword :value :any})
 
 # A resolved extension point, one entry of the boot's `:extensions`: built by
 # `extension/resolve`.
 (def Extension :typedef
-  @{:owner :keyword :point ExtensionPoint :contributions [Contribution] :resolved :any})
+  '@{:owner :keyword :point ExtensionPoint :contributions [Contribution] :resolved :any})
 
 # A plugin manifest: the struct `manifest/manifest` freezes (and `defplugin` refreezes
 # with the module's queued points and contributions).
 (def Manifest :typedef
-  {:name :keyword
+  '{:name :keyword
    :doc :string?
    :void-api :number
    :version :string
@@ -94,91 +94,119 @@
 
 # Where a config value came from: the struct `config/load` records per layer.
 (def ConfigSource :typedef
-  {:layer (enum :defaults :file :env :cli)
+  '{:layer (enum :defaults :file :env :cli)
    :plugin :any :path :string? :var :string? :prefix :string? :arg :string?})
 
 # The loaded config: the table `config/load` returns.
 (def LoadedConfig :typedef
-  @{:profile :keyword
+  '@{:profile :keyword
     :values @{:any :any}
     :provenance @{:any @[ConfigSource]}
     :layers @[ConfigSource]})
 
 # The resolved deployment: the struct `deploy/resolve!` installs.
 (def Deployment :typedef
-  {:shape (enum :single :fleet) :reason :string})
+  '{:shape (enum :single :fleet) :reason :string})
 
 # One row of the store survey: `deploy/survey` merges a declaration's `:ask` answer
 # into a table (open: the answer is the declaration's), or records a throwing `:ask`
 # as a struct.
 (def StoreSurvey :typedef
-  (or @{:name :keyword :what :string
+  '(or @{:name :keyword :what :string
         :shared? (or :boolean (enum :by-design) :nil)
         :store :keyword? :why :string? :replacement :string? & r}
       {:name :keyword :what :string :shared? (enum :unknown) :error :string}))
 
-# A hook handler entry: the struct `hooks/add!` freezes.
+# One node `order/sort` places: a contribution naming its neighbours by `:after` and
+# `:before` (a keyword or a list), with the plugin that contributed it; open, since the
+# node is the contribution itself.
+(def OrderNode :typedef
+  '{:name :keyword
+   :after (or :keyword [:keyword] :nil)
+   :before (or :keyword [:keyword] :nil)
+   :plugin :keyword?
+   & r})
+
+# The options of `order/sort`: the point's anchors in order, the noun for messages,
+# the point's owner, plugin -> its manifest `:requires`, and what an unplaced node is.
+(def OrderOpts :typedef
+  '(or {:anchors (or [:keyword] :nil)
+       :what :string?
+       :owner :keyword?
+       :requires (or {:keyword (or {:keyword :any} [:keyword])} :nil)
+       :unplaced (or (enum :error :last) :nil)}
+      :nil))
+
+# A hook handler entry: the struct `hooks/add!` freezes; `:after`/`:before`
+# place it around the hook's anchors (`hooks/lifecycle-anchors`) or another handler.
 (def HookHandler :typedef
-  {:hook :keyword :name :keyword :fn (or :function :cfunction)
-   :phase :number :plugin :any :doc :string?})
+  '{:hook :keyword :name :keyword :fn (or :function :cfunction)
+   :after (or :keyword [:keyword] :nil) :before (or :keyword [:keyword] :nil)
+   :plugin :any :doc :string?})
 
 # The boot value: the table `boot/bootstrap*` assembles; `start!` adds `:stores`,
 # `void/run!` `:stop-chan` and `:stop-reason` — hence open.
 (def Boot :typedef
-  @{:phase (enum :validated :ready :stopped)
-    :profile :keyword
-    :deploy Deployment
-    :plugins [:keyword]
-    :manifests @{:keyword Manifest}
-    :active [:keyword]
-    :inactive [:keyword]
-    :config LoadedConfig?
-    :extensions @{:keyword Extension}
-    :hooks @{:keyword @{:keyword HookHandler}}
-    :system System?
-    :stores (or @[StoreSurvey] :nil)
-    & r})
+  '@{:phase (enum :validated :ready :stopped)
+     :profile :keyword
+     :deploy Deployment
+     :plugins [:keyword]
+     :manifests @{:keyword Manifest}
+     :active [:keyword]
+     :inactive [:keyword]
+     :config LoadedConfig?
+     :extensions @{:keyword Extension}
+     :hooks @{:keyword @{:keyword HookHandler}}
+     :system System?
+     :stores (or @[StoreSurvey] :nil)
+     & r})
 
-# A connection pool: the table `pool/make` builds.
-(def Pool :typedef
-  @{:connect :function :close :function
-    :reusable? (fn [:any] :boolean)
-    :validate (or (fn [:any] :any) :nil)
+# A connection pool: the table `pool/make` builds, of the resource `a` its `:connect` opens
+# (a bare `Pool` holds anything).
+(def Pool :typedef {:of [a]}
+  '@{:connect (fn [] a) :close (fn [a] :any)
+    :reusable? (fn [a] :boolean)
+    :validate (or (fn [a] :any) :nil)
     :name :string :timeout-kind :keyword
     :size :number :checkout-timeout :number
-    :idle @[:any] :waiters @[PoolWaiter]
+    :idle @[a] :waiters @[PoolWaiter]
     :created :number :in-use :number :closed :boolean
     :stats @{:keyword :number}})
 
 # One parked checkout: the record `pool/await` pushes onto the pool's `:waiters`.
 (def PoolWaiter :typedef
-  @{:chan :abstract :live :boolean :value :any :retry :boolean})
+  '@{:chan :abstract :live :boolean :value :any :retry :boolean})
 
 # A log record: the table `log/emit` builds — the context and the call's key-value
 # pairs are added to it, hence open.
 (def LogRecord :typedef
-  @{:ts :number :level :keyword :ns :string :msg :any & r})
+  '@{:ts :number :level :keyword :ns :string :msg :any & r})
+
+# A log sink: what `log/set-sinks!` installs and `pretty-sink`/`json-sink` build; called
+# with every record that passes the level, its answer ignored.
+(def LogSink :typedef
+  '(fn [LogRecord] :any))
 
 # A resolved handler binding: the struct `bind/resolve` returns.
 (def Binding :typedef
-  {:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
+  '{:call (fn [& :any] :any) :no-reload :boolean :symbol :symbol?
    :name :symbol? :env :table? :what :string})
 
 # A CLI command: a `:void.core/cli` contribution, written by a plugin as data and read
 # by `cli/parse` and the help renderers.
 (def Command :typedef
-  {:name :keyword
+  '{:name :keyword
    :fn (or :function :cfunction :symbol)
    :doc :string?
-   :args (or @[:string] [:string] :nil)
+   :args (or [:string] :nil)
    :flags (or {:string {:key :keyword :type :keyword? :doc :string? & r}} :nil)
-   :needs (or @[:keyword] [:keyword] :nil)
+   :needs (or [:keyword] :nil)
    :read-only? :boolean?
    & r})
 
 # A metadata key declaration: the struct `meta/declare-key` freezes.
 (def MetaDeclaration :typedef
-  {:key :keyword
+  '{:key :keyword
    :merge (enum :replace :concat :deep-merge :restrict)
    :schema :any
    :doc :string?
@@ -186,7 +214,7 @@
 
 # Merged metadata with its provenance: the table `meta/merge-layers` returns.
 (def MergedMeta :typedef
-  @{:value @{:keyword :any}
+  '@{:value @{:keyword :any}
     :provenance @{:keyword @[{:source :any :value :any}]}
     :errors [:string]
     :warnings [:string]})
@@ -194,4 +222,4 @@
 # One entry of a package's own text table: a string, or English plural forms. Read by
 # `text/render`.
 (def TextEntry :typedef
-  (or :string {:other :string :one :string? & r}))
+  '(or :string {:other :string :one :string? & r}))

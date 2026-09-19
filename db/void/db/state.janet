@@ -280,7 +280,7 @@
 
 (defn query
   {:params [(or DbSql DbStatement) (or {:any :any} :nil)]
-   :ret (or @[DbRow] [DbRow])
+   :ret [DbRow]
    :throws [:string VoidError]}
   "Run a statement (or [sql params]) and return its rows."
   [stmt &opt opts]
@@ -361,7 +361,7 @@
   (get (run stmt opts) :count 0))
 
 (defn ddl!
-  {:params [(or @[:string] [:string])]
+  {:params [[:string]]
    :ret :nil
    :throws [:string VoidError]}
   ``Run schema statements (SQL strings) as an idempotent pass — what a

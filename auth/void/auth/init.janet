@@ -40,6 +40,7 @@
 (import void/core/plugin :as plugin)
 (import void/core/system :as system)
 (import void/core/log :as log)
+(import void/core/order :as order)
 (import ./identity :as identity-mod)
 (import ./hash :as hash-mod)
 (import ./store :as store)
@@ -58,14 +59,15 @@
 # -- extension points ----------------------------------------------------
 
 (plugin/defextension-point :void.auth/strategy
-  :doc "Authentication strategies: {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :priority int?}; a strategy needs at least one of :authenticate and :verify"
+  :doc "Authentication strategies: {:name :session :authenticate (fn [req] identity|nil)? :verify (fn [creds] identity|nil)? :challenge (fn [req] response)? :cookie bool? :after <name or [names]>? :before <name or [names]>?}; a strategy needs at least one of :authenticate and :verify. Request strategies are tried in edge order (order/first-wins: no anchors; a strategy no edge ties goes after the placed ones, by name) — void/auth-http's :session, :bearer, :jwt with void/auth-oauth's :oauth between :session and :bearer — unless [:auth :strategies] names the order; a leftover :priority is an error (ADR-0051)"
   :schema {:name :keyword
            :doc [:optional :string]
            :authenticate [:optional :function]
            :verify [:optional :function]
            :challenge [:optional :function]
            :cookie [:optional :boolean]
-           :priority [:optional :int]}
+           :after [:optional [:or :keyword [:vector :keyword]]]
+           :before [:optional [:or :keyword [:vector :keyword]]]}
   :key :name :what "authentication strategy"
   # the same check normalize makes, run at resolution so that a
   # strategy which can never authenticate anybody fails the boot
@@ -73,7 +75,10 @@
   :validate (fn [contribs]
               (each c contribs
                 (unless (or (c :authenticate) (c :verify))
-                  (errorf "strategy %q has neither :authenticate nor :verify" (c :name))))))
+                  (errorf "strategy %q has neither :authenticate nor :verify" (c :name))))
+              # and the edges hold together — a leftover :priority, an
+              # edge to no strategy, a cycle — before the first request
+              (order/first-wins contribs "authentication strategy")))
 
 (plugin/defextension-point :void.auth/hasher
   :doc "Password hashers behind PHC identifiers: {:name :argon2id :derive (fn [password salt params] bytes) :encode-params (fn [params] \"m=..,t=..\") :cost-keys [:m :t]? :version int?}; [:auth :hasher] selects which one writes new hashes"
@@ -99,7 +104,7 @@
              :challenges "the active store for magic links and one-time codes"
              :settings "the [:auth] slice as it was resolved"}})
 
-(each [name doc methods]
+(each [name summary methods]
   [[:void/auth-user-store
     "Who exists and what their password hash is — implemented by an application, or by void/auth-db over a void/db entity."
     {:find "(fn [{:by :email :value \"a@b.c\"}] record|nil)"
@@ -112,7 +117,7 @@
    [:void/auth-challenge-store
     "Magic links and one-time codes; :take must remove what it returns, or the code is not single-use."
     {:put "(fn [handle record ttl])" :take "(fn [handle] record|nil)"}]]
-  (plugin/contribute! :void.core/interface {:name name :doc doc :methods methods}))
+  (plugin/contribute! :void.core/interface {:name name :doc summary :methods methods}))
 
 # -- config --------------------------------------------------------------
 
@@ -130,7 +135,7 @@
   ``Defaults of the [:auth] slice.
 
   `:strategies` unset means "every registered strategy that reads
-  requests, by priority" — an application that wants a shorter list,
+  requests, in edge order" — an application that wants a shorter list,
   or a different order, says so.
 
   `:users` is the in-process user store's contents: subject ->
@@ -195,7 +200,7 @@
 (def redeem-challenge "See challenge/redeem." challenge-mod/redeem)
 
 (defn deliverers
-  {:params [] :ret (or @[{:name :keyword :fn :function & r}] [{:name :keyword :fn :function & r}])}
+  {:params [] :ret [AuthDeliverer]}
   "The :void.auth/deliver contributions this composition resolved, or
   an empty list before it started."
   []
@@ -203,10 +208,10 @@
 
 (defn challenge!
   {:params [:string
-            (or {:kind :keyword? :ttl :number? :claims (or {:keyword :any} :nil)
+            (or {:kind (or (enum :link :otp) :nil) :ttl :number? :claims (or {:keyword :any} :nil)
                  :handle :string? :to :any :channel :any & r}
                 :nil)]
-   :ret {:handle :string :kind :keyword :expires :number :delivered @[:keyword]}
+   :ret {:handle :string :kind (enum :link :otp) :expires :number :delivered @[:keyword]}
    :throws [:string :any]}
   ``Issue a magic link (or a one-time code) for `subject` **and get it
   to the person** — the half that waited for a delivery
@@ -263,9 +268,7 @@
 
 (defn redeem!
   {:params [:string? :string? (or {:now :number? & r} :nil)]
-   :ret (or {:subject :string :via :keyword :cookie :boolean
-             :claims {:keyword :any} :at :number :expires (or :number :nil)}
-            :nil)
+   :ret (or AuthIdentity :nil)
    :throws [:string]}
   ``Redeem a challenge against the active store — `redeem-challenge`
   without having to name the store. Returns an identity or nil.``
@@ -354,7 +357,7 @@
 # -- the registry component ----------------------------------------------
 
 (defn- resolved
-  {:params [{:keyword :any} :keyword] :ret (or @[:any] [:any])}
+  {:params [{:keyword :any} :keyword] :ret [:any]}
   ``One of this package's extension points, as the boot the component
   was started in resolved it.
 

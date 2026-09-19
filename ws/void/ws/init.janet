@@ -95,7 +95,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 450
+   :before :void.core/configured
    :name :ws/capture-config
    :doc "Read the [:ws] slice once, before the route table is built"
    :fn (fn capture [boot]
@@ -111,7 +111,6 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :void.http/route-added
-   :phase 500
    :name :ws/no-deadline-on-sockets
    :doc "A socket route may not carry :void.http/timeout — a deadline would cancel the conversation, not a request"
    :fn (fn check-route [_ entry]
@@ -133,7 +132,7 @@
    :send-queue true :overflow true :close-timeout true})
 
 (defn- origin-allowed?
-  {:params [@{:headers {:string (or :string @[:string])} & r} (or @[:string] [:string])]
+  {:params [@{:headers {:string (or :string @[:string])} & r} [:string]]
    :ret :boolean?}
   ``Is the request's Origin on the allowed list (case-insensitive)? A
   missing Origin fails a configured list too: a non-browser client can
@@ -150,16 +149,14 @@
             (or {:on-open (or (fn [a] :any) :nil)
                 :on-message (or (fn [a b] :any) :nil)
                 :on-close (or (fn [a b] :any) :nil)
-                :protocols (or @[:string] [:string] :nil)
-                :rooms (or @[:keyword] [:keyword] :nil)
-                :origins (or @[:string] [:string] :nil)
+                :protocols (or [:string] :nil)
+                :rooms (or [:keyword] :nil)
+                :origins (or [:string] :nil)
                 :max-frame :number? :max-message :number?
                 :send-queue :number? :overflow :keyword?
                 :close-timeout :number?}
                :nil)]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
-            @{:status :number :body :any :headers @{:string :any}
-              :void.http/upgrade :function})
+   :ret (or HttpResponseTable HttpUpgradeResponse)
    :throws [:string]}
   ``Answer a websocket handshake from inside an ordinary route
   handler. Returns the response to return: the 101 that hands the
@@ -241,9 +238,9 @@
   {:params [(or {:on-open (or (fn [a] :any) :nil)
                 :on-message (or (fn [a b] :any) :nil)
                 :on-close (or (fn [a b] :any) :nil)
-                :protocols (or @[:string] [:string] :nil)
-                :rooms (or @[:keyword] [:keyword] :nil)
-                :origins (or @[:string] [:string] :nil)
+                :protocols (or [:string] :nil)
+                :rooms (or [:keyword] :nil)
+                :origins (or [:string] :nil)
                 :max-frame :number? :max-message :number?
                 :send-queue :number? :overflow :keyword?
                 :close-timeout :number?}
@@ -278,7 +275,7 @@
   (conn/send! c (json/encode value)))
 
 (defn json-body
-  {:params [{:type :keyword :data :string & r}] :ret :any}
+  {:params [WsMessage] :ret :any}
   ``The JSON value in a message, or nil when it is not JSON. A socket
   that carries JSON carries text somebody else wrote, so a payload
   that does not parse is a message to ignore rather than an exception

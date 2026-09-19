@@ -311,7 +311,7 @@
   out)
 
 (defn interpolate
-  {:params [:string (or @[:any] [:any] :nil) (fn [:any] :string)]
+  {:params [:string (or [:any] :nil) (fn [:any] :string)]
    :ret :string
    :throws [:string]}
   ``A statement and its parameters as the one string MySQL is sent.

@@ -19,6 +19,7 @@
 ### a point that is "one contribution per name" says so in its
 ### contract instead of re-typing the check and the fold.
 
+(import ./order :as order)
 (import ./schema :as schema)
 (import ./util :as util)
 
@@ -83,10 +84,13 @@
 
       (plugin/extension-point :void.http/middleware
         :doc "HTTP middleware registered by plugins"
-        :schema {:name :keyword :phase [:int {:min 0 :max 10000}]
+        :schema {:name :keyword
+                 :after [:optional [:or :keyword [:vector :keyword]]]
+                 :before [:optional [:or :keyword [:vector :keyword]]]
                  :wrap :function}
         :key :name
-        :reduce (fn [contribs] (sorted-by |($ :phase) contribs)))
+        :validate (fn [contribs]
+                    (order/sort contribs {:anchors [:void.http/guarded]})))
 
   Options:
     :schema       schema every contribution is validated against
@@ -197,7 +201,9 @@
   ``Contribute a value to another plugin's extension point:
 
       (contribute! :void.http/middleware
-        {:name :redis-session :phase 3000 :wrap wrap-redis-session})
+        {:name :redis-session
+         :after :void.http/session :before :void.http/authenticated
+         :wrap wrap-redis-session})
 
   The contribution lands in the manifest defined later in this module
   with `defplugin` and is validated against the point's schema during
@@ -301,10 +307,13 @@
 
      :void.core/config-source
      (extension-point :void.core/config-source
-       :doc "Extra secret sources (vault, consul): {:name :fn :priority}; :fn is (fn [spec] value-or-nil) for a {:secret NAME} reference, tried in :priority order (lowest first, default 100) before :file and the env. Bootstrap phase 2 hands the contributions of every loaded plugin — active or not, since :when reads the config they help build — to config/load as :secret-sources"
-       :schema {:name :keyword :fn :function :priority [:optional :int]}
+       :doc "Extra secret sources (vault, consul): {:name :fn :after <name or [names]>? :before <name or [names]>?}; :fn is (fn [spec] value-or-nil) for a {:secret NAME} reference, tried before :file and the env — first answer wins. The order is a graph without anchors (order/first-wins): a source an edge ties to another goes by the edges, the rest after it by name; a leftover :priority is an error (ADR-0051). Bootstrap phase 2 hands the contributions of every loaded plugin — active or not, since :when reads the config they help build — to config/load as :secret-sources"
+       :schema {:name :keyword :fn :function
+                :after [:optional [:or :keyword [:vector :keyword]]]
+                :before [:optional [:or :keyword [:vector :keyword]]]}
        :key :name :what "config source"
-       :reduce |(sorted-by (fn [c] [(get c :priority 100) (c :name)]) $))
+       :validate |(order/first-wins $ "config source")
+       :reduce |(order/first-wins $ "config source"))
 
      :void.core/schema-type
      (extension-point :void.core/schema-type
@@ -340,13 +349,20 @@
 
      :void.core/hooks
      (extension-point :void.core/hooks
-       :doc "Lifecycle hooks: {:hook :before-start :fn (fn [boot]) :phase <int, default 1000> :name <keyword>}"
+       :doc "Lifecycle hooks: {:hook :before-start :fn (fn [boot]) :name <keyword> :after <name or [names]>? :before <name or [names]>?}; a handler is placed by edges to the hook's anchors (hooks/lifecycle-anchors — :before-start has :void.core/configured, :after-start :void.core/checked then :void.core/started, :before-stop :void.core/drained) or to another handler of the same hook — its own plugin's, void/core's or a required plugin's. A handler with no edge runs after the placed ones, by name; an unknown name, an unrequired plugin's handler and a cycle fail the boot, and a leftover :phase is an error (ADR-0051)"
        :schema {:hook :keyword
                 :fn :function
-                :phase [:optional :int]
+                :after [:optional [:or :keyword [:vector :keyword]]]
+                :before [:optional [:or :keyword [:vector :keyword]]]
                 :name [:optional :keyword]
                 :doc [:optional :string]}
-       :reduce |(sorted-by (fn [h] [(get h :phase 1000) (h :hook)]) $))}))
+       # the order is the registry's (hooks/handlers, once per hook at
+       # bootstrap, with every contributor's :requires)
+       :validate (fn reject-phase [values]
+                   (def stale (filter |(not (nil? ($ :phase))) values))
+                   (unless (empty? stale)
+                     (errorf "hook %s has :phase, which was removed in ADR-0051: place it with :after/:before an anchor or another handler"
+                             (string/join (map |(string/format "%q" (get $ :name ($ :hook))) stale) ", ")))))}))
 
 # -- resolution (bootstrap phase 4) ---------------------------------------
 
@@ -494,7 +510,8 @@
     (unless (= 1 (length cs))
       (string/format "extension point %q requires exactly one contribution, got %d%s"
                      name (length cs)
-                     (if (empty? cs) "" (string " (from: " (from-str) ")"))))))
+                     (if (empty? cs) "" (string " (from: " (from-str) ")"))))
+    :many nil))
 
 (defn- key-check
   {:params [ExtensionPoint]

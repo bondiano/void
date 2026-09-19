@@ -222,7 +222,7 @@
     (ffi/read :string cell 0)))
 
 (defn cstr-array
-  {:params [(or @[:string?] [:string?])] :ret [(or :buffer :nil) @[:string]]}
+  {:params [[:string?]] :ret [(or :buffer :nil) @[:string]]}
   ``A `char *[]` for the paramValues of PQsendQueryParams: one cell
   per value, NULL where the value is nil (which is how a SQL NULL is
   passed). Returns [buffer keepalive] — the strings must stay
@@ -242,7 +242,7 @@
 (def- notify-size 32)   # char* + int + padding + char* + char*
 
 (defn notification
-  {:params [(or :pointer :nil)] :ret (or {:channel :string :pid :number :payload :string} :nil)}
+  {:params [(or :pointer :nil)] :ret (or PgNotification :nil)}
   ``Read a PGnotify the way libpq lays it out — {:channel :pid
   :payload} — without freeing it; the caller does that with
   PQfreemem, since the strings are copied out of libpq's memory

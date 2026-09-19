@@ -59,10 +59,10 @@
    :ret :nil}
   "Decode `raw` at every split and assert each outcome matches `expect`:
   `:phase`, and `:body`/`:pos` or `:reason` as given."
-  [label raw expect &opt limits]
+  [case-name raw expect &opt limits]
   (each piece (every-split raw)
     (def [st body _] (decode-split raw piece limits))
-    (def where (string/format "%s (pieces of %d)" label piece))
+    (def where (string/format "%s (pieces of %d)" case-name piece))
     (assert (= (expect :phase) (st :phase))
             (string/format "%s: phase %q, wanted %q" where (st :phase) (expect :phase)))
     (when-let [b (expect :body)]

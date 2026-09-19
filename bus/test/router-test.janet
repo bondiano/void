@@ -20,7 +20,7 @@
 (defn- bus-over
   {:params [{:keyword :any}]
    :ret @{:backend :any :codec :any :config :any :group :keyword
-          :middleware :tuple :tracer :any :consumers @{:keyword :any}
+          :chain :tuple :tracer :any :consumers @{:keyword :any}
           :outbox (or :nil (fn [:any] :any))
           :stats @{:published :number :delivered :number :outboxed :number}}
    :throws [:string]}
@@ -121,7 +121,7 @@
 (router/define! :explodes {:topic :boom/now} {:fn (fn [_] (error "handler said no"))})
 (def compiled
   (router/compile-group (router/for-group :default :default)
-                        [(middleware/normalize (middleware/panic-guard))]))
+                        (middleware/place-built-ins [(middleware/panic-guard)])))
 (def [ok err] (protect (router/dispatch compiled {:id "1" :topic :boom/now :meta @{}})))
 (assert (not ok) "the error reaches the backend, which is what a nack is")
 (assert (string/find "handler said no" (string err))

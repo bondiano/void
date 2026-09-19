@@ -207,7 +207,7 @@
   (def open-opts {:reconnect (not= false (get opts :reconnect))})
 
   (defn run
-    {:params [:any :any (or @[:any] [:any] :nil)] :ret :any :throws [:string]}
+    {:params [:any :any (or [:any] :nil)] :ret :any :throws [:string]}
     "Run one statement on the handle's live (or reconnected) connection."
     [h sql params]
     (conn/execute (ensure! h sql) sql params))

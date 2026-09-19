@@ -211,7 +211,7 @@
 (var- blocks nil) # forward declaration: blockquotes and list items recurse
 
 (defn- parse-table
-  {:params [(or @[:string] [:string]) :number (or (fn [:string] :string) :nil)]
+  {:params [[:string] :number (or (fn [:string] :string) :nil)]
    :ret [:any :number]}
   "A pipe table starting at line i, as [node next-i]."
   [lines i rewrite]
@@ -238,7 +238,7 @@
     nil))
 
 (defn- parse-list
-  {:params [(or @[:string] [:string]) :number (or (fn [:string] :string) :nil)]
+  {:params [[:string] :number (or (fn [:string] :string) :nil)]
    :ret [:any :number]}
   "A bullet/ordered list (with nested sublists and task checkboxes)
   starting at line i, as [node next-i]."
@@ -281,7 +281,7 @@
   [[(if ordered :ol :ul) ;(map |(tuple ;$) items)] j])
 
 (defn- parse-quote
-  {:params [(or @[:string] [:string]) :number (or (fn [:string] :string) :nil)]
+  {:params [[:string] :number (or (fn [:string] :string) :nil)]
    :ret [:any :number]}
   "A blockquote starting at line i, as [node next-i]."
   [lines i rewrite]
@@ -374,7 +374,7 @@
   out)
 
 (defn- parse-fence
-  {:params [(or @[:string] [:string]) :number] :ret [:any :number]}
+  {:params [[:string] :number] :ret [:any :number]}
   "A fenced code block starting at line i, as [node next-i]."
   [lines i]
   # matched on the trimmed line: a fence indented under a list item is
@@ -396,7 +396,7 @@
 (def- code-indent 4)
 
 (defn- indented-code?
-  {:params [(or @[:string] [:string]) :number] :ret :boolean :narrows :any}
+  {:params [[:string] :number] :ret :boolean :narrows :any}
   ``An indented code block starts here: four spaces on a line that
   stands on its own after a blank one. CommonMark's rule that matters for
   this corpus is the second half — a code block cannot interrupt a
@@ -409,7 +409,7 @@
        (or (zero? i) (empty? (string/trim (get lines (dec i) ""))))))
 
 (defn- parse-indented-code
-  {:params [(or @[:string] [:string]) :number] :ret [:any :number]}
+  {:params [[:string] :number] :ret [:any :number]}
   "An indented (4-space) code block starting at line i, as [node next-i]."
   [lines i]
   (def body @[])
@@ -434,7 +434,7 @@
   (peg/compile ~(* "<" (? "/") :a)))
 
 (defn- parse-html-block
-  {:params [(or @[:string] [:string]) :number] :ret [:any :number]}
+  {:params [[:string] :number] :ret [:any :number]}
   "An HTML block — every line up to the next blank one, verbatim."
   [lines i]
   (var j i)

@@ -40,12 +40,11 @@
   keys/identity)
 
 (defn make
-  {:params [(or :string :buffer)
+  {:params [(or :string :buffer :keyword :symbol)
             (or {:via :keyword? :cookie :any :claims (or {:keyword :any} :nil)
                  :at :number? :expires :number? & r}
                 :nil)]
-   :ret {:subject :string :via :keyword :cookie :boolean
-         :claims {:keyword :any} :at :number :expires (or :number :nil)}
+   :ret AuthIdentity
    :throws [:string]}
   ``Build an identity. `subject` is required and is a string —
   "user:42", "service:billing", "token:9f3c". Options: :via :cookie
@@ -104,9 +103,9 @@
   default. Claims are what the strategy could prove — a session's
   stored roles, a JWT's payload — and nothing else: an attribute that
   has to be looked up belongs to void/authz's providers.``
-  [key &opt default id]
+  [key &opt fallback id]
   (def i (or id (current)))
-  (if i (get-in i [:claims key] default) default))
+  (if i (get-in i [:claims key] fallback) fallback))
 
 (defn subject-of
   {:params [:string] :ret [:keyword :string]}
@@ -121,7 +120,7 @@
     [:unknown s]))
 
 (defn with-identity*
-  {:params [:any (fn [] :any)] :ret :any}
+  {:params [(or {:subject :string & r} :nil) (fn [] a)] :ret a}
   "Run `thunk` with `id` as the current identity."
   [id thunk]
   (with-dyns [dyn-key id] (thunk)))

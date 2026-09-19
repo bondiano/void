@@ -26,7 +26,7 @@
 
 (defn visit
   {:params [{:session @{:any :any} & r}]
-   :ret @{:status :number :body :any :headers @{:string :any}}}
+   :ret HttpResponseTable}
   "Counts visits in the session, and answers with the count."
   [req]
   (def s (req :session))

@@ -92,7 +92,7 @@
 # -- a long-lived pair ---------------------------------------------------
 
 (defn pair
-  {:params [:number] :ret @{:fd :number :read :nil :write :nil}}
+  {:params [:number] :ret FdwaitPair}
   ``Both directions of one descriptor, created on first use and kept
   for the life of the connection: a driver waits thousands of times on
   the same socket, and a dup() plus an event-loop registration per wait
@@ -103,10 +103,10 @@
       (fdwait/refresh! p (PQsocket conn))   # the fd moved
       (fdwait/release! p)``
   [fd]
-  @{:fd fd :read nil :write nil})
+  @{:fd fd})
 
 (defn- watcher-for
-  {:params [@{:fd :number & r} (enum :read :write)] :ret :abstract}
+  {:params [FdwaitPair (enum :read :write :both)] :ret :abstract}
   "The watcher for one direction of a pair, creating and caching it on
   first use."
   [p dir]
@@ -116,24 +116,24 @@
         w)))
 
 (defn await
-  {:params [@{:fd :number & r} (enum :read :write)] :ret (enum :read :write :hup :err :closed)}
+  {:params [FdwaitPair (enum :read :write :both)] :ret (enum :read :write :hup :err :closed)}
   ``Wait on one direction of a `pair`, reusing its watcher. Same
   return values as `wait`.``
   [p dir]
   (wait (watcher-for p dir)))
 
 (defn release!
-  {:params [@{:fd :number & r}] :ret @{:fd :number & r}}
-  "Close both watchers of a pair; it can be used again afterwards."
+  {:params [FdwaitPair] :ret FdwaitPair}
+  "Close every watcher of a pair; it can be used again afterwards."
   [p]
-  (each dir [:read :write]
+  (each dir [:read :write :both]
     (when-let [w (get p dir)]
       (close w)
       (put p dir nil)))
   p)
 
 (defn refresh!
-  {:params [@{:fd :number & r} :number] :ret @{:fd :number & r}}
+  {:params [FdwaitPair :number] :ret FdwaitPair}
   ``Point a pair at a (possibly new) descriptor, dropping the watchers
   when it actually moved. libpq's socket changes while connecting to a
   multi-host cluster, and a watcher over the previous one would wait

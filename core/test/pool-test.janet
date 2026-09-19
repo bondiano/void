@@ -77,10 +77,10 @@
 # `with` releases on every exit
 
 (let [[p st] (fixture {:size 1})]
-  (def seen (pool/with p (fn [r] (r :id))))
+  (def seen (pool/with-resource p (fn [r] (r :id))))
   (assert (= 1 seen) "with hands the resource to the body")
   (assert (zero? ((pool/stats p) :in-use)) "and releases it on return")
-  (def [ok err] (protect (pool/with p (fn [_] (error "boom")))))
+  (def [ok err] (protect (pool/with-resource p (fn [_] (error "boom")))))
   (assert (and (not ok) (= "boom" err)) "the body's error propagates")
   (assert (zero? ((pool/stats p) :in-use)) "and the resource still came back")
   (assert (= 1 (st :opened)) "on the same, single resource"))

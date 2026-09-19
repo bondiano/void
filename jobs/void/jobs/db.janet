@@ -191,7 +191,7 @@
 # -- rows <-> records ----------------------------------------------------
 
 (defn record->row
-  {:params [{:id :string? :job :keyword? :args (or @[:any] [:any] :nil) :queue :keyword?
+  {:params [{:id :string? :job :keyword? :args (or [:any] :nil) :queue :keyword?
              :priority :number? :state :keyword? :attempt :number? :max-attempts :number?
              :backoff :any :timeout :number? :run-at :number? :enqueued-at :number?
              :started-at :number? :claimed-at :number? :finished-at :number?

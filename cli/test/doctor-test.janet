@@ -91,14 +91,20 @@
   (assert (= :ok ((row rows "app") :status)) "the composition bootstraps")
   (assert (row rows "port 8080") "and its [:http :port] is knocked on")
 
-  # a library is checked only when the composition names its plugin —
-  # and here void/db-postgres is not even importable, which is its own
-  # honest row rather than a crash
+  # a library is checked only when the composition names its plugin.
+  # Whether void/db-postgres is importable depends on the machine (an
+  # installed copy on the syspath makes it so), so each case asserts
+  # its own honest row rather than a crash
   (assert (nil? (row rows "libpq")) "no :void/db-postgres, no libpq row")
   (def with-pg (doctor/gather (fn [] {:plugins [:void/db-postgres]})))
-  (assert (= :warn ((row with-pg "libpq") :status)))
-  (assert (string/find ":start" ((row with-pg "libpq") :note))
-          "the note says who gets the final word")
+  (def libpq (row with-pg "libpq"))
+  (if (first (protect (require "void/db-postgres/libpq")))
+    (assert (not= :fail (libpq :status))
+            "an importable driver is looked for — found or not, never a failure")
+    (do
+      (assert (= :warn (libpq :status)))
+      (assert (string/find ":start" (libpq :note))
+              "the note says who gets the final word")))
 
   # a netrepl path holding something that is not a socket is exactly
   # the mess doctor exists to name

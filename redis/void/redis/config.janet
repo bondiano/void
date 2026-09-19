@@ -208,7 +208,7 @@
    :client-name :connect-timeout :timeout :max-bulk])
 
 (defn options
-  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+  {:params [(or {:keyword :any} :nil)]
    :ret @{:host :string? :port :number? :unix :string? :username :string?
           :password :string? :database :number? :tls :boolean? :protocol :number?
           :client-name :string? :connect-timeout :number? :timeout :number?
@@ -237,7 +237,7 @@
   out)
 
 (defn describe
-  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+  {:params [(or {:keyword :any} :nil)]
    :ret {:server :string :database :number :protocol :number
          :prefix :string :codec :keyword}
    :throws [:string]}
@@ -255,7 +255,7 @@
    :codec (get cfg :codec :raw)})
 
 (defn pool-options
-  {:params [(or {:keyword :any} @{:keyword :any} :nil)]
+  {:params [(or {:keyword :any} :nil)]
    :ret @{:size :number? :checkout-timeout :number? & r}}
   "The [:redis :pool] slice, defaults filled in."
   [cfg0]

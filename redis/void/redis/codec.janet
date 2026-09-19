@@ -32,14 +32,14 @@
 (import ./resp :as resp)
 (import void/core/util :as util)
 
-(def raw
+(def raw {:type RedisCodec}
   ``Bytes as bytes: the value goes to the server the way a command
   argument does, and comes back the string redis is holding.``
   {:name :raw
    :encode (fn raw-encode [v] (resp/argument v))
    :decode (fn raw-decode [v] v)})
 
-(def jdn
+(def jdn {:type RedisCodec}
   ``Janet data notation. Round-trips tables, structs, keywords, nested
   arrays and numbers; readable only by Janet, and by `parse`, which
   reads data and never evaluates it.``
@@ -47,7 +47,7 @@
    :encode (fn jdn-encode [v] (string/format "%j" v))
    :decode (fn jdn-decode [v] (if (nil? v) nil (parse v)))})
 
-(def json
+(def json {:type RedisCodec}
   ``JSON, for values another language also reads. Keywords go out as
   strings and come back as strings — a fact worth knowing before
   storing a table keyed by keywords.``
@@ -60,7 +60,7 @@
   [raw jdn json])
 
 (defn find-codec
-  {:params [{:any :any} :keyword] :ret :any :throws [:string]}
+  {:params [{:keyword RedisCodec} :keyword] :ret RedisCodec :throws [:string]}
   ``The codec named by `name` among `codecs` (the resolved extension
   point), or an error listing what there is — a typo in
   [:redis :codec] should not fall back to storing something else.``
@@ -71,22 +71,22 @@
               (util/names-str (keys codecs)))))
 
 (defn encode
-  {:params [{:encode (fn [a] b) & r} :any] :ret :any}
+  {:params [{:encode (fn [a] b) & r} a] :ret b}
   "Encode one value with a codec."
   [codec v]
   ((codec :encode) v))
 
 (defn decode
-  {:params [{:decode (fn [a] b) & r} :any] :ret :any}
+  {:params [{:decode (fn [a] b) & r} a?] :ret b?}
   ``Decode one reply with a codec. A nil reply (the key does not
   exist) stays nil in every codec: absence is not a value to decode.``
   [codec v]
   (if (nil? v) nil ((codec :decode) v)))
 
 (defn decode-all
-  {:params [{:decode (fn [a] b) & r} (or @[:any] [:any] :nil)]
-   :ret (or @[:any] :nil)}
+  {:params [{:decode (fn [a] b) & r} (or [a?] :nil)]
+   :ret @[b?]}
   "Decode an array of replies — what MGET and the list commands
-  answer with."
+  answer with; no reply at all is no values."
   [codec vs]
-  (when vs (map |(decode codec $) vs)))
+  (map |(decode codec $) (or vs [])))

@@ -18,7 +18,7 @@
 # production composition is this one without it, and dropping a plugin
 # from a list is the whole of the change.
 (defn plugins
-  {:params [:keyword] :ret (or @[:keyword] [:keyword])}
+  {:params [:keyword] :ret [:keyword]}
   "The composition for a profile."
   [profile]
   (if (= :prod profile)

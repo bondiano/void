@@ -1,5 +1,7 @@
 (import ../test-support/paths)
 (import void/core/plugin :as plugin)
+(import void/core/order :as order)
+(import void/http/errors :as http-errors)
 (import void/proto :as proto)
 (import void/grpc :as grpc)
 (import void/grpc/codes :as codes)
@@ -31,7 +33,17 @@
 (def renderers (get-in boot [:extensions :void.http/error-renderer :resolved] []))
 (def connect-renderer (first (filter |(= :void.grpc/error ($ :name)) renderers)))
 (assert connect-renderer)
-(assert (< (get connect-renderer :priority 1000) 900)
+(assert (= :void.http.error/protocol (connect-renderer :before))
+        "the Connect renderer is a protocol renderer")
+(assert (deep= @[:void.grpc/error :void.rest/problem :a/unplaced]
+           (map |($ :name)
+                (order/first-wins [{:name :a/unplaced}
+                                   {:name :void.rest/problem
+                                    :after :void.http.error/protocol
+                                    :before :void.http.error/generic}
+                                   connect-renderer]
+                                  "error renderer"
+                                  {:anchors http-errors/renderer-anchors})))
         "the Connect renderer runs before void/rest's problem+json: on an RPC route the client
         is a generated stub that reads one shape and not the other")
 
@@ -85,6 +97,7 @@
 (assert (nil? (codes/failure {:something :else}))
         "a raised dictionary that is neither is somebody else's to render")
 
+# janet-zed: ignore types
 (assert (not (first (protect (codes/error-value :nonsense "x"))))
         "a code that is not one of the sixteen is refused where it is written")
 

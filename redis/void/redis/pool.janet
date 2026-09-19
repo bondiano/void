@@ -37,20 +37,16 @@
   {:status 503 :doc "no connection became free within [:redis :pool :checkout-timeout]"})
 
 (defn- open-conn
-  {:params [(or {:keyword :any} @{:keyword :any})]
+  {:params [{:keyword :any}]
    :ret @{:stream :abstract
-          :opts (or {:keyword :any} @{:keyword :any})
+          :opts {:keyword :any}
           :buf :buffer :pos :number :lock :abstract :id :number
           :generation :number :commands :number :pending :number
           :in-multi :boolean :watching :boolean :protocol :number
           :server :any :server-id :any :database :number
           :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
           :fresh :boolean & r}
-   :throws [:string
-            {:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [:string RedisConnectionError RedisReplyError]}
   "Open a connection for a checkout. `:fresh` marks it as opened for
   this very checkout: a failure on it is the server being unreachable,
   not a socket that went stale in the idle stack, and ./state tells the
@@ -63,7 +59,7 @@
 (defn- revive
   {:params [:any
             @{:stream :abstract
-             :opts (or {:keyword :any} @{:keyword :any})
+             :opts {:keyword :any}
              :buf :buffer :pos :number :lock :abstract :id :number
              :generation :number :commands :number :pending :number
              :in-multi :boolean :watching :boolean :protocol :number
@@ -71,18 +67,14 @@
              :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
              :fresh :boolean & r}]
    :ret @{:stream :abstract
-          :opts (or {:keyword :any} @{:keyword :any})
+          :opts {:keyword :any}
           :buf :buffer :pos :number :lock :abstract :id :number
           :generation :number :commands :number :pending :number
           :in-multi :boolean :watching :boolean :protocol :number
           :server :any :server-id :any :database :number
           :closed :boolean :broken :boolean :on-push (or (fn [a] :any) :nil)
           :fresh :boolean & r}
-   :throws [:string
-            {:redis/error :boolean :code :string :fatal :boolean
-             :message :string :server :string}
-            {:redis/error :boolean :code :string :message :string
-             :reply :string :command (or :string :nil)}]}
+   :throws [:string RedisConnectionError RedisReplyError]}
   ``An idle connection, checked before it is handed over. A server-side
   idle timeout or a restart leaves a socket that looks fine until the
   first command fails on it, and a client that noticed only then would
@@ -108,9 +100,8 @@
   (and (not (c :discard)) (conn/open? c) (conn/clean? c)))
 
 (defn make
-  {:params [(or {:keyword :any} @{:keyword :any})
-            (or {:size :number? :checkout-timeout :number? & r}
-                @{:size :number? :checkout-timeout :number? & r} :nil)]
+  {:params [{:keyword :any}
+            (or {:size :number? :checkout-timeout :number? & r} :nil)]
    :ret :any}
   ``Build a pool over connection options: opts {:size 8
   :checkout-timeout 5}, `conn-opts` as ./conn takes them.``

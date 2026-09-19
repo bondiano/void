@@ -78,7 +78,7 @@
   (descriptor/registered kind))
 
 (defn lookup
-  {:params [(or :keyword :string :buffer)] :ret (or {:kind :keyword :name :keyword & r} :nil)}
+  {:params [(or :keyword :string :buffer)] :ret ProtoDescriptor?}
   "A descriptor by keyword name or protobuf name, or nil."
   [name]
   (descriptor/lookup name))
@@ -94,21 +94,21 @@
 # -- the codec, re-exported ----------------------------------------------
 
 (defn encode
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any} :buffer?]
+  {:params [ProtoMessageRef {:keyword :any} :buffer?]
    :ret :buffer :throws [:string]}
   "Encode a message value to protobuf bytes."
   [message value &opt buf]
   (codec/encode message value buf))
 
 (defn decode
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) (or :string :buffer)]
+  {:params [ProtoMessageRef (or :string :buffer)]
    :ret @{:keyword :any} :throws [:string]}
   "Decode protobuf bytes into a message value."
   [message bytes]
   (codec/decode message bytes))
 
 (defn to-json
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+  {:params [ProtoMessageRef {:keyword :any}
             (or {:keyword :any} :nil)]
    :ret :any :throws [:string]}
   "A message value as plain data in the proto3 JSON mapping."
@@ -116,22 +116,23 @@
   (pjson/to-json message value opts))
 
 (defn from-json
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :any (or {:keyword :any} :nil)]
+  {:params [ProtoMessageRef :any (or {:keyword :any} :nil)]
    :ret (or @{:keyword :any} :nil) :throws [:string]}
   "Plain data in the proto3 JSON mapping as a message value."
   [message value &opt opts]
   (pjson/from-json message value opts))
 
 (defn encode-json
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) {:keyword :any}
+  {:params [ProtoMessageRef {:keyword :any}
             (or {:keyword :any} :nil)]
-   :ret :string :throws [:string]}
-  "A message value as a proto3-JSON string."
+   :ret :buffer :throws [:string]}
+  "A message value as proto3-JSON bytes."
   [message value &opt opts]
   (pjson/encode message value opts))
 
 (defn decode-json
-  {:params [(or {:kind :keyword & r} :keyword :string :buffer) :string (or {:keyword :any} :nil)]
+  {:params [ProtoMessageRef (or :string :buffer)
+            (or {:keyword :any} :nil)]
    :ret (or @{:keyword :any} :nil) :throws [:string]}
   "A proto3-JSON string as a message value."
   [message text &opt opts]
@@ -277,7 +278,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 300
+   :before :void.core/configured
    :name :proto/load-files
    :doc "Load every :void.proto/file contribution, before route tables are built"
    :fn (fn load-files [boot]

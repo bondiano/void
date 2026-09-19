@@ -44,7 +44,7 @@
   out)
 
 (defn- handle
-  {:params [@{:received @[[:number :string]] & r} :abstract (or @[:any] [:any]) :number]
+  {:params [@{:received @[[:number :string]] & r} :abstract [:any] :number]
    :ret [:boolean :any]}
   "Serve one accepted connection: read a frame, answer it with the next
   scripted step, and repeat until the client hangs up or a step closes
@@ -105,7 +105,7 @@
 
 (defn opts
   {:params [@{:host :string :port :number & r}
-            (or {:keyword :any} @{:keyword :any} :nil)]
+            (or {:keyword :any} :nil)]
    :ret @{:host :string :port :number :protocol :number
           :connect-timeout :number :timeout :number & r}}
   ``Connection options against this fake: RESP2 (so the handshake is
@@ -124,10 +124,10 @@
 
 (defn client
   {:params [@{:host :string :port :number & r}
-            (or {:keyword :any} @{:keyword :any} :nil)
-            (or {:keyword :any} @{:keyword :any} :nil)]
+            (or {:keyword :any} :nil)
+            (or {:keyword :any} :nil)]
    :ret @{:pool :any
-          :codec {:name :keyword :encode (fn [a] :any) :decode (fn [a] :any)}
+          :codec RedisCodec
           :prefix :string :retry :boolean :conn-opts :any}}
   ``A client value over this fake — a pool, the raw codec, no prefix —
   for binding into state/client-dyn, the way test-support/server builds

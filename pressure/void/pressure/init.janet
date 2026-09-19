@@ -174,7 +174,7 @@
 
 (defn- resolved-checks
   {:params [{:extensions {:keyword :any} & r}]
-   :ret (or @[{:name :keyword :fn (fn [] :any)}] [{:name :keyword :fn (fn [] :any)}])}
+   :ret [{:name :keyword :fn (fn [] :any)}]}
   "The :void.pressure/check contributions of the boot this sampler was
   started in."
   [boot]
@@ -255,23 +255,7 @@
     (string/format "%d B" n)))
 
 (defn print-status
-  {:params [{:under-pressure :boolean
-             :mode :keyword
-             :reasons [(or {:signal :any :value :number :limit :number :bar :number}
-                           {:signal :any :check :boolean :reason :string})]
-             :samples {:keyword :number}
-             :peaks {:keyword :number}
-             :available {:loop-lag :boolean :rss :boolean :heap :boolean}
-             :limits {:max-loop-lag (or :number :nil) :max-rss-bytes (or :number :nil)}
-             :recovery {:ratio :any :samples :any :clean :number}
-             :interval :any
-             :sampling :boolean
-             :sampled :number
-             :shed :number
-             :episodes :number
-             :for :number
-             :checks [:keyword]
-             :pid :number}]
+  {:params [PressureStatus]
    :ret :nil}
   "Print a status table — the body of `void pressure status`."
   [s]

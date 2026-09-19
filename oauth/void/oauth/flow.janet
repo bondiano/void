@@ -42,10 +42,10 @@
    :at at})
 
 (defn authorize-url
-  {:params [{:client-id :any :scopes (or @[:string] [:string] :nil) :params :any & r}
+  {:params [{:client-id :any :scopes (or [:string] :nil) :params :any & r}
             {:state :string :verifier :string :nonce (or :string :nil) & r}
             (or :any :nil)
-            (or @{:any :any} :nil)]
+            (or OauthRing :nil)]
    :ret :string
    :throws [:string]}
   ``The URL the browser is redirected to: `response_type=code`, the
@@ -75,7 +75,7 @@
 
 (defn- client-auth
   {:params [{:client-id :any :client-secret :any :auth (or :any :nil) & r}
-            @{:any :any} @{:any :any}]
+            @{:keyword :any} @{:string :string}]
    :ret :nil}
   "Put the client credentials on a token-endpoint request: Basic by
   default (RFC 6749 §2.3.1 — the form every server has), or in the
@@ -87,14 +87,15 @@
     :post (do (put form :client_id id)
               (when secret (put form :client_secret secret)))
     (put headers "authorization"
-         (string "Basic " (crypto/base64 (string id ":" (or secret "")))))))
+         (string "Basic " (crypto/base64 (string id ":" (or secret ""))))))
+  nil)
 
 (defn token-request
   {:params [{:client-id :any :client-secret :any :auth (or :any :nil)
              :redirect-uri (or :string :nil) :name :any & r}
             :any {:verifier :string & r}
-            (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
-   :ret {:method :keyword :url :string :form @{:any :any} :headers @{:any :any} :timeout :any}
+            (or {:timeout :any & r} :nil) (or OauthRing :nil)]
+   :ret OauthRequest
    :throws [:string]}
   "The code exchange as a request table — grant, code, the same
   redirect URI the authorization request named, and the PKCE verifier
@@ -116,8 +117,8 @@
 
 (defn refresh-request
   {:params [{:client-id :any :client-secret :any :auth (or :any :nil) :name :any & r}
-            :any (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
-   :ret {:method :keyword :url :string :form @{:any :any} :headers @{:any :any} :timeout :any}
+            :any (or {:timeout :any & r} :nil) (or OauthRing :nil)]
+   :ret OauthRequest
    :throws [:string]}
   "A refresh as a request table — the same endpoint, the other grant."
   [p refresh-token &opt cfg ring]
@@ -193,7 +194,7 @@
   {:params [{:client-id :any :client-secret :any :auth (or :any :nil)
              :redirect-uri (or :string :nil) :name :any & r}
             :any {:verifier :string & r}
-            (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+            (or {:timeout :any & r} :nil) (or OauthRing :nil)]
    :ret (or {:ok :boolean :reason :any}
             {:ok :boolean
              :tokens {:access-token :any :token-type :any :expires-in :any
@@ -205,7 +206,7 @@
 
 (defn refresh!
   {:params [{:client-id :any :client-secret :any :auth (or :any :nil) :name :any & r}
-            :any (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+            :any (or {:timeout :any & r} :nil) (or OauthRing :nil)]
    :ret (or {:ok :boolean :reason :any}
             {:ok :boolean
              :tokens {:access-token :any :token-type :any :expires-in :any
@@ -216,7 +217,7 @@
   (run-exchange (refresh-request p refresh-token cfg ring) p :refresh))
 
 (defn userinfo!
-  {:params [{:name :any & r} :any (or {:timeout :any & r} :nil) (or @{:any :any} :nil)]
+  {:params [{:name :any & r} :any (or {:timeout :any & r} :nil) (or OauthRing :nil)]
    :ret (or :any :nil)}
   ``The provider's userinfo document for an access token, or nil —
   when there is no endpoint, and when the call fails (logged): a

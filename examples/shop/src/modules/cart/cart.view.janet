@@ -44,8 +44,7 @@
                             :target "#cart" :swap :outer-html))}))
 
 (defn cart-view
-  {:params [(or @[@{:id :number :cart-id :number :product-id :number :quantity :number & r}]
-               [@{:id :number :cart-id :number :product-id :number :quantity :number & r}])
+  {:params [[@{:id :number :cart-id :number :product-id :number :quantity :number & r}]
             {:count :number :subtotal-cents :number}
             (or {:tone :string? :message :string? & r} :nil)]
    :ret :tuple

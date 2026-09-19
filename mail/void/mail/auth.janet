@@ -191,7 +191,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :mail-auth/configure
    :doc "Resolve the [:mail-auth] slice"
    :fn (fn configure [boot]

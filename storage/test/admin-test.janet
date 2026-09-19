@@ -97,10 +97,8 @@
 
   (defn- upload
     {:params [:string :any
-              (or @[{:name :string? :filename :string? :content-type :string?
-                     :value :any :headers (or @{:any :any} :nil) & r}]
-                  [{:name :string? :filename :string? :content-type :string?
-                    :value :any :headers (or @{:any :any} :nil) & r}])]
+              [{:name :string? :filename :string? :content-type :string?
+                    :value :any :headers (or @{:any :any} :nil) & r}]]
      :ret @{:raw :string & r}}
     [uri token parts]
     (def enc (multipart/encode parts))

@@ -76,14 +76,9 @@
                         :nil)]
    :ret @{:conninfo :string :opts :any
           :backoff @{:min :number :max :number :factor :number}
-          :conn (or @{:pg (or :pointer :nil) :fds :abstract
-                      :session @{:stmts @{:string :string} :next :number}
-                      :broken :boolean :closed :boolean :in-tx :boolean
-                      :conninfo :string :opts :any :decode :any
-                      :notifications @[{:channel :string :pid :number :payload :string}]
-                      :in-exchange :boolean}
+          :conn (or PgConn
                     :nil)
-          :wanted @{:string @[:function]}
+          :wanted @{:string @[(fn [PgNotification] :any)]}
           :active @{:string :boolean}
           :fiber (or :fiber :nil)
           :wakeup :abstract
@@ -120,7 +115,7 @@
              :reconnects 0}})
 
 (defn channels
-  {:params [@{:wanted @{:string @[:function]} & r}] :ret @[:string]}
+  {:params [@{:wanted @{:string @[(fn [PgNotification] :any)]} & r}] :ret @[:string]}
   "The channels this listener has at least one handler for."
   [l]
   (sorted (filter |(not (empty? (get-in l [:wanted $]))) (keys (l :wanted)))))
@@ -129,7 +124,7 @@
   {:params [@{:stats @{:notifications :number :dispatched :number :errors :number
                        :connects :number :reconnects :number}
               :conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
-              :running :boolean :wanted @{:string @[:function]} & r}]
+              :running :boolean :wanted @{:string @[(fn [PgNotification] :any)]} & r}]
    :ret @{:notifications :number :dispatched :number :errors :number
           :connects :number :reconnects :number
           :channels :number :connected :boolean :running :boolean}}
@@ -161,11 +156,12 @@
   nil)
 
 (defn subscribe!
-  {:params [@{:wanted @{:string @[:function]}
+  {:params [@{:wanted @{:string @[(fn [PgNotification] :any)]}
               :conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
               :wakeup :abstract & r}
             :any g]
    :ret g
+   :where {g (fn [PgNotification] :any)}
    :throws [:string]}
   ``Call `f` with every notification on `channel`:
   {:channel :payload :pid}. Returns `f`, which is also what
@@ -183,10 +179,10 @@
   f)
 
 (defn unsubscribe!
-  {:params [@{:wanted @{:string @[:function]}
+  {:params [@{:wanted @{:string @[(fn [PgNotification] :any)]}
               :conn (or @{:pg (or :pointer :nil) :closed :boolean :broken :boolean & r} :nil)
               :wakeup :abstract & r}
-            :any :function?]
+            :any (or (fn [PgNotification] :any) :nil)]
    :ret :nil}
   ``Remove one handler, or every handler of a channel when `f` is
   omitted. The UNLISTEN follows once the channel has no handlers left.``
@@ -203,10 +199,10 @@
 # -- the listening fiber -------------------------------------------------
 
 (defn- dispatch!
-  {:params [@{:wanted @{:string @[:function]}
+  {:params [@{:wanted @{:string @[(fn [PgNotification] :any)]}
               :stats @{:notifications :number :dispatched :number :errors :number & r}
               & r}
-            {:channel :string :pid :number :payload :string}]
+            PgNotification]
    :ret :nil}
   "Run every handler subscribed to a notification's channel, counting
   and logging a handler that throws rather than letting it silence
@@ -224,13 +220,9 @@
                    :err (if (string? err) err (describe err)))))))
 
 (defn- sync-subscriptions!
-  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :session :any
-                          :broken :boolean :closed :boolean :in-tx :boolean
-                          :conninfo :string :opts :any :decode :any
-                          :notifications @[{:channel :string :pid :number :payload :string}]
-                          :in-exchange :boolean & r}
+  {:params [@{:conn (or PgConn
                         :nil)
-              :active @{:string :boolean} :wanted @{:string @[:function]} & r}]
+              :active @{:string :boolean} :wanted @{:string @[(fn [PgNotification] :any)]} & r}]
    :ret :nil
    :throws [{:db/error :keyword :message :string & r}]}
   ``Make the session's LISTENs match what is wanted. Runs in the
@@ -249,7 +241,7 @@
       (put (l :active) name true))))
 
 (defn- drop-connection!
-  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :closed :boolean & r} :nil)
+  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds FdwaitPair :closed :boolean & r} :nil)
               & r}]
    :ret :nil}
   "Close and forget the listener's connection, if it has one — the
@@ -263,14 +255,9 @@
 
 (defn- connect!
   {:params [@{:conninfo :string :opts :any :conn :any
-              :stats @{:connects :number & r} :wanted @{:string @[:function]} & r}]
-   :ret @{:pg (or :pointer :nil) :fds :abstract
-          :session @{:stmts @{:string :string} :next :number}
-          :broken :boolean :closed :boolean :in-tx :boolean
-          :conninfo :string :opts :any :decode :any
-          :notifications @[{:channel :string :pid :number :payload :string}]
-          :in-exchange :boolean}
-   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
+              :stats @{:connects :number & r} :wanted @{:string @[(fn [PgNotification] :any)]} & r}]
+   :ret PgConn
+   :throws [:string PgError]}
   "Open a fresh connection, count it and log it — the reconnect
   `listen-turn` makes whenever it does not already hold a live one."
   [l]
@@ -298,16 +285,12 @@
   nil)
 
 (defn- listen-turn
-  {:params [@{:conn (or @{:pg (or :pointer :nil) :fds :abstract :session :any
-                          :broken :boolean :closed :boolean :in-tx :boolean
-                          :conninfo :string :opts :any :decode :any
-                          :notifications @[{:channel :string :pid :number :payload :string}]
-                          :in-exchange :boolean & r}
+  {:params [@{:conn (or PgConn
                         :nil)
               :stats @{:reconnects :number & r} :conninfo :string :opts :any
-              :wanted @{:string @[:function]} :active @{:string :boolean} & r}]
+              :wanted @{:string @[(fn [PgNotification] :any)]} :active @{:string :boolean} & r}]
    :ret :nil
-   :throws [:string {:db/error :keyword :message :string :fatal :boolean :sql :string? & r}]}
+   :throws [:string PgError]}
   "Hold a connection carrying the right LISTENs and park on it until
   the server says something."
   [l]
@@ -342,7 +325,7 @@
   ``One turn of the loop. Returns the delay to wait before the next
   turn — 0 when all is well, a backoff when the connection has to be
   rebuilt.``
-  [l delay]
+  [l wait]
   (def [ok err]
     (protect (if (empty? (channels l)) (idle-turn l) (listen-turn l))))
   (cond
@@ -353,7 +336,7 @@
       (drop-connection! l)
       (min (get-in l [:backoff :max])
            (max (get-in l [:backoff :min])
-                (* delay (get-in l [:backoff :factor])))))))
+                (* wait (get-in l [:backoff :factor])))))))
 
 (defn- run
   {:params [@{:stopped :boolean :conn :any :running :boolean
@@ -362,11 +345,11 @@
   "The listening fiber's whole life: tick until stopped, dropping the
   connection and clearing `:running` on the way out."
   [l]
-  (var delay 0)
+  (var wait 0)
   (while (not (l :stopped))
-    (set delay (tick l delay))
-    (when (and (pos? delay) (not (l :stopped)))
-      (ev/sleep delay)))
+    (set wait (tick l wait))
+    (when (and (pos? wait) (not (l :stopped)))
+      (ev/sleep wait)))
   (drop-connection! l)
   (put l :running false)
   nil)
@@ -409,11 +392,7 @@
   ["SELECT pg_notify($1, $2)" [(string channel) (when payload (string payload))]])
 
 (defn notify!
-  {:params [@{:pg (or :pointer :nil) :fds :abstract :session :any
-              :broken :boolean :closed :boolean :in-tx :boolean
-              :conninfo :string :opts :any :decode :any
-              :notifications @[{:channel :string :pid :number :payload :string}]
-              :in-exchange :boolean & r}
+  {:params [PgConn
             :any :any]
    :ret :nil
    :throws [{:db/error :keyword :message :string & r}]}

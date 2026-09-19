@@ -91,8 +91,7 @@
 
 (defn run!
   {:params [:any
-            (or @[{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}]
-                [{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}])
+            [{:key :keyword :path (fn [:any] :string) :render (fn [:any] :string) & r}]
             {:dry-run :any :force :any & r}]
    :ret [:string]
    :throws [:string]}

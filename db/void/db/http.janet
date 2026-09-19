@@ -43,7 +43,7 @@
 ###
 ### runs its handler inside (db/with-tx ...) — one connection for the
 ### request, committed when the handler returns a response and rolled
-### back when it throws. The wrapper sits at the business phase, so
+### back when it throws. The wrapper sits after :void.http/validated, so
 ### parsing, session, auth and validation have all happened before the
 ### transaction opens and nothing holds a connection while a body is
 ### being read.
@@ -58,7 +58,6 @@
 (import void/core/log :as log)
 (import void/core/schema :as schema)
 (import void/http/errors :as errors)
-(import void/http/middleware :as middleware)
 (import ./entity :as entity)
 (import ./builder :as builder)
 (import ./state :as state)
@@ -171,7 +170,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 300
+   :after :void.core/checked
    :name :db-http/session-table
    :doc "Create the session table when [:db-http :session :auto-create] and this composition actually uses the :db session store"
    :fn (fn session-table [boot]
@@ -212,7 +211,11 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.db/txn
-   :phase middleware/phase/business
+   # after validation, before the response middleware: an invalid
+   # request never opens a transaction, and a render inside the
+   # transaction still reads what the handler wrote
+   :after :void.http/validated
+   :before :void.http/responding
    :doc "Wrap handlers of routes marked :void.db/txn in db/with-tx — a commit on the way out, a rollback on any error"
    :when (fn [rmeta] (truthy? (get rmeta :void.db/txn)))
    :wrap (fn [handler]
@@ -228,25 +231,23 @@
 # path parameter, coerce it, find the row, abort 404 twice. The route
 # says it instead, and the row is on the request before authz runs, so
 # `:void.authz/resource` can be `(fn [req] (req :void.db/row))` rather
-# than a second query. Phase 4600, not 4500: CSRF sits alone at 4500,
-# and a loader that shared the phase would sort before void/security —
-# a forged POST would query, and its 404-or-not would say which ids
-# exist.
+# than a second query. After :void.http/verified, where CSRF has
+# already refused a forged POST — a loader in front of it would query,
+# and its 404-or-not would say which ids exist.
 
 (plugin/contribute! :void.http/route-meta-key
   {:key :void.db/load
    :schema {:entity :any
             :param [:optional :keyword]
             :preload [:optional [:vector :keyword]]}
-   :doc "Load one row before the handler: {:entity User :param :id :preload [...]}. The path parameter (:id by default) is coerced through the entity's primary-key schema and looked up with db/find; a missing or malformed id is a 404 through the error renderers, and the row is at (req :void.db/row). Runs at phase 4600 — after auth and CSRF, before authz — so a forged request never reaches the database and a :void.authz/resource may read the row instead of loading again"
+   :doc "Load one row before the handler: {:entity User :param :id :preload [...]}. The path parameter (:id by default) is coerced through the entity's primary-key schema and looked up with db/find; a missing or malformed id is a 404 through the error renderers, and the row is at (req :void.db/row). Runs between :void.http/verified and :void.http/loaded — after auth and CSRF, before authz — so a forged request never reaches the database and a :void.authz/resource may read the row instead of loading again"
    :merge :replace})
 
 (defn- load-row
-  {:params [{:entity :any :param :keyword? :preload (or @[:keyword] [:keyword] :nil)}
+  {:params [{:entity :any :param :keyword? :preload (or [:keyword] :nil)}
             {:params {:keyword :any} & r}]
    :ret (or @{:any :any} :nil)
-   :throws [{:void/error :keyword :message :string? :data {:keyword :any}
-             :status :number :http/status :number}]}
+   :throws [VoidError]}
   "The row a :void.db/load route names: the path parameter coerced
   through the entity's primary-key schema and looked up with
   entity/find, or a 404 abort when it is missing or does not parse."
@@ -265,7 +266,8 @@
 
 (plugin/contribute! :void.http/middleware
   {:name :void.db/load
-   :phase 4600
+   :after :void.http/verified
+   :before :void.http/loaded
    :doc "Load the row a route's :void.db/load names onto (req :void.db/row), or answer 404"
    :when (fn [rmeta] (truthy? (get rmeta :void.db/load)))
    :wrap (fn [handler]

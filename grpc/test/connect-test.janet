@@ -9,7 +9,7 @@
 (require "void/rest/init")
 
 ### The protocol, end to end, through the whole kernel: the requests below
-### take the same path a socket's would — routing, the phase chain, the
+### take the same path a socket's would — routing, the middleware chain, the
 ### error renderers — because that is the claim this package makes about
 ### Connect on void, and a test that called the handler directly would not
 ### check it.
@@ -23,7 +23,7 @@
   {:params [{:id :any & r} :any]
    :ret @{:id :string :total_cents :number :status :keyword :labels [:string]
          :placed_at @{:seconds :number}}
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   "The RPC handler under test: the order by id, or not_found."
   [msg _req]
   (or (orders (msg :id))
@@ -48,7 +48,7 @@
 (defn place-order
   {:params [{:total_cents :any & r} :any]
    :ret {:id :string :total_cents :any :status :keyword}
-   :throws [{:void.grpc/code :keyword :status :number :http/status :number & r}]}
+   :throws [GrpcFailure]}
   "The RPC handler under test: refuses a non-positive total, else
   places the order."
   [msg _req]
@@ -84,7 +84,7 @@
 (def path "/shop.orders.OrderService/")
 
 (defn- call
-  {:params [:any :string :string (or {:content-type (or :string :nil) :request :any & r} :nil)]
+  {:params [:any :string (or :string :buffer) (or {:content-type (or :string :nil) :request :any & r} :nil)]
    :ret :any}
   "One HTTP call through the injected test client, at `path` + `method`."
   [c method body &opt opts]

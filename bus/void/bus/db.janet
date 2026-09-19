@@ -442,7 +442,7 @@
     nil)
 
   (defn read-batch
-    {:params [:number (or :nil [:keyword] @[:keyword])] :ret @[{:keyword :any}]
+    {:params [:number (or :nil [:keyword])] :ret @[{:keyword :any}]
      :throws [:string {:void/error :keyword :message :string? :data {:any :any} & r}]}
     "Up to one batch of messages past `position`, narrowed to
     `topics` when it is an exact list."
@@ -481,13 +481,13 @@
     "A log row as the envelope `deliver` sees, with `:redelivery` set
     from the cursor when this is the message it is stuck on."
     [row cur]
-    (def seq (get row :seq))
+    (def seq-no (get row :seq))
     @{:id (get row :id)
       :topic (keyword (get row :topic))
       :body (get row :body)
       :meta-body (get row :meta)
-      :seq seq
-      :redelivery (if (= seq (get cur :stuck_seq)) (get cur :stuck_attempts 0) 0)})
+      :seq seq-no
+      :redelivery (if (= seq-no (get cur :stuck_seq)) (get cur :stuck_attempts 0) 0)})
 
   (defn drain!
     {:params [@{:group :any :token :string :exact-topics :any :stopped :any
@@ -786,9 +786,9 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   # before :bus/consume (800), so that a handler cannot see a broker
+   # before :bus/consume, so that a handler cannot see a broker
    # whose publish-tx! is still an error
-   :phase 700
+   :after :void.core/checked :before :bus/consume
    :name :bus-db/outbox
    :doc "Install the transactional outbox writer on the broker"
    # the writer itself is the backend's, resolved at publish time

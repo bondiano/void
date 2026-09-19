@@ -19,7 +19,7 @@
 # -- the application -----------------------------------------------------
 
 (defn home
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "A plain page — the route the CSRF and header tests hit as a GET."
   [req] (ring/text 200 "home"))
 (defn boom
@@ -29,7 +29,7 @@
   [req] (error "handler blew up"))
 
 (defn form-page
-  {:params [@{:session :table & r}] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [@{:session :table & r}] :ret HttpResponseTable}
   "A page whose form the CSRF field slot renders into, once a session
   exists to bind the token to."
   [req]
@@ -43,7 +43,7 @@
   (ring/text 200 (if slot (string/format "%q" (slot)) "no slot")))
 
 (defn accept
-  {:params [:any] :ret @{:status :number :body :any :headers @{:string :any}}}
+  {:params [:any] :ret HttpResponseTable}
   "A route that just confirms it was reached — what a CSRF-passing or
   rate-limited-under-budget request lands on."
   [req] (ring/text 200 "accepted"))

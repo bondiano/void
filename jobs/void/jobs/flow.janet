@@ -51,7 +51,7 @@
    :unique-ttl true :group true :delay true :at true})
 
 (defn- check-spec
-  {:params [:any] :ret (or @[:any] [:any])}
+  {:params [:any] :ret [:any]}
   "Validate a flow node's shape and return its :children (or [])."
   [spec]
   (unless (dictionary? spec)

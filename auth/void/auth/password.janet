@@ -35,15 +35,14 @@
   schema-probing oracle through the driver's error.``
   [:email :username :subject :id])
 
+# The user store `check` and `strategy` read: the :void.auth/user-store contract.
+(def Store :typedef 'AuthUserStore)
+
 (defn check
-  {:params [{:find :function :secret :function :subject :function
-             :claims :function & r}
+  {:params [Store
             (or {:any :any} :nil)
             (or {:now :number? & r} :nil)]
-   :ret {:identity (or {:subject :string & r} :nil)
-         :needs-rehash :boolean
-         :record (or {:keyword :any} :nil)
-         :reason :keyword}
+   :ret AuthLogin
    :throws [:string]}
   ``Verify credentials against a user store. Returns
 
@@ -87,16 +86,16 @@
   (cond
     (not (index-of by selectors))
     (do (hash/dummy-verify password)
-        (log/debug "login with a selector outside the whitelist" :ns log-ns :by by)
-        {:identity nil :needs-rehash false :record nil :reason :bad-selector})
+      (log/debug "login with a selector outside the whitelist" :ns log-ns :by by)
+      {:identity nil :needs-rehash false :record nil :reason :bad-selector})
 
     (nil? record)
     (do (hash/dummy-verify password)
-        {:identity nil :needs-rehash false :record nil :reason :no-such-user})
+      {:identity nil :needs-rehash false :record nil :reason :no-such-user})
 
     (nil? secret)
     (do (hash/dummy-verify password)
-        {:identity nil :needs-rehash false :record record :reason :no-password})
+      {:identity nil :needs-rehash false :record record :reason :no-password})
 
     (let [[ok rehash?] (hash/verify password secret)]
       (if (not ok)
@@ -118,9 +117,8 @@
            :reason :ok})))))
 
 (defn strategy
-  {:params [{:find :function :secret :function :subject :function
-             :claims :function & r}]
-   :ret {:name :keyword :doc :string :verify :function}}
+  {:params [Store]
+   :ret {:name :keyword :doc :string :verify (fn [:any] (or AuthIdentity :nil))}}
   ``The :password strategy over a user store — `:verify` only, so it
   is never in the per-request chain.``
   [store]

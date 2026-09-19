@@ -41,16 +41,16 @@
 
 (defn- await
   {:params [:string (fn [] :any) :number?] :ret :boolean :throws [:string]}
-  "Poll `pred` until it answers or `label` runs out of patience —
+  "Poll `pred` until it answers or `task` runs out of patience —
   broker latencies (group joins above all) are real but not worth a
   fixed sleep each."
-  [label pred &opt timeout]
+  [task pred &opt timeout]
   (default timeout 25)
   (def deadline (+ (os/clock :monotonic) timeout))
   (while (and (not (pred)) (< (os/clock :monotonic) deadline))
     (ev/sleep 0.1))
   (unless (pred)
-    (errorf "%s: not within %d s" label timeout))
+    (errorf "%s: not within %d s" task timeout))
   true)
 
 (defn- fresh-broker

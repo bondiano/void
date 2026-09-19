@@ -149,7 +149,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 400
+   :before :void.core/configured
    :name :tls/verify-gate
    :doc "Refuse [:tls :verify] false in the :prod profile"
    :fn (fn verify-gate [boot]

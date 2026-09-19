@@ -101,13 +101,13 @@
   (defer ((drv :close) c)
     (defn exec
       {:params [:string (or @[:any] :nil) :keyword?]
-       :ret {:rows @[:table] :count :number}}
+       :ret DbResult}
       "Run one write (or the given `kind`) against the shared connection
       `c`, returning the driver's {:rows :count} answer."
       [sql &opt params kind]
       ((drv :execute) c sql (or params []) {:kind (or kind :write)}))
     (defn rows
-      {:params [:string (or @[:any] :nil)] :ret @[:table]}
+      {:params [:string (or @[:any] :nil)] :ret [DbRow]}
       "Run one SELECT against the shared connection `c`, returning its
       rows."
       [sql &opt params]

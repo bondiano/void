@@ -39,7 +39,7 @@
   (base64/encode (sha1/digest (string key guid))))
 
 (defn- header-tokens
-  {:params [:any] :ret (or @[:string] [:string])}
+  {:params [:any] :ret [:string]}
   "A comma-separated header value as lowercase trimmed tokens."
   [value]
   (if (nil? value)
@@ -47,13 +47,13 @@
     (map |(string/ascii-lower (string/trim $)) (string/split "," (string value)))))
 
 (defn- has-token?
-  {:params [{:headers :any & r} :string :string] :ret :number?}
+  {:params [{:headers :any & r} :string :string] :ret :boolean}
   "Does the request's `name` header carry `token` among its
   comma-separated values?"
   [req name token]
   (def v (get-in req [:headers name]))
   (def values (if (indexed? v) v [v]))
-  (some |(index-of token (header-tokens $)) values))
+  (truthy? (some |(index-of token (header-tokens $)) values)))
 
 (defn valid-key?
   {:params [:any] :ret :boolean :narrows :string}
@@ -76,7 +76,7 @@
   (filter |(not (empty? $)) (mapcat header-tokens values)))
 
 (defn negotiate-protocol
-  {:params [{:headers :any & r} (or :nil @[:string] [:string])]
+  {:params [{:headers :any & r} (or :nil [:string])]
    :ret (or :string :keyword :nil)}
   ``Pick a subprotocol: the first one the *server* offers that the
   client also named — the server's preference wins, which is the
@@ -98,8 +98,8 @@
             :none)))))
 
 (defn check
-  {:params [{:method :any :headers :any & r} (or @[:string] [:string] :nil)]
-   :ret (or @{:status :number :body :any :headers @{:string :any}}
+  {:params [{:method :any :headers :any & r} (or [:string] :nil)]
+   :ret (or HttpResponseTable
             {:key :string :protocol (or :string :keyword :nil)})}
   ``Read the upgrade request. Returns `{:key ... :protocol ...}` when
   it is one, or a response table to send back when it is not:

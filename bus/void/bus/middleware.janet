@@ -2,38 +2,44 @@
 ### a handler.
 ###
 ### A middleware is a wrapper `(fn [handler opts] handler')` over
-### `(fn [message] result)`, registered through `:void.bus/middleware`
-### with a numeric phase — the same shape and the same scale
-### `void/http` uses, so that "lower runs earlier, outermost" is one
-### fact to learn rather than two. The one difference is the second
-### argument: `:wrap` is handed the *handler's own options* — its
-### topic, its group, its schema — because a bus handler's options are
-### fixed at declaration and the chain is built per handler, so a
-### middleware that depends on them can close over them once instead
-### of looking them up per message. void/http's wrapper cannot: a
-### route's metadata is not known until the request names the route,
-### which is why it reads it off `(req :void/route)` instead. **The constants are HTTP's where
-### the meaning is the same**: `:panic-guard` still means "nothing
-### below me may kill the fiber", `:observability` still means "the
-### log context and the span are bound from here down",
-### `:validation`, `:business` and `:response` still mean what they
-### mean. The slots HTTP spends on sessions, authentication and
-### authorization are the ones a message has no use for — a message
-### carries its authority in its meta or does not have any — so bus
-### spends them on the three concerns a delivery has and a request
-### does not:
+### `(fn [message] result)`, registered through `:void.bus/middleware`.
+### It says where it runs the way `void/http`'s middleware does — with
+### edges, `:after` and `:before` a named anchor of the chain
+### (`anchors`) or a named neighbour — and one sort (void/core/order)
+### turns the edges into the chain order, once per broker. The one
+### difference is the second argument: `:wrap` is handed the
+### *handler's own options* — its topic, its group, its schema —
+### because a bus handler's options are fixed at declaration and the
+### chain is built per handler, so a middleware that depends on them
+### can close over them once instead of looking them up per message.
+### void/http's wrapper cannot: a route's metadata is not known until
+### the request names the route.
 ###
-###   0     :panic-guard    a handler that throws must reach the
-###                         backend as a nack and nothing else
-###   1000  :observability  correlation, causation, the continued trace
-###   2000  :poison         a message that cannot be handled leaves the
-###                         rotation instead of blocking it
-###   3000  :retry          try again here, before the backend is told
-###   4000  :dedup          the same message twice is one delivery
-###   5000  :throttle       a consumer's own pace
-###   6000  :validation     the payload is what the handler declared
-###   7000  :business       user middleware, by default
-###   9000  :response       whatever comes after the handler returned
+### The anchors, outermost first, and the built-ins between them:
+###
+###   :bus/panic-guard        a handler that throws must reach the
+###                           backend as a nack and nothing else
+###   :void.bus/guarded       — nothing below may kill the fiber
+###   :bus/correlation        correlation and causation, bound
+###   :bus/tracing            the publisher's trace, continued (with
+###                           void/obs on the module path)
+###   :void.bus/observed      — the log context and the span are bound
+###   :bus/poison             a message that cannot be handled leaves
+###                           the rotation instead of blocking it
+###   :bus/retry              try again here, before the backend is told
+###   :bus/dedup              the same message twice is one delivery
+###   :bus/throttle           a consumer's own pace
+###   :void.bus/admitted      — the message is being delivered, once
+###   :bus/validate           the payload is what the handler declared
+###   :void.bus/validated     — the payload is the declared shape
+###
+### A built-in the [:bus] slice turns off is simply not in the chain,
+### and its neighbours close up around it. User middleware usually
+### goes `:after :void.bus/validated`; one that wants to see a message
+### before it is counted or paced goes `:before :void.bus/admitted`.
+### A contribution tied to no anchor, an edge to a name nothing has, a
+### neighbour of a plugin the contributor does not require and a cycle
+### all fail the boot; a leftover `:phase` is an error (ADR-0051).
 ###
 ### **Retry and redelivery are the same concern at two distances**, and
 ### running both by default would multiply. So the retry middleware
@@ -61,41 +67,50 @@
 
 (import void/core/errors :as errors)
 (import void/core/log :as log)
+(import void/core/order :as order)
 (import void/core/schema :as schema)
 (import ./message :as message)
 (import void/core/util :as util)
 
 (def log-ns "void.bus")
 
-(def phases
-  "The standard phase constants (see the module docstring)."
-  {:panic-guard 0
-   :observability 1000
-   :poison 2000
-   :retry 3000
-   :dedup 4000
-   :throttle 5000
-   :validation 6000
-   :business 7000
-   :response 9000})
+# -- anchors and the spine -----------------------------------------------
 
-(def phase/panic-guard (phases :panic-guard))
-(def phase/observability (phases :observability))
-(def phase/poison (phases :poison))
-(def phase/retry (phases :retry))
-(def phase/dedup (phases :dedup))
-(def phase/throttle (phases :throttle))
-(def phase/validation (phases :validation))
-(def phase/business (phases :business))
-(def phase/response (phases :response))
+(def anchors
+  "The :void.bus/middleware anchors, outermost first."
+  [:void.bus/guarded :void.bus/observed :void.bus/admitted :void.bus/validated])
+
+(def spine
+  ``The built-ins and the anchors between them, outermost first: a
+  built-in's edges are its neighbours here once the absent ones are
+  passed over.``
+  [:bus/panic-guard :void.bus/guarded
+   :bus/correlation :bus/tracing :void.bus/observed
+   :bus/poison :bus/retry :bus/dedup :bus/throttle :void.bus/admitted
+   :bus/validate :void.bus/validated])
+
+(defn- spine-edges
+  {:params [[:keyword]] :ret @{:keyword {:after :keyword? :before :keyword?}}}
+  ``Each of `present` built-in names -> its `:after`/`:before`: the
+  neighbours it has in `spine` once every built-in not in `present`
+  is dropped.``
+  [present]
+  (def here (tabseq [n :in present] n true))
+  (def line (filter |(or (index-of $ anchors) (in here $)) spine))
+  (tabseq [[i n] :pairs line :when (in here n)]
+    n {:after (get line (dec i)) :before (get line (inc i))}))
+
+(def- phase-removed
+  "What a leftover :phase is told."
+  "has :phase, which was removed in ADR-0051: place it with :after/:before an anchor (middleware/anchors) or a neighbour")
 
 (defn normalize
   {:params [:any]
-   :ret {:name :keyword :wrap (fn [:any :any] :any) :phase :number
-         :doc :any :named :boolean :when (or :nil (fn [:any] :boolean)) & r}
+   :ret BusMiddleware
    :throws [:string]}
-  "Validate a `:void.bus/middleware` contribution and fill in its
-  defaults."
+  ``Validate a `:void.bus/middleware` contribution and fill in its
+  defaults. It must say where it runs — `:after` or `:before` an
+  anchor or a neighbour; a leftover `:phase` is an error.``
   [c]
   (unless (dictionary? c)
     (errorf "bus middleware must be a dictionary, got %q" c))
@@ -104,67 +119,97 @@
     (errorf "bus middleware: :name must be a keyword, got %q" name))
   (unless (util/callable? (get c :wrap))
     (errorf "bus middleware %q: :wrap must be a function, got %q" name (get c :wrap)))
-  (def phase (get c :phase phase/business))
-  (unless (number? phase)
-    (errorf "bus middleware %q: :phase must be a number, got %q" name phase))
+  (unless (nil? (get c :phase))
+    (errorf "bus middleware %q %s" name phase-removed))
+  (def placed
+    (seq [side :in [:after :before]
+          :let [[ok es] (protect (order/edges (get c side)))]]
+      (unless ok
+        (errorf "bus middleware %q: %s %s" name side es))
+      es))
+  (when (all empty? placed)
+    (errorf "bus middleware %q is not placed: give it :after or :before one of the anchors %s"
+            name (string/join (map |(string/format "%q" $) anchors) " ")))
   (when-let [pred (get c :when)]
     (unless (util/callable? pred)
       (errorf "bus middleware %q: :when must be a function, got %q" name pred)))
-  (table/to-struct (merge @{:doc nil :named false :when nil} c {:phase phase})))
+  (table/to-struct (merge @{:doc nil :named false :when nil} c)))
 
-(defn sort-contributions
-  {:params [(or @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
-                   :when :any & r}]
-                [{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
-                  :when :any & r}])]
-   :ret @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
-           :when :any & r}]}
-  "Deterministic chain order: ascending phase, ties broken by the
-  contributing plugin's name, then the middleware name."
-  [contribs]
-  (sorted-by
-    (fn [c] [(get c :phase phase/business)
-             (string (get c :plugin ""))
-             (string (get c :name ""))])
-    contribs))
+(defn place-built-ins
+  {:params [[{:name :keyword :wrap (fn [:any :any] :any) & r}]]
+   :ret @[BusMiddleware]
+   :throws [:string]}
+  ``The built-ins a broker runs, each given its `:after`/`:before`
+  from its neighbours in `spine` among the ones present, and
+  normalized.``
+  [built-ins]
+  (def edges (spine-edges (map |($ :name) built-ins)))
+  (map |(normalize (merge $ (in edges ($ :name)))) built-ins))
+
+(defn order
+  {:params [[BusMiddleware] (or :nil {:requires (or {:keyword :any} :nil)})]
+   :ret @[BusMiddleware]
+   :throws [:string]}
+  ``Normalized middleware — the placed built-ins and the contributions,
+  each carrying the `:plugin` it came from — in the order their edges
+  give, outermost first; the anchors are not in it. Once per broker.
+  `:requires` (plugin -> its manifest's `:requires`) confines a
+  contribution's neighbours to its own plugin, void/bus and the
+  plugins it requires; nil skips that check. Every error at once; a
+  cycle prints its path.``
+  [middleware &opt opts]
+  (filter |(nil? ($ :anchor))
+          (order/sort middleware
+                      {:anchors anchors
+                       :what "bus middleware"
+                       :owner :void/bus
+                       :requires (get opts :requires)})))
+
+(defn placement-check
+  {:params [[{:name :keyword & r}]] :ret :nil :throws [:string]}
+  ``The point's :validate: every contribution normalizes (placed, no
+  `:phase`) and orders against the anchors and every built-in, so a
+  bad edge or a cycle fails the boot — dry-run included — rather than
+  the broker's start. Whether a neighbour belongs to a required plugin
+  is the broker's to check: a contribution value does not know its
+  plugin.``
+  [values]
+  (def built-ins
+    (map (fn [[n e]] (merge {:name n} e))
+         (pairs (spine-edges (filter |(not (index-of $ anchors)) spine)))))
+  (order/sort [;built-ins ;(map normalize values)]
+              {:anchors anchors :what "bus middleware"})
+  nil)
 
 (defn select
-  {:params [(or @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
-                   :when (or :nil (fn [:any] :boolean)) & r}]
-                [{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
-                  :when (or :nil (fn [:any] :boolean)) & r}])
-            {:name :any :middleware (or :nil [:keyword]) & r}]
-   :ret @[{:name :keyword :wrap :any :phase :number :doc :any :named :boolean
-           :when (or :nil (fn [:any] :boolean)) & r}]
+  {:params [[BusMiddleware] {:name :any :middleware (or :nil [:keyword]) & r}]
+   :ret @[BusMiddleware]
    :throws [:string]}
-  ``The middleware that apply to one handler: the global ones whose
-  `:when` predicate accepts the handler's options, plus the `:named`
-  ones the handler lists under `:middleware`. An unknown name is an
-  error — the chain is built once, at start, so a typo is a boot
-  failure and never a message that quietly skipped its validation.``
-  [contribs opts]
-  (def by-name (tabseq [c :in contribs] (c :name) c))
+  ``The middleware that apply to one handler, out of `ordered` (what
+  `order` answers), in that order: the global ones whose `:when`
+  predicate accepts the handler's options, plus the `:named` ones the
+  handler lists under `:middleware`. An unknown name is an error — the
+  chain is built once, at start, so a typo is a boot failure and never
+  a message that quietly skipped its validation.``
+  [ordered opts]
+  (def by-name (tabseq [c :in ordered] (c :name) c))
   (def wanted (tabseq [n :in (get opts :middleware [])] n true))
   (each n (sorted (keys wanted))
     (unless (in by-name n)
       (errorf "bus handler %q selects unknown middleware %q (known: %s)"
               (get opts :name)
               n (util/names-str (keys by-name)))))
-  (seq [c :in (sort-contributions contribs)
+  (seq [c :in ordered
         :when (if (c :named) (in wanted (c :name)) true)
         :when (if-let [pred (c :when)] (pred opts) true)]
     c))
 
 (defn chain
-  {:params [(or @[{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-                   :named :boolean :when :any & r}]
-                [{:name :keyword :wrap (fn [:any :any] :any) :phase :number :doc :any
-                  :named :boolean :when :any & r}])
-            (fn [:any] :any) (or :nil {:keyword :any})]
+  {:params [[BusMiddleware] (fn [:any] :any) (or :nil {:keyword :any})]
    :ret (fn [:any] :any)}
-  ``Compose selected middleware around a handler: the lowest phase
-  ends up outermost. `opts` is the handler's own options, handed to
-  every `:wrap` (see the module docstring).``
+  ``Compose selected middleware around a handler, the first one
+  outermost. `opts` is the handler's own options, handed to every
+  `:wrap` (see the module docstring).``
   [selected handler &opt opts]
   (default opts {})
   (var h handler)
@@ -175,14 +220,13 @@
 # -- the built-ins -------------------------------------------------------
 
 (defn panic-guard
-  {:params [] :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+  {:params [] :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Log a failed delivery with everything needed to find it again —
   the handler, the topic, the message id, the correlation id — and
   re-raise, because what a failure *means* is the backend's declared
   guarantee and this middleware has no business deciding it.``
   []
   {:name :bus/panic-guard
-   :phase phase/panic-guard
    :doc "Log a failed delivery and re-raise it as a nack"
    :wrap
    (fn wrap-guard [handler _]
@@ -200,7 +244,7 @@
            (propagate err fib)))))})
 
 (defn correlation
-  {:params [] :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+  {:params [] :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Bind the message's correlation and causation onto the fiber and
   into the log context, so that everything the handler does — every
   log line, every message it publishes in turn — carries the same
@@ -211,7 +255,6 @@
   `void/obs` in the composition.``
   []
   {:name :bus/correlation
-   :phase phase/observability
    :doc "Bind the correlation and causation ids for the handler's extent"
    :wrap
    (fn wrap-correlation [handler _]
@@ -225,7 +268,7 @@
 
 (defn tracing
   {:params [{:parse (fn [:any] :any) :with-span (fn [:any :any :any] :any) & r}]
-   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+   :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Continue the publisher's trace in the consumer: the `:traceparent`
   the message carries becomes the remote parent of a span around the
   handler, so a request that published and a worker that consumed are
@@ -242,7 +285,6 @@
   would break every application that runs a bus without one.``
   [tracer]
   {:name :bus/tracing
-   :phase (+ phase/observability 1)
    :doc "A consumer span under the publisher's trace"
    :wrap
    (fn wrap-tracing [handler _]
@@ -280,7 +322,7 @@
 (defn retry
   {:params [{:attempts :number? :base :number? :max :number? :jitter :number?
              :strategy :keyword? & r}]
-   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+   :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Try the rest of the chain again, `:attempts` times, with backoff
   and jitter. On the last failure the error is re-raised, which is
   what puts the message in front of the poison middleware and, under
@@ -290,7 +332,6 @@
   :jitter 0.25}`.``
   [cfg]
   {:name :bus/retry
-   :phase phase/retry
    :doc "Retry a failed handler with backoff and jitter"
    :wrap
    (fn wrap-retry [handler _]
@@ -316,7 +357,7 @@
 
 (defn poison
   {:params [{:max-attempts :number? :topic :keyword? & r} (fn [:any :any :any] :any)]
-   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+   :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Take a message that has been redelivered too often out of the
   rotation: publish it on the poison topic and ack it. `publish` is
   the broker's own, so a poisoned message is an ordinary message —
@@ -329,7 +370,6 @@
   process which last tried it is gone.``
   [cfg publish]
   {:name :bus/poison
-   :phase phase/poison
    :doc "Publish a repeatedly failing message to the poison topic and stop redelivering it"
    :wrap
    (fn wrap-poison [handler _]
@@ -359,7 +399,7 @@
            nil))))})
 
 (defn validate
-  {:params [] :ret {:name :keyword :phase :number :doc :string
+  {:params [] :ret {:name :keyword :doc :string
                      :when (fn [:any] :boolean) :wrap (fn [:any :any] :any)}}
   ``Check a message's payload against the schema its handler declared
   (`{:topic :order/paid :schema OrderPaid}`) before the handler sees
@@ -380,7 +420,6 @@
   frame per message that checks nothing is still a frame per message.``
   []
   {:name :bus/validate
-   :phase phase/validation
    :doc "Validate (and coerce) a payload against the handler's :schema"
    :when (fn wants-validation? [opts] (truthy? (get opts :schema)))
    :wrap
@@ -396,7 +435,7 @@
 
 (defn dedup
   {:params [{:window :number? & r}]
-   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+   :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Deliver a message id once per window. The seen-set is a table in
   this process's heap with a coarse two-generation expiry: ids move
   into a cold half when the window turns and are dropped when it turns
@@ -407,7 +446,6 @@
   docstring for the duplicate this is actually for.``
   [cfg]
   {:name :bus/dedup
-   :phase phase/dedup
    :doc "Skip a message id already delivered inside the dedup window"
    :wrap
    (fn wrap-dedup [handler _]
@@ -435,7 +473,7 @@
 
 (defn throttle
   {:params [{:max :number? :window :number? & r}]
-   :ret {:name :keyword :phase :number :doc :string :wrap (fn [:any :any] :any)}}
+   :ret {:name :keyword :doc :string :wrap (fn [:any :any] :any)}}
   ``Hold a consumer to `:max` messages per `:window` seconds, by
   sleeping before the handler rather than by dropping: a bus consumer
   that is being paced has somewhere to wait — the log it is reading
@@ -443,7 +481,6 @@
   this is a throttle and `void/security`'s is a limiter.``
   [cfg]
   {:name :bus/throttle
-   :phase phase/throttle
    :doc "Pace a consumer to a maximum rate, by waiting"
    :wrap
    (fn wrap-throttle [handler _]

@@ -285,7 +285,8 @@
           "this driver takes the contract's fallback")
   (db/each-row ["SELECT * FROM events WHERE day = ?" [7]] (fn [_] nil))
   (assert (deep= [7] (get-in (fake/log ste) [1 :params])) "raw SQL works too")
-  (assert (not (first (protect (db/each-row "SELECT 1" (fn [_] nil)))))
+  # a bare string on purpose, to see it rejected
+  (assert (not (first (protect (db/each-row "SELECT 1" (fn [_] nil))))) # janet-zed: ignore types
           "and a bare string is not a statement"))
 
 # a driver that really does stream is the same call, one flag apart

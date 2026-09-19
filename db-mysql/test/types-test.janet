@@ -19,7 +19,7 @@
   (string/replace-all "'" "\\'" (string/replace-all "\\" "\\\\" (string b))))
 
 (defn- interp
-  {:params [:string (or @[:any] [:any] :nil)] :ret :string :throws [:string]}
+  {:params [:string (or [:any] :nil)] :ret :string :throws [:string]}
   "`sql` interpolated against `params` with the stand-in escaper."
   [sql params] (types/interpolate sql params esc))
 

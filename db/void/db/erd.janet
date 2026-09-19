@@ -69,7 +69,7 @@
               ""))))
 
 (defn mermaid
-  {:params [(or @[:keyword] [:keyword] :nil)] :ret :string}
+  {:params [(or [:keyword] :nil)] :ret :string}
   ``Render the registered entities (or a given subset of names) as a
   Mermaid erDiagram string.``
   [&opt names]

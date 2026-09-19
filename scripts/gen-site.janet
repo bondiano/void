@@ -486,8 +486,8 @@
   (each name (sorted (keys (boot :manifests)))
     (def m (get-in boot [:manifests name]))
     (array/push body [:h2 {:id (md/slug (string name))} [:code (string name)]])
-    (when-let [doc (clean-doc (m :doc))]
-      (array/push body [:p doc]))
+    (when-let [summary (clean-doc (m :doc))]
+      (array/push body [:p summary]))
     (when-let [key (m :config-key)]
       (array/push body
                   [:p "Config slice: " [:code (string/format "[%q]" key)]])
@@ -650,8 +650,8 @@
   {:params [:string] :ret [:string]}
   "A docstring's lines with the source indentation of the continuation
   lines removed — the first line never carries any."
-  [doc]
-  (def lines (string/split "\n" doc))
+  [docstring]
+  (def lines (string/split "\n" docstring))
   (def rest-lines (drop 1 lines))
   (def indents
     (seq [l :in rest-lines :when (not (empty? (string/trim l)))]
@@ -665,14 +665,14 @@
   "A docstring as hiccup blocks: blank-line paragraphs, and a block
   whose every line is indented four spaces is a usage example — the
   convention the corpus's docstrings already follow."
-  [doc]
+  [docstring]
   (def blocks @[])
   (def cur @[])
   (defn flush! {:params [] :ret (or @[:any] :nil)} []
     (unless (empty? cur)
       (array/push blocks (tuple ;cur))
       (array/clear cur)))
-  (each line (dedent-doc doc)
+  (each line (dedent-doc docstring)
     (if (empty? (string/trim line)) (flush!) (array/push cur line)))
   (flush!)
   (seq [b :in blocks]
@@ -686,9 +686,9 @@
   contributions show their name and doc, anonymous ones their value."
   [c]
   (def v (c :value))
-  (def label (when (dictionary? v) (or (v :name) (v :key))))
-  (if label
-    [[:code (string label)]
+  (def caption (when (dictionary? v) (or (v :name) (v :key))))
+  (if caption
+    [[:code (string caption)]
      (or (clean-doc (v :doc)) "")]
     [[:code (let [r (render-value v)]
               (if (> (length r) 100) (string (string/slice r 0 100) "…") r))]
@@ -698,17 +698,17 @@
   {:params [@[:any]
             {:name :any :doc :string? :requires (or {:keyword :any} :nil)
              :config-key :any :config-defaults :any
-             :components (or @[:any] [:any] :nil)
+             :components (or [:any] :nil)
              :extension-points (or {:keyword :any} :nil)
              :contributes (or {:keyword :any} :nil) & r}
-            (or @[:any] [:any] :nil)]
+            (or [:any] :nil)]
    :ret (or @[:any] :nil)}
   "The manifest of one plugin as page blocks, pushed onto body."
   [body m cli-contribs]
   (def name (m :name))
   (array/push body [:h2 {:id (md/slug (string name))} [:code (string name)]])
-  (when-let [doc (clean-doc (m :doc))]
-    (array/push body [:p doc]))
+  (when-let [summary (clean-doc (m :doc))]
+    (array/push body [:p summary]))
   (def requires (m :requires))
   (unless (or (nil? requires) (empty? requires))
     (array/push body
@@ -974,8 +974,8 @@
          [:a {:class "ghost" :href "overview.html"} "Overview"]
          [:a {:class "ghost" :href page/github} "Source"]]]
        [:div {:class "strip"}
-        ;(seq [[n label] :in stats]
-           [:div [:div {:class "n"} (string n)] [:div {:class "k"} label]])]
+        ;(seq [[n caption] :in stats]
+           [:div [:div {:class "n"} (string n)] [:div {:class "k"} caption]])]
        [:h2 "Quick start"]
        (or quick "")
        [:h2 "Where void fits"]

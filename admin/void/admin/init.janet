@@ -332,14 +332,14 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :before-start
-   :phase 420
+   :before :void.core/configured
    :name :admin/build-context
    :doc "Resolve the admin config, widgets and policies before the route table is built"
    :fn (fn build! [boot] (build-context boot))})
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 120
+   :before :void.core/checked
    :name :admin/warn-when-shut
    :doc "Say once, at start, that the admin is mounted and refusing everybody"
    :fn (fn warn [_boot]
@@ -350,7 +350,7 @@
 
 (plugin/contribute! :void.core/hooks
   {:hook :after-start
-   :phase 130
+   :before :void.core/checked
    :name :admin/require-bulk-runner
    :doc "A resource with a :job action needs somebody to run it — say so at start, not at the button"
    :fn (fn check [_boot]
@@ -375,7 +375,7 @@
 
 (plugin/contribute! :void.http/edge
   {:name :void.admin/method-override
-   :phase 100
+   :after :void.http.edge/scoped
    :doc "Under the admin prefix, a POST carrying ?_method=patch|delete|put is dispatched as that verb — the only way a <form> reaches a route whose verb HTML cannot send. Never out of a GET: a link that changes state is a link the browser prefetches"
    :wrap (fn wrap-override [handler]
            (fn method-override [req]

@@ -81,6 +81,8 @@
 
 (assert (not (first (protect (catalog/install! {:locales [:en] :default :de} []))))
         "[:i18n :default] outside [:i18n :locales] is a boot error")
+# a locale that is not a tag, on purpose
+# janet-zed: ignore types
 (assert (not (first (protect (catalog/install! {:locales ["no way"] :default :en} []))))
         "a locales entry that is not a tag is a boot error")
 (assert (not (first (protect (catalog/install!
