@@ -115,10 +115,12 @@
    # reset and verify through test/inject — so everything the generated
    # composition names has to be importable here. The examples are
    # deliberately not what checks this; the scaffold is checked by what it
-   # itself generates.
+   # itself generates. `void make job` is why void/jobs is: the
+   # generated job is loaded and run, and it names the jobs plugin.
    {:dir "cli" :deps [:void/core]
     :test-deps [:void/http :void/html :void/htmx :void/dev :void/db
-                :void/db-sqlite :void/crypto :void/auth :void/security]
+                :void/db-sqlite :void/crypto :void/auth :void/security
+                :void/jobs]
     :jpm [:spork]}
 
    :void/db
